@@ -110,7 +110,7 @@ export default function DeliveryPage() {
   }
 
   const saveDelivery = async () => {
-    if (sigCanvas.current?.isEmpty()) {
+    if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
       alert("A assinatura é obrigatória.")
       return
     }
