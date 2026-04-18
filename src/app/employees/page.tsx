@@ -92,6 +92,8 @@ export default function EmployeesPage() {
               placeholder="Buscar por nome ou CPF..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              title="Buscar colaborador"
+              aria-label="Buscar colaborador por nome ou CPF"
               className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] focus:ring-4 focus:ring-red-500/5 transition-all"
             />
           </div>
@@ -157,7 +159,11 @@ export default function EmployeesPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
             <div className="flex justify-between items-center p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Novo Cadastro Antares</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label="Fechar modal"
+              >
                 <X className="w-6 h-6" />
               </button>
             </div>

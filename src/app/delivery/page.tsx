@@ -205,8 +205,9 @@ export default function DeliveryPage() {
           {step === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-left-4">
               <div className="space-y-3">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Colaborador Antares</label>
+                <label htmlFor="employee-select" className="text-xs font-black text-slate-400 uppercase tracking-widest">Colaborador Antares</label>
                 <select 
+                  id="employee-select"
                   className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
@@ -219,8 +220,9 @@ export default function DeliveryPage() {
               </div>
 
               <div className="space-y-3">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Equipamento (C.A. Ativo)</label>
+                <label htmlFor="ppe-select" className="text-xs font-black text-slate-400 uppercase tracking-widest">Equipamento (C.A. Ativo)</label>
                 <select 
+                  id="ppe-select"
                   className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                   value={selectedPpeId}
                   onChange={(e) => setSelectedPpeId(e.target.value)}
@@ -233,8 +235,9 @@ export default function DeliveryPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Motivo</label>
+                <label htmlFor="reason-select" className="text-xs font-black text-slate-400 uppercase tracking-widest">Motivo</label>
                 <select 
+                  id="reason-select"
                   className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}

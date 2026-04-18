@@ -156,15 +156,20 @@ export default function PpesPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
             <div className="flex justify-between items-center p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Novo EPI Antares</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label="Fechar modal"
+              >
                 <X className="w-6 h-6" />
               </button>
             </div>
             
             <form onSubmit={handleAddPpe} className="p-8 space-y-5">
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Equipamento</label>
+                <label htmlFor="ppe-name" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Equipamento</label>
                 <input 
+                  id="ppe-name"
                   required
                   type="text" 
                   value={formData.name}
@@ -176,8 +181,9 @@ export default function PpesPage() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nº do C.A.</label>
+                  <label htmlFor="ppe-ca" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nº do C.A.</label>
                   <input 
+                    id="ppe-ca"
                     type="text" 
                     value={formData.ca}
                     onChange={(e) => setFormData({...formData, ca: e.target.value})}
@@ -186,8 +192,9 @@ export default function PpesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Unit. (R$)</label>
+                  <label htmlFor="ppe-cost" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Unit. (R$)</label>
                   <input 
+                    id="ppe-cost"
                     type="number" 
                     step="0.01"
                     value={formData.cost}
@@ -199,8 +206,9 @@ export default function PpesPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Data de Vencimento do C.A.</label>
+                <label htmlFor="ppe-expiry" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Data de Vencimento do C.A.</label>
                 <input 
+                  id="ppe-expiry"
                   type="date" 
                   value={formData.valCa}
                   onChange={(e) => setFormData({...formData, valCa: e.target.value})}

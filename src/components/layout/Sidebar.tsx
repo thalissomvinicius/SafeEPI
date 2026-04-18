@@ -14,7 +14,6 @@ const menuItems = [
   { href: "/training", label: "Treinamentos", icon: CheckCircle2 },
 ]
 
-import Image from "next/image"
 
 export function Sidebar() {
   const pathname = usePathname()
