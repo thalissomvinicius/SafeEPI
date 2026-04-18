@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, Shield, PenTool, History } from "lucide-react"
+import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2 } from "lucide-react"
 
 const menuItems = [
   { href: "/", label: "Dashboard", icon: Home },
