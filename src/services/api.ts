@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery } from "@/types/database";
+import { Employee, PPE, Delivery, Training } from "@/types/database";
 
 export const api = {
   // --- Colaboradores ---
@@ -91,5 +91,29 @@ export const api = {
     
     if (error) throw error;
     return data[0];
+  },
+
+  // --- Treinamentos ---
+  async getTrainings() {
+    const { data, error } = await supabase
+      .from('trainings')
+      .select(`
+        *,
+        employee:employees(full_name, cpf)
+      `)
+      .order('completion_date', { ascending: false });
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async addTraining(training: Omit<Training, 'id' | 'created_at'>) {
+    const { data, error } = await supabase
+      .from('trainings')
+      .insert([training])
+      .select();
+    
+    if (error) throw error;
+    return data[0] as Training;
   }
 };

@@ -32,3 +32,13 @@ export type Delivery = {
   ip_address: string | null;
   created_at?: string;
 };
+
+export type Training = {
+  id: string;
+  employee_id: string;
+  training_name: string;
+  completion_date: string;
+  expiry_date: string;
+  status: 'Válido' | 'Vencendo' | 'Vencido';
+  created_at?: string;
+};
