@@ -1,7 +1,49 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations } from "@/types/database";
+import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement } from "@/types/database";
 
 export const api = {
+  // --- Autenticação ---
+  async login(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async logout() {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  },
+
+  async getSession() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  },
+
+  // --- Canteiros (Workplaces) ---
+  async getWorkplaces() {
+    const { data, error } = await supabase
+      .from('workplaces')
+      .select('*')
+      .order('name', { ascending: true });
+    
+    if (error) throw error;
+    return data as Workplace[];
+  },
+
+  async addWorkplace(workplace: Omit<Workplace, 'id' | 'created_at'>) {
+    const { data, error } = await supabase
+      .from('workplaces')
+      .insert([workplace])
+      .select();
+    
+    if (error) throw error;
+    return data[0] as Workplace;
+  },
+
   // --- Colaboradores ---
   async getEmployees() {
     const { data, error } = await supabase
@@ -44,6 +86,30 @@ export const api = {
     return data[0] as PPE;
   },
 
+  // --- Estoque (Stock Movements) ---
+  async getStockMovements() {
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .select(`
+        *,
+        ppe:ppes(name)
+      `)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data as StockMovement[];
+  },
+
+  async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .insert([movement])
+      .select();
+    
+    if (error) throw error;
+    return data[0] as StockMovement;
+  },
+
   // --- Entregas ---
   async getDeliveries() {
     const { data, error } = await supabase
@@ -51,7 +117,8 @@ export const api = {
       .select(`
         *,
         employee:employees(full_name, cpf),
-        ppe:ppes(name, ca_number, cost)
+        ppe:ppes(name, ca_number, cost),
+        workplace:workplaces(name)
       `)
       .order('delivery_date', { ascending: false });
     

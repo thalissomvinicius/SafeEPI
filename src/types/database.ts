@@ -6,6 +6,16 @@ export type Employee = {
   department: string | null;
   admission_date: string;
   active: boolean;
+  workplace_id: string | null;
+  created_at?: string;
+};
+
+export type Workplace = {
+  id: string;
+  name: string;
+  address: string | null;
+  manager_name: string | null;
+  active: boolean;
   created_at?: string;
 };
 
@@ -18,7 +28,20 @@ export type PPE = {
   lifespan_days: number;
   cost: number;
   active: boolean;
+  current_stock: number;
   created_at?: string;
+};
+
+export type StockMovement = {
+  id: string;
+  ppe_id: string;
+  quantity: number;
+  type: 'ENTRADA' | 'SAIDA' | 'AJUSTE';
+  motive: string | null;
+  created_at?: string;
+  ppe?: {
+    name: string;
+  };
 };
 
 export type Delivery = {
@@ -30,6 +53,7 @@ export type Delivery = {
   quantity: number;
   signature_url: string | null;
   ip_address: string | null;
+  workplace_id: string | null;
   created_at?: string;
 };
 
@@ -52,6 +76,9 @@ export type DeliveryWithRelations = Delivery & {
     name: string;
     ca_number: string;
     cost?: number;
+  };
+  workplace?: {
+    name: string;
   };
 };
 

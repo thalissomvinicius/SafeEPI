@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   description: "Sistema de Controle de EPI - Antares Empreendimentos",
 };
 
-import { Sidebar } from "@/components/layout/Sidebar";
-import { MobileNav } from "@/components/layout/MobileNav";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ClientShell } from "@/components/layout/ClientShell";
 
 export default function RootLayout({
   children,
@@ -32,14 +32,12 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${plusJakarta.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 overflow-hidden">
+        <AuthProvider>
+          <ClientShell>
             {children}
-          </main>
-        </div>
-        <MobileNav />
+          </ClientShell>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -110,9 +110,12 @@ export default function Dashboard() {
             {recentDeliveries.length > 0 ? recentDeliveries.map((delivery, i) => (
               <div key={i} className="flex justify-between items-center p-4 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors">
                 <div>
-                  <p className="text-sm font-black text-slate-700 uppercase tracking-tighter">{delivery.employee?.full_name}</p>
+                  <p className="text-sm font-black text-slate-700 uppercase tracking-tighter">
+                    {delivery.employee?.full_name} 
+                    <span className="ml-2 text-[8px] text-slate-300 font-normal">[{delivery.workplace?.name || "Sede"}]</span>
+                  </p>
                   <p className="text-[10px] text-slate-400 font-bold mt-1">
-                    {delivery.ppe?.name} • {new Date(delivery.delivery_date).toLocaleDateString()} às {new Date(delivery.delivery_date).toLocaleTimeString()}
+                    {delivery.ppe?.name} • {new Date(delivery.delivery_date).toLocaleDateString()}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Shield, Plus, Search, X, Loader2 } from "lucide-react"
+import { Shield, Plus, Search, X, Loader2, Package } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE } from "@/types/database"
+import Link from "next/link"
 
 export default function PpesPage() {
   const [ppes, setPpes] = useState<PPE[]>([])
@@ -27,18 +28,7 @@ export default function PpesPage() {
   }
 
   useEffect(() => {
-    const fetchPpes = async () => {
-      try {
-        setLoading(true)
-        const data = await api.getPpes()
-        setPpes(data)
-      } catch (error) {
-        console.error("Erro ao carregar EPIs:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchPpes()
+    loadPpes()
   }, [])
 
   const filteredPpes = ppes.filter(ppe => 
@@ -59,7 +49,8 @@ export default function PpesPage() {
         cost: parseFloat(formData.cost) || 0,
         manufacturer: "Genérico",
         lifespan_days: 180,
-        active: true
+        active: true,
+        current_stock: 0
       })
       
       await loadPpes()
@@ -77,19 +68,31 @@ export default function PpesPage() {
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in relative">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
+           <div className="flex items-center gap-2 mb-1">
+             <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Catálogo Técnico Antares</span>
+          </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase text-3xl sm:text-2xl">
             <Shield className="w-6 h-6 mr-2 text-[#8B1A1A]" />
-            Catálogo Antares
+            EPIs e CAs
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Gestão técnica de CAs sincronizada com o Supabase.</p>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Gestão técnica de conformidade e saldo de equipamentos.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo EPI
-        </button>
+        <div className="flex gap-3 w-full sm:w-auto">
+            <Link 
+                href="/inventory"
+                className="flex-1 sm:flex-none border border-slate-200 bg-white text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center hover:bg-slate-50"
+            >
+                <Package className="w-4 h-4 mr-2 text-[#8B1A1A]" />
+                Estoque
+            </Link>
+            <button 
+                onClick={() => setIsModalOpen(true)}
+                className="flex-1 sm:flex-none bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center border-b-4 border-red-900"
+            >
+                <Plus className="w-4 h-4 mr-2" />
+                Novo EPI
+            </button>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
@@ -117,8 +120,8 @@ export default function PpesPage() {
                 <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                 <tr>
                     <th className="px-6 py-5">Equipamento</th>
-                    <th className="px-6 py-5">Nº C.A.</th>
-                    <th className="px-6 py-5">Validade</th>
+                    <th className="px-6 py-5">Identificação (C.A)</th>
+                    <th className="px-6 py-5 text-center">Saldo em Estoque</th>
                     <th className="px-6 py-5">Custo Unit.</th>
                     <th className="px-6 py-5 text-right">Ações</th>
                 </tr>
@@ -126,32 +129,41 @@ export default function PpesPage() {
                 <tbody className="divide-y divide-slate-50">
                 {filteredPpes.map((ppe) => (
                     <tr key={ppe.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-5 font-bold text-slate-800">
-                        <div className="flex items-center">
-                        {ppe.name}
-                        {/* Lógica de alerta baseada em data futura pode ser disparada aqui */}
-                        </div>
-                    </td>
-                    <td className="px-6 py-5 text-slate-500 font-mono font-bold tracking-tighter bg-slate-50/50 w-fit px-2 py-1 rounded">
-                        CA {ppe.ca_number}
+                    <td className="px-6 py-5">
+                        <p className="font-bold text-slate-800 uppercase tracking-tighter truncate max-w-[200px]">{ppe.name}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Validade: {new Date(ppe.ca_expiry_date).toLocaleDateString()}</p>
                     </td>
                     <td className="px-6 py-5">
-                        <span className="text-xs font-bold text-slate-500">
-                        {new Date(ppe.ca_expiry_date).toLocaleDateString()}
+                        <span className="text-slate-500 font-mono font-black tracking-tighter bg-slate-100 px-2 py-1 rounded text-xs">
+                          CA {ppe.ca_number}
                         </span>
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                        <div className="flex flex-col items-center">
+                            <span className={`text-lg font-black tracking-tighter ${ppe.current_stock <= 5 ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>
+                                {ppe.current_stock || 0}
+                            </span>
+                            {ppe.current_stock <= 5 && (
+                                <span className="text-[8px] font-black text-[#8B1A1A] uppercase tracking-widest bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Repor!</span>
+                            )}
+                        </div>
                     </td>
                     <td className="px-6 py-5 text-slate-600 font-bold italic">R$ {ppe.cost.toFixed(2)}</td>
                     <td className="px-6 py-5 text-right">
-                        <button className="text-slate-400 hover:text-[#8B1A1A] font-black text-[10px] uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100 italic underline">
-                        Editar
-                        </button>
+                        <Link 
+                            href="/inventory"
+                            title="Gerenciar estoque deste item"
+                            className="text-slate-400 hover:text-[#8B1A1A] font-black text-[10px] uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100 italic"
+                        >
+                        Estoque
+                        </Link>
                     </td>
                     </tr>
                 ))}
                 {filteredPpes.length === 0 && (
                     <tr>
                         <td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic">
-                            Nenhum EPI cadastrado no sistema.
+                            Nenhum EPI cadastrado.
                         </td>
                     </tr>
                 )}
@@ -164,9 +176,9 @@ export default function PpesPage() {
       {/* Modal Adicionar EPI */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="flex justify-between items-center p-6 border-b border-slate-100">
-              <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Novo EPI Antares</h2>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
+            <div className="flex justify-between items-center p-8 border-b border-slate-100">
+              <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl tracking-tighter">Novo Item Antares</h2>
               <button 
                 onClick={() => setIsModalOpen(false)} 
                 className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -176,17 +188,17 @@ export default function PpesPage() {
               </button>
             </div>
             
-            <form onSubmit={handleAddPpe} className="p-8 space-y-5">
+            <form onSubmit={handleAddPpe} className="p-8 space-y-6">
               <div className="space-y-2">
-                <label htmlFor="ppe-name" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Equipamento</label>
+                <label htmlFor="ppe-name" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Equipamento (EPI)</label>
                 <input 
                   id="ppe-name"
                   required
                   type="text" 
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
-                  placeholder="Ex: Bota de Couro"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                  placeholder="Ex: Óculos de Proteção"
                 />
               </div>
               
@@ -203,7 +215,7 @@ export default function PpesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="ppe-cost" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Unit. (R$)</label>
+                  <label htmlFor="ppe-cost" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo de Compra (R$)</label>
                   <input 
                     id="ppe-cost"
                     type="number" 
@@ -211,7 +223,7 @@ export default function PpesPage() {
                     value={formData.cost}
                     onChange={(e) => setFormData({...formData, cost: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
-                    placeholder="00.00"
+                    placeholder="0.00"
                   />
                 </div>
               </div>
@@ -223,11 +235,11 @@ export default function PpesPage() {
                   type="date" 
                   value={formData.valCa}
                   onChange={(e) => setFormData({...formData, valCa: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
                 />
               </div>
 
-              <div className="pt-6 flex gap-3">
+              <div className="pt-6 flex gap-4">
                 <button 
                   type="button" 
                   disabled={isSaving}
@@ -239,9 +251,9 @@ export default function PpesPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-1 px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-xl uppercase tracking-widest transition-all flex items-center justify-center font-bold"
+                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-2xl uppercase tracking-widest transition-all flex items-center justify-center font-bold border-b-4 border-red-900 shadow-xl shadow-red-900/10"
                 >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar EPI"}
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Ativar no Catálogo"}
                 </button>
               </div>
             </form>

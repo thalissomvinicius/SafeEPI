@@ -1,47 +1,47 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Users, Plus, Search, X, Loader2 } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive } from "lucide-react"
 import { api } from "@/services/api"
-import { Employee } from "@/types/database"
+import { Employee, Workplace } from "@/types/database"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   
   // Form State
-  const [formData, setFormData] = useState({ name: "", role: "", department: "", cpf: "" })
+  const [formData, setFormData] = useState({ 
+    name: "", 
+    role: "", 
+    department: "", 
+    cpf: "",
+    workplace_id: "" 
+  })
   const [isSaving, setIsSaving] = useState(false)
 
   // Fetch real data from Supabase
-  const loadEmployees = async () => {
+  const loadData = async () => {
     try {
       setLoading(true)
-      const data = await api.getEmployees()
-      setEmployees(data)
+      const [empData, wpData] = await Promise.all([
+        api.getEmployees(),
+        api.getWorkplaces()
+      ])
+      setEmployees(empData)
+      setWorkplaces(wpData)
     } catch (error) {
-      console.error("Erro ao carregar colaboradores:", error)
-      alert("Falha ao carregar colaboradores do banco de dados.")
+      console.error("Erro ao carregar dados:", error)
+      alert("Falha ao carregar dados do banco de dados.")
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        setLoading(true)
-        const data = await api.getEmployees()
-        setEmployees(data)
-      } catch (error) {
-        console.error("Erro ao carregar colaboradores:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchEmployees()
+    loadData()
   }, [])
 
   const filteredEmployees = employees.filter(emp => 
@@ -61,11 +61,12 @@ export default function EmployeesPage() {
         department: formData.department || "Sede Antares",
         cpf: formData.cpf || "000.000.000-00",
         admission_date: new Date().toISOString(),
-        active: true
+        active: true,
+        workplace_id: formData.workplace_id || null
       })
       
-      await loadEmployees() // Recarrega a lista
-      setFormData({ name: "", role: "", department: "", cpf: "" })
+      await loadData() // Recarrega a lista
+      setFormData({ name: "", role: "", department: "", cpf: "", workplace_id: "" })
       setIsModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar colaborador:", error)
@@ -73,6 +74,10 @@ export default function EmployeesPage() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const getWorkplaceName = (id: string | null) => {
+    return workplaces.find(w => w.id === id)?.name || "Geral / Sede"
   }
 
   return (
@@ -105,7 +110,7 @@ export default function EmployeesPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               title="Buscar colaborador"
               aria-label="Buscar colaborador por nome ou CPF"
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] focus:ring-4 focus:ring-red-500/5 transition-all"
+              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] transition-all"
             />
           </div>
         </div>
@@ -122,7 +127,7 @@ export default function EmployeesPage() {
                 <tr>
                     <th className="px-6 py-5">Nome do Colaborador</th>
                     <th className="px-6 py-5">Cargo / Lotação</th>
-                    <th className="px-6 py-5">CPF</th>
+                    <th className="px-6 py-5">Canteiro (Obra)</th>
                     <th className="px-6 py-5">Status</th>
                     <th className="px-6 py-5 text-right">Ações</th>
                 </tr>
@@ -130,11 +135,19 @@ export default function EmployeesPage() {
                 <tbody className="divide-y divide-slate-50">
                 {filteredEmployees.map((emp) => (
                     <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-5 font-bold text-slate-800">{emp.full_name}</td>
+                    <td className="px-6 py-5">
+                        <p className="font-bold text-slate-800">{emp.full_name}</p>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">{emp.cpf}</p>
+                    </td>
                     <td className="px-6 py-5 text-slate-500 font-medium italic">
                         {emp.job_title} <span className="mx-1 text-slate-200">•</span> {emp.department}
                     </td>
-                    <td className="px-6 py-5 text-slate-400 font-mono text-xs">{emp.cpf}</td>
+                    <td className="px-6 py-5">
+                        <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter">
+                            <HardDrive className="w-3 h-3 text-[#8B1A1A]" />
+                            {getWorkplaceName(emp.workplace_id)}
+                        </div>
+                    </td>
                     <td className="px-6 py-5">
                         <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-full border ${
                         emp.active 
@@ -167,7 +180,7 @@ export default function EmployeesPage() {
       {/* Modal Adicionar Colaborador */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
             <div className="flex justify-between items-center p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Novo Cadastro Antares</h2>
               <button 
@@ -224,6 +237,20 @@ export default function EmployeesPage() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold" 
                   placeholder="Cargo oficial"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Canteiro de Obra</label>
+                <select 
+                  value={formData.workplace_id}
+                  onChange={(e) => setFormData({...formData, workplace_id: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold"
+                >
+                  <option value="">Sede Antares / Sem Canteiro</option>
+                  {workplaces.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="pt-6 flex gap-3">

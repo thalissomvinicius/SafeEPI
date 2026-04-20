@@ -1,12 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2 } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
 
 const menuItems = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/delivery", label: "Nova Entrega", icon: PenTool },
+  { href: "/inventory", label: "Estoque", icon: Package },
+  { href: "/workplaces", label: "Canteiros", icon: HardDrive },
   { href: "/employees", label: "Colaboradores", icon: Users },
   { href: "/ppes", label: "EPIs e CAs", icon: Shield },
   { href: "/history", label: "Histórico", icon: History },
@@ -17,6 +20,7 @@ const menuItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { logout } = useAuth()
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 text-slate-600 hidden md:flex flex-col h-screen sticky top-0 shadow-sm">
@@ -49,9 +53,18 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-100 text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
-        <p>Sistema SESMT Digital</p>
-        <p className="mt-1 text-[#8B1A1A]">Antares v1.0</p>
+      <div className="p-4 border-t border-slate-100 flex flex-col gap-3">
+        <button 
+          onClick={logout}
+          className="flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors group uppercase tracking-widest"
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          Encerrar Sessão
+        </button>
+        <div className="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
+          <p>Sistema SESMT Digital</p>
+          <p className="mt-1 text-[#8B1A1A]">Antares v1.0</p>
+        </div>
       </div>
     </aside>
   )
