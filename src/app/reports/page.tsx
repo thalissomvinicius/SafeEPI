@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { TrendingDown, Download, BarChart3, PieChart, ShieldCheck, Loader2, HardDrive } from "lucide-react"
+import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, Loader2, HardDrive } from "lucide-react"
 import { api } from "@/services/api"
 import { startOfMonth, isAfter } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
+import { Skeleton } from "@/components/ui/Skeleton"
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 
 
 export default function ReportsPage() {
@@ -18,7 +20,10 @@ export default function ReportsPage() {
     { label: "EPIs em Alerta (C.A.)", value: "0", change: "Vencendo" },
     { label: "Treinamentos Registrados", value: "0", change: "NR-01/06" },
   ])
-  const [investmentByWorkplace, setInvestmentByWorkplace] = useState<{name: string, total: number}[]>([])
+  const [investmentByWorkplace, setInvestmentByWorkplace] = useState<{name: string, value: number}[]>([])
+  const [ppeUsageData, setPpeUsageData] = useState<{name: string, value: number}[]>([])
+  
+  const COLORS = ['#8B1A1A', '#1e293b', '#475569', '#64748b', '#94a3b8']
 
   useEffect(() => {
     if (!authLoading && user && user.role === 'ALMOXARIFE') {
@@ -57,10 +62,23 @@ export default function ReportsPage() {
             const total = deliveryData
                 .filter(d => d.workplace_id === wp.id)
                 .reduce((acc, d) => acc + (d.ppe?.cost || 0), 0)
-            return { name: wp.name, total }
-        }).sort((a, b) => b.total - a.total)
+            return { name: wp.name, value: total }
+        }).sort((a, b) => b.value - a.value)
 
         setInvestmentByWorkplace(wpStats)
+
+        // 4. Top 5 EPIs mais entregues
+        const ppeCounts: {[key: string]: number} = {}
+        deliveryData.forEach(d => {
+            if (d.ppe) {
+                ppeCounts[d.ppe.name] = (ppeCounts[d.ppe.name] || 0) + d.quantity
+            }
+        })
+        const ppeStats = Object.entries(ppeCounts)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5)
+        setPpeUsageData(ppeStats)
 
         setStats([
           { label: "Investimento EPIs (Mês)", value: `R$ ${monthTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `${monthDeliveries.length} itens` },
@@ -92,9 +110,21 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-        <div className="flex flex-col items-center justify-center py-40">
-            <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
-            <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Compilando Inteligência SESMT Antares...</p>
+        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in">
+            <div className="flex justify-between border-b border-slate-100 pb-8">
+                <div className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-10 w-64" />
+                </div>
+                <Skeleton className="h-12 w-40" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[1,2,3,4].map(i => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Skeleton className="h-[400px] w-full rounded-3xl" />
+                <Skeleton className="h-[400px] w-full rounded-3xl" />
+            </div>
         </div>
     )
   }
@@ -135,14 +165,92 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col group hover:border-[#8B1A1A]/30 transition-all min-h-[400px]">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-[#8B1A1A]" />
-                Investimento por Canteiro
-            </h3>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Geral</span>
+      {/* Seção de Gráficos Analíticos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Gráfico 1: Investimento por Canteiro */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+              <div className="flex items-center justify-between mb-8">
+                  <div>
+                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Investimento por Canteiro</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Distribuição total de custos (R$)</p>
+                  </div>
+                  <PieChartIcon className="w-5 h-5 text-[#8B1A1A]" />
+              </div>
+              
+              <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                          <Pie
+                              data={investmentByWorkplace}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={100}
+                              paddingAngle={5}
+                              dataKey="value"
+                              animationDuration={1500}
+                          >
+                              {investmentByWorkplace.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`}
+                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                          />
+                          <Legend verticalAlign="bottom" height={36}/>
+                      </PieChart>
+                  </ResponsiveContainer>
+              </div>
+          </div>
+
+          {/* Gráfico 2: Top 5 EPIs entregues */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+              <div className="flex items-center justify-between mb-8">
+                  <div>
+                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Top 5 Consumo de EPIs</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Itens mais retirados pela equipe</p>
+                  </div>
+                  <BarChartIcon className="w-5 h-5 text-[#8B1A1A]" />
+              </div>
+              
+              <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={ppeUsageData} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                          <XAxis type="number" hide />
+                          <YAxis 
+                            dataKey="name" 
+                            type="category" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}}
+                            width={100}
+                          />
+                          <Tooltip 
+                             cursor={{fill: '#f8fafc'}}
+                             contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                          />
+                          <Bar 
+                            dataKey="value" 
+                            fill="#8B1A1A" 
+                            radius={[0, 10, 10, 0]} 
+                            barSize={20}
+                            animationDuration={2000}
+                          />
+                      </BarChart>
+                  </ResponsiveContainer>
+              </div>
+          </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+              <div>
+                  <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Ranking de Investimento</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Valores totais por canteiro de obra</p>
+              </div>
+              <TrendingDown className="w-5 h-5 text-[#8B1A1A]" />
           </div>
           
           <div className="space-y-6 flex-1 overflow-y-auto pr-2">
@@ -150,14 +258,14 @@ export default function ReportsPage() {
                 <div key={i} className="space-y-2">
                     <div className="flex justify-between items-end">
                         <span className="text-sm font-bold text-slate-600 uppercase tracking-tighter">{wp.name}</span>
-                        <span className="text-xs font-black text-[#8B1A1A]">R$ {wp.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-xs font-black text-[#8B1A1A]">R$ {wp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div 
                             className="h-full bg-[#8B1A1A] transition-all duration-1000" 
                             ref={(el) => {
                                 if (el) {
-                                    el.style.width = `${Math.min(100, (wp.total / (investmentByWorkplace[0]?.total || 1)) * 100)}%`
+                                    el.style.width = `${Math.min(100, (wp.value / (investmentByWorkplace[0]?.value || 1)) * 100)}%`
                                 }
                             }}
                         ></div>
@@ -168,12 +276,6 @@ export default function ReportsPage() {
                 <p className="text-slate-400 text-sm italic text-center py-10">Nenhum canteiro com movimentações ainda.</p>
             )}
           </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center min-h-[400px] group hover:border-[#8B1A1A]/30 transition-all">
-          <PieChart className="w-16 h-16 text-slate-100 mb-6 group-hover:scale-110 transition-transform text-[#8B1A1A]/10" />
-          <h3 className="font-black text-slate-800 uppercase tracking-tighter text-center italic">Distribuição de Motivos Automática</h3>
-          <p className="text-xs text-slate-400 mt-2 text-center max-w-xs leading-relaxed font-medium">
             O algoritmo Antares analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
           </p>
           <div className="mt-8 relative w-24 h-24">

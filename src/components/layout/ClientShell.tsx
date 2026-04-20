@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { MobileNav } from "@/components/layout/MobileNav"
+import { Header } from "@/components/layout/Header"
 
 export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -24,9 +25,12 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     <>
       <div className="flex h-screen overflow-hidden w-full relative">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto pb-16 md:pb-0 relative z-0">
-          {children}
-        </main>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto pb-16 md:pb-0 relative z-0">
+            {children}
+          </main>
+        </div>
       </div>
       <MobileNav />
     </>

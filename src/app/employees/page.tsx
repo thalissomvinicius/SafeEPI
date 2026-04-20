@@ -5,6 +5,7 @@ import { Users, Plus, Search, X, Loader2, HardDrive, Lock } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, Workplace } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -132,12 +133,33 @@ export default function EmployeesPage() {
         </div>
 
         <div className="overflow-x-auto min-h-[200px] flex flex-col">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#8B1A1A]" />
-                <p className="text-sm font-medium">Buscando dados no Supabase...</p>
-            </div>
-          ) : (
+         {loading ? (
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="flex justify-between items-end border-b border-slate-100 pb-8">
+           <div className="space-y-2">
+             <Skeleton className="h-4 w-32" />
+             <Skeleton className="h-8 w-64" />
+           </div>
+           <Skeleton className="h-12 w-40" />
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+           <div className="p-5 border-b border-slate-100">
+             <Skeleton className="h-10 w-64" />
+           </div>
+           {[...Array(5)].map((_, i) => (
+             <div key={i} className="flex items-center gap-4 p-6 border-b border-slate-50 last:border-0">
+                <Skeleton className="h-12 w-12" variant="circle" />
+                <div className="flex-1 space-y-2">
+                   <Skeleton className="h-4 w-1/4" />
+                   <Skeleton className="h-3 w-1/2" />
+                </div>
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-8 w-24" />
+             </div>
+           ))}
+        </div>
+      </div>
+  ) : (
             <table className="w-full text-sm text-left">
                 <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                 <tr>

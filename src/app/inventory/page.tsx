@@ -6,6 +6,7 @@ import { api } from "@/services/api"
 import { PPE, StockMovement } from "@/types/database"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 export default function InventoryPage() {
   const [ppes, setPpes] = useState<PPE[]>([])
@@ -114,9 +115,17 @@ export default function InventoryPage() {
              </div>
              
              {loading ? (
-                <div className="flex flex-col items-center justify-center py-40">
-                    <Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A] mb-2" />
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Sincronizando Almoxarifado...</p>
+                <div className="w-full space-y-4 p-4">
+                    {[...Array(5)].map((_, i) => (
+                        <div key={i} className="flex items-center space-x-4 py-4 border-b border-slate-50">
+                            <div className="flex-1 space-y-2">
+                                <Skeleton className="h-4 w-1/3" />
+                                <Skeleton className="h-3 w-1/4" />
+                            </div>
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-4 w-24 rounded-full" />
+                        </div>
+                    ))}
                 </div>
              ) : (
                 <div className="overflow-x-auto">

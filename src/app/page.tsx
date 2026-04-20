@@ -5,6 +5,8 @@ import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Loader2 } 
 import Link from "next/link"
 import { api } from "@/services/api"
 import { DeliveryWithRelations } from "@/types/database"
+import { Skeleton } from "@/components/ui/Skeleton"
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts"
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -13,6 +15,7 @@ export default function Dashboard() {
     criticalCAs: 0,
   })
   const [recentDeliveries, setRecentDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [chartData, setChartData] = useState<{name: string, value: number}[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -25,7 +28,6 @@ export default function Dashboard() {
           api.getDeliveries()
         ])
 
-        // Lógica simples de CAs vencendo (nos próximos 90 dias ou já vencidos)
         const now = new Date()
         const criticalCount = ppeData.filter(p => {
           const expiry = new Date(p.ca_expiry_date)
@@ -39,6 +41,18 @@ export default function Dashboard() {
           criticalCAs: criticalCount
         })
 
+        // Chart Data (Last 7 Days)
+        const last7Days = [...Array(7)].map((_, i) => {
+          const date = new Date()
+          date.setDate(date.getDate() - (6 - i))
+          const dateStr = date.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric' })
+          const count = deliveryData.filter(d => 
+            new Date(d.delivery_date).toDateString() === date.toDateString()
+          ).length
+          return { name: dateStr, value: count }
+        })
+        setChartData(last7Days)
+
         setRecentDeliveries(deliveryData.slice(0, 5))
       } catch (err) {
         console.error("Erro dashboard:", err)
@@ -49,14 +63,41 @@ export default function Dashboard() {
     loadDashboardData()
   }, [])
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
-        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Acessando Banco de Dados Antares...</p>
+  const DashboardSkeleton = () => (
+    <div className="p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-100 pb-8 gap-4">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-4 w-48" />
+        </div>
+        <Skeleton className="h-12 w-40" />
       </div>
-    )
-  }
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-10 w-10" />
+            </div>
+            <Skeleton className="h-8 w-16 mb-2" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-8 h-[400px]">
+          <Skeleton className="h-full w-full rounded-2xl" />
+        </div>
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 space-y-4">
+          <Skeleton className="h-6 w-1/2" />
+          <Skeleton className="h-full w-full rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  )
+
+  if (loading) return <DashboardSkeleton />
 
   return (
     <div className="p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -75,7 +116,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Cards de Métricas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           { title: "Entregas Realizadas", value: stats.deliveries, subtitle: "Total no banco de dados", icon: PackageCheck, color: "text-[#8B1A1A]", bg: "bg-red-50" },
@@ -100,41 +140,85 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Seção Inferior: Vencimentos e Fila de Assinaturas */}
-      <div className="grid lg:grid-cols-1 gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-hidden">
-          <h2 className="text-lg font-black text-slate-800 mb-6 flex items-center uppercase tracking-tighter">
-            <ShieldCheck className="w-5 h-5 text-green-600 mr-2" />
-            Últimas Movimentações Sincronizadas
-          </h2>
-          <div className="space-y-3">
-            {recentDeliveries.length > 0 ? recentDeliveries.map((delivery, i) => (
-              <div key={i} className="flex justify-between items-center p-4 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-8 shadow-sm flex flex-col">
+            <div className="flex justify-between items-center mb-8">
                 <div>
-                  <p className="text-sm font-black text-slate-700 uppercase tracking-tighter">
-                    {delivery.employee?.full_name} 
-                    <span className="ml-2 text-[8px] text-slate-300 font-normal">[{delivery.workplace?.name || "Sede"}]</span>
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-bold mt-1">
-                    {delivery.ppe?.name} • {new Date(delivery.delivery_date).toLocaleDateString()}
-                  </p>
+                    <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Atividade de Entregas</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Últimos 7 dias em tempo real</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  {delivery.signature_url && (
-                    <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[8px] font-black rounded border border-green-100 uppercase uppercase">Assinado</span>
-                  )}
-                  <div className="px-3 py-1 bg-slate-50 text-slate-400 text-[10px] font-black rounded border border-slate-100 uppercase tracking-widest font-mono">
-                    #{delivery.id.slice(0, 4)}
-                  </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-[#8B1A1A] rounded-full animate-pulse"></div>
+                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Live Sync</span>
                 </div>
-              </div>
-            )) : (
-              <p className="text-slate-400 text-sm italic py-10 text-center">Nenhuma entrega registrada ainda no Supabase.</p>
-            )}
-          </div>
-          <Link href="/history" className="mt-6 inline-block text-[10px] font-black text-[#8B1A1A] uppercase tracking-widest hover:underline">
-            Ver auditoria completa →
-          </Link>
+            </div>
+            
+            <div className="h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                        <defs>
+                            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#8B1A1A" stopOpacity={0.1}/>
+                                <stop offset="95%" stopColor="#8B1A1A" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis 
+                            dataKey="name" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
+                            dy={10}
+                        />
+                        <YAxis hide />
+                        <Tooltip 
+                            contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold'}}
+                            cursor={{stroke: '#8B1A1A', strokeWidth: 2, strokeDasharray: '4 4'}}
+                        />
+                        <Area 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke="#8B1A1A" 
+                            strokeWidth={4} 
+                            fillOpacity={1} 
+                            fill="url(#colorValue)" 
+                            animationDuration={2000}
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col h-full overflow-hidden">
+            <div className="p-8 border-b border-slate-50 flex justify-between items-center">
+                <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Histórico Local</h3>
+                <ShieldCheck className="w-5 h-5 text-green-500" />
+            </div>
+            <div className="flex-1 overflow-y-auto">
+                <div className="divide-y divide-slate-50">
+                    {recentDeliveries.map((delivery) => (
+                        <div key={delivery.id} className="p-6 hover:bg-slate-50 transition-colors">
+                            <div className="flex justify-between items-start mb-1">
+                                <p className="font-black text-slate-800 uppercase tracking-tight text-sm truncate max-w-[150px]">
+                                    {delivery.employee?.full_name}
+                                </p>
+                                <span className="text-[9px] font-black text-slate-400">#{delivery.id.slice(0,4)}</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                                {delivery.ppe?.name} • {new Date(delivery.delivery_date).toLocaleDateString()}
+                            </p>
+                            <div className="mt-3 flex items-center justify-between">
+                                <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[8px] font-black uppercase rounded tracking-widest border border-green-100">Assinado</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="p-6 bg-slate-50 mt-auto border-t border-slate-100">
+                <Link href="/history" className="text-[10px] font-black text-[#8B1A1A] uppercase tracking-widest hover:underline flex items-center justify-center">
+                    Ver auditoria completa <ArrowRight className="w-3 h-3 ml-1" />
+                </Link>
+            </div>
         </div>
       </div>
     </div>

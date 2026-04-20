@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Shield, Plus, Search, X, Loader2, Package } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE } from "@/types/database"
+import { Skeleton } from "@/components/ui/Skeleton"
 import Link from "next/link"
 
 export default function PpesPage() {
@@ -115,11 +116,21 @@ export default function PpesPage() {
         </div>
 
         <div className="overflow-x-auto min-h-[200px] flex flex-col">
-          {loading ? (
-             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#8B1A1A]" />
-                <p className="text-sm font-medium">Buscando EPIs no Supabase...</p>
-            </div>
+           {loading ? (
+              <div className="w-full space-y-4 p-4">
+                  {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center space-x-6 py-5 border-b border-slate-50 last:border-0">
+                          <div className="flex-1 space-y-2">
+                              <Skeleton className="h-5 w-2/3" />
+                              <Skeleton className="h-3 w-1/3" />
+                          </div>
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-4 w-16" />
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-8 w-8" variant="circle" />
+                      </div>
+                  ))}
+              </div>
           ) : (
             <table className="w-full text-sm text-left">
                 <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
