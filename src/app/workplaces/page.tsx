@@ -21,7 +21,8 @@ export default function WorkplacesPage() {
 
   const loadWorkplaces = async () => {
     try {
-      setLoading(true)
+      // Removed synchronous setLoading(true) to avoid cascading renders in useEffect.
+      // Loading is initialized to true.
       const data = await api.getWorkplaces()
       setWorkplaces(data)
     } catch (error) {
@@ -32,7 +33,10 @@ export default function WorkplacesPage() {
   }
 
   useEffect(() => {
-    loadWorkplaces()
+    const timer = setTimeout(() => {
+      loadWorkplaces()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [])
 
   const handleAddWorkplace = async (e: React.FormEvent) => {
@@ -42,6 +46,7 @@ export default function WorkplacesPage() {
     try {
       setIsSaving(true)
       await api.addWorkplace({ ...formData, active: true })
+      setLoading(true)
       await loadWorkplaces()
       setIsModalOpen(false)
       setFormData({ name: "", address: "", manager_name: "" })
@@ -73,6 +78,7 @@ export default function WorkplacesPage() {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
+          title="Abrir formulário de novo canteiro"
           className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -159,6 +165,8 @@ export default function WorkplacesPage() {
               </div>
               <button 
                 onClick={() => setIsModalOpen(false)} 
+                title="Fechar modal"
+                aria-label="Fechar modal de cadastro de canteiro"
                 className="text-slate-300 hover:text-slate-600 transition-colors p-2 hover:bg-slate-50 rounded-full"
               >
                 <X className="w-6 h-6" />

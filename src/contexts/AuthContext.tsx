@@ -4,9 +4,20 @@ import { createContext, useContext, useEffect, useState } from "react"
 import { api } from "@/services/api"
 import { useRouter, usePathname } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+
+export type User = {
+  id: string
+  email?: string
+  user_metadata?: {
+    full_name?: string
+    role?: 'ADMIN' | 'ALMOXARIFE' | 'DIRETORIA'
+  }
+  role?: 'ADMIN' | 'ALMOXARIFE' | 'DIRETORIA'
+}
 
 type AuthContextType = {
-  user: any | null
+  user: User | null
   loading: boolean
   logout: () => Promise<void>
 }
@@ -18,7 +29,7 @@ const AuthContext = createContext<AuthContextType>({
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
@@ -28,7 +39,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const session = await api.getSession()
         if (session) {
-          setUser(session.user)
+          // Busca o perfil completo no banco de dados (incluindo o papel/role atualizado)
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single()
+
+          const userData = {
+            ...session.user,
+            role: profile?.role || session.user.user_metadata?.role || 'ALMOXARIFE'
+          }
+          setUser(userData as User)
         } else {
           setUser(null)
           if (pathname !== '/login') {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Package, Plus, History, Search, ArrowUpCircle, ArrowDownCircle, Settings2, Loader2, Link } from "lucide-react"
+import { Package, Plus, History, Search, ArrowUpCircle, ArrowDownCircle, Settings2, Loader2 } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE, StockMovement } from "@/types/database"
 import { format } from "date-fns"
@@ -19,13 +19,13 @@ export default function InventoryPage() {
   const [formData, setFormData] = useState({
     ppe_id: "",
     quantity: 1,
-    type: "ENTRADA" as const,
+    type: "ENTRADA" as "ENTRADA" | "SAIDA" | "AJUSTE",
     motive: "Compra / Reposição de Estoque"
   })
 
   const loadData = async () => {
     try {
-      setLoading(true)
+      // Removed synchronous setLoading(true)
       const [ppeData, moveData] = await Promise.all([
         api.getPpes(),
         api.getStockMovements()
@@ -41,7 +41,10 @@ export default function InventoryPage() {
   }
 
   useEffect(() => {
-    loadData()
+    const timer = setTimeout(() => {
+      loadData()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [])
 
   const handleAddMovement = async (e: React.FormEvent) => {
@@ -50,6 +53,7 @@ export default function InventoryPage() {
 
     try {
       setIsSaving(true)
+      setLoading(true)
       await api.addStockMovement(formData)
       await loadData()
       setIsModalOpen(false)
@@ -80,6 +84,7 @@ export default function InventoryPage() {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
+          title="Abrir formulário de entrada de estoque"
           className="w-full md:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-xl shadow-red-900/20 px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center border-b-4 border-red-900"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -207,6 +212,8 @@ export default function InventoryPage() {
               </div>
               <button 
                 onClick={() => setIsModalOpen(false)} 
+                title="Fechar modal"
+                aria-label="Fechar modal de ajuste de saldo"
                 className="text-slate-300 hover:text-slate-600 p-2"
               >
                 <Plus className="w-6 h-6 rotate-45" />
@@ -215,8 +222,10 @@ export default function InventoryPage() {
             
             <form onSubmit={handleAddMovement} className="p-8 space-y-6">
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Equipamento (EPI)</label>
+                <label htmlFor="ppe_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Equipamento (EPI)</label>
                 <select 
+                  id="ppe_select"
+                  title="Selecionar equipamento para movimentação"
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold appearance-none"
                   value={formData.ppe_id}
                   onChange={(e) => setFormData({...formData, ppe_id: e.target.value})}
@@ -229,11 +238,13 @@ export default function InventoryPage() {
 
               <div className="grid grid-cols-2 gap-6">
                  <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tipo</label>
+                    <label htmlFor="type_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tipo</label>
                     <select 
+                        id="type_select"
+                        title="Selecionar tipo de movimentação"
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold"
                         value={formData.type}
-                        onChange={(e) => setFormData({...formData, type: e.target.value as any})}
+                        onChange={(e) => setFormData({...formData, type: e.target.value as "ENTRADA" | "SAIDA" | "AJUSTE"})}
                     >
                         <option value="ENTRADA">Entrada (+)</option>
                         <option value="SAIDA">Saída (-)</option>
@@ -241,8 +252,10 @@ export default function InventoryPage() {
                     </select>
                  </div>
                  <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Quantidade / Saldo</label>
+                    <label htmlFor="quantity_input" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Quantidade / Saldo</label>
                     <input 
+                        id="quantity_input"
+                        title="Informar quantidade"
                         type="number" 
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-center"
                         value={formData.quantity}
@@ -252,8 +265,10 @@ export default function InventoryPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Motivo / Justificativa</label>
+                <label htmlFor="motive_input" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Motivo / Justificativa</label>
                 <input 
+                  id="motive_input"
+                  title="Informar motivo"
                   type="text" 
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold"
                   placeholder="Ex: Nota Fiscal 1234 / Reposição Mensal"

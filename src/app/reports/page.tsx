@@ -4,12 +4,14 @@ import { useState, useEffect } from "react"
 import { TrendingDown, Download, BarChart3, PieChart, ShieldCheck, Loader2, HardDrive } from "lucide-react"
 import { api } from "@/services/api"
 import { startOfMonth, isAfter } from "date-fns"
-import { DeliveryWithRelations, Workplace } from "@/types/database"
+import { useAuth } from "@/contexts/AuthContext"
+import { useRouter } from "next/navigation"
+
 
 export default function ReportsPage() {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [workplaces, setWorkplaces] = useState<Workplace[]>([])
-  const [deliveries, setDeliveries] = useState<DeliveryWithRelations[]>([])
   const [stats, setStats] = useState([
     { label: "Investimento EPIs (Mês)", value: "R$ 0,00", change: "Atualizando..." },
     { label: "Entregas Totais", value: "0", change: "Total" },
@@ -19,19 +21,23 @@ export default function ReportsPage() {
   const [investmentByWorkplace, setInvestmentByWorkplace] = useState<{name: string, total: number}[]>([])
 
   useEffect(() => {
+    if (!authLoading && user && user.role === 'ALMOXARIFE') {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
+
+  useEffect(() => {
     async function loadReports() {
+      if (!user || user.role === 'ALMOXARIFE') return
+
       try {
         setLoading(true)
-        const [empData, ppeData, deliveryData, trainingData, wpData] = await Promise.all([
-          api.getEmployees(),
+        const [ppeData, deliveryData, trainingData, wpData] = await Promise.all([
           api.getPpes(),
           api.getDeliveries(),
           api.getTrainings(),
           api.getWorkplaces()
         ])
-
-        setWorkplaces(wpData)
-        setDeliveries(deliveryData)
 
         // 1. Cálculo de Investimento do Mês
         const monthStart = startOfMonth(new Date())
@@ -59,7 +65,7 @@ export default function ReportsPage() {
         setStats([
           { label: "Investimento EPIs (Mês)", value: `R$ ${monthTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `${monthDeliveries.length} itens` },
           { label: "Entregas Totais", value: deliveryData.length.toString(), change: "Sincronizado" },
-          { label: "CAs em Críticos", value: criticalCount.toString(), change: "Atenção" },
+          { label: "EPIs em Alerta (C.A.)", value: criticalCount.toString(), change: "Atenção" },
           { label: "Treinamentos Registrados", value: trainingData.length.toString(), change: "NR-01/06" },
         ])
       } catch (err) {
@@ -68,8 +74,21 @@ export default function ReportsPage() {
         setLoading(false)
       }
     }
-    loadReports()
-  }, [])
+
+    const timer = setTimeout(() => {
+        loadReports()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [user])
+
+  if (authLoading || (user && user.role === 'ALMOXARIFE')) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40">
+        <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
+        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Validando acesso...</p>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -136,7 +155,11 @@ export default function ReportsPage() {
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div 
                             className="h-full bg-[#8B1A1A] transition-all duration-1000" 
-                            style={{ width: `${Math.min(100, (wp.total / (investmentByWorkplace[0]?.total || 1)) * 100)}%` }}
+                            ref={(el) => {
+                                if (el) {
+                                    el.style.width = `${Math.min(100, (wp.total / (investmentByWorkplace[0]?.total || 1)) * 100)}%`
+                                }
+                            }}
                         ></div>
                     </div>
                 </div>
@@ -154,7 +177,7 @@ export default function ReportsPage() {
             O algoritmo Antares analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
           </p>
           <div className="mt-8 relative w-24 h-24">
-             <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#8B1A1A]/20 border-r-[#8B1A1A]/40 animate-spin transition-all" style={{ animationDuration: '3s' }}></div>
+             <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#8B1A1A]/20 border-r-[#8B1A1A]/40 animate-[spin_3s_linear_infinite] transition-all"></div>
           </div>
         </div>
       </div>

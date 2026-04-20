@@ -25,9 +25,10 @@ export default function LoginPage() {
       setLoading(true)
       await api.login(email, password)
       router.push("/") // Redireciona para o painel
-    } catch (err: any) {
-      console.error("Login failed:", err)
-      setErrorMsg(err.message || "Credenciais inválidas. Tente novamente.")
+    } catch (err) {
+      const error = err as Error
+      console.error("Login failed:", error)
+      setErrorMsg(error.message || "Credenciais inválidas. Tente novamente.")
     } finally {
       setLoading(false)
     }

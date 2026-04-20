@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement } from "@/types/database";
+import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile } from "@/types/database";
 
 export const api = {
   // --- Autenticação ---
@@ -132,7 +132,7 @@ export const api = {
     // 1. Se houver imagem da assinatura, faz o upload para o Storage
     if (signatureFile) {
       const fileName = `${Date.now()}_${delivery.employee_id}.png`;
-      const { data: storageData, error: storageError } = await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from('ppe_signatures')
         .upload(fileName, signatureFile);
       
@@ -182,5 +182,27 @@ export const api = {
     
     if (error) throw error;
     return data[0] as Training;
+  },
+
+  // --- Perfis de Usuário (RBAC) ---
+  async getProfiles() {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('full_name', { ascending: true });
+    
+    if (error) throw error;
+    return data as Profile[];
+  },
+
+  async updateProfileRole(userId: string, role: Profile['role']) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ role })
+      .eq('id', userId)
+      .select();
+    
+    if (error) throw error;
+    return data[0] as Profile;
   }
 };

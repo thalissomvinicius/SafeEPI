@@ -16,7 +16,8 @@ export default function PpesPage() {
 
   const loadPpes = async () => {
     try {
-      setLoading(true)
+      // Removed synchronous setLoading(true) to avoid cascading renders in useEffect.
+      // Loading is initialized to true.
       const data = await api.getPpes()
       setPpes(data)
     } catch (error) {
@@ -28,7 +29,10 @@ export default function PpesPage() {
   }
 
   useEffect(() => {
-    loadPpes()
+    const timer = setTimeout(() => {
+      loadPpes()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [])
 
   const filteredPpes = ppes.filter(ppe => 
@@ -53,6 +57,7 @@ export default function PpesPage() {
         current_stock: 0
       })
       
+      setLoading(true)
       await loadPpes()
       setFormData({ name: "", ca: "", valCa: "", cost: "" })
       setIsModalOpen(false)
@@ -181,8 +186,9 @@ export default function PpesPage() {
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl tracking-tighter">Novo Item Antares</h2>
               <button 
                 onClick={() => setIsModalOpen(false)} 
+                title="Fechar modal"
+                aria-label="Fechar modal de cadastro de EPI"
                 className="text-slate-400 hover:text-slate-600 transition-colors"
-                aria-label="Fechar modal"
               >
                 <X className="w-6 h-6" />
               </button>

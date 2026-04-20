@@ -55,13 +55,13 @@ export default function DeliveryPage() {
     loadOptions()
   }, [])
 
-  // Auto-atualiza o canteiro quando o colaborador muda
-  useEffect(() => {
-    const emp = employees.find(e => e.id === selectedEmployeeId)
+  const handleEmployeeChange = (employeeId: string) => {
+    setSelectedEmployeeId(employeeId)
+    const emp = employees.find(e => e.id === employeeId)
     if (emp && emp.workplace_id) {
         setSelectedWorkplaceId(emp.workplace_id)
     }
-  }, [selectedEmployeeId, employees])
+  }
 
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const selectedPpe = ppes.find(p => p.id === selectedPpeId)
@@ -223,9 +223,11 @@ export default function DeliveryPage() {
                 <label htmlFor="employee-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador Ativo</label>
                 <select 
                   id="employee-select"
+                  title="Selecionar colaborador"
+                  aria-label="Selecionar colaborador para entrega de EPI"
                   className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold appearance-none"
                   value={selectedEmployeeId}
-                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  onChange={(e) => handleEmployeeChange(e.target.value)}
                 >
                   {employees.map(emp => (
                     <option key={emp.id} value={emp.id}>{emp.full_name}</option>
@@ -242,6 +244,7 @@ export default function DeliveryPage() {
                   </label>
                   <select 
                     id="workplace-select"
+                    title="Selecionar local da entrega"
                     className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                     value={selectedWorkplaceId}
                     onChange={(e) => setSelectedWorkplaceId(e.target.value)}
@@ -257,6 +260,7 @@ export default function DeliveryPage() {
                   <label htmlFor="reason-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Motivo</label>
                   <select 
                     id="reason-select"
+                    title="Selecionar motivo da entrega"
                     className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
@@ -273,6 +277,7 @@ export default function DeliveryPage() {
                 <label htmlFor="ppe-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">EPI Selecionado (C.A.)</label>
                 <select 
                   id="ppe-select"
+                  title="Selecionar equipamento"
                   className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                   value={selectedPpeId}
                   onChange={(e) => setSelectedPpeId(e.target.value)}

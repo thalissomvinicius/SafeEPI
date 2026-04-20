@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/services/api"
+import { DeliveryWithRelations } from "@/types/database"
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -11,7 +12,7 @@ export default function Dashboard() {
     employees: 0,
     criticalCAs: 0,
   })
-  const [recentDeliveries, setRecentDeliveries] = useState<any[]>([])
+  const [recentDeliveries, setRecentDeliveries] = useState<DeliveryWithRelations[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

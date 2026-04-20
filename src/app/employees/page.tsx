@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Users, Plus, Search, X, Loader2, HardDrive } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive, Lock } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, Workplace } from "@/types/database"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -21,11 +22,14 @@ export default function EmployeesPage() {
     workplace_id: "" 
   })
   const [isSaving, setIsSaving] = useState(false)
+  const { user } = useAuth()
+  const canEdit = user?.role === 'ADMIN'
 
   // Fetch real data from Supabase
   const loadData = async () => {
     try {
-      setLoading(true)
+      // Removed synchronous setLoading(true) to avoid cascading renders in useEffect.
+      // Loading is initialized to true.
       const [empData, wpData] = await Promise.all([
         api.getEmployees(),
         api.getWorkplaces()
@@ -41,7 +45,11 @@ export default function EmployeesPage() {
   }
 
   useEffect(() => {
-    loadData()
+    // Initial load - wrapped in setTimeout to ensure it's asynchronous and avoid cascading render warnings
+    const timer = setTimeout(() => {
+      loadData()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [])
 
   const filteredEmployees = employees.filter(emp => 
@@ -65,6 +73,7 @@ export default function EmployeesPage() {
         workplace_id: formData.workplace_id || null
       })
       
+      setLoading(true)
       await loadData() // Recarrega a lista
       setFormData({ name: "", role: "", department: "", cpf: "", workplace_id: "" })
       setIsModalOpen(false)
@@ -90,13 +99,20 @@ export default function EmployeesPage() {
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de prontuários de EPI sincronizada com o Supabase.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Colaborador
-        </button>
+        {canEdit ? (
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Colaborador
+          </button>
+        ) : (
+          <div className="bg-slate-100 text-slate-400 px-6 py-3 rounded-xl text-sm font-bold flex items-center italic cursor-not-allowed select-none whitespace-nowrap">
+             <Lock className="w-4 h-4 mr-2 opacity-50" />
+             Acesso Restrito
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
@@ -240,8 +256,10 @@ export default function EmployeesPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Canteiro de Obra</label>
+                <label htmlFor="workplace_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Canteiro de Obra</label>
                 <select 
+                  id="workplace_select"
+                  title="Selecionar canteiro de obra"
                   value={formData.workplace_id}
                   onChange={(e) => setFormData({...formData, workplace_id: e.target.value})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold"

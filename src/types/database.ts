@@ -88,3 +88,10 @@ export type TrainingWithRelations = Training & {
     cpf: string;
   };
 };
+export type Profile = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: 'ADMIN' | 'ALMOXARIFE' | 'DIRETORIA';
+  created_at?: string;
+};

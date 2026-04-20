@@ -1,26 +1,31 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut } from "lucide-react"
+import { usePathname } from "next/navigation"
+import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const menuItems = [
-  { href: "/", label: "Dashboard", icon: Home },
-  { href: "/delivery", label: "Nova Entrega", icon: PenTool },
-  { href: "/inventory", label: "Estoque", icon: Package },
-  { href: "/workplaces", label: "Canteiros", icon: HardDrive },
-  { href: "/employees", label: "Colaboradores", icon: Users },
-  { href: "/ppes", label: "EPIs e CAs", icon: Shield },
-  { href: "/history", label: "Histórico", icon: History },
-  { href: "/reports", label: "Relatórios", icon: TrendingDown },
-  { href: "/training", label: "Treinamentos", icon: CheckCircle2 },
+  { href: "/", label: "Dashboard", icon: Home, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
+  { href: "/delivery", label: "Nova Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
+  { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
+  { href: "/workplaces", label: "Canteiros", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/employees", label: "Colaboradores", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/history", label: "Histórico", icon: History, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
+  { href: "/reports", label: "Relatórios", icon: TrendingDown, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/training", label: "Treinamentos", icon: CheckCircle2, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/users", label: "Usuários", icon: Settings, roles: ['ADMIN'] },
 ]
 
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
+  
+  const filteredMenuItems = menuItems.filter(item => 
+    item.roles.includes(user?.role || 'ADMIN')
+  )
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 text-slate-600 hidden md:flex flex-col h-screen sticky top-0 shadow-sm">
@@ -33,7 +38,7 @@ export function Sidebar() {
       </div>
       
       <nav className="flex-1 py-6 px-3 space-y-1">
-        {menuItems.map((item) => {
+        {filteredMenuItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
           return (
