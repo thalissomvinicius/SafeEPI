@@ -27,7 +27,7 @@ export default function DeliveryPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("")
   const [selectedPpeId, setSelectedPpeId] = useState("")
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
-  const [reason, setReason] = useState("Primeira Entrega (Admissão)")
+  const [reason, setReason] = useState("Primeira Entrega")
 
   useEffect(() => {
     async function loadOptions() {
@@ -261,10 +261,10 @@ export default function DeliveryPage() {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                   >
-                    <option>Primeira Entrega (Admissão)</option>
-                    <option>Substituição (Desgaste/Validade)</option>
-                    <option>Perda</option>
-                    <option>Dano</option>
+                    <option value="Primeira Entrega">Primeira Entrega (Admissão)</option>
+                    <option value="Substituição (Desgaste/Validade)">Substituição (Desgaste/Validade)</option>
+                    <option value="Perda">Perda</option>
+                    <option value="Dano">Dano</option>
                   </select>
                 </div>
               </div>
