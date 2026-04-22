@@ -126,7 +126,7 @@ export const api = {
       .select(`
         *,
         employee:employees(full_name, cpf),
-        ppe:ppes(name, ca_number, cost),
+        ppe:ppes(name, ca_number, cost, lifespan_days),
         workplace:workplaces(name)
       `)
       .order('delivery_date', { ascending: false });
@@ -141,7 +141,7 @@ export const api = {
       .select(`
         *,
         employee:employees(full_name, cpf, job_title, active, admission_date, termination_date),
-        ppe:ppes(name, ca_number, cost),
+        ppe:ppes(name, ca_number, cost, lifespan_days),
         workplace:workplaces(name)
       `)
       .eq('employee_id', employeeId)

@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, AlertTriangle, Calendar, Package, X, Loader2 } from "lucide-react"
+import { Bell, AlertTriangle, Calendar, Package, X, Loader2, RefreshCw } from "lucide-react"
+import { addDays, isPast } from "date-fns"
 import { api } from "@/services/api"
 import { PPE } from "@/types/database"
 
@@ -11,7 +12,7 @@ export function NotificationBell() {
     id: string;
     title: string;
     description: string;
-    type: 'CA' | 'STOCK';
+    type: 'CA' | 'STOCK' | 'LIFESPAN';
     severity: 'high' | 'medium';
   }[]>([])
   const [loading, setLoading] = useState(true)
@@ -20,10 +21,31 @@ export function NotificationBell() {
     async function checkNotifications() {
       try {
         setLoading(true)
-        const [ppeData] = await Promise.all([api.getPpes()])
+        const [ppeData, deliveryData] = await Promise.all([
+          api.getPpes(),
+          api.getDeliveries()
+        ])
         
         const alerts: any[] = []
         const now = new Date()
+
+        // Check PPE Lifespan Alerts (Items in use that need replacement)
+        deliveryData.forEach(delivery => {
+          if (!delivery.returned_at && delivery.ppe?.lifespan_days) {
+            const deliveryDate = new Date(delivery.delivery_date)
+            const expiryDate = addDays(deliveryDate, delivery.ppe.lifespan_days)
+            
+            if (isPast(expiryDate)) {
+              alerts.push({
+                id: `expiry-${delivery.id}`,
+                title: "Troca Obrigatória",
+                description: `${delivery.employee?.full_name} está com ${delivery.ppe.name} vencido pelo uso.`,
+                type: 'LIFESPAN',
+                severity: 'high'
+              })
+            }
+          }
+        })
 
         ppeData.forEach(ppe => {
           // Check CA Expiry
@@ -105,8 +127,10 @@ export function NotificationBell() {
                     }`}>
                       {notif.type === 'CA' ? (
                         <Calendar className={`w-5 h-5 ${notif.severity === 'high' ? 'text-red-600' : 'text-amber-600'}`} />
-                      ) : (
+                      ) : notif.type === 'STOCK' ? (
                         <Package className={`w-5 h-5 ${notif.severity === 'high' ? 'text-red-600' : 'text-amber-600'}`} />
+                      ) : (
+                        <RefreshCw className="w-5 h-5 text-red-600 animate-spin-slow" />
                       )}
                     </div>
                     <div>

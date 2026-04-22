@@ -79,6 +79,7 @@ export type DeliveryWithRelations = Delivery & {
     name: string;
     ca_number: string;
     cost?: number;
+    lifespan_days?: number;
   };
   workplace?: {
     name: string;

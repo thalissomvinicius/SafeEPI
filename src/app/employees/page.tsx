@@ -6,7 +6,7 @@ import { api } from "@/services/api"
 import { Employee, Workplace, DeliveryWithRelations } from "@/types/database"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import { format } from "date-fns"
+import { format, addDays, isPast } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -509,6 +509,12 @@ export default function EmployeesPage() {
                                 </div>
                                 <div className="text-xs text-slate-500 font-medium flex flex-wrap gap-x-4 gap-y-1">
                                   <span>Entregue: {format(new Date(delivery.delivery_date), "dd/MM/yyyy HH:mm")}</span>
+                                  {delivery.ppe?.lifespan_days && !delivery.returned_at && (
+                                    <span className={isPast(addDays(new Date(delivery.delivery_date), delivery.ppe.lifespan_days)) ? "text-red-600 font-black animate-pulse" : ""}>
+                                      Troca em: {format(addDays(new Date(delivery.delivery_date), delivery.ppe.lifespan_days), "dd/MM/yyyy")}
+                                      {isPast(addDays(new Date(delivery.delivery_date), delivery.ppe.lifespan_days)) && " • TROCA PENDENTE!"}
+                                    </span>
+                                  )}
                                   <span>Motivo: {delivery.reason}</span>
                                   {delivery.returned_at && (
                                     <span className="text-[#8B1A1A] font-bold">

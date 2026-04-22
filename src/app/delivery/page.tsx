@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import SignatureCanvas from "react-signature-canvas"
-import { CheckCircle2, FileDown, Loader2, HardDrive } from "lucide-react"
+import { CheckCircle2, FileDown, Loader2, HardDrive, ShieldAlert } from "lucide-react"
 import jsPDF from "jspdf"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -68,6 +68,9 @@ export default function DeliveryPage() {
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const selectedPpe = ppes.find(p => p.id === selectedPpeId)
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
+
+  // Check CA Expiration
+  const isPpeExpired = selectedPpe ? new Date(selectedPpe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0) : false
 
   const filteredPpes = ppes.filter(ppe => 
     ppe.name.toLowerCase().includes(ppeSearchTerm.toLowerCase()) || 
@@ -136,6 +139,11 @@ export default function DeliveryPage() {
   const saveDelivery = async () => {
     if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
       alert("A assinatura é obrigatória.")
+      return
+    }
+
+    if (isPpeExpired) {
+      alert("O EPI selecionado está com o CA vencido. A entrega não pode ser realizada.")
       return
     }
 
@@ -303,12 +311,23 @@ export default function DeliveryPage() {
                       onChange={(e) => setSelectedPpeId(e.target.value)}
                     >
                       <option value="">Selecione o EPI...</option>
-                      {filteredPpes.map(ppe => (
-                        <option key={ppe.id} value={ppe.id}>CA {ppe.ca_number} • {ppe.name}</option>
-                      ))}
+                      {filteredPpes.map(ppe => {
+                        const isExpired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
+                        return (
+                          <option key={ppe.id} value={ppe.id} className={isExpired ? "text-red-600 font-bold" : ""}>
+                            {isExpired ? "⚠️ [CA VENCIDO] " : ""}CA {ppe.ca_number} • {ppe.name}
+                          </option>
+                        )
+                      })}
                       {filteredPpes.length === 0 && <option value="">Nenhum EPI encontrado</option>}
                     </select>
                   </div>
+                  {isPpeExpired && (
+                    <p className="text-red-600 text-[10px] font-black uppercase tracking-widest mt-1 flex items-center animate-pulse">
+                       <ShieldAlert className="w-3 h-3 mr-1" />
+                       Entrega Bloqueada: CA Vencido em {format(new Date(selectedPpe?.ca_expiry_date || ""), "dd/MM/yyyy")}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -326,11 +345,12 @@ export default function DeliveryPage() {
 
               <div className="pt-4">
                 <button 
-                  disabled={employees.length === 0 || ppes.length === 0}
+                  disabled={employees.length === 0 || ppes.length === 0 || isPpeExpired}
                   onClick={() => setStep(2)}
-                  className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white disabled:bg-slate-300 py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900"
+                  className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white disabled:bg-slate-300 py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
                 >
-                  Confirmar e Assinar
+                  {isPpeExpired ? <ShieldAlert className="w-5 h-5" /> : null}
+                  {isPpeExpired ? "EPI com CA Vencido" : "Confirmar e Assinar"}
                 </button>
               </div>
             </div>
@@ -364,11 +384,11 @@ export default function DeliveryPage() {
 
               <div className="pt-2 flex flex-col gap-5">
                 <button 
-                  disabled={isSaving}
+                  disabled={isSaving || isPpeExpired}
                   onClick={saveDelivery}
-                  className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900"
+                  className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "FINALIZAR ENTREGA DIGITAL"}
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : isPpeExpired ? "BLOQUEADO (CA VENCIDO)" : "FINALIZAR ENTREGA DIGITAL"}
                 </button>
                 <button onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600">← Alterar Dados</button>
               </div>
