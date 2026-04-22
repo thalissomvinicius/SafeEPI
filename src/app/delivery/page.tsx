@@ -294,19 +294,19 @@ export default function DeliveryPage() {
                     <span>EPI Selecionado (C.A.)</span>
                     <span className="text-slate-300 font-medium normal-case tracking-normal">Busca Rápida</span>
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input 
                       id="ppe-search"
                       type="text"
                       placeholder="Pesquisar CA ou Nome..."
                       value={ppeSearchTerm}
                       onChange={(e) => setPpeSearchTerm(e.target.value)}
-                      className="w-1/3 bg-white border-2 border-slate-100 text-slate-900 rounded-xl px-4 py-4 outline-none focus:border-[#8B1A1A] transition-all font-bold text-sm"
+                      className="w-full sm:w-1/3 bg-white border-2 border-slate-100 text-slate-900 rounded-xl px-4 py-4 outline-none focus:border-[#8B1A1A] transition-all font-bold text-sm"
                     />
                     <select 
                       id="ppe-select"
                       title="Selecionar equipamento"
-                      className="w-2/3 bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
+                      className="w-full sm:w-2/3 bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                       value={selectedPpeId}
                       onChange={(e) => setSelectedPpeId(e.target.value)}
                     >
