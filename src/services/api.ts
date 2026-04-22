@@ -65,6 +65,15 @@ export const api = {
     return data[0] as Employee;
   },
 
+  async terminateEmployee(employeeId: string) {
+    const { error } = await supabase
+      .from('employees')
+      .update({ active: false, termination_date: new Date().toISOString() })
+      .eq('id', employeeId);
+    
+    if (error) throw error;
+  },
+
   // --- EPIs ---
   async getPpes() {
     const { data, error } = await supabase
@@ -126,6 +135,22 @@ export const api = {
     return data as DeliveryWithRelations[];
   },
 
+  async getEmployeeHistory(employeeId: string) {
+    const { data, error } = await supabase
+      .from('deliveries')
+      .select(`
+        *,
+        employee:employees(full_name, cpf, job_title, active, admission_date, termination_date),
+        ppe:ppes(name, ca_number, cost),
+        workplace:workplaces(name)
+      `)
+      .eq('employee_id', employeeId)
+      .order('delivery_date', { ascending: false });
+    
+    if (error) throw error;
+    return data as DeliveryWithRelations[];
+  },
+
   async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at' | 'delivery_date'>, signatureFile?: File) {
     let signatureUrl = null;
 
@@ -158,6 +183,24 @@ export const api = {
     
     if (error) throw error;
     return data[0];
+  },
+
+  async returnDelivery(deliveryId: string, motive: string) {
+    const { error } = await supabase
+      .from('deliveries')
+      .update({ returned_at: new Date().toISOString(), return_motive: motive })
+      .eq('id', deliveryId);
+    
+    if (error) throw error;
+  },
+
+  async returnMultipleDeliveries(deliveryIds: string[], motive: string) {
+    const { error } = await supabase
+      .from('deliveries')
+      .update({ returned_at: new Date().toISOString(), return_motive: motive })
+      .in('id', deliveryIds);
+    
+    if (error) throw error;
   },
 
   // --- Treinamentos ---

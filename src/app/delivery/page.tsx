@@ -26,6 +26,8 @@ export default function DeliveryPage() {
   // Estados dos formulários selecionados
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("")
   const [selectedPpeId, setSelectedPpeId] = useState("")
+  const [ppeSearchTerm, setPpeSearchTerm] = useState("")
+  const [quantity, setQuantity] = useState(1)
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
   const [reason, setReason] = useState("Primeira Entrega")
 
@@ -66,6 +68,11 @@ export default function DeliveryPage() {
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const selectedPpe = ppes.find(p => p.id === selectedPpeId)
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
+
+  const filteredPpes = ppes.filter(ppe => 
+    ppe.name.toLowerCase().includes(ppeSearchTerm.toLowerCase()) || 
+    ppe.ca_number.includes(ppeSearchTerm)
+  )
 
   const clearSignature = () => {
     sigCanvas.current?.clear()
@@ -145,7 +152,7 @@ export default function DeliveryPage() {
         ppe_id: selectedPpeId,
         workplace_id: selectedWorkplaceId || null,
         reason: reason as 'Primeira Entrega' | 'Substituição (Desgaste/Validade)' | 'Perda' | 'Dano',
-        quantity: 1,
+        quantity: quantity,
         ip_address: `Terminal ${selectedWorkplace?.name || "Móvel"}`,
         signature_url: null
       }, signatureFile)
@@ -273,20 +280,47 @@ export default function DeliveryPage() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label htmlFor="ppe-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">EPI Selecionado (C.A.)</label>
-                <select 
-                  id="ppe-select"
-                  title="Selecionar equipamento"
-                  className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
-                  value={selectedPpeId}
-                  onChange={(e) => setSelectedPpeId(e.target.value)}
-                >
-                  {ppes.map(ppe => (
-                    <option key={ppe.id} value={ppe.id}>CA {ppe.ca_number} • {ppe.name}</option>
-                  ))}
-                  {ppes.length === 0 && <option>Nenhum EPI encontrado</option>}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label htmlFor="ppe-search" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
+                    <span>EPI Selecionado (C.A.)</span>
+                    <span className="text-slate-300 font-medium normal-case tracking-normal">Busca Rápida</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input 
+                      id="ppe-search"
+                      type="text"
+                      placeholder="Pesquisar CA ou Nome..."
+                      value={ppeSearchTerm}
+                      onChange={(e) => setPpeSearchTerm(e.target.value)}
+                      className="w-1/3 bg-white border-2 border-slate-100 text-slate-900 rounded-xl px-4 py-4 outline-none focus:border-[#8B1A1A] transition-all font-bold text-sm"
+                    />
+                    <select 
+                      id="ppe-select"
+                      className="w-2/3 bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
+                      value={selectedPpeId}
+                      onChange={(e) => setSelectedPpeId(e.target.value)}
+                    >
+                      <option value="">Selecione o EPI...</option>
+                      {filteredPpes.map(ppe => (
+                        <option key={ppe.id} value={ppe.id}>CA {ppe.ca_number} • {ppe.name}</option>
+                      ))}
+                      {filteredPpes.length === 0 && <option value="">Nenhum EPI encontrado</option>}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label htmlFor="quantity-input" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quantidade</label>
+                  <input 
+                    id="quantity-input"
+                    type="number"
+                    min="1"
+                    className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
+                    value={quantity}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                  />
+                </div>
               </div>
 
               <div className="pt-4">

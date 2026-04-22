@@ -7,6 +7,7 @@ export type Employee = {
   admission_date: string;
   active: boolean;
   workplace_id: string | null;
+  termination_date?: string | null;
   created_at?: string;
 };
 
@@ -54,6 +55,8 @@ export type Delivery = {
   signature_url: string | null;
   ip_address: string | null;
   workplace_id: string | null;
+  returned_at?: string | null;
+  return_motive?: string | null;
   created_at?: string;
 };
 
