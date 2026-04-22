@@ -41,13 +41,13 @@ export function NotificationBell() {
           }
 
           // Check Stock (Simple logic: < 5 is low)
-          if (ppe.stock_balance < 5) {
+          if (ppe.current_stock < 5) {
             alerts.push({
               id: `stock-${ppe.id}`,
               title: "Estoque Baixo",
-              description: `${ppe.name} tem apenas ${ppe.stock_balance} unidades.`,
+              description: `${ppe.name} tem apenas ${ppe.current_stock} unidades.`,
               type: 'STOCK',
-              severity: ppe.stock_balance <= 1 ? 'high' : 'medium'
+              severity: ppe.current_stock <= 1 ? 'high' : 'medium'
             })
           }
         })

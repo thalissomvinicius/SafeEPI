@@ -195,7 +195,7 @@ export default function ReportsPage() {
                               ))}
                           </Pie>
                           <Tooltip 
-                            formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR')}`}
+                            formatter={(value: any) => `R$ ${Number(value).toLocaleString('pt-BR')}`}
                             contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                           />
                           <Legend verticalAlign="bottom" height={36}/>
@@ -276,13 +276,13 @@ export default function ReportsPage() {
                 <p className="text-slate-400 text-sm italic text-center py-10">Nenhum canteiro com movimentações ainda.</p>
             )}
           </div>
-            O algoritmo Antares analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
-          </p>
-          <div className="mt-8 relative w-24 h-24">
-             <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#8B1A1A]/20 border-r-[#8B1A1A]/40 animate-[spin_3s_linear_infinite] transition-all"></div>
-          </div>
+            <p className="text-slate-400 text-sm mt-4 italic font-medium">
+              O algoritmo Antares analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
+            </p>
+            <div className="mt-8 relative w-24 h-24">
+               <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#8B1A1A]/20 border-r-[#8B1A1A]/40 animate-[spin_3s_linear_infinite] transition-all"></div>
+            </div>
         </div>
-      </div>
 
       <div className="bg-slate-900 rounded-2xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-slate-900/40 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#8B1A1A]/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
