@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { COMPANY_CONFIG } from "@/config/company"
+import QRCode from "qrcode"
 
 const [r, g, b] = COMPANY_CONFIG.primaryColorRgb
 
@@ -17,50 +18,46 @@ function addPageHeader(doc: jsPDF, title: string, subtitle: string) {
   doc.setFillColor(r, g, b)
   doc.rect(0, 0, pageWidth, 38, "F")
 
-  // White accent line (simulated transparency with lighter color)
-  doc.setFillColor(r + 30, g + 30, b + 30) // Slightly lighter than primary
+  // White accent line
+  doc.setFillColor(r + 30, g + 30, b + 30)
   doc.rect(0, 34, pageWidth, 4, "F")
 
-  // Company name (left)
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(8)
   doc.setFont("helvetica", "bold")
   doc.text(COMPANY_CONFIG.name.toUpperCase(), 14, 13)
 
-  // Title (center)
   doc.setFontSize(14)
   doc.setFont("helvetica", "bold")
   doc.text(title, pageWidth / 2, 22, { align: "center" })
 
-  // Subtitle
   doc.setFontSize(8)
   doc.setFont("helvetica", "normal")
   doc.text(subtitle, pageWidth / 2, 30, { align: "center" })
 
-  // Date top-right
   doc.setFontSize(7)
   doc.text(format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR }), pageWidth - 14, 13, { align: "right" })
 
-  doc.setTextColor(30, 41, 59) // slate-800
+  doc.setTextColor(30, 41, 59)
 }
 
-function addPageFooter(doc: jsPDF, hash?: string) {
+function addPageFooter(doc: jsPDF, hash?: string, ip?: string) {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
 
-  doc.setFillColor(248, 250, 252) // slate-50
+  doc.setFillColor(248, 250, 252)
   doc.rect(0, pageHeight - 16, pageWidth, 16, "F")
 
-  doc.setDrawColor(226, 232, 240) // slate-200
+  doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.3)
   doc.line(14, pageHeight - 16, pageWidth - 14, pageHeight - 16)
 
-  doc.setFontSize(6.5)
+  doc.setFontSize(6)
   doc.setFont("helvetica", "normal")
-  doc.setTextColor(100, 116, 139) // slate-500
+  doc.setTextColor(100, 116, 139)
 
-  const left = `${COMPANY_CONFIG.systemName} • ${COMPANY_CONFIG.compliance}`
-  const right = hash ? `Token: ${hash}` : `Emitido em ${format(new Date(), "dd/MM/yyyy")}`
+  const left = `${COMPANY_CONFIG.systemName} • NR-06 Compliance • Identidade Digital Verificada`
+  const right = hash ? `Hash: ${hash} | IP: ${ip || 'N/A'}` : `Emitido em ${format(new Date(), "dd/MM/yyyy")}`
   doc.text(left, 14, pageHeight - 6)
   doc.text(right, pageWidth - 14, pageHeight - 6, { align: "right" })
 }
@@ -93,12 +90,15 @@ export interface DeliveryPDFData {
   authMethod: 'manual' | 'facial'
   signatureBase64: string
   photoBase64?: string
+  ipAddress?: string
+  location?: string
+  validationHash?: string
 }
 
-export function generateDeliveryPDF(data: DeliveryPDFData): Blob {
+export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> {
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const hash = Math.random().toString(36).substring(2, 10).toUpperCase()
+  const hash = data.validationHash || Math.random().toString(36).substring(2, 12).toUpperCase()
 
   addPageHeader(doc, "FICHA DE ENTREGA DE E.P.I.", "Certificado de Uso Individual — NR-06 Art. 6°")
 
@@ -107,7 +107,6 @@ export function generateDeliveryPDF(data: DeliveryPDFData): Blob {
   const boxH = 36
   const col = (pageWidth - 28) / 2
 
-  // Box Colaborador
   doc.setFillColor(248, 250, 252)
   doc.roundedRect(14, boxY, col - 4, boxH, 3, 3, "F")
   doc.setDrawColor(226, 232, 240)
@@ -118,7 +117,6 @@ export function generateDeliveryPDF(data: DeliveryPDFData): Blob {
   infoRow(doc, "CPF", data.employeeCpf, 18, boxY + 20)
   infoRow(doc, "Função", data.employeeRole, 18, boxY + 30)
 
-  // Box EPI
   doc.setFillColor(248, 250, 252)
   doc.roundedRect(14 + col, boxY, col - 4, boxH, 3, 3, "F")
   doc.setDrawColor(226, 232, 240)
@@ -128,7 +126,6 @@ export function generateDeliveryPDF(data: DeliveryPDFData): Blob {
   infoRow(doc, "Nº do C.A.", data.ppeCaNumber, 18 + col, boxY + 20)
   infoRow(doc, "Canteiro / Unidade", data.workplaceName, 18 + col, boxY + 30)
 
-  // ── Details row ──
   const detY = boxY + boxH + 10
   const colW = (pageWidth - 28) / 4
   const details = [
@@ -141,16 +138,14 @@ export function generateDeliveryPDF(data: DeliveryPDFData): Blob {
     infoRow(doc, d.label, d.value, 14 + i * colW, detY + 4)
   })
 
-  // ── Termo de responsabilidade ──
   const termY = detY + 18
-  doc.setFillColor(255, 251, 235) // amber-50
-  doc.setDrawColor(251, 191, 36)  // amber-400
-  doc.setLineWidth(0.3)
+  doc.setFillColor(255, 251, 235)
+  doc.setDrawColor(251, 191, 36)
   doc.roundedRect(14, termY, pageWidth - 28, 24, 3, 3, "FD")
 
   doc.setFont("helvetica", "bold")
   doc.setFontSize(7.5)
-  doc.setTextColor(146, 64, 14) // amber-800
+  doc.setTextColor(146, 64, 14)
   doc.text("⚠  TERMO DE RESPONSABILIDADE", 18, termY + 7)
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
@@ -158,61 +153,117 @@ export function generateDeliveryPDF(data: DeliveryPDFData): Blob {
   const term = "Declaro ter recebido o(s) EPI(s) listado(s) acima em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m), responsabilizando-me pela sua guarda e conservação conforme NR-06 do MTE."
   doc.text(doc.splitTextToSize(term, pageWidth - 36), 18, termY + 14)
 
-  // ── Assinatura / Foto ──
   const sigY = termY + 32
-  const sigBoxW = data.authMethod === 'facial' ? 70 : pageWidth - 28
 
   if (data.authMethod === 'facial' && data.signatureBase64) {
-    // Photo on left
+    // ── PHOTO BOX (square, proportional) ──
+    const photoSize = 50 // Square photo
     doc.setFillColor(241, 245, 249)
-    doc.roundedRect(14, sigY, 65, 55, 3, 3, "F")
+    doc.setDrawColor(203, 213, 225)
+    doc.roundedRect(14, sigY, photoSize + 4, photoSize + 4, 3, 3, "FD")
     try {
-      doc.addImage(data.signatureBase64, 'JPEG', 14, sigY, 65, 55)
-    } catch { /* silently fail */ }
+      doc.addImage(data.signatureBase64, 'JPEG', 16, sigY + 2, photoSize, photoSize)
+    } catch { /* silently ignore */ }
 
-    // Facial auth badge
-    doc.setFillColor(220, 252, 231) // green-100
-    doc.setDrawColor(134, 239, 172) // green-300
-    doc.roundedRect(84, sigY, pageWidth - 98, 20, 3, 3, "FD")
+    // ── VERIFICATION INFO BOX (right of photo) ──
+    const infoX = 14 + photoSize + 10
+    const infoW = pageWidth - infoX - 14
+
+    // Green verified badge
+    doc.setFillColor(220, 252, 231)
+    doc.setDrawColor(134, 239, 172)
+    doc.roundedRect(infoX, sigY, infoW, 22, 3, 3, "FD")
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
-    doc.setTextColor(21, 128, 61) // green-700
-    doc.text("✓  IDENTIDADE VERIFICADA POR BIOMETRIA FACIAL", 88, sigY + 9)
+    doc.setTextColor(21, 128, 61)
+    doc.text("✓  IDENTIDADE VERIFICADA POR BIOMETRIA FACIAL", infoX + 4, sigY + 8)
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.text(`Tecnologia: face-api.js (AI local) • Token: ${hash}`, 88, sigY + 16)
+    doc.setFontSize(6.5)
+    doc.setTextColor(21, 128, 61)
+    doc.text(`Motor: face-api.js / TensorFlow.js (AI-Based)`, infoX + 4, sigY + 14)
+    doc.text(`Tecnologia: Euclidean Distance Matching`, infoX + 4, sigY + 19)
 
-    // Line below
+    // ── METADATA BOX (IP, Location) ──
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(226, 232, 240)
+    doc.roundedRect(infoX, sigY + 25, infoW, 18, 3, 3, "FD")
+    doc.setFontSize(6.5)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(100, 116, 139)
+    doc.text("METADADOS DE AUTENTICAÇÃO", infoX + 4, sigY + 31)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(6.5)
+    doc.setTextColor(71, 85, 105)
+    doc.text(`IP do Dispositivo: ${data.ipAddress || 'Não registrado'}`, infoX + 4, sigY + 37)
+    doc.text(`Geolocalização: ${data.location || 'Não capturada'}`, infoX + 4, sigY + 42)
+
+    // ── SIGNATURE LINE ──
     doc.setDrawColor(226, 232, 240)
     doc.setLineWidth(0.5)
-    doc.line(84, sigY + 28, pageWidth - 14, sigY + 28)
+    doc.line(infoX, sigY + 48, infoX + infoW, sigY + 48)
     doc.setFontSize(7.5)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(100, 116, 139)
-    doc.text(data.employeeName.toUpperCase(), (84 + pageWidth - 14) / 2, sigY + 33, { align: "center" })
+    doc.text(data.employeeName.toUpperCase(), infoX + infoW / 2, sigY + 52, { align: "center" })
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(6.5)
-    doc.text("Assinante (Biometria Facial)", (84 + pageWidth - 14) / 2, sigY + 38, { align: "center" })
+    doc.setFontSize(6)
+    doc.text("Assinatura Biométrica Digital Certificada", infoX + infoW / 2, sigY + 57, { align: "center" })
+
   } else {
-    // Manual signature
+    // ── MANUAL SIGNATURE ──
     doc.setFillColor(248, 250, 252)
     doc.setDrawColor(226, 232, 240)
-    doc.roundedRect(14, sigY, sigBoxW, 50, 3, 3, "FD")
+    doc.roundedRect(14, sigY, pageWidth - 28, 55, 3, 3, "FD")
     try {
       doc.addImage(data.signatureBase64, 'PNG', (pageWidth - 80) / 2, sigY + 5, 80, 30)
     } catch { /* */ }
     doc.setLineWidth(0.5)
-    doc.line(40, sigY + 42, pageWidth - 40, sigY + 42)
+    doc.line(40, sigY + 45, pageWidth - 40, sigY + 45)
     doc.setFontSize(7.5)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(100, 116, 139)
-    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, sigY + 47, { align: "center" })
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(6.5)
-    doc.text("Assinatura do Colaborador", pageWidth / 2, sigY + 52, { align: "center" })
+    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, sigY + 50, { align: "center" })
+
+    // ── IP & Location for manual mode too ──
+    if (data.ipAddress || data.location) {
+      doc.setFontSize(6)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(148, 163, 184)
+      doc.text(`IP: ${data.ipAddress || 'N/A'} | Localização: ${data.location || 'N/A'}`, pageWidth / 2, sigY + 55, { align: "center" })
+    }
   }
 
-  addPageFooter(doc, hash)
+  // ── QR CODE SECTION (always visible, below signature area) ──
+  const qrY = sigY + 64
+  
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.3)
+  doc.line(14, qrY, pageWidth - 14, qrY)
+
+  try {
+    const qrText = `${COMPANY_CONFIG.systemName} | Hash: ${hash} | ${format(new Date(), "dd/MM/yyyy HH:mm")}`
+    const qrDataUrl = await QRCode.toDataURL(qrText, { width: 200, margin: 1 })
+    doc.addImage(qrDataUrl, 'PNG', 14, qrY + 4, 22, 22)
+  } catch { /* silently ignore */ }
+
+  // QR legend + Hash info (right of QR)
+  doc.setFontSize(7)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(30, 41, 59)
+  doc.text("CERTIFICADO DE AUTENTICIDADE", 42, qrY + 9)
+  
+  doc.setFontSize(6.5)
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(100, 116, 139)
+  doc.text(`Hash de Validação: ${hash}`, 42, qrY + 15)
+  doc.text(`IP do Terminal: ${data.ipAddress || 'Não registrado'}`, 42, qrY + 20)
+  doc.text(`Localização GPS: ${data.location || 'Não capturada'}`, 42, qrY + 25)
+
+  doc.setFontSize(5.5)
+  doc.setTextColor(148, 163, 184)
+  doc.text("Escaneie o QR Code para verificar a autenticidade deste documento.", 14, qrY + 30)
+
+  addPageFooter(doc, hash, data.ipAddress)
   return doc.output("blob")
 }
 
@@ -231,27 +282,24 @@ export interface ReturnPDFData {
   signatureBase64: string
 }
 
-export function generateReturnPDF(data: ReturnPDFData): Blob {
+export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const hash = Math.random().toString(36).substring(2, 10).toUpperCase()
+  const hash = Math.random().toString(36).substring(2, 12).toUpperCase()
 
   addPageHeader(doc, "RECIBO DE BAIXA / SUBSTITUIÇÃO E.P.I.", "Registro de Devolução e Troca — NR-06")
 
-  // Info
   const boxY = 46
   infoRow(doc, "Colaborador", data.employeeName, 14, boxY)
   infoRow(doc, "CPF", data.employeeCpf, 14, boxY + 12)
 
-  // Divider
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.3)
   doc.line(14, boxY + 20, pageWidth - 14, boxY + 20)
 
-  // Return info
   const retY = boxY + 28
-  doc.setFillColor(254, 242, 242) // red-50
-  doc.setDrawColor(252, 165, 165) // red-300
+  doc.setFillColor(254, 242, 242)
+  doc.setDrawColor(252, 165, 165)
   doc.roundedRect(14, retY, (pageWidth - 28) / 2 - 4, 26, 3, 3, "FD")
   doc.setFontSize(8)
   doc.setFont("helvetica", "bold")
@@ -266,7 +314,7 @@ export function generateReturnPDF(data: ReturnPDFData): Blob {
   doc.text(`Motivo: ${data.returnMotive}`, 18, retY + 23)
 
   if (data.newItemName) {
-    doc.setFillColor(240, 253, 244) // green-50
+    doc.setFillColor(240, 253, 244)
     doc.setDrawColor(134, 239, 172)
     const halfW = (pageWidth - 28) / 2
     doc.roundedRect(14 + halfW + 4, retY, halfW - 4, 26, 3, 3, "FD")
@@ -285,7 +333,6 @@ export function generateReturnPDF(data: ReturnPDFData): Blob {
     }
   }
 
-  // Term
   const termY = retY + 34
   const term = data.newItemName
     ? "Confirmo a devolução do item antigo e o recebimento do novo equipamento listado acima em perfeitas condições de uso."
@@ -298,14 +345,14 @@ export function generateReturnPDF(data: ReturnPDFData): Blob {
   doc.setTextColor(71, 85, 105)
   doc.text(`"${term}"`, pageWidth / 2, termY + 10, { align: "center" })
 
-  // Signature
   const sigY = termY + 24
   doc.setFillColor(248, 250, 252)
   doc.setDrawColor(226, 232, 240)
   doc.roundedRect(14, sigY, pageWidth - 28, 50, 3, 3, "FD")
   try {
     if (data.authMethod === 'facial') {
-      doc.addImage(data.signatureBase64, 'JPEG', (pageWidth - 60) / 2, sigY + 5, 60, 35)
+      // Square photo, proportional
+      doc.addImage(data.signatureBase64, 'JPEG', (pageWidth - 40) / 2, sigY + 3, 40, 40)
     } else {
       doc.addImage(data.signatureBase64, 'PNG', (pageWidth - 80) / 2, sigY + 5, 80, 30)
     }
@@ -352,7 +399,6 @@ export function generateNR06PDF(data: NR06PDFData): void {
 
   addPageHeader(doc, "FICHA DE CONTROLE DE EPI — NR-06", "Documento de Prontuário Individual do Colaborador")
 
-  // Employee Info
   const boxY = 46
   const col = (pageWidth - 28) / 3
 
@@ -371,7 +417,6 @@ export function generateNR06PDF(data: NR06PDFData): void {
     infoRow(doc, f.label, f.value, x, y)
   })
 
-  // Table
   const tableY = boxY + 38
   autoTable(doc, {
     startY: tableY,

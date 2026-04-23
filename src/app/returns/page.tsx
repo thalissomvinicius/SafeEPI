@@ -116,7 +116,7 @@ export default function ReturnsPage() {
         }, signatureFile)
       }
 
-      const pdfBlob = generateReturnPDF({
+      const pdfBlob = await generateReturnPDF({
         employeeName: selectedEmployee.full_name,
         employeeCpf: selectedEmployee.cpf,
         returnedItemName: deliveryToReturn.ppe?.name || "EPI",

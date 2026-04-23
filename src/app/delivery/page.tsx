@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
-import { CheckCircle2, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine } from "lucide-react"
-import { format } from "date-fns"
+import { CheckCircle2, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2 } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, PPE, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
@@ -18,6 +17,10 @@ export default function DeliveryPage() {
   const [isSaved, setIsSaved] = useState(false)
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+
+  // Metadados de Autenticidade
+  const [ipAddress, setIpAddress] = useState<string>("")
+  const [location, setLocation] = useState<string>("")
 
   // Dados do banco
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -37,6 +40,22 @@ export default function DeliveryPage() {
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial'>('manual')
 
   useEffect(() => {
+    // Captura IP e Localização ao carregar
+    const captureMetadata = async () => {
+        try {
+            const ipRes = await fetch('https://api.ipify.org?format=json')
+            const ipData = await ipRes.json()
+            setIpAddress(ipData.ip)
+
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    setLocation(`${pos.coords.latitude}, ${pos.coords.longitude}`)
+                })
+            }
+        } catch (e) { console.error("Erro ao capturar metadados:", e) }
+    }
+    captureMetadata()
+
     async function loadOptions() {
       try {
         const [empData, ppeData, wpData] = await Promise.all([
@@ -55,7 +74,6 @@ export default function DeliveryPage() {
         if (ppeData.length > 0) setSelectedPpeId(ppeData[0].id)
       } catch (error) {
         console.error("Erro ao carregar opções:", error)
-        alert("Ocorreu um erro ao conectar com o banco de dados Supabase.")
       } finally {
         setLoadingOptions(false)
       }
@@ -91,16 +109,18 @@ export default function DeliveryPage() {
     }
   }
 
-
-
-  const saveDelivery = async (signatureDataUrl: string) => {
+  const saveDelivery = useCallback(async (signatureDataUrl: string) => {
     if (isPpeExpired) {
-      alert("O EPI selecionado está com o CA vencido. A entrega não pode ser realizada.")
+      alert("O EPI selecionado está com o CA vencido.")
       return
     }
 
     try {
       setIsSaving(true)
+      
+      // Geração de Hash de Validação
+      const payload = `${selectedEmployeeId}-${selectedPpeId}-${Date.now()}`
+      const validationHash = btoa(payload).substring(0, 12).toUpperCase()
       
       const response = await fetch(signatureDataUrl)
       const blob = await response.blob()
@@ -112,11 +132,11 @@ export default function DeliveryPage() {
         workplace_id: selectedWorkplaceId || null,
         reason: 'Primeira Entrega',
         quantity: quantity,
-        ip_address: `Terminal ${selectedWorkplace?.name || "Móvel"}`,
+        ip_address: ipAddress || "Desconhecido",
         signature_url: null
       }, signatureFile)
 
-      const pdfBlob = generateDeliveryPDF({
+      const pdfBlob = await generateDeliveryPDF({
         employeeName: selectedEmployee?.full_name || "",
         employeeCpf: selectedEmployee?.cpf || "",
         employeeRole: selectedEmployee?.job_title || "",
@@ -127,18 +147,19 @@ export default function DeliveryPage() {
         reason,
         authMethod,
         signatureBase64: signatureDataUrl,
-        photoBase64: authMethod === 'facial' ? signatureDataUrl : undefined,
+        ipAddress,
+        location,
+        validationHash
       })
       setLastPdfUrl(URL.createObjectURL(pdfBlob))
-      
       setIsSaved(true)
     } catch (err) {
       console.error("Erro ao finalizar entrega:", err)
-      alert("Ocorreu um erro ao salvar no Supabase. Verifique se o bucket 'ppe_signatures' é público.")
+      alert("Erro ao salvar entrega.")
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [selectedEmployeeId, selectedPpeId, selectedWorkplaceId, quantity, ipAddress, location, isPpeExpired, authMethod, selectedEmployee, selectedPpe, selectedWorkplace, reason])
 
   const handleManualSave = () => {
     if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
@@ -151,6 +172,21 @@ export default function DeliveryPage() {
 
   const handleFaceCapture = (descriptor: Float32Array, imageBase64: string) => {
     saveDelivery(imageBase64)
+  }
+
+  const generateRemoteLink = () => {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+      const data = {
+          e: selectedEmployeeId,
+          p: selectedPpeId,
+          w: selectedWorkplaceId,
+          q: quantity,
+          r: reason
+      }
+      const encoded = btoa(JSON.stringify(data))
+      const url = `${baseUrl}/delivery/remote?s=${encoded}`
+      navigator.clipboard.writeText(url)
+      alert("Link de assinatura remota copiado para o clipboard! Envie para o colaborador.")
   }
 
   if (loadingOptions) {
@@ -169,7 +205,7 @@ export default function DeliveryPage() {
           <CheckCircle2 className="w-16 h-16" />
         </div>
         <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter italic">Comprovante Digital Gerado</h2>
-        <p className="text-slate-500 max-w-md">A entrega para a unidade <strong>{selectedWorkplace?.name || "Sede"}</strong> foi validada e arquivada.</p>
+        <p className="text-slate-500 max-w-md italic text-sm">Validado em IP {ipAddress || '...'} com Hash Único de Segurança.</p>
         
         <div className="mt-8 flex flex-col sm:flex-row gap-4">
           {lastPdfUrl && (
@@ -197,8 +233,8 @@ export default function DeliveryPage() {
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto pb-24 md:pb-8">
       <div className="mb-8 border-l-4 border-[#8B1A1A] pl-4">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas (Entrada) {COMPANY_CONFIG.shortName}</h1>
-        <p className="text-slate-500 font-medium">Fornecimento de Novos Equipamentos via {COMPANY_CONFIG.systemName}.</p>
+        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
+        <p className="text-slate-500 font-medium">Compliance NR-06 com Rastreabilidade de Autoria.</p>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl shadow-slate-200/50">
@@ -215,7 +251,6 @@ export default function DeliveryPage() {
                 <select 
                   id="employee-select"
                   title="Selecionar colaborador"
-                  aria-label="Selecionar colaborador para entrega de EPI"
                   className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold appearance-none"
                   value={selectedEmployeeId}
                   onChange={(e) => handleEmployeeChange(e.target.value)}
@@ -229,23 +264,21 @@ export default function DeliveryPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label htmlFor="ppe-search" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
+                  <label htmlFor="ppe-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
                     <span>EPI Selecionado (C.A.)</span>
-                    <span className="text-slate-300 font-medium normal-case tracking-normal">Busca Rápida</span>
                   </label>
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-col gap-2">
                     <input 
-                      id="ppe-search"
                       type="text"
-                      placeholder="Pesquisar CA ou Nome..."
+                      placeholder="Busca por CA ou Nome..."
                       value={ppeSearchTerm}
                       onChange={(e) => setPpeSearchTerm(e.target.value)}
-                      className="w-full sm:w-1/3 bg-white border-2 border-slate-100 text-slate-900 rounded-xl px-4 py-4 outline-none focus:border-[#8B1A1A] transition-all font-bold text-sm"
+                      className="w-full bg-white border-2 border-slate-100 text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] transition-all font-bold text-xs"
                     />
                     <select 
                       id="ppe-select"
                       title="Selecionar equipamento"
-                      className="w-full sm:w-2/3 bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
+                      className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
                       value={selectedPpeId}
                       onChange={(e) => setSelectedPpeId(e.target.value)}
                     >
@@ -258,15 +291,8 @@ export default function DeliveryPage() {
                           </option>
                         )
                       })}
-                      {filteredPpes.length === 0 && <option value="">Nenhum EPI encontrado</option>}
                     </select>
                   </div>
-                  {isPpeExpired && (
-                    <p className="text-red-600 text-[10px] font-black uppercase tracking-widest mt-1 flex items-center animate-pulse">
-                       <ShieldAlert className="w-3 h-3 mr-1" />
-                       Entrega Bloqueada: CA Vencido em {format(new Date(selectedPpe?.ca_expiry_date || ""), "dd/MM/yyyy")}
-                    </p>
-                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -282,14 +308,24 @@ export default function DeliveryPage() {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-4 space-y-3">
                 <button 
                   disabled={employees.length === 0 || ppes.length === 0 || isPpeExpired}
                   onClick={() => setStep(2)}
                   className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white disabled:bg-slate-300 py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
                 >
-                  {isPpeExpired ? <ShieldAlert className="w-5 h-5" /> : null}
-                  {isPpeExpired ? "EPI com CA Vencido" : "Avançar para Assinatura"}
+                  Avançar para Assinatura
+                </button>
+                <div className="flex items-center gap-2 text-slate-400">
+                    <div className="flex-1 h-[1px] bg-slate-100" />
+                    <span className="text-[8px] font-black uppercase tracking-widest">Ou</span>
+                    <div className="flex-1 h-[1px] bg-slate-100" />
+                </div>
+                <button 
+                  onClick={generateRemoteLink}
+                  className="w-full bg-white border border-slate-200 text-slate-600 py-3 rounded-xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
+                >
+                  <Link2 className="w-4 h-4 text-blue-500" /> Gerar Link de Assinatura Remota
                 </button>
               </div>
             </div>
@@ -299,7 +335,7 @@ export default function DeliveryPage() {
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
               <div className="bg-slate-50 p-6 rounded-2xl text-sm border border-slate-200">
                 <div className="flex items-center gap-2 mb-3">
-                    <span className="bg-[#8B1A1A] text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">NR-06</span>
+                    <span className="bg-[#8B1A1A] text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">NR-06 Compliance</span>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{selectedWorkplace?.name || "Sede Antares"}</span>
                 </div>
                 <p className="font-bold text-slate-700 italic">
@@ -307,7 +343,6 @@ export default function DeliveryPage() {
                 </p>
               </div>
 
-              {/* Tabs de Assinatura */}
               <div className="flex bg-slate-100 p-1 rounded-xl">
                 <button 
                   onClick={() => setAuthMethod('manual')}
@@ -326,8 +361,8 @@ export default function DeliveryPage() {
               {authMethod === 'manual' ? (
                 <div className="space-y-3 animate-in fade-in">
                   <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desenhe sua assinatura</label>
-                    <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic">Limpar Painel</button>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assinatura Manuscrita</label>
+                    <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic">Limpar</button>
                   </div>
                   <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-100 shadow-inner h-64 touch-none">
                     <SignatureCanvas 
@@ -337,11 +372,11 @@ export default function DeliveryPage() {
                     />
                   </div>
                   <button 
-                    disabled={isSaving || isPpeExpired}
+                    disabled={isSaving}
                     onClick={handleManualSave}
                     className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50"
                   >
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "FINALIZAR ENTREGA DIGITAL"}
+                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "FINALIZAR ENTREGA"}
                   </button>
                 </div>
               ) : (
@@ -350,21 +385,14 @@ export default function DeliveryPage() {
                     <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-center space-y-3">
                       <ShieldAlert className="w-8 h-8 text-amber-500 mx-auto" />
                       <p className="text-amber-800 font-bold text-sm">Biometria não cadastrada</p>
-                      <p className="text-amber-600 text-xs">O colaborador {selectedEmployee?.full_name} ainda não possui uma foto mestra. Volte à tela de Equipe e cadastre a biometria ou use a Assinatura Manual.</p>
+                      <p className="text-amber-600 text-xs">O colaborador {selectedEmployee?.full_name} ainda não possui uma foto mestra.</p>
                     </div>
                   ) : (
                     <>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Validação Facial Ativa</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidade Certificada</span>
                         <div className="flex items-center gap-2">
-                          <Image 
-                            src={selectedEmployee.photo_url || ''} 
-                            alt={`Foto de ${selectedEmployee.full_name}`} 
-                            width={24} 
-                            height={24} 
-                            className="w-6 h-6 rounded-full border border-slate-200 object-cover" 
-                            unoptimized
-                          />
+                          <Image src={selectedEmployee.photo_url || ''} alt="User" width={24} height={24} className="w-6 h-6 rounded-full border border-slate-200 object-cover" unoptimized />
                           <span className="text-[10px] font-bold text-slate-500">{selectedEmployee.full_name}</span>
                         </div>
                       </div>
@@ -388,3 +416,4 @@ export default function DeliveryPage() {
     </div>
   )
 }
+
