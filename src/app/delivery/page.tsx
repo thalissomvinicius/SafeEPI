@@ -243,7 +243,7 @@ export default function DeliveryPage() {
           <div className={`flex-1 text-center py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 2 ? 'bg-white text-[#8B1A1A]' : 'text-slate-400'}`}>2. Autenticação</div>
         </div>
 
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
           {step === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-left-4">
               <div className="space-y-3">

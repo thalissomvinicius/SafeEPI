@@ -377,7 +377,7 @@ export default function EmployeesPage() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div className="flex justify-between items-center p-5 sm:p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">{formData.id ? 'Editar Colaborador' : `Novo Cadastro ${COMPANY_CONFIG.shortName}`}</h2>
               <button 
                 onClick={closeEditModal} 
@@ -399,7 +399,7 @@ export default function EmployeesPage() {
                 />
               </div>
             ) : (
-            <form onSubmit={handleSaveEmployee} className="p-8 space-y-5">
+            <form onSubmit={handleSaveEmployee} className="p-5 sm:p-8 space-y-5">
               <div className="flex flex-col items-center mb-4">
                 {formData.photo_url ? (
                   <div className="relative">
@@ -526,7 +526,7 @@ export default function EmployeesPage() {
               const emp = employees.find(e => e.id === selectedEmployeeId)
               return (
                 <>
-                  <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+                  <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
                     <div>
                       <div className="flex items-center gap-3">
                         <h2 className="font-black text-slate-800 text-2xl tracking-tighter">{emp?.full_name}</h2>
@@ -554,7 +554,7 @@ export default function EmployeesPage() {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+                  <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/30">
                     {loadingHistory ? (
                       <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                         <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#8B1A1A]" />

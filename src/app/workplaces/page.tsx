@@ -192,7 +192,7 @@ export default function WorkplacesPage() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="flex justify-between items-center p-8 border-b border-slate-50">
+            <div className="flex justify-between items-center p-5 sm:p-8 border-b border-slate-50">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl">{formData.id ? 'Editar Ponto Operacional' : 'Novo Ponto Operacional'}</h2>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1 italic">{formData.id ? 'Atualização de Cadastro' : 'Expansão de Infraestrutura'}</p>
@@ -207,7 +207,7 @@ export default function WorkplacesPage() {
               </button>
             </div>
             
-            <form onSubmit={handleSaveWorkplace} className="p-8 space-y-6">
+            <form onSubmit={handleSaveWorkplace} className="p-5 sm:p-8 space-y-6">
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Nome do Canteiro / Obra</label>
                 <input 

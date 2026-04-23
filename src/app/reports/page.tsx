@@ -172,7 +172,7 @@ export default function ReportsPage() {
       {/* Seção de Gráficos Analíticos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Gráfico 1: Investimento por Canteiro */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm">
               <div className="flex items-center justify-between mb-8">
                   <div>
                       <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Investimento por Canteiro</h3>
@@ -210,7 +210,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Gráfico 2: Top 5 EPIs entregues */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm">
               <div className="flex items-center justify-between mb-8">
                   <div>
                       <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Top 5 Consumo de EPIs</h3>
@@ -249,7 +249,7 @@ export default function ReportsPage() {
           </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm">
           <div className="flex items-center justify-between mb-8">
               <div>
                   <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Ranking de Investimento</h3>
@@ -289,7 +289,7 @@ export default function ReportsPage() {
             </div>
         </div>
 
-      <div className="bg-slate-900 rounded-2xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-slate-900/40 relative overflow-hidden">
+      <div className="bg-slate-900 rounded-2xl p-5 sm:p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-slate-900/40 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#8B1A1A]/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
         <div className="flex items-center gap-4 relative z-10 w-full sm:w-auto">
             <div className="bg-[#8B1A1A] p-4 rounded-xl shadow-lg shadow-red-900/50">

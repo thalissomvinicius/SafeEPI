@@ -187,7 +187,7 @@ export default function TrainingPage() {
               </button>
             </div>
             
-            <form onSubmit={handleAddTraining} className="p-8 space-y-5">
+            <form onSubmit={handleAddTraining} className="p-5 sm:p-8 space-y-5">
               <div className="space-y-2">
                 <label id="label-colaborador" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador</label>
                 <select 

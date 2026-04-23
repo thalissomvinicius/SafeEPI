@@ -169,7 +169,7 @@ export default function InventoryPage() {
 
         {/* Lado Direito: Histórico de Movimentações */}
         <div className="space-y-6">
-           <div className="bg-slate-900 rounded-3xl p-8 shadow-2xl relative overflow-hidden h-full min-h-[500px]">
+           <div className="bg-slate-900 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden h-full min-h-[500px]">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#8B1A1A]/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
               <h3 className="font-black text-white uppercase tracking-tighter text-sm flex items-center gap-2 mb-8 relative z-10">
                  <History className="w-5 h-5 text-[#8B1A1A]" />
@@ -214,7 +214,7 @@ export default function InventoryPage() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+            <div className="p-5 sm:p-8 border-b border-slate-100 flex justify-between items-center">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl">Ajuste de Saldo</h2>
                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1 italic">Entrada de Compras ou Acerto Inventário</p>
@@ -229,7 +229,7 @@ export default function InventoryPage() {
               </button>
             </div>
             
-            <form onSubmit={handleAddMovement} className="p-8 space-y-6">
+            <form onSubmit={handleAddMovement} className="p-5 sm:p-8 space-y-6">
               <div className="space-y-2">
                 <label htmlFor="ppe_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Equipamento (EPI)</label>
                 <select 

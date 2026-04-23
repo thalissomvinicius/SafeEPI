@@ -86,10 +86,10 @@ export default function Dashboard() {
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-8 h-[400px]">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 h-[400px]">
           <Skeleton className="h-full w-full rounded-2xl" />
         </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-8 space-y-4">
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4">
           <Skeleton className="h-6 w-1/2" />
           <Skeleton className="h-full w-full rounded-2xl" />
         </div>
@@ -141,7 +141,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-8 shadow-sm flex flex-col">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Atividade de Entregas</h3>
@@ -190,7 +190,7 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col h-full overflow-hidden">
-            <div className="p-8 border-b border-slate-50 flex justify-between items-center">
+            <div className="p-5 sm:p-8 border-b border-slate-50 flex justify-between items-center">
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Histórico Local</h3>
                 <ShieldCheck className="w-5 h-5 text-green-500" />
             </div>

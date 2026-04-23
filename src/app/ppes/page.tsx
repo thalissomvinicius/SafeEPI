@@ -239,7 +239,7 @@ export default function PpesPage() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="flex justify-between items-center p-8 border-b border-slate-100">
+            <div className="flex justify-between items-center p-5 sm:p-8 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl tracking-tighter">{formData.id ? 'Editar EPI' : 'Novo Item Antares'}</h2>
               <button 
                 onClick={closeEditModal} 
@@ -251,7 +251,7 @@ export default function PpesPage() {
               </button>
             </div>
             
-            <form onSubmit={handleSavePpe} className="p-8 space-y-6">
+            <form onSubmit={handleSavePpe} className="p-5 sm:p-8 space-y-6">
               <div className="space-y-2">
                 <label htmlFor="ppe-name" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Equipamento (EPI)</label>
                 <input 

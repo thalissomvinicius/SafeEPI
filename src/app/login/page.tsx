@@ -35,11 +35,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 overflow-hidden relative">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 overflow-y-auto relative py-12">
       {/* Background Decorativo */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#8B1A1A]/20 rounded-full blur-[120px] pointer-events-none"></div>
 
-      <div className="w-full max-w-md p-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
+      <div className="w-full max-w-md p-5 sm:p-8 relative z-10 animate-in fade-in zoom-in-95 duration-700">
         <div className="text-center mb-10">
           <div className="mx-auto w-16 h-16 bg-[#8B1A1A] p-3 rounded-2xl shadow-xl shadow-red-900/50 mb-6 flex items-center justify-center transform rotate-12 hover:rotate-0 transition-all duration-300">
             <ShieldCheck className="w-10 h-10 text-white" />
@@ -50,7 +50,7 @@ export default function LoginPage() {
           <p className="text-slate-400 text-sm mt-3 font-medium uppercase tracking-[0.2em]">Autenticação Restrita</p>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl">
           {errorMsg && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold uppercase tracking-widest text-center rounded-xl animate-in shake">
               {errorMsg}

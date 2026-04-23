@@ -143,7 +143,7 @@ export default function UsersPage() {
         )}
       </div>
 
-      <div className="bg-slate-50 rounded-2xl p-8 border-2 border-dashed border-slate-200 flex items-start gap-4">
+      <div className="bg-slate-50 rounded-2xl p-5 sm:p-8 border-2 border-dashed border-slate-200 flex flex-col sm:flex-row items-start gap-4">
         <div className="p-3 bg-amber-50 rounded-xl">
           <AlertCircle className="w-6 h-6 text-amber-600" />
         </div>
