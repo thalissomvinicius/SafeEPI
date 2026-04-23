@@ -44,6 +44,17 @@ export const api = {
     return data[0] as Workplace;
   },
 
+  async updateWorkplace(id: string, updates: Partial<Workplace>) {
+    const { data, error } = await supabase
+      .from('workplaces')
+      .update(updates)
+      .eq('id', id)
+      .select();
+    
+    if (error) throw error;
+    return data[0] as Workplace;
+  },
+
   // --- Colaboradores ---
   async getEmployees() {
     const { data, error } = await supabase

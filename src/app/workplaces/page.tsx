@@ -13,7 +13,7 @@ export default function WorkplacesPage() {
   const [isSaving, setIsSaving] = useState(false)
 
   // Form State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{id?: string, name: string, address: string, manager_name: string}>({
     name: "",
     address: "",
     manager_name: "",
@@ -39,23 +39,46 @@ export default function WorkplacesPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  const handleAddWorkplace = async (e: React.FormEvent) => {
+  const handleSaveWorkplace = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name) return
 
     try {
       setIsSaving(true)
-      await api.addWorkplace({ ...formData, active: true })
+      if (formData.id) {
+        await api.updateWorkplace(formData.id, {
+          name: formData.name,
+          address: formData.address,
+          manager_name: formData.manager_name
+        })
+      } else {
+        await api.addWorkplace({ name: formData.name, address: formData.address, manager_name: formData.manager_name, active: true })
+      }
       setLoading(true)
       await loadWorkplaces()
       setIsModalOpen(false)
-      setFormData({ name: "", address: "", manager_name: "" })
+      setFormData({ id: undefined, name: "", address: "", manager_name: "" })
     } catch (error) {
       console.error("Erro ao salvar canteiro:", error)
       alert("Erro ao salvar canteiro no banco de dados.")
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const openEditWorkplace = (w: Workplace) => {
+    setFormData({
+      id: w.id,
+      name: w.name,
+      address: w.address || "",
+      manager_name: w.manager_name || ""
+    })
+    setIsModalOpen(true)
+  }
+
+  const closeEditModal = () => {
+    setFormData({ id: undefined, name: "", address: "", manager_name: "" })
+    setIsModalOpen(false)
   }
 
   const filteredWorkplaces = workplaces.filter(w => 
@@ -77,7 +100,10 @@ export default function WorkplacesPage() {
             <p className="text-slate-500 text-sm mt-1 font-medium">Controle de locais de obra, unidades produtivas e centros de custo.</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setFormData({ id: undefined, name: "", address: "", manager_name: "" })
+            setIsModalOpen(true)
+          }}
           title="Abrir formulário de novo canteiro"
           className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
         >
@@ -132,7 +158,15 @@ export default function WorkplacesPage() {
 
                   <div className="mt-6 pt-4 border-t border-slate-50 flex justify-between items-center relative z-10">
                     <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[8px] font-black rounded border border-green-100 uppercase tracking-widest">Operacional</span>
-                    <button className="text-[10px] font-black text-[#8B1A1A] uppercase tracking-widest hover:underline">Ver detalhes →</button>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => openEditWorkplace(w)}
+                            className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#8B1A1A] transition-colors"
+                        >
+                            Editar
+                        </button>
+                        <button className="text-[10px] font-black text-[#8B1A1A] uppercase tracking-widest hover:underline">Ver detalhes →</button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -160,11 +194,11 @@ export default function WorkplacesPage() {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
             <div className="flex justify-between items-center p-8 border-b border-slate-50">
               <div>
-                <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl">Novo Ponto Operacional</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1 italic">Expansão de Infraestrutura</p>
+                <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl">{formData.id ? 'Editar Ponto Operacional' : 'Novo Ponto Operacional'}</h2>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1 italic">{formData.id ? 'Atualização de Cadastro' : 'Expansão de Infraestrutura'}</p>
               </div>
               <button 
-                onClick={() => setIsModalOpen(false)} 
+                onClick={closeEditModal} 
                 title="Fechar modal"
                 aria-label="Fechar modal de cadastro de canteiro"
                 className="text-slate-300 hover:text-slate-600 transition-colors p-2 hover:bg-slate-50 rounded-full"
@@ -173,7 +207,7 @@ export default function WorkplacesPage() {
               </button>
             </div>
             
-            <form onSubmit={handleAddWorkplace} className="p-8 space-y-6">
+            <form onSubmit={handleSaveWorkplace} className="p-8 space-y-6">
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Nome do Canteiro / Obra</label>
                 <input 
@@ -218,7 +252,7 @@ export default function WorkplacesPage() {
                 <button 
                   type="button" 
                   disabled={isSaving}
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={closeEditModal}
                   className="flex-1 px-4 py-4 text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-[0.2em] transition-all"
                 >
                   Cancelar
@@ -228,7 +262,7 @@ export default function WorkplacesPage() {
                   disabled={isSaving}
                   className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900"
                 >
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Ativar Canteiro"}
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar Canteiro"}
                 </button>
               </div>
             </form>
