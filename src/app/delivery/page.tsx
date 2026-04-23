@@ -2,12 +2,13 @@
 
 import { useState, useRef, useEffect } from "react"
 import SignatureCanvas from "react-signature-canvas"
-import { CheckCircle2, FileDown, Loader2, HardDrive, ShieldAlert } from "lucide-react"
+import { CheckCircle2, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine } from "lucide-react"
 import jsPDF from "jspdf"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { api } from "@/services/api"
 import { Employee, PPE, Workplace } from "@/types/database"
+import { FaceCamera } from "@/components/ui/FaceCamera"
 
 export default function DeliveryPage() {
   const [step, setStep] = useState(1)
@@ -29,7 +30,10 @@ export default function DeliveryPage() {
   const [ppeSearchTerm, setPpeSearchTerm] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
-  const [reason, setReason] = useState("Primeira Entrega")
+  const [reason] = useState("Nova Entrega")
+
+  // Biometria Facial
+  const [authMethod, setAuthMethod] = useState<'manual' | 'facial'>('manual')
 
   useEffect(() => {
     async function loadOptions() {
@@ -48,28 +52,21 @@ export default function DeliveryPage() {
             setSelectedWorkplaceId(empData[0].workplace_id || "")
         }
         if (ppeData.length > 0) setSelectedPpeId(ppeData[0].id)
-      } catch (err) {
-        console.error("Erro ao carregar opções:", err)
+      } catch (error) {
+        console.error("Erro ao carregar opções:", error)
+        alert("Ocorreu um erro ao conectar com o banco de dados Supabase.")
       } finally {
         setLoadingOptions(false)
       }
     }
+
     loadOptions()
   }, [])
-
-  const handleEmployeeChange = (employeeId: string) => {
-    setSelectedEmployeeId(employeeId)
-    const emp = employees.find(e => e.id === employeeId)
-    if (emp && emp.workplace_id) {
-        setSelectedWorkplaceId(emp.workplace_id)
-    }
-  }
 
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const selectedPpe = ppes.find(p => p.id === selectedPpeId)
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
 
-  // Check CA Expiration
   const isPpeExpired = selectedPpe ? new Date(selectedPpe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0) : false
 
   const filteredPpes = ppes.filter(ppe => 
@@ -77,26 +74,38 @@ export default function DeliveryPage() {
     ppe.ca_number.includes(ppeSearchTerm)
   )
 
+  const handleEmployeeChange = (empId: string) => {
+    setSelectedEmployeeId(empId)
+    const emp = employees.find(e => e.id === empId)
+    if (emp && emp.workplace_id) {
+        setSelectedWorkplaceId(emp.workplace_id)
+    } else {
+        setSelectedWorkplaceId("")
+    }
+  }
+
   const clearSignature = () => {
-    sigCanvas.current?.clear()
+    if (sigCanvas.current) {
+      sigCanvas.current.clear()
+    }
   }
 
   const generatePDFBlob = (signatureImageBase64: string): Blob => {
     const doc = new jsPDF()
-    const dataAtual = new Date()
-    const dataFormatada = format(dataAtual, "dd 'de' MMMM 'de' yyyy, 'às' HH:mm", { locale: ptBR })
-    const hash = Math.random().toString(36).substring(2, 15).toUpperCase()
+    const dataFormatada = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+    const hash = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
 
-    doc.setFontSize(16)
+    doc.setFillColor(139, 26, 26) // #8B1A1A
+    doc.rect(0, 0, 210, 30, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(22)
     doc.setFont("helvetica", "bold")
-    doc.text("FICHA DE EQUIPAMENTO DE PROTEÇÃO INDIVIDUAL - EPI", 105, 20, { align: "center" })
-    
+    doc.text("FICHA DE ENTREGA DE E.P.I.", 105, 18, { align: "center" })
     doc.setFontSize(10)
-    doc.setFont("helvetica", "normal")
-    doc.text("Empresa: ANTARES EMPREENDIMENTOS S.A. | CNPJ: 12.345.678/0001-90", 15, 30)
-    doc.setLineWidth(0.2)
-    doc.line(15, 35, 195, 35)
-    
+    doc.text("NR-06 - Ministério do Trabalho e Emprego", 105, 25, { align: "center" })
+
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(12)
     doc.setFont("helvetica", "bold")
     doc.text("DADOS DO COLABORADOR E UNIDADE", 15, 42)
     doc.setFont("helvetica", "normal")
@@ -127,7 +136,7 @@ export default function DeliveryPage() {
     doc.addImage(signatureImageBase64, 'PNG', 65, ySignatureBox + 5, 80, 25)
     doc.line(55, ySignatureBox + 35, 155, ySignatureBox + 35)
     doc.setFontSize(8)
-    doc.text(`Assinatura Digital: ${selectedEmployee?.full_name}`, 105, ySignatureBox + 40, { align: "center" })
+    doc.text(`Assinatura (${authMethod === 'facial' ? 'Biometria Facial' : 'Manual'}): ${selectedEmployee?.full_name}`, 105, ySignatureBox + 40, { align: "center" })
 
     doc.setFontSize(7)
     doc.setTextColor(100)
@@ -136,12 +145,7 @@ export default function DeliveryPage() {
     return doc.output('blob')
   }
 
-  const saveDelivery = async () => {
-    if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
-      alert("A assinatura é obrigatória.")
-      return
-    }
-
+  const saveDelivery = async (signatureDataUrl: string) => {
     if (isPpeExpired) {
       alert("O EPI selecionado está com o CA vencido. A entrega não pode ser realizada.")
       return
@@ -149,7 +153,6 @@ export default function DeliveryPage() {
 
     try {
       setIsSaving(true)
-      const signatureDataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL("image/png")
       
       const response = await fetch(signatureDataUrl)
       const blob = await response.blob()
@@ -159,7 +162,7 @@ export default function DeliveryPage() {
         employee_id: selectedEmployeeId,
         ppe_id: selectedPpeId,
         workplace_id: selectedWorkplaceId || null,
-        reason: reason as 'Primeira Entrega' | 'Substituição (Desgaste/Validade)' | 'Perda' | 'Dano',
+        reason: 'Primeira Entrega', // Default for new deliveries
         quantity: quantity,
         ip_address: `Terminal ${selectedWorkplace?.name || "Móvel"}`,
         signature_url: null
@@ -175,6 +178,19 @@ export default function DeliveryPage() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleManualSave = () => {
+    if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
+      alert("A assinatura é obrigatória.")
+      return
+    }
+    const signatureDataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL("image/png")
+    saveDelivery(signatureDataUrl)
+  }
+
+  const handleFaceCapture = (descriptor: Float32Array, imageBase64: string) => {
+    saveDelivery(imageBase64)
   }
 
   if (loadingOptions) {
@@ -221,8 +237,8 @@ export default function DeliveryPage() {
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto pb-24 md:pb-8">
       <div className="mb-8 border-l-4 border-[#8B1A1A] pl-4">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Terminal SESMT Antares</h1>
-        <p className="text-slate-500 font-medium">Registro Localizado na Nuvem Supabase.</p>
+        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas (Entrada)</h1>
+        <p className="text-slate-500 font-medium">Fornecimento de Novos Equipamentos.</p>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl shadow-slate-200/50">
@@ -253,43 +269,6 @@ export default function DeliveryPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label htmlFor="workplace-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
-                    <HardDrive className="w-3 h-3 mr-1 text-[#8B1A1A]" />
-                    Local da Entrega
-                  </label>
-                  <select 
-                    id="workplace-select"
-                    title="Selecionar local da entrega"
-                    className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
-                    value={selectedWorkplaceId}
-                    onChange={(e) => setSelectedWorkplaceId(e.target.value)}
-                  >
-                    <option value="">Sede / Sem Canteiro</option>
-                    {workplaces.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-3">
-                  <label htmlFor="reason-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Motivo</label>
-                  <select 
-                    id="reason-select"
-                    title="Selecionar motivo da entrega"
-                    className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                  >
-                    <option value="Primeira Entrega">Primeira Entrega (Admissão)</option>
-                    <option value="Substituição (Desgaste/Validade)">Substituição (Desgaste/Validade)</option>
-                    <option value="Perda">Perda</option>
-                    <option value="Dano">Dano</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-3">
                   <label htmlFor="ppe-search" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
                     <span>EPI Selecionado (C.A.)</span>
                     <span className="text-slate-300 font-medium normal-case tracking-normal">Busca Rápida</span>
@@ -312,10 +291,10 @@ export default function DeliveryPage() {
                     >
                       <option value="">Selecione o EPI...</option>
                       {filteredPpes.map(ppe => {
-                        const isExpired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
+                        const expired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
                         return (
-                          <option key={ppe.id} value={ppe.id} className={isExpired ? "text-red-600 font-bold" : ""}>
-                            {isExpired ? "⚠️ [CA VENCIDO] " : ""}CA {ppe.ca_number} • {ppe.name}
+                          <option key={ppe.id} value={ppe.id} className={expired ? "text-red-600 font-bold" : ""}>
+                            {expired ? "⚠️ [CA VENCIDO] " : ""}CA {ppe.ca_number} • {ppe.name}
                           </option>
                         )
                       })}
@@ -350,46 +329,89 @@ export default function DeliveryPage() {
                   className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white disabled:bg-slate-300 py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
                 >
                   {isPpeExpired ? <ShieldAlert className="w-5 h-5" /> : null}
-                  {isPpeExpired ? "EPI com CA Vencido" : "Confirmar e Assinar"}
+                  {isPpeExpired ? "EPI com CA Vencido" : "Avançar para Assinatura"}
                 </button>
               </div>
             </div>
           )}
 
           {step === 2 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
               <div className="bg-slate-50 p-6 rounded-2xl text-sm border border-slate-200">
                 <div className="flex items-center gap-2 mb-3">
                     <span className="bg-[#8B1A1A] text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">NR-06</span>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{selectedWorkplace?.name || "Sede Antares"}</span>
                 </div>
                 <p className="font-bold text-slate-700 italic">
-                  &ldquo;Eu, <strong>{selectedEmployee?.full_name}</strong>, recebo nesta data o EPI <strong>{selectedPpe?.name}</strong> (CA {selectedPpe?.ca_number}) e comprometo-me com seu uso e guarda conforme as normas de segurança.&rdquo;
+                  &ldquo;Eu, <strong>{selectedEmployee?.full_name}</strong>, recebo nesta data o EPI <strong>{selectedPpe?.name}</strong> (CA {selectedPpe?.ca_number})...&rdquo;
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest underline decoration-[#8B1A1A]">Pátio de Assinatura Digital</label>
-                  <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic">Limpar Painel</button>
-                </div>
-                <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-100 shadow-inner h-80 sm:h-64 touch-none">
-                  <SignatureCanvas 
-                    ref={sigCanvas}
-                    canvasProps={{ className: 'w-full h-full' }}
-                    penColor="#000000"
-                  />
-                </div>
+              {/* Tabs de Assinatura */}
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                <button 
+                  onClick={() => setAuthMethod('manual')}
+                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  <PenLine className="w-4 h-4" /> Manual
+                </button>
+                <button 
+                  onClick={() => setAuthMethod('facial')}
+                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  <Fingerprint className="w-4 h-4" /> Biometria
+                </button>
               </div>
 
-              <div className="pt-2 flex flex-col gap-5">
-                <button 
-                  disabled={isSaving || isPpeExpired}
-                  onClick={saveDelivery}
-                  className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : isPpeExpired ? "BLOQUEADO (CA VENCIDO)" : "FINALIZAR ENTREGA DIGITAL"}
-                </button>
+              {authMethod === 'manual' ? (
+                <div className="space-y-3 animate-in fade-in">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desenhe sua assinatura</label>
+                    <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic">Limpar Painel</button>
+                  </div>
+                  <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-100 shadow-inner h-64 touch-none">
+                    <SignatureCanvas 
+                      ref={sigCanvas}
+                      canvasProps={{ className: 'w-full h-full' }}
+                      penColor="#000000"
+                    />
+                  </div>
+                  <button 
+                    disabled={isSaving || isPpeExpired}
+                    onClick={handleManualSave}
+                    className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50"
+                  >
+                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : "FINALIZAR ENTREGA DIGITAL"}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in zoom-in-95">
+                  {!selectedEmployee?.face_descriptor ? (
+                    <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-center space-y-3">
+                      <ShieldAlert className="w-8 h-8 text-amber-500 mx-auto" />
+                      <p className="text-amber-800 font-bold text-sm">Biometria não cadastrada</p>
+                      <p className="text-amber-600 text-xs">O colaborador {selectedEmployee?.full_name} ainda não possui uma foto mestra. Volte à tela de Equipe e cadastre a biometria ou use a Assinatura Manual.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Validação Facial Ativa</span>
+                        <div className="flex items-center gap-2">
+                          <img src={selectedEmployee.photo_url || ''} alt="" className="w-6 h-6 rounded-full border border-slate-200 object-cover" />
+                          <span className="text-[10px] font-bold text-slate-500">{selectedEmployee.full_name}</span>
+                        </div>
+                      </div>
+                      <FaceCamera 
+                        targetDescriptor={new Float32Array(selectedEmployee.face_descriptor)}
+                        onCapture={handleFaceCapture}
+                        onCancel={() => setAuthMethod('manual')}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-center">
                 <button onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600">← Alterar Dados</button>
               </div>
             </div>

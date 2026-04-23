@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings } from "lucide-react"
+import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const menuItems = [
   { href: "/", label: "Dashboard", icon: Home, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/delivery", label: "Nova Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
+  { href: "/returns", label: "Baixas / Substituições", icon: ArrowRightLeft, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/workplaces", label: "Canteiros", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/employees", label: "Colaboradores", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, Workplace, DeliveryWithRelations } from "@/types/database"
 import jsPDF from "jspdf"
@@ -10,6 +10,7 @@ import { format, addDays, isPast } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { FaceCamera } from "@/components/ui/FaceCamera"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -17,6 +18,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isFaceCameraOpen, setIsFaceCameraOpen] = useState(false)
   
   // Prontuario State
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
@@ -25,13 +27,23 @@ export default function EmployeesPage() {
   const [loadingHistory, setLoadingHistory] = useState(false)
   
   // Form State
-  const [formData, setFormData] = useState({ 
-
+  const [formData, setFormData] = useState<{
+    id?: string;
+    name: string;
+    role: string;
+    department: string;
+    cpf: string;
+    workplace_id: string;
+    photo_url?: string | null;
+    face_descriptor?: any | null;
+  }>({ 
     name: "", 
     role: "", 
     department: "", 
     cpf: "",
-    workplace_id: "" 
+    workplace_id: "",
+    photo_url: null,
+    face_descriptor: null
   })
   const [isSaving, setIsSaving] = useState(false)
   const { user } = useAuth()
@@ -82,12 +94,14 @@ export default function EmployeesPage() {
         cpf: formData.cpf || "000.000.000-00",
         admission_date: new Date().toISOString(),
         active: true,
-        workplace_id: formData.workplace_id || null
+        workplace_id: formData.workplace_id || null,
+        photo_url: formData.photo_url || null,
+        face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
       })
       
       setLoading(true)
       await loadData() // Recarrega a lista
-      setFormData({ name: "", role: "", department: "", cpf: "", workplace_id: "" })
+      setFormData({ name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
       setIsModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar colaborador:", error)
@@ -363,7 +377,39 @@ export default function EmployeesPage() {
               </button>
             </div>
             
+            {isFaceCameraOpen ? (
+              <div className="p-6">
+                <FaceCamera 
+                  onCapture={(desc, img) => {
+                    setFormData({ ...formData, face_descriptor: desc, photo_url: img });
+                    setIsFaceCameraOpen(false);
+                  }}
+                  onCancel={() => setIsFaceCameraOpen(false)}
+                />
+              </div>
+            ) : (
             <form onSubmit={handleAddEmployee} className="p-8 space-y-5">
+              <div className="flex flex-col items-center mb-4">
+                {formData.photo_url ? (
+                  <div className="relative">
+                    <img src={formData.photo_url} alt="Biometria" className="w-24 h-24 rounded-full object-cover border-4 border-green-500" />
+                    <button type="button" onClick={() => setFormData({...formData, photo_url: null, face_descriptor: null})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1">
+                      <X className="w-4 h-4" />
+                    </button>
+                    <span className="block text-center text-[10px] text-green-600 font-bold uppercase mt-2">Biometria Cadastrada</span>
+                  </div>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => setIsFaceCameraOpen(true)}
+                    className="flex flex-col items-center justify-center w-24 h-24 rounded-full border-2 border-dashed border-slate-300 text-slate-400 hover:text-[#8B1A1A] hover:border-[#8B1A1A] transition-all bg-slate-50"
+                  >
+                    <Camera className="w-8 h-8 mb-1" />
+                    <span className="text-[8px] font-black uppercase tracking-widest text-center px-2">Biometria<br/>Facial</span>
+                  </button>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome Completo</label>
                 <input 
@@ -444,6 +490,7 @@ export default function EmployeesPage() {
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}

@@ -65,6 +65,17 @@ export const api = {
     return data[0] as Employee;
   },
 
+  async updateEmployee(id: string, updates: Partial<Employee>) {
+    const { data, error } = await supabase
+      .from('employees')
+      .update(updates)
+      .eq('id', id)
+      .select();
+    
+    if (error) throw error;
+    return data[0] as Employee;
+  },
+
   async terminateEmployee(employeeId: string) {
     const { error } = await supabase
       .from('employees')

@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext"
 const allItems = [
   { href: "/", label: "Dashboard", icon: Home, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/delivery", label: "Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
+  { href: "/returns", label: "Baixas", icon: History, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/employees", label: "Equipe", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/workplaces", label: "Canteiros", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },

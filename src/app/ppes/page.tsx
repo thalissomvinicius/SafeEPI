@@ -12,7 +12,7 @@ export default function PpesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [formData, setFormData] = useState({ name: "", ca: "", valCa: "", cost: "" })
+  const [formData, setFormData] = useState({ name: "", ca: "", valCa: "", cost: "", stock: "" })
   const [isSaving, setIsSaving] = useState(false)
 
   const loadPpes = async () => {
@@ -47,7 +47,7 @@ export default function PpesPage() {
 
     try {
       setIsSaving(true)
-      await api.addPpe({
+      const newPpe = await api.addPpe({
         name: formData.name,
         ca_number: formData.ca || "N/A",
         ca_expiry_date: formData.valCa || new Date().toISOString(),
@@ -55,12 +55,21 @@ export default function PpesPage() {
         manufacturer: "Genérico",
         lifespan_days: 180,
         active: true,
-        current_stock: 0
+        current_stock: parseInt(formData.stock) || 0
       })
+
+      if (parseInt(formData.stock) > 0) {
+        await api.addStockMovement({
+          ppe_id: newPpe.id,
+          quantity: parseInt(formData.stock),
+          type: 'ENTRADA',
+          motive: 'Saldo Inicial (Cadastro)'
+        })
+      }
       
       setLoading(true)
       await loadPpes()
-      setFormData({ name: "", ca: "", valCa: "", cost: "" })
+      setFormData({ name: "", ca: "", valCa: "", cost: "", stock: "" })
       setIsModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar EPI:", error)
@@ -232,7 +241,7 @@ export default function PpesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="ppe-cost" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo de Compra (R$)</label>
+                  <label htmlFor="ppe-cost" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Custo Unitário (R$)</label>
                   <input 
                     id="ppe-cost"
                     type="number" 
@@ -245,15 +254,29 @@ export default function PpesPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="ppe-expiry" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Data de Vencimento do C.A.</label>
-                <input 
-                  id="ppe-expiry"
-                  type="date" 
-                  value={formData.valCa}
-                  onChange={(e) => setFormData({...formData, valCa: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="ppe-stock" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo Inicial (Qtd)</label>
+                  <input 
+                    id="ppe-stock"
+                    type="number" 
+                    min="0"
+                    value={formData.stock}
+                    onChange={(e) => setFormData({...formData, stock: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="ppe-expiry" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Vencimento do C.A.</label>
+                  <input 
+                    id="ppe-expiry"
+                    type="date" 
+                    value={formData.valCa}
+                    onChange={(e) => setFormData({...formData, valCa: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                  />
+                </div>
               </div>
 
               <div className="pt-6 flex gap-4">
