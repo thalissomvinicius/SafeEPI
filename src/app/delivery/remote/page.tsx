@@ -10,6 +10,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
+import { toast } from "sonner"
 
 interface DeliveryData {
   e: string // employee id
@@ -207,7 +208,7 @@ function RemoteDeliveryContent() {
       setPhase('done')
     } catch (err: any) {
       console.error(err)
-      alert("Erro ao salvar assinatura: " + err.message)
+      toast.error("Erro ao salvar assinatura: " + err.message)
     } finally {
       setIsSaving(false)
     }

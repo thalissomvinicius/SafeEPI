@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ClientShell } from "@/components/layout/ClientShell";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,
@@ -38,6 +39,7 @@ export default function RootLayout({
             {children}
           </ClientShell>
         </AuthProvider>
+        <Toaster position="top-center" richColors closeButton />
       </body>
     </html>
   );

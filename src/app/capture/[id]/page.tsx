@@ -7,6 +7,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { formatCpf } from "@/utils/cpf"
 import Image from "next/image"
 import { Suspense } from "react"
+import { toast } from "sonner"
 
 interface LinkData {
   id: string
@@ -138,7 +139,7 @@ function CaptureContent() {
 
       setIsSuccess(true)
     } catch (err: unknown) {
-      alert(err instanceof Error ? "Falha: " + err.message : "Falha ao salvar biometria.")
+      toast.error(err instanceof Error ? "Falha: " + err.message : "Falha ao salvar biometria.")
     } finally {
       setIsSaving(false)
     }

@@ -12,6 +12,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateNR06PDF } from "@/utils/pdfGenerator"
 import { formatCpf, isValidCpf } from "@/utils/cpf"
+import { toast } from "sonner"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -63,7 +64,7 @@ export default function EmployeesPage() {
       setWorkplaces(wpData)
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
-      alert("Falha ao carregar dados do banco de dados.")
+      toast.error("Falha ao carregar dados do banco de dados.")
     } finally {
       setLoading(false)
     }
@@ -128,7 +129,7 @@ export default function EmployeesPage() {
         // Recarrega a lista para garantir dados consistentes
         await loadData()
 
-        alert("Cadastro atualizado com sucesso!")
+        toast.success("Cadastro atualizado com sucesso!")
         setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
         setIsModalOpen(false)
       } else {
@@ -143,7 +144,7 @@ export default function EmployeesPage() {
           photo_url: null,
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
         }, photoFile)
-        alert("Colaborador cadastrado com sucesso!")
+        toast.success("Colaborador cadastrado com sucesso!")
         
         // Novo cadastro: recarrega a lista completa para incluir o novo
         setLoading(true)
@@ -153,7 +154,7 @@ export default function EmployeesPage() {
       }
     } catch (error) {
       console.error("Erro ao salvar colaborador:", error)
-      alert("Erro ao salvar no banco de dados. Verifique a conexão.")
+      toast.error("Erro ao salvar no banco de dados. Verifique a conexão.")
     } finally {
       setIsSaving(false)
       setLoading(false)
@@ -188,7 +189,7 @@ export default function EmployeesPage() {
       setEmployeeHistory(history)
     } catch (err) {
       console.error("Erro ao carregar histórico:", err)
-      alert("Falha ao carregar prontuário.")
+      toast.error("Falha ao carregar prontuário.")
     } finally {
       setLoadingHistory(false)
     }
@@ -203,10 +204,11 @@ export default function EmployeesPage() {
       if (selectedEmployeeId) {
         const history = await api.getEmployeeHistory(selectedEmployeeId)
         setEmployeeHistory(history)
+        toast.success("EPI devolvido com sucesso.")
       }
     } catch (err) {
       console.error("Erro ao dar baixa:", err)
-      alert("Erro ao registrar devolução.")
+      toast.error("Erro ao registrar devolução.")
     }
   }
 
@@ -231,10 +233,10 @@ export default function EmployeesPage() {
       await loadData()
       const history = await api.getEmployeeHistory(selectedEmployeeId)
       setEmployeeHistory(history)
-      alert("Colaborador desligado e EPIs baixados com sucesso.")
+      toast.success("Colaborador desligado e EPIs baixados com sucesso.")
     } catch (err) {
       console.error("Erro ao desligar:", err)
-      alert("Erro ao processar desligamento.")
+      toast.error("Erro ao processar desligamento.")
     } finally {
       setLoadingHistory(false)
     }
@@ -477,10 +479,10 @@ export default function EmployeesPage() {
                         if (!res.ok) throw new Error(data.error)
                         const link = `${window.location.origin}/capture/${formData.id}?t=${data.link.token}`;
                         navigator.clipboard.writeText(link);
-                        alert("Link copiado! Válido por 24h e uso único.\n\n" + link);
+                        toast.success("Link copiado! Válido por 24h e uso único.");
                       } catch (err: any) {
                         const errorMsg = err.message || "Erro desconhecido";
-                        alert("Erro ao gerar link: " + errorMsg + "\n\nVerifique se a tabela 'remote_links' foi criada no banco de dados.");
+                        toast.error(`Erro ao gerar link: ${errorMsg}. Verifique a tabela 'remote_links'.`);
                       }
                     }}
                     className="mt-3 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
