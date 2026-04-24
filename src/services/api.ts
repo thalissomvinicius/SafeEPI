@@ -238,7 +238,7 @@ export const api = {
     return data as DeliveryWithRelations[];
   },
 
-  async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at' | 'delivery_date'>, signatureFile?: File) {
+  async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at'>, signatureFile?: File) {
     let signatureUrl = null;
 
     // 1. Se houver imagem da assinatura, faz o upload para o Storage
@@ -265,7 +265,7 @@ export const api = {
       .insert([{
         ...delivery,
         signature_url: signatureUrl,
-        delivery_date: new Date().toISOString()
+        delivery_date: delivery.delivery_date || new Date().toISOString()
       }])
       .select();
     

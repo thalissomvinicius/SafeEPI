@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
-import { CheckCircle2, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package } from "lucide-react"
+import { CheckCircle2, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock } from "lucide-react"
+import { format, addDays } from "date-fns"
 import { api } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
@@ -43,6 +44,7 @@ export default function DeliveryPage() {
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("")
   const [ppeSearchTerm, setPpeSearchTerm] = useState("")
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
+  const [deliveryDate, setDeliveryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
 
   // ── CART: Multi-EPI ──
   const [cart, setCart] = useState<CartItem[]>([])
@@ -137,10 +139,19 @@ export default function DeliveryPage() {
       toast.error("EPI com CA vencido não pode ser entregue.")
       return
     }
-    if (cart.some(item => item.ppeId === currentPpeId)) {
-      toast.error("Este EPI já está na lista de entrega.")
+    
+    // Verificação de Estoque
+    const totalInCart = cart.reduce((acc, item) => item.ppeId === currentPpeId ? acc + item.quantity : acc, 0)
+    if (totalInCart + currentQuantity > currentPpe.current_stock) {
+      toast.error(`Estoque Insuficiente! Você possui apenas ${currentPpe.current_stock} unidades de ${currentPpe.name} no estoque. Por favor, adicione mais estoque primeiro.`)
       return
     }
+
+    if (cart.some(item => item.ppeId === currentPpeId)) {
+      toast.error("Este EPI já está na lista. Remova-o se quiser alterar a quantidade.")
+      return
+    }
+
     setCart(prev => [...prev, {
       ppeId: currentPpeId,
       ppeName: currentPpe.name,
@@ -189,7 +200,8 @@ export default function DeliveryPage() {
           quantity: item.quantity,
           ip_address: ipAddress || "Desconhecido",
           auth_method: authMethod,
-          signature_url: null
+          signature_url: null,
+          delivery_date: new Date(deliveryDate).toISOString()
         }, signatureFile)
       }
 
@@ -213,7 +225,8 @@ export default function DeliveryPage() {
         signatureBase64: signatureDataUrl,
         ipAddress,
         location,
-        validationHash
+        validationHash,
+        deliveryDate: new Date(deliveryDate).toISOString()
       })
       
       const shortId = validationHash.slice(0, 8)
@@ -348,6 +361,23 @@ export default function DeliveryPage() {
         <div className="p-5 sm:p-8">
           {step === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-left-4">
+              {/* Data da Entrega */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-[#8B1A1A]" />
+                    Data da Entrega
+                  </h3>
+                  <p className="text-[10px] font-medium text-slate-500 italic mt-0.5">Selecione para entregas retroativas.</p>
+                </div>
+                <input 
+                  type="date"
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  className="w-full sm:w-auto bg-white border border-slate-200 text-slate-900 rounded-xl px-4 py-2 outline-none focus:border-[#8B1A1A] font-bold text-sm shadow-sm"
+                />
+              </div>
+
               <div className="space-y-3">
                 <label htmlFor="employee-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
                   <span>Colaborador Ativo</span>
@@ -468,6 +498,23 @@ export default function DeliveryPage() {
                         <option value="Dano">Dano</option>
                       </select>
                     </div>
+
+                    {currentPpe && currentPpe.lifespan_days > 0 && (
+                      <div className="bg-orange-50 p-3 rounded-xl border border-orange-100 flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Útil (NR-06)</span>
+                          <span className="text-xs font-bold text-orange-800">{currentPpe.lifespan_days} dias</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-1 pt-2 border-t border-orange-200">
+                          <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Próxima Troca
+                          </span>
+                          <span className="text-xs font-black text-[#8B1A1A]">
+                            {format(addDays(new Date(`${deliveryDate}T12:00:00`), currentPpe.lifespan_days), 'dd/MM/yyyy')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     <button 
                       onClick={addToCart}
                       disabled={!currentPpe || isCurrentPpeExpired}

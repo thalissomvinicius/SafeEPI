@@ -96,6 +96,7 @@ export interface DeliveryPDFData {
   ipAddress?: string
   location?: string
   validationHash?: string
+  deliveryDate?: string // Custom delivery date
 }
 
 export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> {
@@ -126,7 +127,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.text("NR-06 | Certificado de Uso Individual", pageWidth / 2, 30, { align: "center" })
   
   doc.setFontSize(7)
-  const today = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
+  const today = data.deliveryDate ? format(new Date(data.deliveryDate), "dd/MM/yyyy", { locale: ptBR }) : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
   doc.text(today, pageWidth - 14, 15, { align: "right" })
 
   // 2. CARD: COLABORADOR (3 Columns)
