@@ -83,10 +83,13 @@ export interface DeliveryPDFData {
   employeeCpf: string
   employeeRole: string
   workplaceName: string
+  // Single item (backward compat)
   ppeName: string
   ppeCaNumber: string
   quantity: number
   reason: string
+  // Multi-item support
+  items?: { ppeName: string; ppeCaNumber: string; quantity: number; reason: string }[]
   authMethod: 'manual' | 'facial'
   signatureBase64: string
   photoBase64?: string
@@ -100,6 +103,11 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const hash = data.validationHash || Math.random().toString(36).substring(2, 12).toUpperCase()
+
+  // Build items array (support both single and multi-item)
+  const pdfItems = data.items && data.items.length > 0
+    ? data.items
+    : [{ ppeName: data.ppeName, ppeCaNumber: data.ppeCaNumber, quantity: data.quantity, reason: data.reason }]
 
   // 1. HEADER (SaaS Premium Style)
   doc.setFillColor(r, g, b)
@@ -121,7 +129,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   const today = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
   doc.text(today, pageWidth - 14, 15, { align: "right" })
 
-  // 2. CARD: COLABORADOR (2 Columns)
+  // 2. CARD: COLABORADOR (3 Columns)
   let currentY = 50
   doc.setFillColor(255, 255, 255)
   doc.setDrawColor(230, 230, 230)
@@ -136,13 +144,11 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFontSize(8)
   doc.setTextColor(100, 116, 139)
   
-  // Column 1
   doc.text("CPF", 20, currentY + 18)
   doc.setTextColor(30, 41, 59)
   doc.setFont("helvetica", "bold")
   doc.text(data.employeeCpf, 20, currentY + 23)
   
-  // Column 2 (Middle)
   doc.setTextColor(100, 116, 139)
   doc.setFont("helvetica", "normal")
   doc.text("CARGO / FUNÇÃO", pageWidth / 2, currentY + 18)
@@ -150,7 +156,6 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFont("helvetica", "bold")
   doc.text(data.employeeRole || "Não Informado", pageWidth / 2, currentY + 23)
   
-  // Column 3 (Unit)
   doc.setTextColor(100, 116, 139)
   doc.setFont("helvetica", "normal")
   doc.text("UNIDADE / CANTEIRO", pageWidth - 20, currentY + 18, { align: "right" })
@@ -158,19 +163,19 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFont("helvetica", "bold")
   doc.text(data.workplaceName || "Sede", pageWidth - 20, currentY + 23, { align: "right" })
 
-  // 3. CARD: DADOS DO EPI (Table Style)
+  // 3. CARD: DADOS DO EPI (Table — supports multiple items)
   currentY += 45
   autoTable(doc, {
     startY: currentY,
     head: [["Equipamento (EPI)", "Nº CA", "Qtd", "Motivo", "Data Entrega"]],
-    body: [[
-      data.ppeName,
-      data.ppeCaNumber,
-      String(data.quantity),
-      data.reason,
+    body: pdfItems.map(item => [
+      item.ppeName,
+      item.ppeCaNumber,
+      String(item.quantity),
+      item.reason,
       format(new Date(), "dd/MM/yyyy")
-    ]],
-    styles: { fontSize: 9, cellPadding: 6, font: "helvetica" },
+    ]),
+    styles: { fontSize: 9, cellPadding: 5, font: "helvetica" },
     headStyles: { fillColor: [245, 245, 245], textColor: [71, 85, 105], fontStyle: "bold" },
     margin: { left: 14, right: 14 },
     theme: 'grid'
