@@ -252,7 +252,7 @@ export default function DeliveryPage() {
     } finally {
       setIsSaving(false)
     }
-  }, [selectedEmployeeId, selectedWorkplaceId, cart, ipAddress, location, authMethod, selectedEmployee, selectedWorkplace])
+  }, [selectedEmployeeId, selectedWorkplaceId, cart, ipAddress, location, authMethod, selectedEmployee, selectedWorkplace, deliveryDate])
 
   const handleManualSave = () => {
     if (!sigCanvas.current || sigCanvas.current.isEmpty()) {

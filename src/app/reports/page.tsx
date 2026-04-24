@@ -185,7 +185,6 @@ export default function ReportsPage() {
     generateGeneralReportPDF({
       stats,
       deliveries: allDeliveries,
-      // @ts-expect-error - Chave periodTitle aceita na nova interface mas o typescript acusa erro
       periodTitle: titleMap[dateFilter]
     })
   }
