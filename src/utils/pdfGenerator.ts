@@ -342,13 +342,16 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.text("Scan to Verify", pageWidth - 32, currentY + 33, { align: "center" })
   } catch {}
 
-  // 7. FOOTER
-  doc.setDrawColor(240, 240, 240)
-  doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15)
-  doc.setFontSize(7)
+  // 7. FOOTER (dynamic position — after auth card, not fixed to page bottom)
+  currentY += 45
+  doc.setDrawColor(230, 230, 230)
+  doc.setLineWidth(0.3)
+  doc.line(14, currentY, pageWidth - 14, currentY)
+  doc.setFontSize(6.5)
+  doc.setFont("helvetica", "normal")
   doc.setTextColor(148, 163, 184)
   const footerText = `${COMPANY_CONFIG.systemName} Digital • NR-06 Compliance • Documento gerado automaticamente para fins de auditoria.`
-  doc.text(footerText, pageWidth / 2, pageHeight - 10, { align: "center" })
+  doc.text(footerText, pageWidth / 2, currentY + 6, { align: "center" })
 
   return doc.output("blob")
 }
