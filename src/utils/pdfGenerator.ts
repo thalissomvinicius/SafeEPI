@@ -370,6 +370,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
 export interface ReturnPDFData {
   employeeName: string
   employeeCpf: string
+  workplaceName: string
   returnedItemName: string
   returnMotive: string
   newItemName?: string
@@ -388,6 +389,7 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   const boxY = 46
   infoRow(doc, "Colaborador", data.employeeName, 14, boxY)
   infoRow(doc, "CPF", data.employeeCpf, 14, boxY + 12)
+  infoRow(doc, "Unidade / Sede", data.workplaceName, pageWidth / 2, boxY + 12)
 
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.3)

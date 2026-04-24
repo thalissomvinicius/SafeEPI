@@ -6,7 +6,7 @@ import { Users, AlertTriangle, Search, CheckCircle2, FileDown, Loader2, ArrowRig
 import SignatureCanvas from "react-signature-canvas"
 import { format } from "date-fns"
 import { api } from "@/services/api"
-import { Employee, PPE, DeliveryWithRelations } from "@/types/database"
+import { Employee, PPE, DeliveryWithRelations, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateReturnPDF } from "@/utils/pdfGenerator"
@@ -15,6 +15,7 @@ import { formatCpf } from "@/utils/cpf"
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [ppes, setPpes] = useState<PPE[]>([])
+  const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
 
@@ -39,12 +40,14 @@ export default function ReturnsPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [empData, ppeData] = await Promise.all([
+        const [empData, ppeData, wpData] = await Promise.all([
           api.getEmployees(),
-          api.getPpes()
+          api.getPpes(),
+          api.getWorkplaces()
         ])
         setEmployees(empData.filter(e => e.active))
         setPpes(ppeData.filter(p => p.active))
+        setWorkplaces(wpData)
       } catch (err) {
         console.error("Erro", err)
       } finally {
@@ -124,9 +127,13 @@ export default function ReturnsPage() {
         }, signatureFile)
       }
 
+      const workplace = workplaces.find(w => w.id === selectedEmployee.workplace_id)
+      const workplaceName = workplace?.name || "Sede"
+
       const pdfBlob = await generateReturnPDF({
         employeeName: selectedEmployee.full_name,
         employeeCpf: selectedEmployee.cpf,
+        workplaceName: workplaceName,
         returnedItemName: deliveryToReturn.ppe?.name || "EPI",
         returnMotive: returnMotive,
         newItemName: newPpe?.name,
