@@ -119,7 +119,8 @@ export default function ReturnsPage() {
           reason: returnMotive === 'Perda' || returnMotive === 'Dano' ? 'Perda' : 'Substituição (Desgaste/Validade)',
           quantity: 1,
           ip_address: "Terminal de Baixas",
-          signature_url: null
+          signature_url: null,
+          delivery_date: new Date().toISOString()
         }, signatureFile)
       }
 
