@@ -443,17 +443,21 @@ export default function DeliveryPage() {
 
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Quantidade</label>
+                      <label htmlFor="quantity-input" className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Quantidade</label>
                       <input 
+                        id="quantity-input"
                         type="number" min="1" max="100"
+                        title="Quantidade do EPI"
                         className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
                         value={currentQuantity}
                         onChange={(e) => setCurrentQuantity(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Motivo</label>
+                      <label htmlFor="reason-select" className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Motivo</label>
                       <select
+                        id="reason-select"
+                        title="Motivo da entrega"
                         value={currentReason}
                         onChange={(e) => setCurrentReason(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] font-bold text-xs"
@@ -493,7 +497,12 @@ export default function DeliveryPage() {
                             <span className="text-[9px] font-bold text-slate-400">{item.reason}</span>
                           </div>
                         </div>
-                        <button onClick={() => removeFromCart(item.ppeId)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors">
+                        <button 
+                          onClick={() => removeFromCart(item.ppeId)} 
+                          title="Remover EPI"
+                          aria-label={`Remover ${item.ppeName}`}
+                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
