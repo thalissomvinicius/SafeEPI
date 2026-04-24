@@ -101,22 +101,29 @@ export default function EmployeesPage() {
       }
 
       if (formData.id) {
-        const updates: Partial<Employee> = {
+        // Constrói o objeto de atualização SEM valores undefined
+        const updates: Record<string, unknown> = {
           full_name: formData.name,
           job_title: formData.role || "Geral",
           department: formData.department || `Sede ${COMPANY_CONFIG.shortName}`,
           cpf: formData.cpf || "000.000.000-00",
           workplace_id: formData.workplace_id || null,
-          // Sempre inclui photo_url: null remove, string mantém
-          photo_url: formData.photo_url === null ? null : (formData.photo_url?.startsWith('http') ? formData.photo_url : undefined),
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
         }
 
-        // Usa o Employee ATUALIZADO retornado pelo Supabase para sincronizar estado
-        const updatedEmployee = await api.updateEmployee(formData.id, updates, photoFile)
+        // photo_url: null = remover foto, string = manter/atualizar, não incluir = sem mudança
+        if (formData.photo_url === null) {
+          updates.photo_url = null
+          updates.face_descriptor = null
+        } else if (formData.photo_url && formData.photo_url.startsWith('http')) {
+          updates.photo_url = formData.photo_url
+        }
+        // Se photo_url é base64 (nova captura), photoFile será enviado e a API cuida do upload
+
+        await api.updateEmployee(formData.id, updates as Partial<Employee>, photoFile)
         
-        // Atualiza somente o colaborador editado na lista — sem fazer nova consulta
-        setEmployees(prev => prev.map(e => e.id === updatedEmployee.id ? updatedEmployee : e))
+        // Recarrega a lista para garantir dados consistentes
+        await loadData()
 
         alert("Cadastro atualizado com sucesso!")
         setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
