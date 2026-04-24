@@ -318,7 +318,7 @@ export default function ReportsPage() {
                 Excel
             </button>
             <button 
-                onClick={() => window.print()}
+                onClick={handleExportPDF}
                 className="flex-1 sm:flex-none bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-slate-50 transition-all flex items-center justify-center border-b-4 border-slate-200 gap-2"
             >
                 <Download className="w-4 h-4 text-[#8B1A1A]" />

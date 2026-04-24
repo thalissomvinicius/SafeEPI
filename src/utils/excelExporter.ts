@@ -7,12 +7,14 @@ import { DeliveryWithRelations } from "@/types/database"
 // Helpers
 // ─────────────────────────────────────────────
 
-function buildWorkbookHeader(): Record<string, string>[] {
-  return [
-    { A: `${COMPANY_CONFIG.name} — ${COMPANY_CONFIG.systemName}` },
-    { A: `Exportado em: ${format(new Date(), "dd/MM/yyyy HH:mm")} | ${COMPANY_CONFIG.compliance}` },
-    {},
-  ] as never[]
+function addHeaderToSheet(ws: XLSX.WorkSheet, title: string) {
+  const headerData = [
+    [`${COMPANY_CONFIG.name.toUpperCase()} — ${COMPANY_CONFIG.systemName.toUpperCase()}`],
+    [`Relatório: ${title}`],
+    [`Exportado em: ${format(new Date(), "dd/MM/yyyy HH:mm")} | Compliance NR-06`],
+    [] // Blank row before data
+  ]
+  XLSX.utils.sheet_add_aoa(ws, headerData, { origin: "A1" })
 }
 
 // ─────────────────────────────────────────────
@@ -39,7 +41,8 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     "Custo Total (R$)": (d.ppe?.cost || 0) * (d.quantity || 1),
   }))
 
-  const ws = XLSX.utils.json_to_sheet(rows)
+  const ws = XLSX.utils.json_to_sheet(rows, { origin: "A5" })
+  addHeaderToSheet(ws, "Histórico Geral de Entregas")
   styleWorksheet(ws, Object.keys(rows[0] || {}).length)
 
   XLSX.utils.book_append_sheet(wb, ws, "Entregas")
@@ -56,7 +59,8 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     .map(([epi, { qtd, custo }]) => ({ "EPI": epi, "Total Entregue": qtd, "Custo Total (R$)": custo }))
     .sort((a, b) => b["Total Entregue"] - a["Total Entregue"])
 
-  const wsSummary = XLSX.utils.json_to_sheet(summaryRows)
+  const wsSummary = XLSX.utils.json_to_sheet(summaryRows, { origin: "A5" })
+  addHeaderToSheet(wsSummary, "Resumo por EPI")
   styleWorksheet(wsSummary, 3)
   XLSX.utils.book_append_sheet(wb, wsSummary, "Resumo por EPI")
 
@@ -72,9 +76,10 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     .map(([canteiro, { qtd, custo }]) => ({ "Canteiro": canteiro, "Entregas": qtd, "Investimento Total (R$)": custo }))
     .sort((a, b) => b["Investimento Total (R$)"] - a["Investimento Total (R$)"])
 
-  const wsWp = XLSX.utils.json_to_sheet(wpRows)
+  const wsWp = XLSX.utils.json_to_sheet(wpRows, { origin: "A5" })
+  addHeaderToSheet(wsWp, "Resumo por Canteiro")
   styleWorksheet(wsWp, 3)
-  XLSX.utils.book_append_sheet(wb, wsWp, "Resumo por Canteiro")
+  XLSX.utils.book_append_sheet(wb, wsWp, "Resumo Canteiros")
 
   const fileName = `Relatorio_EPIs_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
   XLSX.writeFile(wb, fileName)
@@ -101,7 +106,8 @@ export function exportEmployeeToExcel(
     "Custo (R$)": d.ppe?.cost || 0,
   }))
 
-  const ws = XLSX.utils.json_to_sheet(rows)
+  const ws = XLSX.utils.json_to_sheet(rows, { origin: "A5" })
+  addHeaderToSheet(ws, `Prontuário Individual: ${employeeName}`)
   styleWorksheet(ws, 8)
   XLSX.utils.book_append_sheet(wb, ws, "Prontuário")
 
@@ -115,7 +121,11 @@ export function exportEmployeeToExcel(
 function styleWorksheet(ws: XLSX.WorkSheet, colCount: number) {
   const colWidths = []
   for (let i = 0; i < colCount; i++) {
-    colWidths.push({ wch: 22 })
+    colWidths.push({ wch: 22 }) // Set a comfortable width for all columns
+  }
+  // Make the first column (usually EPI name or Colaborador) wider
+  if (colWidths.length > 1) {
+    colWidths[1] = { wch: 35 }
   }
   ws["!cols"] = colWidths
 }
