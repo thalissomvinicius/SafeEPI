@@ -101,7 +101,7 @@ export default function EmployeesPage() {
       }
 
       if (formData.id) {
-        // Constrói o objeto de atualização SEM valores undefined
+        // Atualiza campos textuais
         const updates: Record<string, unknown> = {
           full_name: formData.name,
           job_title: formData.role || "Geral",
@@ -111,16 +111,19 @@ export default function EmployeesPage() {
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
         }
 
-        // photo_url: null = remover foto, string = manter/atualizar, não incluir = sem mudança
-        if (formData.photo_url === null) {
-          updates.photo_url = null
-          updates.face_descriptor = null
-        } else if (formData.photo_url && formData.photo_url.startsWith('http')) {
+        // Se tem foto HTTP existente, mantém
+        if (formData.photo_url && formData.photo_url.startsWith('http')) {
           updates.photo_url = formData.photo_url
         }
-        // Se photo_url é base64 (nova captura), photoFile será enviado e a API cuida do upload
 
+        // Atualiza campos gerais (e foto se for nova captura via photoFile)
         await api.updateEmployee(formData.id, updates as Partial<Employee>, photoFile)
+
+        // Se a foto foi REMOVIDA (null), faz chamada dedicada separada
+        if (formData.photo_url === null) {
+          console.log('[handleSave] Foto removida - chamando removeEmployeePhoto')
+          await api.removeEmployeePhoto(formData.id)
+        }
         
         // Recarrega a lista para garantir dados consistentes
         await loadData()

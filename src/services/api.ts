@@ -111,14 +111,35 @@ export const api = {
       finalUpdates.photo_url = publicUrl;
     }
 
+    console.log('[updateEmployee] ID:', id);
+    console.log('[updateEmployee] finalUpdates:', JSON.stringify(finalUpdates, null, 2));
+
     const { data, error } = await supabase
       .from('employees')
       .update(finalUpdates)
       .eq('id', id)
       .select();
     
+    console.log('[updateEmployee] Supabase response data:', JSON.stringify(data, null, 2));
+    console.log('[updateEmployee] Supabase response error:', error);
+
     if (error) throw error;
-    return data[0] as Employee;
+    return data?.[0] as Employee;
+  },
+
+  async removeEmployeePhoto(id: string) {
+    console.log('[removeEmployeePhoto] Removing photo for employee:', id);
+    const { data, error } = await supabase
+      .from('employees')
+      .update({ photo_url: null, face_descriptor: null })
+      .eq('id', id)
+      .select('id, photo_url, face_descriptor');
+    
+    console.log('[removeEmployeePhoto] Result:', JSON.stringify(data, null, 2));
+    console.log('[removeEmployeePhoto] Error:', error);
+    
+    if (error) throw error;
+    return data?.[0] as Employee;
   },
 
   async terminateEmployee(employeeId: string) {
