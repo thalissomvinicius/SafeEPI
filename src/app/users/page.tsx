@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Shield, UserCog, Mail, Calendar, Loader2, CheckCircle2, AlertCircle, Plus, Key, Trash2 } from "lucide-react"
+import { Shield, UserCog, Mail, Calendar, Loader2, AlertCircle, Plus, Key, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
 import { Profile } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
@@ -108,9 +108,10 @@ export default function UsersPage() {
       }
       setIsModalOpen(false)
       loadUsers()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro no form:", error)
-      toast.error(error.message || "Erro ao salvar usuário.")
+      const message = error instanceof Error ? error.message : "Erro ao salvar usuário."
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -121,7 +122,7 @@ export default function UsersPage() {
     setIsModalOpen(true)
   }
 
-  const openResetPasswordModal = (user: any) => {
+  const openResetPasswordModal = (user: (Profile & { email: string, created_at: string, last_sign_in_at: string })) => {
     setFormData({ id: user.id, full_name: user.full_name, email: user.email, password: "", role: user.role })
     setIsModalOpen(true)
   }

@@ -164,7 +164,8 @@ export default function ReportsPage() {
       { label: "EPIs em Alerta (C.A.)", value: criticalCount.toString(), change: "Atenção (Geral)" },
       { label: `Treinamentos (${labelMap[dateFilter]})`, value: filteredTrainings.length.toString(), change: "NR-01/06" },
     ])
-  }, [rawDeliveries, rawPpes, rawTrainings, rawWorkplaces, dateFilter])
+    // eslint-disable-next-line
+  }, [rawDeliveries, rawPpes, rawTrainings, rawWorkplaces, dateFilter, customStartDate, customEndDate, specificMonth])
 
   if (authLoading || (user && user.role === 'ALMOXARIFE')) {
     return (

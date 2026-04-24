@@ -561,9 +561,8 @@ export function generateNR06PDF(data: NR06PDFData): void {
     margin: { left: 14, right: 14 },
   })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   // @ts-expect-error - jsPDF-autotable adds lastAutoTable to doc
-  const finalY = (doc as any).lastAutoTable?.finalY || 200
+  const finalY = doc.lastAutoTable?.finalY || 200
   const emitDate = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
   doc.setFontSize(7)
   doc.setFont("helvetica", "italic")
