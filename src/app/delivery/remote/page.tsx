@@ -66,9 +66,18 @@ function RemoteDeliveryContent() {
         const ipData = await ipRes.json()
         setIpAddress(ipData.ip)
         if ('geolocation' in navigator) {
-          navigator.geolocation.getCurrentPosition((pos) => {
-            setLocation(`${pos.coords.latitude}, ${pos.coords.longitude}`)
-          })
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setLocation(`${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`)
+            },
+            (err) => {
+              console.warn("Geolocation denied or unavailable:", err.message)
+              setLocation("Permissão negada pelo dispositivo")
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          )
+        } else {
+          setLocation("Navegador sem suporte a GPS")
         }
       } catch { /* ignore */ }
 

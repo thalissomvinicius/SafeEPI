@@ -194,10 +194,8 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   const splitTerm = doc.splitTextToSize(termText, pageWidth - 40)
   doc.text(splitTerm, 20, currentY + 13, { align: "justify" })
 
-  // 5. CARD: BIOMETRIA (REFACTORED)
+  // 5. CARD: BIOMETRIA / ASSINATURA
   currentY += 35
-  const photoContainerSize = 45
-  const photoCenterX = pageWidth / 2 - photoContainerSize / 2
   
   if (data.authMethod === 'facial' && data.signatureBase64) {
     // Label Header
@@ -206,29 +204,55 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.setTextColor(71, 85, 105)
     doc.text("AUTENTICAÇÃO BIOMÉTRICA", pageWidth / 2, currentY, { align: "center" })
     
-    // Container Shadow/Border
+    // Container border
+    const containerSize = 50
+    const containerX = pageWidth / 2 - containerSize / 2
     doc.setDrawColor(226, 232, 240)
     doc.setFillColor(248, 250, 252)
-    doc.roundedRect(photoCenterX - 2, currentY + 5, photoContainerSize + 4, photoContainerSize + 4, 3, 3, "FD")
+    doc.roundedRect(containerX - 2, currentY + 5, containerSize + 4, containerSize + 4, 3, 3, "FD")
     
     try {
-      // Logic to prevent stretching: Draw a square image
-      // We assume signatureBase64 is the photo in this case
-      doc.addImage(data.signatureBase64, 'JPEG', photoCenterX, currentY + 7, photoContainerSize, photoContainerSize)
+      // Load image to get its natural dimensions and prevent stretching
+      const imgProps = doc.getImageProperties(data.signatureBase64)
+      const imgW = imgProps.width
+      const imgH = imgProps.height
+      
+      // Calculate proportional dimensions to fit inside container
+      let drawW = containerSize
+      let drawH = containerSize
+      const ratio = imgW / imgH
+      
+      if (ratio > 1) {
+        // Landscape: fit width, crop height (center vertically)
+        drawH = containerSize
+        drawW = containerSize
+      } else if (ratio < 1) {
+        // Portrait: fit height, adjust width
+        drawH = containerSize
+        drawW = containerSize * ratio
+      }
+      // else: square, perfect fit
+      
+      const drawX = containerX + (containerSize - drawW) / 2
+      const drawY = currentY + 7 + (containerSize - drawH) / 2
+      
+      doc.addImage(data.signatureBase64, 'JPEG', drawX, drawY, drawW, drawH)
     } catch (e) {
       console.error("Error adding photo to PDF", e)
     }
     
     // Employee details below photo
+    doc.setFont("helvetica", "bold")
     doc.setFontSize(9)
     doc.setTextColor(30, 41, 59)
-    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + photoContainerSize + 16, { align: "center" })
+    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + containerSize + 16, { align: "center" })
     
     doc.setFontSize(7)
+    doc.setFont("helvetica", "normal")
     doc.setTextColor(148, 163, 184)
-    doc.text(`Identidade Validada por Inteligência Artificial (face-api.js)`, pageWidth / 2, currentY + photoContainerSize + 21, { align: "center" })
+    doc.text("Identidade Validada por IA (face-api.js / TensorFlow)", pageWidth / 2, currentY + containerSize + 21, { align: "center" })
     
-    currentY += photoContainerSize + 30
+    currentY += containerSize + 30
   } else {
     // MANUAL SIGNATURE
     doc.setFont("helvetica", "bold")
