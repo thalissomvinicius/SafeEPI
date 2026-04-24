@@ -1,13 +1,13 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { History, Download, ShieldCheck, Search, Loader2 } from "lucide-react"
+import { History, Download, ShieldCheck, Search, Loader2, FileDown } from "lucide-react"
 import { api } from "@/services/api"
 import { DeliveryWithRelations } from "@/types/database"
+import { generateDeliveryPDF } from "@/utils/pdfGenerator"
+import { toast } from "sonner"
 
 export default function HistoryPage() {
   const [records, setRecords] = useState<DeliveryWithRelations[]>([])
   const [loading, setLoading] = useState(true)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
@@ -18,12 +18,71 @@ export default function HistoryPage() {
         setRecords(data)
       } catch (err) {
         console.error("Erro histórico:", err)
+        toast.error("Falha ao carregar histórico.")
       } finally {
         setLoading(false)
       }
     }
     fetchHistory()
   }, [])
+
+  const handleDownloadPDF = async (rec: DeliveryWithRelations) => {
+    if (!rec.signature_url) {
+      toast.error("Este registro não possui assinatura digital.")
+      return
+    }
+
+    try {
+      setDownloadingId(rec.id)
+      
+      // 1. Converter URL da assinatura para Base64 (necessário para jsPDF)
+      const response = await fetch(rec.signature_url)
+      const blob = await response.blob()
+      const base64Signature = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      })
+
+      // 2. Gerar o PDF
+      const pdfBlob = await generateDeliveryPDF({
+        employeeName: rec.employee?.full_name || "Desconhecido",
+        employeeCpf: rec.employee?.cpf || "000.000.000-00",
+        employeeRole: rec.employee?.job_title || "Geral",
+        workplaceName: rec.workplace?.name || "Sede",
+        ppeName: rec.ppe?.name || "N/A",
+        ppeCaNumber: rec.ppe?.ca_number || "N/A",
+        quantity: rec.quantity,
+        reason: rec.reason,
+        authMethod: rec.signature_url.includes('emp_') ? 'facial' : 'manual', // Heurística simples
+        signatureBase64: base64Signature,
+        ipAddress: rec.ip_address || "Remoto",
+        validationHash: rec.id.slice(0, 8).toUpperCase()
+      })
+
+      // 3. Criar nome de arquivo padronizado: Comprovante_[ID8]_[Nome]_[EPI].pdf
+      const shortId = rec.id.slice(0, 8).toUpperCase()
+      const safeName = (rec.employee?.full_name || "Comprovante").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const safePpe = (rec.ppe?.name || "EPI").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const fileName = `Comprovante_${shortId}_${safeName}_${safePpe}.pdf`
+
+      // 4. Download do arquivo
+      const url = window.URL.createObjectURL(pdfBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', fileName)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      
+      toast.success(`PDF gerado: ${fileName}`)
+    } catch (err) {
+      console.error("Erro ao gerar PDF:", err)
+      toast.error("Erro ao processar o arquivo PDF.")
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   const filteredRecords = records.filter(rec => 
     rec.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -102,8 +161,16 @@ export default function HistoryPage() {
                         )}
                     </td>
                     <td className="px-6 py-5 text-right">
-                        <button className="text-[#8B1A1A] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end w-full p-2 rounded transition-all group-hover:underline">
-                            <Download className="w-4 h-4 mr-1" />
+                        <button 
+                          onClick={() => handleDownloadPDF(rec)}
+                          disabled={downloadingId === rec.id}
+                          className="text-[#8B1A1A] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end w-full p-2 rounded transition-all group-hover:underline disabled:opacity-30"
+                        >
+                            {downloadingId === rec.id ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                              <FileDown className="w-4 h-4 mr-1" />
+                            )}
                             PDF
                         </button>
                     </td>

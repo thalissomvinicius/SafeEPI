@@ -159,8 +159,25 @@ export default function DeliveryPage() {
         location,
         validationHash
       })
-      setLastPdfUrl(URL.createObjectURL(pdfBlob))
+      
+      const shortId = validationHash.slice(0, 8)
+      const safeName = (selectedEmployee?.full_name || "Comprovante").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const safePpe = (selectedPpe?.name || "EPI").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const fileName = `Comprovante_${shortId}_${safeName}_${safePpe}.pdf`
+      
+      const pdfUrl = URL.createObjectURL(pdfBlob)
+      setLastPdfUrl(pdfUrl)
       setIsSaved(true)
+
+      // Auto-download helper
+      const link = document.createElement('a')
+      link.href = pdfUrl
+      link.setAttribute('download', fileName)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      toast.success("Entrega registrada e PDF gerado com sucesso!")
     } catch (err) {
       console.error("Erro ao finalizar entrega:", err)
       alert("Erro ao salvar entrega.")

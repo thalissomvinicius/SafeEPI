@@ -208,8 +208,24 @@ function RemoteDeliveryContent() {
         location,
         validationHash
       })
+
+      const shortId = validationHash.slice(0, 8)
+      const safeName = (employee.full_name || "Comprovante").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const safePpe = (ppe.name || "EPI").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const fileName = `Comprovante_${shortId}_${safeName}_${safePpe}.pdf`
+
       const pdfUrl = URL.createObjectURL(pdfBlob)
       setLastPdfUrl(pdfUrl)
+      
+      // Auto-download
+      const link = document.createElement('a')
+      link.href = pdfUrl
+      link.setAttribute('download', fileName)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      toast.success("Assinatura salva e comprovante gerado!")
       setPhase('done')
     } catch (err: any) {
       console.error(err)
