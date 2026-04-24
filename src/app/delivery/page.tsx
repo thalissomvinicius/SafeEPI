@@ -428,6 +428,28 @@ export default function DeliveryPage() {
                 </div>
               </div>
 
+              {/* ── UNIDADE / LOCAL ── */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <span>Unidade / Local de Entrega</span>
+                  {selectedWorkplace && (
+                    <span className="text-[9px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-black uppercase tracking-widest">
+                      Auto-preenchido
+                    </span>
+                  )}
+                </label>
+                <select
+                  title="Unidade / Local de Entrega"
+                  value={selectedWorkplaceId}
+                  onChange={(e) => setSelectedWorkplaceId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm appearance-none cursor-pointer"
+                >
+                  <option value="">— Nenhuma Unidade / Sede —</option>
+                  {workplaces.map(wp => (
+                    <option key={wp.id} value={wp.id}>{wp.name}</option>
+                  ))}
+                </select>
+              </div>
               {/* ── ADICIONAR EPI AO CARRINHO ── */}
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Adicionar EPI à Entrega</label>
