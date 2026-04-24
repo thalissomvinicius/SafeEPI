@@ -431,6 +431,25 @@ export default function EmployeesPage() {
                     <span className="text-[8px] font-black uppercase tracking-widest text-center px-2">Biometria<br/>Facial</span>
                   </button>
                 )}
+                
+                {formData.id ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link = `${window.location.origin}/capture/${formData.id}`;
+                      navigator.clipboard.writeText(link);
+                      alert("Link copiado: " + link);
+                    }}
+                    className="mt-3 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
+                  >
+                    <Link2 className="w-3 h-3" />
+                    Gerar Link de Captura Remota
+                  </button>
+                ) : (
+                  <p className="mt-3 text-[9px] font-bold uppercase tracking-widest text-slate-400 italic text-center">
+                    Salve o cadastro para gerar<br/>o link de captura remota
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
