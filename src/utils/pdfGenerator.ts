@@ -75,7 +75,7 @@ function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number)
 }
 
 // ─────────────────────────────────────────────
-// 1. FICHA DE ENTREGA (NR-06)
+// 1. FICHA DE ENTREGA (NR-06) - MODERN LAYOUT
 // ─────────────────────────────────────────────
 
 export interface DeliveryPDFData {
@@ -98,174 +98,208 @@ export interface DeliveryPDFData {
 export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> {
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const hash = data.validationHash || Math.random().toString(36).substring(2, 12).toUpperCase()
 
-  addPageHeader(doc, "FICHA DE ENTREGA DE E.P.I.", "Certificado de Uso Individual — NR-06 Art. 6°")
+  // 1. HEADER (SaaS Premium Style)
+  doc.setFillColor(r, g, b)
+  doc.rect(0, 0, pageWidth, 40, "F")
+  
+  doc.setTextColor(255, 255, 255)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8)
+  doc.text(COMPANY_CONFIG.name.toUpperCase(), 14, 15)
+  
+  doc.setFontSize(18)
+  doc.text("FICHA DE ENTREGA DE EPI", pageWidth / 2, 22, { align: "center" })
+  
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(9)
+  doc.text("NR-06 | Certificado de Uso Individual", pageWidth / 2, 30, { align: "center" })
+  
+  doc.setFontSize(7)
+  const today = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
+  doc.text(today, pageWidth - 14, 15, { align: "right" })
 
-  // ── Info boxes ──
-  const boxY = 46
-  const boxH = 42 // Increased height for better spacing
-  const col = (pageWidth - 28) / 2
+  // 2. CARD: COLABORADOR (2 Columns)
+  let currentY = 50
+  doc.setFillColor(255, 255, 255)
+  doc.setDrawColor(230, 230, 230)
+  doc.roundedRect(14, currentY, pageWidth - 28, 35, 3, 3, "S")
+  
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(12)
+  doc.setTextColor(r, g, b)
+  doc.text(data.employeeName.toUpperCase(), 20, currentY + 10)
+  
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.setTextColor(100, 116, 139)
+  
+  // Column 1
+  doc.text("CPF", 20, currentY + 18)
+  doc.setTextColor(30, 41, 59)
+  doc.setFont("helvetica", "bold")
+  doc.text(data.employeeCpf, 20, currentY + 23)
+  
+  // Column 2 (Middle)
+  doc.setTextColor(100, 116, 139)
+  doc.setFont("helvetica", "normal")
+  doc.text("CARGO / FUNÇÃO", pageWidth / 2, currentY + 18)
+  doc.setTextColor(30, 41, 59)
+  doc.setFont("helvetica", "bold")
+  doc.text(data.employeeRole || "Não Informado", pageWidth / 2, currentY + 23)
+  
+  // Column 3 (Unit)
+  doc.setTextColor(100, 116, 139)
+  doc.setFont("helvetica", "normal")
+  doc.text("UNIDADE / CANTEIRO", pageWidth - 20, currentY + 18, { align: "right" })
+  doc.setTextColor(30, 41, 59)
+  doc.setFont("helvetica", "bold")
+  doc.text(data.workplaceName || "Sede", pageWidth - 20, currentY + 23, { align: "right" })
 
-  doc.setFillColor(248, 250, 252)
-  doc.roundedRect(14, boxY, col - 4, boxH, 3, 3, "F")
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(14, boxY, col - 4, boxH, 3, 3, "S")
-
-  infoRow(doc, "Colaborador", data.employeeName, 18, boxY + 8)
-  infoRow(doc, "CPF", data.employeeCpf, 18, boxY + 22)
-  infoRow(doc, "Cargo / Função", data.employeeRole, 18, boxY + 36)
-
-  doc.setFillColor(248, 250, 252)
-  doc.roundedRect(14 + col, boxY, col - 4, boxH, 3, 3, "F")
-  doc.setDrawColor(226, 232, 240)
-  doc.roundedRect(14 + col, boxY, col - 4, boxH, 3, 3, "S")
-
-  infoRow(doc, "Equipamento (EPI)", data.ppeName, 18 + col, boxY + 8)
-  infoRow(doc, "Nº do C.A.", data.ppeCaNumber, 18 + col, boxY + 22)
-  infoRow(doc, "Canteiro / Unidade", data.workplaceName, 18 + col, boxY + 36)
-
-  const detY = boxY + boxH + 8
-  const colW = (pageWidth - 28) / 4
-  const details = [
-    { label: "Qtd Entregue", value: String(data.quantity) },
-    { label: "Motivo", value: data.reason },
-    { label: "Data de Entrega", value: format(new Date(), "dd/MM/yyyy", { locale: ptBR }) },
-    { label: "Autenticação", value: data.authMethod === 'facial' ? 'Biometria Facial' : 'Assinatura Manual' },
-  ]
-  details.forEach((d, i) => {
-    infoRow(doc, d.label, d.value, 14 + i * colW, detY + 4)
+  // 3. CARD: DADOS DO EPI (Table Style)
+  currentY += 45
+  autoTable(doc, {
+    startY: currentY,
+    head: [["Equipamento (EPI)", "Nº CA", "Qtd", "Motivo", "Data Entrega"]],
+    body: [[
+      data.ppeName,
+      data.ppeCaNumber,
+      String(data.quantity),
+      data.reason,
+      format(new Date(), "dd/MM/yyyy")
+    ]],
+    styles: { fontSize: 9, cellPadding: 6, font: "helvetica" },
+    headStyles: { fillColor: [245, 245, 245], textColor: [71, 85, 105], fontStyle: "bold" },
+    margin: { left: 14, right: 14 },
+    theme: 'grid'
   })
 
-  const termY = detY + 18
-  doc.setFillColor(255, 251, 235)
-  doc.setDrawColor(251, 191, 36)
-  doc.roundedRect(14, termY, pageWidth - 28, 24, 3, 3, "FD")
-
+  // 4. CARD: TERMO DE RESPONSABILIDADE
+  // @ts-ignore
+  currentY = doc.lastAutoTable.finalY + 15
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(14, currentY, pageWidth - 28, 25, 2, 2, "S")
+  
   doc.setFont("helvetica", "bold")
-  doc.setFontSize(7.5)
-  doc.setTextColor(146, 64, 14)
-  doc.text("ATENÇÃO: TERMO DE RESPONSABILIDADE", 18, termY + 7)
+  doc.setFontSize(8)
+  doc.setTextColor(r, g, b)
+  doc.text("TERMO DE RESPONSABILIDADE", 20, currentY + 7)
+  
   doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.setTextColor(120, 53, 15)
-  const term = "Declaro ter recebido o(s) EPI(s) listado(s) acima em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m), responsabilizando-me pela sua guarda e conservação conforme NR-06 do MTE."
-  doc.text(doc.splitTextToSize(term, pageWidth - 36), 18, termY + 13)
+  doc.setFontSize(7.5)
+  doc.setTextColor(71, 85, 105)
+  const termText = "Declaro ter recebido o(s) EPI(s) listado(s) acima em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m), responsabilizando-me pela sua guarda e conservação conforme NR-06 do MTE."
+  const splitTerm = doc.splitTextToSize(termText, pageWidth - 40)
+  doc.text(splitTerm, 20, currentY + 13, { align: "justify" })
 
-  const sigY = termY + 32
-
+  // 5. CARD: BIOMETRIA (REFACTORED)
+  currentY += 35
+  const photoContainerSize = 45
+  const photoCenterX = pageWidth / 2 - photoContainerSize / 2
+  
   if (data.authMethod === 'facial' && data.signatureBase64) {
-    // ── PHOTO BOX (square, proportional) ──
-    const photoSize = 50 // Square photo
-    doc.setFillColor(241, 245, 249)
-    doc.setDrawColor(203, 213, 225)
-    doc.roundedRect(14, sigY, photoSize + 4, photoSize + 4, 3, 3, "FD")
-    try {
-      doc.addImage(data.signatureBase64, 'JPEG', 16, sigY + 2, photoSize, photoSize)
-    } catch { /* silently ignore */ }
-
-    // ── VERIFICATION INFO BOX (right of photo) ──
-    const infoX = 14 + photoSize + 10
-    const infoW = pageWidth - infoX - 14
-
-    // Green verified badge
-    doc.setFillColor(220, 252, 231)
-    doc.setDrawColor(134, 239, 172)
-    doc.roundedRect(infoX, sigY, infoW, 22, 3, 3, "FD")
+    // Label Header
+    doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(21, 128, 61)
-    doc.text("✓  IDENTIDADE VERIFICADA POR BIOMETRIA FACIAL", infoX + 4, sigY + 8)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(6.5)
-    doc.setTextColor(21, 128, 61)
-    doc.text(`Motor: face-api.js / TensorFlow.js (AI-Based)`, infoX + 4, sigY + 14)
-    doc.text(`Tecnologia: Euclidean Distance Matching`, infoX + 4, sigY + 19)
-
-    // ── METADATA BOX (IP, Location) ──
-    doc.setFillColor(248, 250, 252)
-    doc.setDrawColor(226, 232, 240)
-    doc.roundedRect(infoX, sigY + 25, infoW, 18, 3, 3, "FD")
-    doc.setFontSize(6.5)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(100, 116, 139)
-    doc.text("METADADOS DE AUTENTICAÇÃO", infoX + 4, sigY + 31)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(6.5)
     doc.setTextColor(71, 85, 105)
-    doc.text(`IP do Dispositivo: ${data.ipAddress || 'Não registrado'}`, infoX + 4, sigY + 37)
-    doc.text(`Geolocalização: ${data.location || 'Não capturada'}`, infoX + 4, sigY + 42)
-
-    // ── SIGNATURE LINE ──
+    doc.text("AUTENTICAÇÃO BIOMÉTRICA", pageWidth / 2, currentY, { align: "center" })
+    
+    // Container Shadow/Border
     doc.setDrawColor(226, 232, 240)
-    doc.setLineWidth(0.5)
-    doc.line(infoX, sigY + 48, infoX + infoW, sigY + 48)
-    doc.setFontSize(7.5)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(100, 116, 139)
-    doc.text(data.employeeName.toUpperCase(), infoX + infoW / 2, sigY + 52, { align: "center" })
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(6)
-    doc.text("Assinatura Biométrica Digital Certificada", infoX + infoW / 2, sigY + 57, { align: "center" })
-
-  } else {
-    // ── MANUAL SIGNATURE ──
     doc.setFillColor(248, 250, 252)
-    doc.setDrawColor(226, 232, 240)
-    doc.roundedRect(14, sigY, pageWidth - 28, 55, 3, 3, "FD")
+    doc.roundedRect(photoCenterX - 2, currentY + 5, photoContainerSize + 4, photoContainerSize + 4, 3, 3, "FD")
+    
     try {
-      doc.addImage(data.signatureBase64, 'PNG', (pageWidth - 80) / 2, sigY + 5, 80, 30)
-    } catch { /* */ }
-    doc.setLineWidth(0.5)
-    doc.line(40, sigY + 45, pageWidth - 40, sigY + 45)
-    doc.setFontSize(7.5)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(100, 116, 139)
-    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, sigY + 50, { align: "center" })
-
-    // ── IP & Location for manual mode too ──
-    if (data.ipAddress || data.location) {
-      doc.setFontSize(6)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(148, 163, 184)
-      doc.text(`IP: ${data.ipAddress || 'N/A'} | Localização: ${data.location || 'N/A'}`, pageWidth / 2, sigY + 55, { align: "center" })
+      // Logic to prevent stretching: Draw a square image
+      // We assume signatureBase64 is the photo in this case
+      doc.addImage(data.signatureBase64, 'JPEG', photoCenterX, currentY + 7, photoContainerSize, photoContainerSize)
+    } catch (e) {
+      console.error("Error adding photo to PDF", e)
     }
+    
+    // Employee details below photo
+    doc.setFontSize(9)
+    doc.setTextColor(30, 41, 59)
+    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + photoContainerSize + 16, { align: "center" })
+    
+    doc.setFontSize(7)
+    doc.setTextColor(148, 163, 184)
+    doc.text(`Identidade Validada por Inteligência Artificial (face-api.js)`, pageWidth / 2, currentY + photoContainerSize + 21, { align: "center" })
+    
+    currentY += photoContainerSize + 30
+  } else {
+    // MANUAL SIGNATURE
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(8)
+    doc.setTextColor(71, 85, 105)
+    doc.text("ASSINATURA DO COLABORADOR", pageWidth / 2, currentY, { align: "center" })
+    
+    doc.setDrawColor(226, 232, 240)
+    doc.line(pageWidth / 2 - 40, currentY + 20, pageWidth / 2 + 40, currentY + 20)
+    
+    try {
+      doc.addImage(data.signatureBase64, 'PNG', pageWidth / 2 - 35, currentY + 2, 70, 18)
+    } catch {}
+    
+    doc.setFontSize(8)
+    doc.setTextColor(30, 41, 59)
+    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + 25, { align: "center" })
+    
+    currentY += 40
   }
 
-  // ── QR CODE SECTION (always visible, below signature area) ──
-  const qrY = sigY + 64
+  // 6. CARD: AUTENTICAÇÃO (2 Columns)
+  doc.setFillColor(252, 252, 252)
+  doc.setDrawColor(240, 240, 240)
+  doc.roundedRect(14, currentY, pageWidth - 28, 35, 3, 3, "FD")
   
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.line(14, qrY, pageWidth - 14, qrY)
-
-  try {
-    const qrText = `${COMPANY_CONFIG.systemName} | Hash: ${hash} | ${format(new Date(), "dd/MM/yyyy HH:mm")}`
-    const qrDataUrl = await QRCode.toDataURL(qrText, { width: 200, margin: 1 })
-    doc.addImage(qrDataUrl, 'PNG', 14, qrY + 4, 22, 22)
-  } catch { /* silently ignore */ }
-
-  // QR legend + Hash info (right of QR)
+  // Left: Metadata
+  const metaX = 20
   doc.setFontSize(7)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(30, 41, 59)
-  doc.text("CERTIFICADO DE AUTENTICIDADE", 42, qrY + 9)
-  
-  doc.setFontSize(6.5)
   doc.setFont("helvetica", "normal")
-  doc.setTextColor(100, 116, 139)
-  doc.text(`Hash de Validação: ${hash}`, 42, qrY + 15)
-  doc.text(`IP do Terminal: ${data.ipAddress || 'Não registrado'}`, 42, qrY + 20)
-  doc.text(`Localização GPS: ${data.location || 'Não capturada'}`, 42, qrY + 25)
-
-  doc.setFontSize(5.5)
   doc.setTextColor(148, 163, 184)
-  doc.text("Escaneie o QR Code para verificar a autenticidade deste documento.", 14, qrY + 30)
+  doc.text("HASH DE VALIDAÇÃO", metaX, currentY + 10)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(71, 85, 105)
+  doc.text(hash, metaX, currentY + 14)
+  
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(148, 163, 184)
+  doc.text("IP DO TERMINAL", metaX, currentY + 21)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(71, 85, 105)
+  doc.text(data.ipAddress || "Remoto", metaX, currentY + 25)
+  
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(148, 163, 184)
+  doc.text("GEOLOCALIZAÇÃO", metaX, currentY + 31)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(71, 85, 105)
+  doc.text(data.location || "Coordenadas não capturadas", metaX, currentY + 35)
 
-  addPageFooter(doc, hash, data.ipAddress)
+  // Right: QR Code
+  try {
+    const qrText = `${COMPANY_CONFIG.systemName} | Valid: ${hash} | Date: ${today}`
+    const qrDataUrl = await QRCode.toDataURL(qrText, { width: 200, margin: 1 })
+    doc.addImage(qrDataUrl, 'PNG', pageWidth - 45, currentY + 5, 25, 25)
+    doc.setFontSize(6)
+    doc.setTextColor(200, 200, 200)
+    doc.text("Scan to Verify", pageWidth - 32, currentY + 33, { align: "center" })
+  } catch {}
+
+  // 7. FOOTER
+  doc.setDrawColor(240, 240, 240)
+  doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15)
+  doc.setFontSize(7)
+  doc.setTextColor(148, 163, 184)
+  const footerText = `${COMPANY_CONFIG.systemName} Digital • NR-06 Compliance • Documento gerado automaticamente para fins de auditoria.`
+  doc.text(footerText, pageWidth / 2, pageHeight - 10, { align: "center" })
+
   return doc.output("blob")
 }
+
 
 // ─────────────────────────────────────────────
 // 2. RECIBO DE BAIXA / SUBSTITUIÇÃO
