@@ -172,6 +172,7 @@ export default function Dashboard() {
                         />
                         <YAxis hide />
                         <Tooltip 
+                            formatter={(value: any) => [value, "Entregas"]}
                             contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold'}}
                             cursor={{stroke: '#8B1A1A', strokeWidth: 2, strokeDasharray: '4 4'}}
                         />
