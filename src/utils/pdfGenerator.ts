@@ -146,12 +146,12 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFont("helvetica", "bold")
   doc.setFontSize(7.5)
   doc.setTextColor(146, 64, 14)
-  doc.text("⚠  TERMO DE RESPONSABILIDADE", 18, termY + 7)
+  doc.text("ATENÇÃO: TERMO DE RESPONSABILIDADE", 18, termY + 7)
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
   doc.setTextColor(120, 53, 15)
   const term = "Declaro ter recebido o(s) EPI(s) listado(s) acima em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m), responsabilizando-me pela sua guarda e conservação conforme NR-06 do MTE."
-  doc.text(doc.splitTextToSize(term, pageWidth - 36), 18, termY + 14)
+  doc.text(doc.splitTextToSize(term, pageWidth - 36), 18, termY + 13)
 
   const sigY = termY + 32
 

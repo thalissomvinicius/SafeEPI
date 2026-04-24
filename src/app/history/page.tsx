@@ -57,7 +57,7 @@ export default function HistoryPage() {
         ppeCaNumber: rec.ppe?.ca_number || "N/A",
         quantity: rec.quantity,
         reason: rec.reason,
-        authMethod: rec.signature_url.includes('emp_') ? 'facial' : 'manual', // Heurística simples
+        authMethod: (rec.signature_url.includes('bio_') || rec.signature_url.includes('emp_')) ? 'facial' : 'manual',
         signatureBase64: base64Signature,
         ipAddress: rec.ip_address || "Remoto",
         validationHash: rec.id.slice(0, 8).toUpperCase()

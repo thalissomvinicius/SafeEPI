@@ -181,6 +181,7 @@ function RemoteDeliveryContent() {
       formData.append('reason', deliveryData?.r || 'Primeira Entrega')
       formData.append('quantity', String(deliveryData?.q || 1))
       formData.append('ip_address', ipAddress || 'Remoto')
+      formData.append('auth_method', authMethod)
       formData.append('signatureFile', signatureFile)
       if (linkToken) formData.append('token', linkToken) // Passa o token para o servidor
 

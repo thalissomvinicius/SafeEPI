@@ -243,7 +243,8 @@ export const api = {
 
     // 1. Se houver imagem da assinatura, faz o upload para o Storage
     if (signatureFile) {
-      const fileName = `${Date.now()}_${delivery.employee_id}.png`;
+      const prefix = delivery.auth_method === 'facial' ? 'bio_' : 'sig_';
+      const fileName = `${prefix}${Date.now()}_${delivery.employee_id}.png`;
       const { error: storageError } = await supabase.storage
         .from('ppe_signatures')
         .upload(fileName, signatureFile);

@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     const reason = formData.get('reason') as string;
     const quantity = parseInt(formData.get('quantity') as string || '1');
     const ip_address = formData.get('ip_address') as string;
+    const auth_method = formData.get('auth_method') as string || 'manual';
     const signatureFile = formData.get('signatureFile') as File | null;
     const token = formData.get('token') as string | null;
 
@@ -53,7 +54,9 @@ export async function POST(req: Request) {
 
     // 1. Upload da assinatura usando a chave de Admin
     if (signatureFile && signatureFile.size > 0) {
-      const fileName = `${Date.now()}_${employee_id}.png`;
+      // Prefix filename with auth method to distinguish in history
+      const prefix = auth_method === 'facial' ? 'bio_' : 'sig_';
+      const fileName = `${prefix}${Date.now()}_${employee_id}.png`;
       const { error: storageError } = await supabaseAdmin.storage
         .from('ppe_signatures')
         .upload(fileName, signatureFile);
@@ -81,6 +84,7 @@ export async function POST(req: Request) {
         quantity,
         ip_address,
         signature_url: signatureUrl,
+        auth_method, // Assuming the column will be added
         delivery_date: new Date().toISOString()
       }])
       .select();

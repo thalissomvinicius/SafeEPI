@@ -55,6 +55,7 @@ export type Delivery = {
   reason: 'Primeira Entrega' | 'Substituição (Desgaste/Validade)' | 'Perda' | 'Dano';
   quantity: number;
   signature_url: string | null;
+  auth_method?: 'manual' | 'facial';
   ip_address: string | null;
   workplace_id: string | null;
   returned_at?: string | null;

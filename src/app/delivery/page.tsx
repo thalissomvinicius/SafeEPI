@@ -141,6 +141,7 @@ export default function DeliveryPage() {
         reason: reason as Delivery['reason'],
         quantity: quantity,
         ip_address: ipAddress || "Desconhecido",
+        auth_method: authMethod,
         signature_url: null
       }, signatureFile)
 
