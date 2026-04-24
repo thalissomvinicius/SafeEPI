@@ -575,13 +575,15 @@ export function generateNR06PDF(data: NR06PDFData): void {
 export interface ReportPDFData {
   stats: { label: string; value: string; change: string }[]
   deliveries: any[] // Array of deliveries to list
+  periodTitle?: string
 }
 
 export function generateGeneralReportPDF(data: ReportPDFData) {
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
 
-  addPageHeader(doc, "RELATÓRIO DE CONFORMIDADE E CUSTOS", "Métricas Globais e Rastreabilidade (NR-06)")
+  const subtitle = data.periodTitle ? `Métricas Globais e Rastreabilidade • ${data.periodTitle}` : "Métricas Globais e Rastreabilidade (NR-06)"
+  addPageHeader(doc, "RELATÓRIO DE CONFORMIDADE E CUSTOS", subtitle)
 
   // Metrics Dashboard
   let currentY = 50

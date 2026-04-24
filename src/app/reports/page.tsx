@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, Loader2, FileSpreadsheet } from "lucide-react"
+import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, Loader2, FileSpreadsheet, Calendar } from "lucide-react"
 import { api } from "@/services/api"
 import { startOfMonth, isAfter } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
@@ -10,16 +10,28 @@ import { Skeleton } from "@/components/ui/Skeleton"
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
-import { DeliveryWithRelations } from "@/types/database"
+import { DeliveryWithRelations, PPE, Training, Workplace } from "@/types/database"
 
+type DateFilter = 'all' | 'month' | 'last30' | 'last90'
 
 export default function ReportsPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  
+  // Raw Data State
+  const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [rawPpes, setRawPpes] = useState<PPE[]>([])
+  const [rawTrainings, setRawTrainings] = useState<Training[]>([])
+  const [rawWorkplaces, setRawWorkplaces] = useState<Workplace[]>([])
+
+  // Filter State
+  const [dateFilter, setDateFilter] = useState<DateFilter>('month')
+  
+  // Computed Data State
   const [allDeliveries, setAllDeliveries] = useState<DeliveryWithRelations[]>([])
   const [stats, setStats] = useState([
-    { label: "Investimento EPIs (Mês)", value: "R$ 0,00", change: "Atualizando..." },
+    { label: "Investimento EPIs", value: "R$ 0,00", change: "Atualizando..." },
     { label: "Entregas Totais", value: "0", change: "Total" },
     { label: "EPIs em Alerta (C.A.)", value: "0", change: "Vencendo" },
     { label: "Treinamentos Registrados", value: "0", change: "NR-01/06" },
@@ -29,16 +41,17 @@ export default function ReportsPage() {
   
   const COLORS = ['#8B1A1A', '#1e293b', '#475569', '#64748b', '#94a3b8']
 
+  // Auth protection
   useEffect(() => {
     if (!authLoading && user && user.role === 'ALMOXARIFE') {
       router.push('/')
     }
   }, [user, authLoading, router])
 
+  // Fetch Raw Data
   useEffect(() => {
-    async function loadReports() {
+    async function loadData() {
       if (!user || user.role === 'ALMOXARIFE') return
-
       try {
         setLoading(true)
         const [ppeData, deliveryData, trainingData, wpData] = await Promise.all([
@@ -47,62 +60,95 @@ export default function ReportsPage() {
           api.getTrainings(),
           api.getWorkplaces()
         ])
-
-        // 1. Cálculo de Investimento do Mês
-        const monthStart = startOfMonth(new Date())
-        const monthDeliveries = deliveryData.filter(d => isAfter(new Date(d.delivery_date), monthStart))
-        const monthTotal = monthDeliveries.reduce((acc, d) => acc + (d.ppe?.cost || 0), 0)
-
-        // 2. CAs Críticos (Vencendo nos próximos 90 dias)
-        const now = new Date()
-        const criticalCount = ppeData.filter(p => {
-          const expiry = new Date(p.ca_expiry_date)
-          const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-          return diffDays < 90
-        }).length
-
-        // 3. Investimento por Canteiro (Todos os tempos)
-        const wpStats = wpData.map(wp => {
-            const total = deliveryData
-                .filter(d => d.workplace_id === wp.id)
-                .reduce((acc, d) => acc + (d.ppe?.cost || 0), 0)
-            return { name: wp.name, value: total }
-        }).sort((a, b) => b.value - a.value)
-
-        setInvestmentByWorkplace(wpStats)
-
-        // 4. Top 5 EPIs mais entregues
-        const ppeCounts: {[key: string]: number} = {}
-        deliveryData.forEach(d => {
-            if (d.ppe) {
-                ppeCounts[d.ppe.name] = (ppeCounts[d.ppe.name] || 0) + d.quantity
-            }
-        })
-        const ppeStats = Object.entries(ppeCounts)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5)
-        setPpeUsageData(ppeStats)
-        setAllDeliveries(deliveryData)
-
-        setStats([
-          { label: "Investimento EPIs (Mês)", value: `R$ ${monthTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `${monthDeliveries.length} itens` },
-          { label: "Entregas Totais", value: deliveryData.length.toString(), change: "Sincronizado" },
-          { label: "EPIs em Alerta (C.A.)", value: criticalCount.toString(), change: "Atenção" },
-          { label: "Treinamentos Registrados", value: trainingData.length.toString(), change: "NR-01/06" },
-        ])
+        setRawPpes(ppeData)
+        setRawDeliveries(deliveryData)
+        setRawTrainings(trainingData)
+        setRawWorkplaces(wpData)
       } catch (err) {
-        console.error("Erro ao gerar relatórios:", err)
+        console.error("Erro ao carregar dados:", err)
       } finally {
         setLoading(false)
       }
     }
-
+    
     const timer = setTimeout(() => {
-        loadReports()
+        loadData()
     }, 0)
     return () => clearTimeout(timer)
   }, [user])
+
+  // Compute stats based on filter
+  useEffect(() => {
+    if (rawDeliveries.length === 0 && rawPpes.length === 0) return
+
+    let filteredDeliveries = rawDeliveries
+    let filteredTrainings = rawTrainings
+    const now = new Date()
+
+    if (dateFilter !== 'all') {
+      const cutoff = new Date()
+      if (dateFilter === 'month') {
+        cutoff.setDate(1)
+        cutoff.setHours(0,0,0,0)
+      } else if (dateFilter === 'last30') {
+        cutoff.setDate(cutoff.getDate() - 30)
+      } else if (dateFilter === 'last90') {
+        cutoff.setDate(cutoff.getDate() - 90)
+      }
+      
+      filteredDeliveries = rawDeliveries.filter(d => new Date(d.delivery_date) >= cutoff)
+      filteredTrainings = rawTrainings.filter(t => new Date(t.date) >= cutoff)
+    }
+
+    setAllDeliveries(filteredDeliveries)
+
+    // 1. Cálculo de Investimento do Período
+    const periodTotal = filteredDeliveries.reduce((acc, d) => acc + (d.ppe?.cost || 0), 0)
+
+    // 2. CAs Críticos (Vencendo nos próximos 90 dias) - Geral
+    const criticalCount = rawPpes.filter(p => {
+      const expiry = new Date(p.ca_expiry_date)
+      const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      return diffDays < 90
+    }).length
+
+    // 3. Investimento por Canteiro (no período filtrado)
+    const wpStats = rawWorkplaces.map(wp => {
+        const total = filteredDeliveries
+            .filter(d => d.workplace_id === wp.id)
+            .reduce((acc, d) => acc + (d.ppe?.cost || 0), 0)
+        return { name: wp.name, value: total }
+    }).sort((a, b) => b.value - a.value).filter(wp => wp.value > 0) // Hide empty workplaces
+
+    setInvestmentByWorkplace(wpStats)
+
+    // 4. Top 5 EPIs mais entregues no período
+    const ppeCounts: {[key: string]: number} = {}
+    filteredDeliveries.forEach(d => {
+        if (d.ppe) {
+            ppeCounts[d.ppe.name] = (ppeCounts[d.ppe.name] || 0) + d.quantity
+        }
+    })
+    const ppeStats = Object.entries(ppeCounts)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5)
+    setPpeUsageData(ppeStats)
+
+    const labelMap = {
+      'all': 'Todo o Período',
+      'month': 'Neste Mês',
+      'last30': 'Últimos 30 Dias',
+      'last90': 'Últimos 90 Dias'
+    }
+
+    setStats([
+      { label: `Custo EPIs (${labelMap[dateFilter]})`, value: `R$ ${periodTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `${filteredDeliveries.length} itens` },
+      { label: `Entregas (${labelMap[dateFilter]})`, value: filteredDeliveries.length.toString(), change: "Validadas" },
+      { label: "EPIs em Alerta (C.A.)", value: criticalCount.toString(), change: "Atenção (Geral)" },
+      { label: `Treinamentos (${labelMap[dateFilter]})`, value: filteredTrainings.length.toString(), change: "NR-01/06" },
+    ])
+  }, [rawDeliveries, rawPpes, rawTrainings, rawWorkplaces, dateFilter])
 
   if (authLoading || (user && user.role === 'ALMOXARIFE')) {
     return (
@@ -135,9 +181,12 @@ export default function ReportsPage() {
   }
 
   const handleExportPDF = () => {
+    const titleMap = { 'all': 'Todo o Histórico', 'month': 'Neste Mês', 'last30': 'Últimos 30 Dias', 'last90': 'Últimos 90 Dias' }
     generateGeneralReportPDF({
       stats,
-      deliveries: allDeliveries
+      deliveries: allDeliveries,
+      // @ts-ignore
+      periodTitle: titleMap[dateFilter]
     })
   }
 
@@ -154,13 +203,30 @@ export default function ReportsPage() {
             </h1>
             <p className="text-slate-500 text-sm mt-1 font-medium italic">Extração de custos operacionais e conformidade normativa.</p>
         </div>
-        <button 
-          onClick={handleExportPDF}
-          className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center shadow-sm"
-        >
-            <Download className="w-4 h-4 mr-2 text-[#8B1A1A]" />
-            Exportar PDF
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Calendar className="h-4 w-4 text-slate-400" />
+            </div>
+            <select 
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+              className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 pl-10 pr-8 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#8B1A1A] appearance-none"
+            >
+              <option value="month">Neste Mês</option>
+              <option value="last30">Últimos 30 Dias</option>
+              <option value="last90">Últimos 90 Dias</option>
+              <option value="all">Todo o Período</option>
+            </select>
+          </div>
+          <button 
+            onClick={handleExportPDF}
+            className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm"
+          >
+              <Download className="w-4 h-4 mr-2 text-[#8B1A1A]" />
+              Exportar PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
