@@ -31,6 +31,7 @@ export default function DeliveryPage() {
   // Estados dos formulários selecionados
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("")
   const [selectedPpeId, setSelectedPpeId] = useState("")
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState("")
   const [ppeSearchTerm, setPpeSearchTerm] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
@@ -91,6 +92,11 @@ export default function DeliveryPage() {
   const filteredPpes = ppes.filter(ppe => 
     ppe.name.toLowerCase().includes(ppeSearchTerm.toLowerCase()) || 
     ppe.ca_number.includes(ppeSearchTerm)
+  )
+
+  const filteredEmployees = employees.filter(emp => 
+    emp.full_name.toLowerCase().includes(employeeSearchTerm.toLowerCase()) || 
+    (emp.cpf && emp.cpf.includes(employeeSearchTerm))
   )
 
   const handleEmployeeChange = (empId: string) => {
@@ -247,19 +253,52 @@ export default function DeliveryPage() {
           {step === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-left-4">
               <div className="space-y-3">
-                <label htmlFor="employee-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador Ativo</label>
-                <select 
-                  id="employee-select"
-                  title="Selecionar colaborador"
-                  className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold appearance-none"
-                  value={selectedEmployeeId}
-                  onChange={(e) => handleEmployeeChange(e.target.value)}
-                >
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.full_name}</option>
-                  ))}
-                  {employees.length === 0 && <option>Nenhum colaborador encontrado</option>}
-                </select>
+                <label htmlFor="employee-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
+                  <span>Colaborador Ativo</span>
+                </label>
+                <div className="flex flex-col gap-3 relative">
+                  <input 
+                    type="text"
+                    placeholder="Busca por nome ou CPF..."
+                    value={employeeSearchTerm}
+                    onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
+                  />
+                  
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
+                      {filteredEmployees.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum colaborador encontrado</div>
+                      ) : (
+                        filteredEmployees.map(emp => {
+                          const isSelected = selectedEmployeeId === emp.id
+                          
+                          return (
+                            <div 
+                              key={emp.id}
+                              onClick={() => handleEmployeeChange(emp.id)}
+                              className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                            >
+                              <div>
+                                <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>
+                                  {emp.full_name}
+                                </p>
+                                {emp.cpf && (
+                                  <div className="flex items-center gap-2 mt-1.5">
+                                    <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">
+                                      CPF: {emp.cpf}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              {isSelected && <CheckCircle2 className="w-5 h-5 text-[#8B1A1A]" />}
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -267,31 +306,52 @@ export default function DeliveryPage() {
                   <label htmlFor="ppe-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
                     <span>EPI Selecionado (C.A.)</span>
                   </label>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-3 relative">
                     <input 
                       type="text"
                       placeholder="Busca por CA ou Nome..."
                       value={ppeSearchTerm}
                       onChange={(e) => setPpeSearchTerm(e.target.value)}
-                      className="w-full bg-white border-2 border-slate-100 text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] transition-all font-bold text-xs"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
                     />
-                    <select 
-                      id="ppe-select"
-                      title="Selecionar equipamento"
-                      className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
-                      value={selectedPpeId}
-                      onChange={(e) => setSelectedPpeId(e.target.value)}
-                    >
-                      <option value="">Selecione o EPI...</option>
-                      {filteredPpes.map(ppe => {
-                        const expired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
-                        return (
-                          <option key={ppe.id} value={ppe.id} className={expired ? "text-red-600 font-bold" : ""}>
-                            {expired ? "⚠️ [CA VENCIDO] " : ""}CA {ppe.ca_number} • {ppe.name}
-                          </option>
-                        )
-                      })}
-                    </select>
+                    
+                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
+                        {filteredPpes.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum EPI encontrado</div>
+                        ) : (
+                          filteredPpes.map(ppe => {
+                            const expired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
+                            const isSelected = selectedPpeId === ppe.id
+                            
+                            return (
+                              <div 
+                                key={ppe.id}
+                                onClick={() => setSelectedPpeId(ppe.id)}
+                                className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                              >
+                                <div>
+                                  <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>
+                                    {ppe.name}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-1.5">
+                                    <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">
+                                      CA {ppe.ca_number}
+                                    </span>
+                                    {expired && (
+                                      <span className="text-[8px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase tracking-widest">
+                                        Vencido
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {isSelected && <CheckCircle2 className="w-5 h-5 text-[#8B1A1A]" />}
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -301,7 +361,7 @@ export default function DeliveryPage() {
                     id="quantity-input"
                     type="number"
                     min="1"
-                    className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
                     value={quantity}
                     onChange={(e) => setQuantity(Number(e.target.value))}
                   />
@@ -309,17 +369,18 @@ export default function DeliveryPage() {
 
                 <div className="space-y-3 sm:col-span-2">
                   <label htmlFor="reason-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Motivo da Entrega</label>
-                  <select 
-                    id="reason-select"
-                    className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold appearance-none"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                  >
-                    <option value="Primeira Entrega">Primeira Entrega</option>
-                    <option value="Substituição (Desgaste/Validade)">Substituição (Desgaste/Validade)</option>
-                    <option value="Perda">Perda</option>
-                    <option value="Dano">Dano</option>
-                  </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    {['Primeira Entrega', 'Substituição (Desgaste/Validade)', 'Perda', 'Dano'].map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setReason(opt)}
+                        className={`p-4 rounded-2xl border text-xs font-black uppercase tracking-tight transition-all flex items-center justify-center text-center ${reason === opt ? 'border-[#8B1A1A] bg-red-50 text-[#8B1A1A] shadow-md shadow-red-900/10' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
