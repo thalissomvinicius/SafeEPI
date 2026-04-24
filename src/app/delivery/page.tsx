@@ -17,6 +17,7 @@ interface CartItem {
   ppeId: string
   ppeName: string
   ppeCaNumber: string
+  ppeCaExpiry: string
   quantity: number
   reason: string
 }
@@ -156,6 +157,7 @@ export default function DeliveryPage() {
       ppeId: currentPpeId,
       ppeName: currentPpe.name,
       ppeCaNumber: currentPpe.ca_number,
+      ppeCaExpiry: currentPpe.ca_expiry_date,
       quantity: currentQuantity,
       reason: currentReason
     }])
@@ -218,6 +220,7 @@ export default function DeliveryPage() {
         items: cart.map(item => ({
           ppeName: item.ppeName,
           ppeCaNumber: item.ppeCaNumber,
+          caExpiry: item.ppeCaExpiry,
           quantity: item.quantity,
           reason: item.reason
         })),

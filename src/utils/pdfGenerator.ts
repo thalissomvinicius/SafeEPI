@@ -84,12 +84,9 @@ export interface DeliveryPDFData {
   employeeRole: string
   workplaceName: string
   // Single item (backward compat)
-  ppeName: string
-  ppeCaNumber: string
-  quantity: number
-  reason: string
+  ppeCaExpiry?: string
   // Multi-item support
-  items?: { ppeName: string; ppeCaNumber: string; quantity: number; reason: string }[]
+  items?: { ppeName: string; ppeCaNumber: string; caExpiry?: string; quantity: number; reason: string }[]
   authMethod: 'manual' | 'facial'
   signatureBase64: string
   photoBase64?: string
@@ -108,7 +105,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   // Build items array (support both single and multi-item)
   const pdfItems = data.items && data.items.length > 0
     ? data.items
-    : [{ ppeName: data.ppeName, ppeCaNumber: data.ppeCaNumber, quantity: data.quantity, reason: data.reason }]
+    : [{ ppeName: data.ppeName, ppeCaNumber: data.ppeCaNumber, caExpiry: data.ppeCaExpiry, quantity: data.quantity, reason: data.reason }]
 
   // 1. HEADER (SaaS Premium Style)
   doc.setFillColor(r, g, b)
@@ -168,15 +165,16 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   currentY += 45
   autoTable(doc, {
     startY: currentY,
-    head: [["Equipamento (EPI)", "Nº CA", "Qtd", "Motivo", "Data Entrega"]],
+    head: [["Equipamento (EPI)", "Nº CA", "Venc. CA", "Qtd", "Motivo", "Data Entrega"]],
     body: pdfItems.map(item => [
       item.ppeName,
       item.ppeCaNumber,
+      item.caExpiry ? format(new Date(item.caExpiry), "dd/MM/yyyy") : "—",
       String(item.quantity),
       item.reason,
-      format(new Date(), "dd/MM/yyyy")
+      data.deliveryDate ? format(new Date(data.deliveryDate), "dd/MM/yyyy") : format(new Date(), "dd/MM/yyyy")
     ]),
-    styles: { fontSize: 9, cellPadding: 5, font: "helvetica" },
+    styles: { fontSize: 8.5, cellPadding: 4, font: "helvetica" },
     headStyles: { fillColor: [245, 245, 245], textColor: [71, 85, 105], fontStyle: "bold" },
     margin: { left: 14, right: 14 },
     theme: 'grid'
@@ -197,8 +195,8 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFontSize(7.5)
   doc.setTextColor(71, 85, 105)
   const termText = "Declaro ter recebido o(s) EPI(s) listado(s) acima em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m), responsabilizando-me pela sua guarda e conservação conforme NR-06 do MTE."
-  const splitTerm = doc.splitTextToSize(termText, pageWidth - 40)
-  doc.text(splitTerm, 20, currentY + 13, { align: "justify" })
+  const splitTerm = doc.splitTextToSize(termText, pageWidth - 36)
+  doc.text(splitTerm, 18, currentY + 13, { align: "left" })
 
   // 5. CARD: BIOMETRIA / ASSINATURA
   // Smart detection: use actual image dimensions to decide rendering mode
