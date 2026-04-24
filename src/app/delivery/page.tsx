@@ -208,8 +208,9 @@ export default function DeliveryPage() {
         const url = `${baseUrl}/delivery/remote?t=${data.link.token}`
         navigator.clipboard.writeText(url)
         alert("Link de assinatura remota copiado! Válido por 24h e uso único.\n\n" + url)
-      } catch (err) {
-        alert("Erro ao gerar link de assinatura remota: " + (err instanceof Error ? err.message : "Desconhecido"))
+      } catch (err: any) {
+        const errorMsg = err.message || "Erro desconhecido";
+        alert("Erro ao gerar link de assinatura remota: " + errorMsg + "\n\nVerifique se a tabela 'remote_links' foi criada no banco de dados.");
       }
   }
 

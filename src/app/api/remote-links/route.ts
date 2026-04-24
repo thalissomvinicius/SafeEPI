@@ -44,13 +44,13 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('[remote-links] Create error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ error: error.message, details: error }, { status: 500 })
     }
 
     return NextResponse.json({ link })
-  } catch (err) {
+  } catch (err: any) {
     console.error('[remote-links] Unexpected error:', err)
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno', message: err.message }, { status: 500 })
   }
 }
 

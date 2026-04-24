@@ -478,8 +478,9 @@ export default function EmployeesPage() {
                         const link = `${window.location.origin}/capture/${formData.id}?t=${data.link.token}`;
                         navigator.clipboard.writeText(link);
                         alert("Link copiado! Válido por 24h e uso único.\n\n" + link);
-                      } catch (err) {
-                        alert("Erro ao gerar link: " + (err instanceof Error ? err.message : "Erro desconhecido"))
+                      } catch (err: any) {
+                        const errorMsg = err.message || "Erro desconhecido";
+                        alert("Erro ao gerar link: " + errorMsg + "\n\nVerifique se a tabela 'remote_links' foi criada no banco de dados.");
                       }
                     }}
                     className="mt-3 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
