@@ -41,6 +41,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     "Custo Total (R$)": (d.ppe?.cost || 0) * (d.quantity || 1),
   }))
 
+  // @ts-ignore
   const ws = XLSX.utils.json_to_sheet(rows, { origin: "A5" })
   addHeaderToSheet(ws, "Histórico Geral de Entregas")
   styleWorksheet(ws, Object.keys(rows[0] || {}).length)
@@ -59,6 +60,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     .map(([epi, { qtd, custo }]) => ({ "EPI": epi, "Total Entregue": qtd, "Custo Total (R$)": custo }))
     .sort((a, b) => b["Total Entregue"] - a["Total Entregue"])
 
+  // @ts-ignore
   const wsSummary = XLSX.utils.json_to_sheet(summaryRows, { origin: "A5" })
   addHeaderToSheet(wsSummary, "Resumo por EPI")
   styleWorksheet(wsSummary, 3)
@@ -76,6 +78,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     .map(([canteiro, { qtd, custo }]) => ({ "Canteiro": canteiro, "Entregas": qtd, "Investimento Total (R$)": custo }))
     .sort((a, b) => b["Investimento Total (R$)"] - a["Investimento Total (R$)"])
 
+  // @ts-ignore
   const wsWp = XLSX.utils.json_to_sheet(wpRows, { origin: "A5" })
   addHeaderToSheet(wsWp, "Resumo por Canteiro")
   styleWorksheet(wsWp, 3)
@@ -106,6 +109,7 @@ export function exportEmployeeToExcel(
     "Custo (R$)": d.ppe?.cost || 0,
   }))
 
+  // @ts-ignore
   const ws = XLSX.utils.json_to_sheet(rows, { origin: "A5" })
   addHeaderToSheet(ws, `Prontuário Individual: ${employeeName}`)
   styleWorksheet(ws, 8)
