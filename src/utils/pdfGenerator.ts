@@ -195,16 +195,31 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.text(splitTerm, 20, currentY + 13, { align: "justify" })
 
   // 5. CARD: BIOMETRIA / ASSINATURA
+  // Smart detection: use actual image dimensions to decide rendering mode
+  // Photos are portrait/square, signatures are wide landscape drawings
   currentY += 35
   
-  if (data.authMethod === 'facial' && data.signatureBase64) {
-    // Label Header
+  let isPhoto = data.authMethod === 'facial' // Start with declared method
+  let imgRatio = 1
+  
+  if (data.signatureBase64) {
+    try {
+      const imgProps = doc.getImageProperties(data.signatureBase64)
+      imgRatio = imgProps.width / imgProps.height
+      // If image is roughly square or portrait (ratio <= 1.5), it's likely a photo
+      // Signature drawings are always very wide (ratio > 2)
+      if (imgRatio <= 1.5) isPhoto = true
+      if (imgRatio > 2.5) isPhoto = false
+    } catch { /* keep declared method */ }
+  }
+
+  if (isPhoto && data.signatureBase64) {
+    // ── BIOMETRIC PHOTO (proportional, centered) ──
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
     doc.text("AUTENTICAÇÃO BIOMÉTRICA", pageWidth / 2, currentY, { align: "center" })
     
-    // Container border
     const containerSize = 50
     const containerX = pageWidth / 2 - containerSize / 2
     doc.setDrawColor(226, 232, 240)
@@ -212,26 +227,18 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.roundedRect(containerX - 2, currentY + 5, containerSize + 4, containerSize + 4, 3, 3, "FD")
     
     try {
-      // Load image to get its natural dimensions and prevent stretching
-      const imgProps = doc.getImageProperties(data.signatureBase64)
-      const imgW = imgProps.width
-      const imgH = imgProps.height
+      // Calculate proportional dimensions to fit inside container WITHOUT stretching
+      let drawW: number, drawH: number
       
-      // Calculate proportional dimensions to fit inside container
-      let drawW = containerSize
-      let drawH = containerSize
-      const ratio = imgW / imgH
-      
-      if (ratio > 1) {
-        // Landscape: fit width, crop height (center vertically)
-        drawH = containerSize
+      if (imgRatio >= 1) {
+        // Landscape or square: fit to width, calculate height
         drawW = containerSize
-      } else if (ratio < 1) {
-        // Portrait: fit height, adjust width
+        drawH = containerSize / imgRatio
+      } else {
+        // Portrait: fit to height, calculate width
         drawH = containerSize
-        drawW = containerSize * ratio
+        drawW = containerSize * imgRatio
       }
-      // else: square, perfect fit
       
       const drawX = containerX + (containerSize - drawW) / 2
       const drawY = currentY + 7 + (containerSize - drawH) / 2
@@ -241,7 +248,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
       console.error("Error adding photo to PDF", e)
     }
     
-    // Employee details below photo
+    // Employee name below photo
     doc.setFont("helvetica", "bold")
     doc.setFontSize(9)
     doc.setTextColor(30, 41, 59)
@@ -254,24 +261,46 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     
     currentY += containerSize + 30
   } else {
-    // MANUAL SIGNATURE
+    // ── MANUAL SIGNATURE (proportional) ──
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
     doc.text("ASSINATURA DO COLABORADOR", pageWidth / 2, currentY, { align: "center" })
     
+    // Signature container
+    const sigBoxW = 100
+    const sigBoxH = 30
+    const sigBoxX = (pageWidth - sigBoxW) / 2
+    
     doc.setDrawColor(226, 232, 240)
-    doc.line(pageWidth / 2 - 40, currentY + 20, pageWidth / 2 + 40, currentY + 20)
+    doc.setFillColor(252, 252, 252)
+    doc.roundedRect(sigBoxX, currentY + 4, sigBoxW, sigBoxH, 2, 2, "FD")
     
     try {
-      doc.addImage(data.signatureBase64, 'PNG', pageWidth / 2 - 35, currentY + 2, 70, 18)
+      // Fit signature proportionally inside the box
+      const imgProps = doc.getImageProperties(data.signatureBase64)
+      const sigRatio = imgProps.width / imgProps.height
+      let drawW = sigBoxW - 8
+      let drawH = drawW / sigRatio
+      if (drawH > sigBoxH - 6) {
+        drawH = sigBoxH - 6
+        drawW = drawH * sigRatio
+      }
+      const drawX = sigBoxX + (sigBoxW - drawW) / 2
+      const drawY = currentY + 4 + (sigBoxH - drawH) / 2
+      doc.addImage(data.signatureBase64, 'PNG', drawX, drawY, drawW, drawH)
     } catch {}
     
-    doc.setFontSize(8)
-    doc.setTextColor(30, 41, 59)
-    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + 25, { align: "center" })
+    // Signature line
+    doc.setDrawColor(200, 200, 200)
+    doc.line(sigBoxX + 10, currentY + sigBoxH + 6, sigBoxX + sigBoxW - 10, currentY + sigBoxH + 6)
     
-    currentY += 40
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(30, 41, 59)
+    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + sigBoxH + 12, { align: "center" })
+    
+    currentY += sigBoxH + 22
   }
 
   // 6. CARD: AUTENTICAÇÃO (2 Columns)
