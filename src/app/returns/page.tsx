@@ -6,7 +6,7 @@ import { Users, AlertTriangle, Search, CheckCircle2, FileDown, Loader2, ArrowRig
 import SignatureCanvas from "react-signature-canvas"
 import { format } from "date-fns"
 import { api } from "@/services/api"
-import { Employee, PPE, Delivery, DeliveryWithRelations } from "@/types/database"
+import { Employee, PPE, DeliveryWithRelations } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateReturnPDF } from "@/utils/pdfGenerator"

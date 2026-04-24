@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
-import { CheckCircle2, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, ShieldCheck, UserCheck, Lock } from "lucide-react"
+import { FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, ShieldCheck, UserCheck, Lock } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, PPE, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
@@ -51,14 +51,15 @@ function RemoteDeliveryContent() {
   // ── Load delivery data on mount ──
   useEffect(() => {
     const s = searchParams.get('s')
-    if (!s) {
-      setErrorMsg("Link inválido ou expirado.")
-      setPhase('error')
-      return
-    }
+    
+    const init = async () => {
+      if (!s) {
+        setErrorMsg("Link inválido ou expirado.")
+        setPhase('error')
+        return
+      }
 
-    // Capture IP & location
-    const captureMetadata = async () => {
+      // Capture IP & location
       try {
         const ipRes = await fetch('https://api.ipify.org?format=json')
         const ipData = await ipRes.json()
@@ -69,43 +70,37 @@ function RemoteDeliveryContent() {
           })
         }
       } catch { /* ignore */ }
-    }
-    captureMetadata()
 
-    try {
-      const decoded: DeliveryData = JSON.parse(atob(s))
-      setDeliveryData(decoded)
-      
-      async function loadDetails() {
-        try {
-          const [employees, ppes, workplaces] = await Promise.all([
-            api.getEmployees(),
-            api.getPpes(),
-            api.getWorkplaces()
-          ])
-          const emp = employees.find(e => e.id === decoded.e)
-          const p = ppes.find(p => p.id === decoded.p)
-          const w = workplaces.find(w => w.id === decoded.w)
+      try {
+        const decoded: DeliveryData = JSON.parse(atob(s))
+        setDeliveryData(decoded)
+        
+        const [employees, ppes, workplaces] = await Promise.all([
+          api.getEmployees(),
+          api.getPpes(),
+          api.getWorkplaces()
+        ])
+        
+        const emp = employees.find(e => e.id === decoded.e)
+        const p = ppes.find(p => p.id === decoded.p)
+        const w = workplaces.find(w => w.id === decoded.w)
 
-          if (!emp || !p) {
-            setErrorMsg("Dados da entrega não encontrados no sistema.")
-            setPhase('error')
-          } else {
-            setEmployee(emp)
-            setPpe(p)
-            setWorkplace(w || null)
-            setPhase('verify') // Go to identity verification
-          }
-        } catch {
-          setErrorMsg("Falha ao conectar com o servidor.")
+        if (!emp || !p) {
+          setErrorMsg("Dados da entrega não encontrados no sistema.")
           setPhase('error')
+        } else {
+          setEmployee(emp)
+          setPpe(p)
+          setWorkplace(w || null)
+          setPhase('verify') // Go to identity verification
         }
+      } catch {
+        setErrorMsg("Erro ao processar o link de assinatura.")
+        setPhase('error')
       }
-      loadDetails()
-    } catch {
-      setErrorMsg("Erro ao processar o link de assinatura.")
-      setPhase('error')
     }
+
+    init()
   }, [searchParams])
 
   // Local formatter removed in favor of central utility
