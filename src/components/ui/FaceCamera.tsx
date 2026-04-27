@@ -375,9 +375,9 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
             muted 
             playsInline 
             onPlay={handleVideoPlay}
-            className={`w-full h-full object-cover transition-opacity duration-500 face-camera-video ${!isCameraActive ? 'opacity-0' : 'opacity-100'}`}
+            className={`w-full h-full object-cover transition-opacity duration-500 scale-x-[-1] face-camera-video ${!isCameraActive ? 'opacity-0' : 'opacity-100'}`}
           />
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none face-camera-mirror" />
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none scale-x-[-1] face-camera-mirror" />
           
           {/* Circular guide — fixed size to prevent distortion on mobile */}
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center">

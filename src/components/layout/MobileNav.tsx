@@ -37,7 +37,7 @@ export function MobileNav() {
   return (
     <>
       {/* Bottom Bar */}
-      <div className="md:hidden fixed bottom-0 w-full bg-white border-t border-slate-200 z-[100] px-2 py-2 flex justify-around pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <div className="md:hidden fixed bottom-0 w-full bg-white border-t border-slate-200 z-[100] px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] flex justify-around shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         {mainItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
