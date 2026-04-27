@@ -504,6 +504,7 @@ export interface NR06PDFData {
 export async function generateNR06PDF(data: NR06PDFData): Promise<void> {
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
 
   addPageHeader(doc, "FICHA DE CONTROLE DE EPI — NR-06", "Documento de Prontuário Individual do Colaborador")
 
@@ -521,7 +522,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<void> {
 
   fields.forEach((f, i) => {
     const x = 14 + (i % 3) * col
-    const y = boxY + Math.floor(i / 3) * 16
+    const y = boxY + Math.floor(i / 3) * 17
     infoRow(doc, f.label, f.value, x, y)
   })
 
@@ -561,10 +562,10 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<void> {
     ]),
     styles: {
       fontSize: 7,
-      cellPadding: 3,
+      cellPadding: { top: 6, right: 3, bottom: 6, left: 3 },
       font: "helvetica",
       textColor: [30, 41, 59],
-      minCellHeight: 16,
+      minCellHeight: 12,
     },
     headStyles: {
       fillColor: [r, g, b],
@@ -577,10 +578,10 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<void> {
     columnStyles: {
       0: { cellWidth: 18 },
       2: { halign: "center", cellWidth: 14 },
-      3: { halign: "center", cellWidth: 8 },
+      3: { halign: "center", cellWidth: 12 },
       5: { halign: "center" },
-      6: { halign: "center", cellWidth: 20 },
-      7: { cellWidth: 22, halign: "center" },
+      6: { halign: "center", cellWidth: 18 },
+      7: { cellWidth: 32, halign: "center" },
     },
     willDrawCell: (hookData) => {
       if (hookData.section === 'body' && hookData.column.index === 5) {
@@ -620,59 +621,69 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<void> {
   let finalY = doc.lastAutoTable?.finalY || 200
   finalY += 12
 
-  // ── TST Signer Block ──
+  // TST signer block
   if (data.tstSigner) {
     const tst = data.tstSigner
-    doc.setDrawColor(226, 232, 240)
-    doc.setFillColor(248, 250, 252)
-    doc.roundedRect(14, finalY, pageWidth - 28, 42, 3, 3, "FD")
+    const blockWidth = 88
+    const blockX = (pageWidth - blockWidth) / 2
+    const blockY = finalY
+    const contentX = blockX + 16
+    const contentWidth = blockWidth - 32
+    doc.setDrawColor(203, 213, 225)
+    doc.setLineWidth(0.8)
+    doc.roundedRect(blockX, blockY, blockWidth, 50, 4, 4)
 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(7)
     doc.setTextColor(71, 85, 105)
-    doc.text("ASSINATURA DO RESPONSÁVEL TÉCNICO DE SEGURANÇA (TST)", 20, finalY + 7)
+    doc.text("ASSINATURA DO RESPONS\u00c1VEL T\u00c9CNICO", pageWidth / 2, blockY + 7, { align: "center" })
 
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(8.5)
-    doc.setTextColor(30, 41, 59)
-    doc.text(tst.name.toUpperCase(), 20, finalY + 14)
-
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.setTextColor(100, 116, 139)
-    doc.text(tst.role, 20, finalY + 19)
-
-    // Signature image on the right
     try {
       const imgProps = doc.getImageProperties(tst.signatureBase64)
       const ratio = imgProps.width / imgProps.height
       const isPhoto = ratio <= 1.5
-      const drawH = isPhoto ? 28 : 14
-      const drawW = drawH * ratio
-      const sigX = pageWidth - 14 - drawW - 4
-      const sigY = finalY + 7
+      const drawH = isPhoto ? 20 : 12
+      let drawW = drawH * ratio
+      if (drawW > contentWidth) {
+        drawW = contentWidth
+      }
+      const sigX = contentX
+      const sigY = blockY + 12
       const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
       doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
     } catch { /* skip */ }
 
-    // Signature line below name for manual sig
-    doc.setDrawColor(226, 232, 240)
+    doc.setDrawColor(203, 213, 225)
     doc.setLineWidth(0.3)
-    doc.line(20, finalY + 34, pageWidth / 2 - 10, finalY + 34)
-    doc.setFontSize(6)
-    doc.setTextColor(148, 163, 184)
-    doc.text("Assinatura do Responsável Técnico", 20, finalY + 38)
+    doc.line(contentX, blockY + 34, contentX + contentWidth, blockY + 34)
 
-    finalY += 50
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(8.5)
+    doc.setTextColor(30, 41, 59)
+    doc.text(tst.name.toUpperCase(), contentX, blockY + 40)
+
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7)
+    doc.setTextColor(102, 102, 102)
+    doc.text(tst.role, contentX, blockY + 45)
+
+    finalY += 56
   }
 
   const emitDate = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  const footerY = pageHeight - 24
+  doc.setFillColor(248, 250, 252)
+  doc.rect(0, footerY - 8, pageWidth, 20, "F")
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.3)
+  doc.line(14, footerY - 4, pageWidth - 14, footerY - 4)
+
   doc.setFontSize(7)
   doc.setFont("helvetica", "italic")
   doc.setTextColor(100, 116, 139)
-  doc.text(`Documento emitido em ${emitDate} pelo ${COMPANY_CONFIG.systemName}.`, 14, finalY + 8)
+  doc.text(`Documento emitido em ${emitDate} pelo ${COMPANY_CONFIG.systemName}.`, 14, footerY + 2)
+  doc.text(`${COMPANY_CONFIG.systemName} • NR-06 Compliance • Identidade Digital Verificada`, 14, footerY + 6)
 
-  addPageFooter(doc)
   doc.save(`Ficha_NR06_${data.employeeName.replace(/\s+/g, '_')}.pdf`)
 }
 
@@ -781,132 +792,132 @@ export function generateTrainingCertificate(data: TrainingCertificateData): void
   const pageHeight = doc.internal.pageSize.getHeight()
   const centerX = pageWidth / 2
 
-  // Background
   doc.setFillColor(248, 250, 252)
   doc.rect(0, 0, pageWidth, pageHeight, "F")
 
-  // Outer Border
   doc.setDrawColor(r, g, b)
   doc.setLineWidth(2)
-  doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
-  
-  // Inner Border
+  doc.rect(16, 16, pageWidth - 32, pageHeight - 32)
+
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.5)
-  doc.rect(12, 12, pageWidth - 24, pageHeight - 24)
+  doc.rect(20, 20, pageWidth - 40, pageHeight - 40)
 
-  // Top Header / Logo Area
   if (COMPANY_CONFIG.logoUrl) {
     try {
       const imgWidth = 40
       const imgHeight = 15
-      doc.addImage(COMPANY_CONFIG.logoUrl, 'PNG', centerX - imgWidth / 2, 20, imgWidth, imgHeight)
+      doc.addImage(COMPANY_CONFIG.logoUrl, "PNG", centerX - imgWidth / 2, 26, imgWidth, imgHeight)
     } catch {
       doc.setFont("helvetica", "bold")
       doc.setFontSize(24)
       doc.setTextColor(r, g, b)
-      doc.text(COMPANY_CONFIG.name, centerX, 30, { align: "center" })
+      doc.text(COMPANY_CONFIG.name, centerX, 38, { align: "center" })
     }
   } else {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(24)
     doc.setTextColor(r, g, b)
-    doc.text(COMPANY_CONFIG.name, centerX, 30, { align: "center" })
+    doc.text(COMPANY_CONFIG.name, centerX, 38, { align: "center" })
   }
 
-  // Title
   doc.setFont("times", "bold")
   doc.setFontSize(36)
   doc.setTextColor(30, 41, 59)
-  doc.text("CERTIFICADO DE CONCLUSÃO", centerX, 60, { align: "center" })
+  doc.text("CERTIFICADO DE CONCLUS\u00c3O", centerX, 62, { align: "center" })
 
-  // Subtitle
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(12)
-  doc.setTextColor(100, 116, 139)
-  doc.text("Certificamos para os devidos fins que", centerX, 75, { align: "center" })
+  doc.setFont("helvetica", "italic")
+  doc.setFontSize(10)
+  doc.setTextColor(102, 102, 102)
+  doc.text("Certificamos para os devidos fins que", centerX, 76, { align: "center" })
 
-  // Employee Name
   doc.setFont("times", "bolditalic")
   doc.setFontSize(28)
   doc.setTextColor(r, g, b)
-  doc.text(data.employeeName.toUpperCase(), centerX, 95, { align: "center" })
+  doc.text(data.employeeName.toUpperCase(), centerX, 96, { align: "center" })
 
-  // CPF
   doc.setFont("helvetica", "normal")
   doc.setFontSize(12)
   doc.setTextColor(71, 85, 105)
-  doc.text(`Portador(a) do CPF: ${data.employeeCpf}`, centerX, 105, { align: "center" })
+  doc.text(`Portador(a) do CPF: ${data.employeeCpf}`, centerX, 108, { align: "center" })
 
-  // Course Text
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(14)
-  doc.setTextColor(100, 116, 139)
-  doc.text(`concluiu com êxito o treinamento de`, centerX, 123, { align: "center" })
+  doc.setFont("helvetica", "italic")
+  doc.setFontSize(10)
+  doc.setTextColor(102, 102, 102)
+  doc.text("concluiu com \u00eaxito o treinamento de", centerX, 126, { align: "center" })
 
-  // Course Name
   doc.setFont("helvetica", "bold")
   doc.setFontSize(20)
   doc.setTextColor(30, 41, 59)
-  doc.text(data.trainingName.toUpperCase(), centerX, 134, { align: "center" })
+  doc.text(data.trainingName.toUpperCase(), centerX, 138, { align: "center" })
 
-  // Dates
-  const emitDate = format(new Date(data.completionDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-  const validUntil = format(new Date(data.expiryDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  const completionText = format(new Date(data.completionDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  const validUntilText = format(new Date(data.expiryDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(12)
   doc.setTextColor(71, 85, 105)
-  doc.text(`Realizado em: ${emitDate}  |  Válido até: ${validUntil}`, centerX, 150, { align: "center" })
+  doc.text(`Realizado em: ${completionText}  |  V\u00e1lido at\u00e9: ${validUntilText}`, centerX, 150, { align: "center" })
 
-  // Footer / Signature
-  const finalY = 180
-  
+  const signerBlockX = centerX - 40
+  const signerBlockWidth = 80
+  const imageTopY = 162
+  const separatorY = 186
+  const signerNameY = 193
+  const signerRoleY = 198
+
   if (data.instructorName) {
-    const startX = centerX
-    
-    // Signature Line
-    doc.setDrawColor(148, 163, 184)
-    doc.setLineWidth(0.5)
-    doc.line(startX - 42, finalY, startX + 42, finalY)
-
-    // Instructor Signature Image
     if (data.signatureBase64) {
       try {
         const imgProps = doc.getImageProperties(data.signatureBase64)
         const ratio = imgProps.width / imgProps.height
         const isPhoto = ratio <= 1.5
-        const drawH = isPhoto ? 24 : 14
-        const drawW = drawH * ratio
-        const sigX = startX - drawW / 2
-        const sigY = isPhoto ? finalY - drawH - 8 : finalY - drawH - 4
-        const fmt = data.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+        const maxW = isPhoto ? 18 : 34
+        const maxH = isPhoto ? 18 : 10
+        let drawW = maxW
+        let drawH = drawW / ratio
+
+        if (drawH > maxH) {
+          drawH = maxH
+          drawW = drawH * ratio
+        }
+
+        const sigX = centerX - drawW / 2
+        const sigY = imageTopY
+        const fmt = data.signatureBase64.startsWith("data:image/png") ? "PNG" : "JPEG"
+
         if (isPhoto) {
           doc.setDrawColor(203, 213, 225)
           doc.setFillColor(255, 255, 255)
           doc.roundedRect(sigX - 2, sigY - 2, drawW + 4, drawH + 4, 2, 2, "FD")
         }
+
         doc.addImage(data.signatureBase64, fmt, sigX, sigY, drawW, drawH)
-      } catch { /* skip */ }
+      } catch {
+        // ignore invalid signature image
+      }
     }
+
+    doc.setDrawColor(148, 163, 184)
+    doc.setLineWidth(0.5)
+    doc.line(signerBlockX, separatorY, signerBlockX + signerBlockWidth, separatorY)
 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(10)
     doc.setTextColor(30, 41, 59)
-    doc.text(data.instructorName.toUpperCase(), startX, finalY + 7, { align: "center" })
+    doc.text(data.instructorName.toUpperCase(), centerX, signerNameY, { align: "center" })
 
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(9)
-    doc.setTextColor(100, 116, 139)
-    doc.text(data.instructorRole || "Instrutor / Responsável Técnico", startX, finalY + 12, { align: "center" })
+    doc.setFontSize(8)
+    doc.setTextColor(102, 102, 102)
+    doc.text(data.instructorRole || "Instrutor / Respons\u00e1vel T\u00e9cnico", centerX, signerRoleY, { align: "center" })
   }
 
-  // System Stamp
   doc.setFontSize(8)
   doc.setFont("helvetica", "italic")
   doc.setTextColor(148, 163, 184)
-  const today = format(new Date(), "dd/MM/yyyy 'às' HH:mm")
-  doc.text(`Documento emitido digitalmente em ${today} via ${COMPANY_CONFIG.systemName}`, 15, pageHeight - 15)
+  const issuedAt = format(new Date(), "dd/MM/yyyy '\u00e0s' HH:mm")
+  doc.text(`Documento emitido digitalmente em ${issuedAt} via ${COMPANY_CONFIG.systemName}`, 20, pageHeight - 12)
 
-  doc.save(`Certificado_${data.employeeName.replace(/\s+/g, '_')}_${data.trainingName.replace(/\s+/g, '_')}.pdf`)
+  doc.save(`Certificado_${data.employeeName.replace(/\s+/g, "_")}_${data.trainingName.replace(/\s+/g, "_")}.pdf`)
 }
