@@ -368,7 +368,7 @@ export const api = {
       .from('trainings')
       .select(`
         *,
-        employee:employees(full_name, cpf)
+        employee:employees!trainings_employee_id_fkey(full_name, cpf)
       `)
       .order('completion_date', { ascending: false });
     
