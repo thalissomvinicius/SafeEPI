@@ -303,7 +303,7 @@ export default function ReportsPage() {
       {/* Seção de Gráficos Analíticos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Gráfico 1: Investimento por Canteiro */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm min-w-0">
               <div className="flex items-center justify-between mb-8">
                   <div>
                       <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Investimento por Canteiro</h3>
@@ -312,7 +312,7 @@ export default function ReportsPage() {
                   <PieChartIcon className="w-5 h-5 text-[#8B1A1A]" />
               </div>
               
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] min-h-[300px] w-full min-w-0">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie
@@ -341,7 +341,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Gráfico 2: Top 5 EPIs entregues */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm min-w-0">
               <div className="flex items-center justify-between mb-8">
                   <div>
                       <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Top 5 Consumo de EPIs</h3>
@@ -350,7 +350,7 @@ export default function ReportsPage() {
                   <BarChartIcon className="w-5 h-5 text-[#8B1A1A]" />
               </div>
               
-              <div className="h-[300px] w-full">
+              <div className="h-[300px] min-h-[300px] w-full min-w-0">
                   <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={ppeUsageData} layout="vertical">
                           <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />

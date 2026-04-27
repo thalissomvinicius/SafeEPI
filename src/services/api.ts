@@ -1,6 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile } from "@/types/database";
 
+type AddTrainingResult = {
+  training: Training;
+  warning?: string;
+}
+
 export const api = {
   async getAuthHeaders(): Promise<Record<string, string>> {
     const { data, error } = await supabase.auth.getSession();
@@ -371,14 +376,53 @@ export const api = {
     return data as TrainingWithRelations[];
   },
 
-  async addTraining(training: Omit<Training, 'id' | 'created_at'>) {
+  async addTraining(training: Omit<Training, 'id' | 'created_at'>): Promise<AddTrainingResult> {
     const { data, error } = await supabase
       .from('trainings')
       .insert([training])
       .select();
-    
-    if (error) throw error;
-    return data[0] as Training;
+
+    if (!error) {
+      return { training: data[0] as Training };
+    }
+
+    const message = error.message || "";
+    const isTrainingSchemaIssue =
+      message.includes("schema cache") ||
+      message.includes("instructor_id") ||
+      message.includes("instructor_name") ||
+      message.includes("instructor_role") ||
+      message.includes("signature_url") ||
+      message.includes("auth_method");
+
+    if (!isTrainingSchemaIssue) {
+      throw error;
+    }
+
+    const fallbackTraining = {
+      employee_id: training.employee_id,
+      training_name: training.training_name,
+      completion_date: training.completion_date,
+      expiry_date: training.expiry_date,
+      status: training.status,
+    };
+
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('trainings')
+      .insert([fallbackTraining])
+      .select();
+
+    if (fallbackError) {
+      throw new Error(
+        "A tabela 'trainings' do Supabase ainda não está pronta para instrutor/assinatura. Rode o script add_training_instructor.sql e recarregue o schema do PostgREST."
+      );
+    }
+
+    return {
+      training: fallbackData[0] as Training,
+      warning:
+        "Treinamento salvo sem dados de instrutor/assinatura. Rode o script add_training_instructor.sql no Supabase para habilitar certificado completo.",
+    };
   },
 
   // --- Perfis de Usuário (RBAC) ---

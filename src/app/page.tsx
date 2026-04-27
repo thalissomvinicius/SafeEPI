@@ -143,7 +143,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm flex flex-col">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm flex flex-col min-w-0">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Atividade de Entregas</h3>
@@ -155,7 +155,7 @@ export default function Dashboard() {
                 </div>
             </div>
             
-            <div className="h-[280px] w-full">
+            <div className="h-[280px] min-h-[280px] w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                         <defs>

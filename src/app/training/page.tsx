@@ -44,9 +44,15 @@ export default function TrainingPage() {
         api.getTrainings(),
         api.getEmployees()
       ])
+      const availableEmployees = eData.filter(e => e.active !== false)
+      const employeesForTraining = availableEmployees.length > 0 ? availableEmployees : eData
+
       setTrainings(tData)
-      setEmployees(eData.filter(e => e.active))
-      if (eData.length > 0) setFormData(prev => ({ ...prev, employee_id: eData[0].id }))
+      setEmployees(employeesForTraining)
+      setFormData(prev => ({
+        ...prev,
+        employee_id: employeesForTraining.find(emp => emp.id === prev.employee_id)?.id || employeesForTraining[0]?.id || ""
+      }))
     } catch (error) {
       console.error("Erro ao carregar treinamentos:", error)
     } finally {
@@ -83,7 +89,7 @@ export default function TrainingPage() {
       const completionDate = new Date(formData.completion_date)
       const expiryDate = addYears(completionDate, 1) // Validade padrão de 1 ano
 
-      await api.addTraining({
+      const result = await api.addTraining({
         employee_id: formData.employee_id,
         training_name: finalTrainingName,
         completion_date: formData.completion_date,
@@ -96,13 +102,30 @@ export default function TrainingPage() {
         auth_method: tstAuthMethod
       })
 
+      const trainedEmployee = employees.find(emp => emp.id === formData.employee_id)
+      generateTrainingCertificate({
+        employeeName: trainedEmployee?.full_name || "N/A",
+        employeeCpf: trainedEmployee?.cpf || "N/A",
+        trainingName: finalTrainingName,
+        completionDate: formData.completion_date,
+        expiryDate: format(expiryDate, "yyyy-MM-dd"),
+        instructorName: tstSelectedEmployee.full_name,
+        instructorRole: tstRole,
+        signatureBase64: tstSignatureBase64,
+      })
+
       await loadData()
       setIsModalOpen(false)
       resetForm()
-      toast.success("Treinamento registrado com sucesso!")
-    } catch (error) {
+      if (result.warning) {
+        toast.warning(result.warning)
+      } else {
+        toast.success("Treinamento registrado com sucesso!")
+      }
+    } catch (error: unknown) {
       console.error("Erro ao salvar treinamento:", error)
-      toast.error("Erro ao salvar treinamento no banco de dados.")
+      const message = error instanceof Error ? error.message : "Erro ao salvar treinamento no banco de dados."
+      toast.error(message)
     } finally {
       setIsSaving(false)
     }
@@ -297,10 +320,13 @@ export default function TrainingPage() {
                         value={formData.employee_id}
                         title="Selecionar Colaborador"
                         aria-labelledby="label-colaborador"
+                        disabled={employees.length === 0}
                         onChange={(e) => setFormData({...formData, employee_id: e.target.value})}
                         required
                       >
-                        <option value="">Selecione um colaborador...</option>
+                        <option value="">
+                          {employees.length === 0 ? "Nenhum colaborador disponível" : "Selecione um colaborador..."}
+                        </option>
                         {employees.map(emp => (
                           <option key={emp.id} value={emp.id}>{emp.full_name}</option>
                         ))}
