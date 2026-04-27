@@ -40,21 +40,36 @@ export default function TrainingPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [tData, eData] = await Promise.all([
+      const [trainingsResult, employeesResult] = await Promise.allSettled([
         api.getTrainings(),
         api.getEmployees()
       ])
-      const availableEmployees = eData.filter(e => e.active !== false)
-      const employeesForTraining = availableEmployees.length > 0 ? availableEmployees : eData
 
-      setTrainings(tData)
-      setEmployees(employeesForTraining)
-      setFormData(prev => ({
-        ...prev,
-        employee_id: employeesForTraining.find(emp => emp.id === prev.employee_id)?.id || employeesForTraining[0]?.id || ""
-      }))
+      if (trainingsResult.status === "fulfilled") {
+        setTrainings(trainingsResult.value)
+      } else {
+        console.error("Erro ao carregar treinamentos:", trainingsResult.reason)
+        setTrainings([])
+        toast.warning("Nao foi possivel carregar o historico de treinamentos agora. O cadastro continua disponivel.")
+      }
+
+      if (employeesResult.status === "fulfilled") {
+        const eData = employeesResult.value
+        const availableEmployees = eData.filter(e => e.active !== false)
+        const employeesForTraining = availableEmployees.length > 0 ? availableEmployees : eData
+
+        setEmployees(employeesForTraining)
+        setFormData(prev => ({
+          ...prev,
+          employee_id: employeesForTraining.find(emp => emp.id === prev.employee_id)?.id || employeesForTraining[0]?.id || ""
+        }))
+      } else {
+        console.error("Erro ao carregar colaboradores:", employeesResult.reason)
+        setEmployees([])
+        toast.error("Falha ao carregar os colaboradores no Supabase.")
+      }
     } catch (error) {
-      console.error("Erro ao carregar treinamentos:", error)
+      console.error("Erro inesperado ao carregar dados de treinamentos:", error)
     } finally {
       setLoading(false)
     }
