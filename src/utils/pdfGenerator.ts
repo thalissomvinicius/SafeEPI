@@ -763,3 +763,144 @@ export function generateGeneralReportPDF(data: ReportPDFData) {
   addPageFooter(doc)
   doc.save(`Relatorio_Global_EPIs_${format(new Date(), "yyyyMMdd")}.pdf`)
 }
+
+export interface TrainingCertificateData {
+  employeeName: string
+  employeeCpf: string
+  trainingName: string
+  completionDate: string
+  expiryDate: string
+  instructorName?: string
+  instructorRole?: string
+  signatureBase64?: string
+}
+
+export function generateTrainingCertificate(data: TrainingCertificateData): void {
+  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+
+  // Background
+  doc.setFillColor(248, 250, 252)
+  doc.rect(0, 0, pageWidth, pageHeight, "F")
+
+  // Outer Border
+  doc.setDrawColor(r, g, b)
+  doc.setLineWidth(2)
+  doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
+  
+  // Inner Border
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.5)
+  doc.rect(12, 12, pageWidth - 24, pageHeight - 24)
+
+  // Top Header / Logo Area
+  if (COMPANY_CONFIG.logoUrl) {
+    try {
+      const imgWidth = 40
+      const imgHeight = 15
+      doc.addImage(COMPANY_CONFIG.logoUrl, 'PNG', pageWidth / 2 - imgWidth / 2, 20, imgWidth, imgHeight)
+    } catch {
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(24)
+      doc.setTextColor(r, g, b)
+      doc.text(COMPANY_CONFIG.name, pageWidth / 2, 30, { align: "center" })
+    }
+  } else {
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(24)
+    doc.setTextColor(r, g, b)
+    doc.text(COMPANY_CONFIG.name, pageWidth / 2, 30, { align: "center" })
+  }
+
+  // Title
+  doc.setFont("times", "bold")
+  doc.setFontSize(36)
+  doc.setTextColor(30, 41, 59)
+  doc.text("CERTIFICADO DE CONCLUSÃO", pageWidth / 2, 60, { align: "center" })
+
+  // Subtitle
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(12)
+  doc.setTextColor(100, 116, 139)
+  doc.text("Certificamos para os devidos fins que", pageWidth / 2, 75, { align: "center" })
+
+  // Employee Name
+  doc.setFont("times", "bolditalic")
+  doc.setFontSize(28)
+  doc.setTextColor(r, g, b)
+  doc.text(data.employeeName.toUpperCase(), pageWidth / 2, 95, { align: "center" })
+
+  // CPF
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(12)
+  doc.setTextColor(71, 85, 105)
+  doc.text(`Portador(a) do CPF: ${data.employeeCpf}`, pageWidth / 2, 105, { align: "center" })
+
+  // Course Text
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(14)
+  doc.setTextColor(100, 116, 139)
+  doc.text(`concluiu com êxito o treinamento de`, pageWidth / 2, 125, { align: "center" })
+
+  // Course Name
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(20)
+  doc.setTextColor(30, 41, 59)
+  doc.text(data.trainingName.toUpperCase(), pageWidth / 2, 135, { align: "center" })
+
+  // Dates
+  const emitDate = format(new Date(data.completionDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  const validUntil = format(new Date(data.expiryDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(12)
+  doc.setTextColor(71, 85, 105)
+  doc.text(`Realizado em: ${emitDate}  |  Válido até: ${validUntil}`, pageWidth / 2, 150, { align: "center" })
+
+  // Footer / Signature
+  const finalY = 175
+  
+  if (data.instructorName) {
+    const startX = pageWidth / 2
+    
+    // Signature Line
+    doc.setDrawColor(148, 163, 184)
+    doc.setLineWidth(0.5)
+    doc.line(startX - 40, finalY, startX + 40, finalY)
+
+    // Instructor Signature Image
+    if (data.signatureBase64) {
+      try {
+        const imgProps = doc.getImageProperties(data.signatureBase64)
+        const ratio = imgProps.width / imgProps.height
+        const isPhoto = ratio <= 1.5
+        const drawH = isPhoto ? 24 : 14
+        const drawW = drawH * ratio
+        const sigX = startX - drawW / 2
+        const sigY = finalY - drawH - 2
+        const fmt = data.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+        doc.addImage(data.signatureBase64, fmt, sigX, sigY, drawW, drawH)
+      } catch { /* skip */ }
+    }
+
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(10)
+    doc.setTextColor(30, 41, 59)
+    doc.text(data.instructorName.toUpperCase(), startX, finalY + 6, { align: "center" })
+
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(9)
+    doc.setTextColor(100, 116, 139)
+    doc.text(data.instructorRole || "Instrutor / Responsável Técnico", startX, finalY + 11, { align: "center" })
+  }
+
+  // System Stamp
+  doc.setFontSize(8)
+  doc.setFont("helvetica", "italic")
+  doc.setTextColor(148, 163, 184)
+  const today = format(new Date(), "dd/MM/yyyy 'às' HH:mm")
+  doc.text(`Documento emitido digitalmente em ${today} via ${COMPANY_CONFIG.systemName}`, 15, pageHeight - 15)
+
+  doc.save(`Certificado_${data.employeeName.replace(/\s+/g, '_')}_${data.trainingName.replace(/\s+/g, '_')}.pdf`)
+}

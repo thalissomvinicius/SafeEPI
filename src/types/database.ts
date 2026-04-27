@@ -70,6 +70,11 @@ export type Training = {
   completion_date: string;
   expiry_date: string;
   status: 'Válido' | 'Vencendo' | 'Vencido';
+  instructor_id?: string | null;
+  instructor_name?: string | null;
+  instructor_role?: string | null;
+  signature_url?: string | null;
+  auth_method?: 'manual' | 'facial' | null;
   created_at?: string;
 };
 
