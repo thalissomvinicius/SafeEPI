@@ -1,12 +1,48 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Loader2 } from "lucide-react"
+import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/services/api"
 import { DeliveryWithRelations } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts"
+
+function DashboardSkeleton() {
+  return (
+    <div className="p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-100 pb-8 gap-4">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-4 w-48" />
+        </div>
+        <Skeleton className="h-12 w-40" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-10 w-10" />
+            </div>
+            <Skeleton className="h-8 w-16 mb-2" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 h-[400px]">
+          <Skeleton className="h-full w-full rounded-2xl" />
+        </div>
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4">
+          <Skeleton className="h-6 w-1/2" />
+          <Skeleton className="h-full w-full rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -62,40 +98,6 @@ export default function Dashboard() {
     }
     loadDashboardData()
   }, [])
-
-  const DashboardSkeleton = () => (
-    <div className="p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-100 pb-8 gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-4 w-48" />
-        </div>
-        <Skeleton className="h-12 w-40" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-10 w-10" />
-            </div>
-            <Skeleton className="h-8 w-16 mb-2" />
-            <Skeleton className="h-3 w-32" />
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 h-[400px]">
-          <Skeleton className="h-full w-full rounded-2xl" />
-        </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 space-y-4">
-          <Skeleton className="h-6 w-1/2" />
-          <Skeleton className="h-full w-full rounded-2xl" />
-        </div>
-      </div>
-    </div>
-  )
 
   if (loading) return <DashboardSkeleton />
 
@@ -172,7 +174,7 @@ export default function Dashboard() {
                         />
                         <YAxis hide />
                         <Tooltip 
-                            formatter={(value: any) => [value, "Entregas"]}
+                            formatter={(value) => [value ?? 0, "Entregas"]}
                             contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold'}}
                             cursor={{stroke: '#8B1A1A', strokeWidth: 2, strokeDasharray: '4 4'}}
                         />

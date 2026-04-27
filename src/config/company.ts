@@ -17,6 +17,7 @@ export const COMPANY_CONFIG = {
   address: process.env.NEXT_PUBLIC_COMPANY_ADDRESS || "Endereço da Empresa",
   phone: process.env.NEXT_PUBLIC_COMPANY_PHONE || "(00) 0000-0000",
   email: process.env.NEXT_PUBLIC_COMPANY_EMAIL || "sesmt@empresa.com.br",
+  logoUrl: process.env.NEXT_PUBLIC_COMPANY_LOGO_URL || "",
   
   // Cores da marca (hex) — usadas nos PDFs
   primaryColor: "#8B1A1A",   // Vermelho Antares

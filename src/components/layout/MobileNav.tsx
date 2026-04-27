@@ -31,9 +31,6 @@ export function MobileNav() {
 
   // Top 4 items for the main bar
   const mainItems = filteredItems.slice(0, 4)
-  // Rest for the menu
-  const menuItems = filteredItems.slice(4)
-
   return (
     <>
       {/* Bottom Bar */}

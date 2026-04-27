@@ -134,7 +134,10 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
   // ── Start camera when ready ──
   useEffect(() => {
     if (isModelsLoaded && !showInstructions) {
-      startCamera()
+      const timer = setTimeout(() => {
+        void startCamera()
+      }, 0)
+      return () => clearTimeout(timer)
     }
   }, [isModelsLoaded, showInstructions, startCamera])
 

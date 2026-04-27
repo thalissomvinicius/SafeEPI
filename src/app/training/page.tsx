@@ -5,11 +5,10 @@ import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Came
 import { api } from "@/services/api"
 import { Employee, TrainingWithRelations } from "@/types/database"
 import { format, addYears } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import { toast } from "sonner"
 import { useRef } from "react"
 import SignatureCanvas from "react-signature-canvas"
-import FaceCamera from "@/components/ui/FaceCamera"
+import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateTrainingCertificate } from "@/utils/pdfGenerator"
 
 export default function TrainingPage() {

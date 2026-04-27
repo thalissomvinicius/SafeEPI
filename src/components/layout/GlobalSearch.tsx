@@ -132,7 +132,7 @@ export function GlobalSearch() {
                 </div>
               ) : (results.employees.length === 0 && results.ppes.length === 0 && results.workplaces.length === 0) ? (
                 <div className="p-12 text-center text-slate-400">
-                  <p className="text-sm font-bold uppercase tracking-widest italic">Nenhum resultado encontrado para "{query}"</p>
+                  <p className="text-sm font-bold uppercase tracking-widest italic">Nenhum resultado encontrado para &quot;{query}&quot;</p>
                 </div>
               ) : (
                 <div className="space-y-2">

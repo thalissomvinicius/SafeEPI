@@ -1,20 +1,21 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, AlertTriangle, Calendar, Package, X, Loader2, RefreshCw } from "lucide-react"
+import { Bell, AlertTriangle, Calendar, Package, Loader2, RefreshCw } from "lucide-react"
 import { addDays, isPast } from "date-fns"
 import { api } from "@/services/api"
-import { PPE } from "@/types/database"
+
+type NotificationItem = {
+  id: string;
+  title: string;
+  description: string;
+  type: 'CA' | 'STOCK' | 'LIFESPAN';
+  severity: 'high' | 'medium';
+}
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
-  const [notifications, setNotifications] = useState<{
-    id: string;
-    title: string;
-    description: string;
-    type: 'CA' | 'STOCK' | 'LIFESPAN';
-    severity: 'high' | 'medium';
-  }[]>([])
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -26,7 +27,7 @@ export function NotificationBell() {
           api.getDeliveries()
         ])
         
-        const alerts: any[] = []
+        const alerts: NotificationItem[] = []
         const now = new Date()
 
         // Check PPE Lifespan Alerts (Items in use that need replacement)

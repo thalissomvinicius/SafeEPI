@@ -286,19 +286,11 @@ export default function DeliveryPage() {
       }
 
       try {
-        const res = await fetch('/api/remote-links', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            employee_id: selectedEmployeeId, 
-            type: 'delivery',
-            data: deliveryDataPayload 
-          })
+        const data = await api.createRemoteLink({
+          employee_id: selectedEmployeeId,
+          type: 'delivery',
+          data: deliveryDataPayload
         })
-        
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Erro ao gerar link')
-
         const url = `${baseUrl}/delivery/remote?t=${data.link.token}`
         navigator.clipboard.writeText(url)
         toast.success("Link de assinatura remota copiado! Válido por 24h.");
@@ -702,4 +694,3 @@ export default function DeliveryPage() {
     </div>
   )
 }
-

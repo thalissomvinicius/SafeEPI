@@ -537,18 +537,13 @@ export default function EmployeesPage() {
                     type="button"
                     onClick={async () => {
                       try {
-                        const res = await fetch('/api/remote-links', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ employee_id: formData.id, type: 'capture' })
-                        })
-                        const data = await res.json()
-                        if (!res.ok) throw new Error(data.error)
+                        if (!formData.id) return
+                        const data = await api.createRemoteLink({ employee_id: formData.id, type: 'capture' })
                         const link = `${window.location.origin}/capture/${formData.id}?t=${data.link.token}`;
                         navigator.clipboard.writeText(link);
                         toast.success("Link copiado! Válido por 24h e uso único.");
-                      } catch (err: any) {
-                        const errorMsg = err.message || "Erro desconhecido";
+                      } catch (err: unknown) {
+                        const errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
                         toast.error(`Erro ao gerar link: ${errorMsg}. Verifique a tabela 'remote_links'.`);
                       }
                     }}

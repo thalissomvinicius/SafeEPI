@@ -2,6 +2,14 @@ import { supabase } from "@/lib/supabase";
 import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile } from "@/types/database";
 
 export const api = {
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  },
+
   // --- Autenticação ---
   async login(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -25,7 +33,9 @@ export const api = {
 
   // --- Gestão de Usuários (Apenas Admin) ---
   async getUsers() {
-    const res = await fetch('/api/users');
+    const res = await fetch('/api/users', {
+      headers: await this.getAuthHeaders(),
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     return data.users as (Profile & { email: string, created_at: string, last_sign_in_at: string })[];
@@ -34,7 +44,7 @@ export const api = {
   async createUser(payload: { email: string, password?: string, full_name: string, role: string }) {
     const res = await fetch('/api/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
       body: JSON.stringify(payload)
     });
     const data = await res.json();
@@ -45,7 +55,7 @@ export const api = {
   async updateUser(payload: { id: string, password?: string, full_name?: string, role?: string }) {
     const res = await fetch('/api/users', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
       body: JSON.stringify(payload)
     });
     const data = await res.json();
@@ -54,10 +64,29 @@ export const api = {
   },
 
   async deleteUser(id: string) {
-    const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/users?id=${id}`, {
+      method: 'DELETE',
+      headers: await this.getAuthHeaders(),
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     return data;
+  },
+
+  async createRemoteLink(payload: {
+    employee_id: string;
+    type: 'capture' | 'delivery';
+    data?: Record<string, unknown> | null;
+    expires_hours?: number;
+  }) {
+    const res = await fetch('/api/remote-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    return data as { link: { token: string } };
   },
 
   // --- Canteiros (Workplaces) ---
@@ -152,7 +181,7 @@ export const api = {
     // Usa rota server-side para contornar RLS
     const response = await fetch('/api/employees/update', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
       body: JSON.stringify({ id, updates: finalUpdates })
     });
 
@@ -167,7 +196,7 @@ export const api = {
     console.log('[removeEmployeePhoto] Chamando API server-side para remover foto');
     const response = await fetch('/api/employees/update', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
       body: JSON.stringify({ id, removePhoto: true })
     });
 

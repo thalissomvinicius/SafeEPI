@@ -1,100 +1,101 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
-
-// Usamos a chave Service Role para poder criar usuários sem deslogar o admin atual
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-)
+import { NextResponse } from "next/server"
+import { requireAuthorizedUser } from "@/lib/serverAuth"
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import type { Profile } from "@/types/database"
 
 export async function GET(request: Request) {
+  const auth = await requireAuthorizedUser(request, ["ADMIN"])
+  if (!auth.authorized) {
+    return auth.response
+  }
+
   try {
     const { data: users, error } = await supabaseAdmin.auth.admin.listUsers()
-    
+
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    // Buscar os perfis da tabela profiles para complementar
     const { data: profiles, error: profilesError } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
+      .from("profiles")
+      .select("*")
 
     if (profilesError) {
       return NextResponse.json({ error: profilesError.message }, { status: 400 })
     }
 
-    // Mesclar os dados de auth com os perfis
-    const mergedUsers = users.users.map(u => {
-      const profile = profiles?.find(p => p.id === u.id)
+    const mergedUsers = users.users.map((user) => {
+      const profile = profiles?.find((item) => item.id === user.id)
       return {
-        id: u.id,
-        email: u.email,
-        full_name: profile?.full_name || '',
-        role: profile?.role || 'USER',
-        created_at: u.created_at,
-        last_sign_in_at: u.last_sign_in_at
+        id: user.id,
+        email: user.email,
+        full_name: profile?.full_name || "",
+        role: profile?.role || "USER",
+        created_at: user.created_at,
+        last_sign_in_at: user.last_sign_in_at,
       }
     })
 
     return NextResponse.json({ users: mergedUsers })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro interno do servidor"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
+  const auth = await requireAuthorizedUser(request, ["ADMIN"])
+  if (!auth.authorized) {
+    return auth.response
+  }
+
   try {
     const { email, password, full_name, role } = await request.json()
 
-    // 1. Criar o usuário no Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // Auto-confirma o email
-      user_metadata: { full_name }
+      email_confirm: true,
+      user_metadata: { full_name },
     })
 
     if (authError) {
       return NextResponse.json({ error: authError.message }, { status: 400 })
     }
 
-    // 2. Criar ou atualizar o profile
     if (authData.user) {
       const { error: profileError } = await supabaseAdmin
-        .from('profiles')
+        .from("profiles")
         .upsert({
           id: authData.user.id,
           email,
           full_name,
-          role
+          role,
         })
 
       if (profileError) {
-        // Fallback: se der erro no profile, exclui o user do Auth pra não ficar órfão
         await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
         return NextResponse.json({ error: profileError.message }, { status: 400 })
       }
     }
 
     return NextResponse.json({ success: true, user: authData.user })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro interno do servidor"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
 export async function PUT(request: Request) {
+  const auth = await requireAuthorizedUser(request, ["ADMIN"])
+  if (!auth.authorized) {
+    return auth.response
+  }
+
   try {
     const { id, password, role, full_name } = await request.json()
 
-    // 1. Atualizar senha (se informada) e metadados no Auth
-    const updates: any = {}
+    const updates: { password?: string; user_metadata?: { full_name: string } } = {}
     if (password) updates.password = password
     if (full_name) updates.user_metadata = { full_name }
 
@@ -105,16 +106,15 @@ export async function PUT(request: Request) {
       }
     }
 
-    // 2. Atualizar role e full_name no Profiles
-    const profileUpdates: any = {}
+    const profileUpdates: Partial<Pick<Profile, "role" | "full_name">> = {}
     if (role) profileUpdates.role = role
     if (full_name) profileUpdates.full_name = full_name
 
     if (Object.keys(profileUpdates).length > 0) {
       const { error: profileError } = await supabaseAdmin
-        .from('profiles')
+        .from("profiles")
         .update(profileUpdates)
-        .eq('id', id)
+        .eq("id", id)
 
       if (profileError) {
         return NextResponse.json({ error: profileError.message }, { status: 400 })
@@ -122,18 +122,24 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro interno do servidor"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
 export async function DELETE(request: Request) {
+  const auth = await requireAuthorizedUser(request, ["ADMIN"])
+  if (!auth.authorized) {
+    return auth.response
+  }
+
   try {
     const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
+    const id = searchParams.get("id")
 
     if (!id) {
-      return NextResponse.json({ error: 'ID não fornecido' }, { status: 400 })
+      return NextResponse.json({ error: "ID não fornecido" }, { status: 400 })
     }
 
     const { error } = await supabaseAdmin.auth.admin.deleteUser(id)
@@ -142,7 +148,8 @@ export async function DELETE(request: Request) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro interno do servidor"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
