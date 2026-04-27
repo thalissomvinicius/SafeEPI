@@ -233,8 +233,12 @@ export default function WorkplacesPage() {
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Detalhes do Canteiro</p>
                 </div>
               </div>
-              <button onClick={() => { setDetailsWorkplace(null); setDetailsEmployees([]); setDetailsDeliveries([]) }}
-                className="text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors">
+              <button 
+                onClick={() => { setDetailsWorkplace(null); setDetailsEmployees([]); setDetailsDeliveries([]) }}
+                title="Fechar detalhes"
+                aria-label="Fechar detalhes"
+                className="text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
