@@ -1133,6 +1133,7 @@ export function generateMovementsPresentationPDF(data: MovementsReportData): voi
   doc.setLineWidth(0.3)
   doc.line(rightX + 6, chartsY + 14, rightX + rightW - 6, chartsY + 14)
 
+  const total = data.stats.deliveries + data.stats.returns
   if (total > 0) {
     const delivPct = data.stats.deliveries / total
     const retPct = data.stats.returns / total
