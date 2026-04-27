@@ -779,6 +779,10 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   }
 
   // --- PAGE 1: FRENTE ---
+  // Background changed to pure white so the logo doesn't show a white bounding box
+  doc.setFillColor(255, 255, 255)
+  doc.rect(0, 0, pageWidth, pageHeight, "F")
+  
   drawBorders()
   
   // Header: Logo on left, title in center, photo on right
@@ -802,7 +806,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
       // 90px height -> ~31.5mm
       const imgHeight = 31.5;
       const imgWidth = 42; // approx 4:3
-      doc.addImage(logoBase64, "PNG", marginX, 25, imgWidth, imgHeight);
+      doc.addImage(logoBase64, "PNG", marginX, 20, imgWidth, imgHeight);
     } catch { }
   }
 
@@ -821,7 +825,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   const photoW = 21;
   const photoH = 26;
   const photoX = pageWidth - marginX - photoW;
-  const photoY = 25;
+  const photoY = 20;
   
   doc.setDrawColor(139, 0, 0)
   doc.setLineWidth(0.7)
@@ -852,11 +856,13 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setTextColor(68, 68, 68) // #444444
   doc.text(`Portador(a) do CPF: ${data.employeeCpf}`, centerX, 95, { align: "center" })
 
-  // Divisor ornamental
-  doc.setFont("times", "normal")
-  doc.setFontSize(14)
-  doc.setTextColor(139, 0, 0)
-  doc.text("— · —", centerX, 105, { align: "center" })
+  // Divisor ornamental (drawn with lines instead of text to avoid weird spacing)
+  doc.setDrawColor(139, 0, 0)
+  doc.setLineWidth(0.5)
+  doc.line(centerX - 12, 103, centerX - 3, 103)
+  doc.setFillColor(139, 0, 0)
+  doc.circle(centerX, 103, 1, "F")
+  doc.line(centerX + 3, 103, centerX + 12, 103)
 
   doc.setFont("helvetica", "italic")
   doc.setFontSize(12)
@@ -900,17 +906,20 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     const qrDataUrl = await QRCode.toDataURL(validationUrl, { width: 150, margin: 1 })
     doc.addImage(qrDataUrl, 'PNG', marginX, footerY, 25, 25)
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(8)
+    doc.setFontSize(7)
     doc.setTextColor(119, 119, 119) // #777777
-    doc.text(`Valide em: ${validationUrl.replace('https://', '')}`, marginX + 12.5, footerY + 29, { align: "center" })
+    doc.text(`Autenticação:`, marginX + 12.5, footerY + 28, { align: "center" })
+    doc.setFontSize(6)
+    doc.text(`${validationUrl.replace('https://', '')}`, marginX + 12.5, footerY + 31, { align: "center" })
   } catch {}
 
   // Center: Signature
   if (data.instructorName) {
     const sigLineW = 63 // ~180px
+    const sigY = footerY + 15
     doc.setDrawColor(139, 0, 0)
     doc.setLineWidth(0.5)
-    doc.line(centerX - sigLineW/2, footerY + 20, centerX + sigLineW/2, footerY + 20)
+    doc.line(centerX - sigLineW/2, sigY, centerX + sigLineW/2, sigY)
 
     if (data.signatureBase64 && !data.signatureBase64.startsWith('data:image/jpeg')) {
       try {
@@ -922,18 +931,18 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
           drawW = sigLineW;
           drawH = drawW / ratio;
         }
-        doc.addImage(data.signatureBase64, "PNG", centerX - drawW/2, footerY + 20 - drawH - 1, drawW, drawH)
+        doc.addImage(data.signatureBase64, "PNG", centerX - drawW/2, sigY - drawH - 1, drawW, drawH)
       } catch {}
     }
 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(11)
     doc.setTextColor(85, 85, 85)
-    doc.text(data.instructorName.toUpperCase(), centerX, footerY + 25, { align: "center" })
+    doc.text(data.instructorName.toUpperCase(), centerX, sigY + 5, { align: "center" })
     
     doc.setFont("helvetica", "normal")
     doc.setFontSize(10)
-    doc.text(data.instructorRole || "Resp. Técnico", centerX, footerY + 30, { align: "center" })
+    doc.text(data.instructorRole || "Resp. Técnico", centerX, sigY + 10, { align: "center" })
   }
 
   // Right: Footer text
