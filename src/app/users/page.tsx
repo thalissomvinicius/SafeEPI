@@ -11,7 +11,7 @@ import { toast } from "sonner"
 export default function UsersPage() {
   const { user: currentUser, loading: authLoading } = useAuth()
   const router = useRouter()
-  const [users, setUsers] = useState<(Omit<Profile, 'full_name' | 'email'> & { full_name: string; email: string; created_at: string; last_sign_in_at: string })[]>([])
+  const [users, setUsers] = useState<(Profile & { email: string; created_at: string; last_sign_in_at: string })[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
@@ -122,8 +122,8 @@ export default function UsersPage() {
     setIsModalOpen(true)
   }
 
-  const openResetPasswordModal = (user: Omit<Profile, 'full_name' | 'email'> & { full_name: string; email: string; created_at: string; last_sign_in_at: string }) => {
-    setFormData({ id: user.id, full_name: user.full_name, email: user.email, password: "", role: user.role ?? "ALMOXARIFE" })
+  const openResetPasswordModal = (user: (typeof users)[number]) => {
+    setFormData({ id: user.id, full_name: user.full_name ?? "", email: user.email, password: "", role: user.role ?? "ALMOXARIFE" })
     setIsModalOpen(true)
   }
 
