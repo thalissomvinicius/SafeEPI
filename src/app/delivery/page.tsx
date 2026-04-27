@@ -361,146 +361,86 @@ export default function DeliveryPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto pb-24 md:pb-8">
-      <div className="mb-8 border-l-4 border-[#8B1A1A] pl-4">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
-        <p className="text-slate-500 font-medium">Compliance NR-06 com Rastreabilidade de Autoria.</p>
+    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto pb-24 lg:pb-8">
+      <div className="mb-6 lg:mb-8 border-l-4 border-[#8B1A1A] pl-4">
+        <h1 className="text-2xl lg:text-3xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
+        <p className="text-slate-500 font-medium text-sm lg:text-base mt-1">Compliance NR-06 com Rastreabilidade de Autoria.</p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl shadow-slate-200/50">
+      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40">
+        {/* Progress Bar Header */}
         <div className="flex bg-slate-50 border-b border-slate-100">
-          <div className={`flex-1 text-center py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 1 ? 'bg-white text-[#8B1A1A]' : 'text-slate-400'}`}>1. Seleção</div>
-          <div className={`flex-1 text-center py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 2 ? 'bg-white text-[#8B1A1A]' : 'text-slate-400'}`}>2. Autenticação</div>
+          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 1 ? 'bg-white text-[#8B1A1A] border-b-2 border-[#8B1A1A]' : 'text-slate-400 border-b-2 border-transparent'}`}>1. Seleção e Carrinho</div>
+          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 2 ? 'bg-white text-[#8B1A1A] border-b-2 border-[#8B1A1A]' : 'text-slate-400 border-b-2 border-transparent'}`}>2. Autenticação e Assinatura</div>
         </div>
 
-        <div className="p-5 sm:p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           {step === 1 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-left-4">
-              {/* Data da Entrega */}
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-[#8B1A1A]" />
-                    Data da Entrega
-                  </h3>
-                  <p className="text-[10px] font-medium text-slate-500 italic mt-0.5">Selecione para entregas retroativas.</p>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 animate-in fade-in slide-in-from-left-4">
+              
+              {/* --- COLUNA ESQUERDA: DADOS BASE --- */}
+              <div className="lg:col-span-5 space-y-6 lg:border-r lg:border-slate-100 lg:pr-8">
+                <div className="mb-2 hidden lg:block">
+                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><User className="w-5 h-5 text-[#8B1A1A]"/> Favorecido</h2>
+                  <p className="text-xs text-slate-400 font-medium mt-1">Quem irá receber os equipamentos.</p>
                 </div>
-                <input 
-                  type="date"
-                  title="Data da Entrega"
-                  value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
-                  className="w-full sm:w-auto bg-white border border-slate-200 text-slate-900 rounded-xl px-4 py-2 outline-none focus:border-[#8B1A1A] font-bold text-sm shadow-sm"
-                />
-              </div>
 
-              <div className="space-y-3">
-                <label htmlFor="employee-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
-                  <span>Colaborador Ativo</span>
-                </label>
-                <div className="flex flex-col gap-3 relative">
-                  <input 
-                    type="text"
-                    placeholder="Busca por nome ou CPF..."
-                    value={employeeSearchTerm}
-                    onChange={(e) => setEmployeeSearchTerm(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
-                  />
-                  
-                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
-                      {filteredEmployees.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum colaborador encontrado</div>
-                      ) : (
-                        filteredEmployees.map(emp => {
-                          const isSelected = selectedEmployeeId === emp.id
-                          
-                          return (
-                            <div 
-                              key={emp.id}
-                              onClick={() => handleEmployeeChange(emp.id)}
-                              className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
-                            >
-                              <div>
-                                <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>
-                                  {emp.full_name}
-                                </p>
-                                {emp.cpf && (
-                                  <div className="flex items-center gap-2 mt-1.5">
-                                    <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">
-                                      CPF: {formatCpf(emp.cpf)}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                              {isSelected && <CheckCircle2 className="w-5 h-5 text-[#8B1A1A]" />}
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-[#8B1A1A]" />
+                      Data da Entrega
+                    </h3>
+                    <p className="text-[10px] font-medium text-slate-500 italic mt-0.5">Entregas retroativas.</p>
                   </div>
+                  <input 
+                    type="date"
+                    title="Data da Entrega"
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                    className="w-full sm:w-auto bg-white border border-slate-200 text-slate-900 rounded-xl px-4 py-3 sm:py-2 outline-none focus:border-[#8B1A1A] font-bold text-sm shadow-sm"
+                  />
                 </div>
-              </div>
 
-              {/* ── UNIDADE / LOCAL ── */}
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <span>Unidade / Local de Entrega</span>
-                  {selectedWorkplace && (
-                    <span className="text-[9px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-black uppercase tracking-widest">
-                      Auto-preenchido
-                    </span>
-                  )}
-                </label>
-                <select
-                  title="Unidade / Local de Entrega"
-                  value={selectedWorkplaceId}
-                  onChange={(e) => setSelectedWorkplaceId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm appearance-none cursor-pointer"
-                >
-                  <option value="">— Nenhuma Unidade / Sede —</option>
-                  {workplaces.map(wp => (
-                    <option key={wp.id} value={wp.id}>{wp.name}</option>
-                  ))}
-                </select>
-              </div>
-              {/* ── ADICIONAR EPI AO CARRINHO ── */}
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Adicionar EPI à Entrega</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="space-y-3">
+                  <label htmlFor="employee-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
+                    <span>Colaborador Ativo</span>
+                  </label>
+                  <div className="flex flex-col gap-2 relative">
                     <input 
                       type="text"
-                      placeholder="Busca por CA ou Nome..."
-                      value={ppeSearchTerm}
-                      onChange={(e) => setPpeSearchTerm(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-3 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
+                      placeholder="Busca por nome ou CPF..."
+                      value={employeeSearchTerm}
+                      onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
                     />
+                    
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <div className="max-h-40 overflow-y-auto divide-y divide-slate-50">
-                        {filteredPpes.length === 0 ? (
-                          <div className="p-6 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum EPI encontrado</div>
+                      <div className="max-h-[200px] overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
+                        {filteredEmployees.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum colaborador encontrado</div>
                         ) : (
-                          filteredPpes.map(ppe => {
-                            const expired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
-                            const isSelected = currentPpeId === ppe.id
-                            const inCart = cart.some(item => item.ppeId === ppe.id)
+                          filteredEmployees.map(emp => {
+                            const isSelected = selectedEmployeeId === emp.id
                             return (
                               <div 
-                                key={ppe.id}
-                                onClick={() => !inCart && setCurrentPpeId(ppe.id)}
-                                className={`p-3 cursor-pointer transition-colors flex items-center justify-between ${inCart ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                                key={emp.id}
+                                onClick={() => handleEmployeeChange(emp.id)}
+                                className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
                               >
                                 <div>
-                                  <p className={`font-black text-xs uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>{ppe.name}</p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">CA {ppe.ca_number}</span>
-                                    {expired && <span className="text-[8px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Vencido</span>}
-                                    {inCart && <span className="text-[8px] font-black bg-green-100 text-green-600 px-1.5 py-0.5 rounded">Na lista</span>}
-                                  </div>
+                                  <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>
+                                    {emp.full_name}
+                                  </p>
+                                  {emp.cpf && (
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">
+                                        CPF: {formatCpf(emp.cpf)}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
-                                {isSelected && !inCart && <CheckCircle2 className="w-4 h-4 text-[#8B1A1A]" />}
+                                {isSelected && <CheckCircle2 className="w-5 h-5 text-[#8B1A1A]" />}
                               </div>
                             )
                           })
@@ -508,160 +448,231 @@ export default function DeliveryPage() {
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <div className="space-y-3">
-                    <div>
-                      <label htmlFor="quantity-input" className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Quantidade</label>
-                      <input 
-                        id="quantity-input"
-                        type="number" min="1" max="100"
-                        title="Quantidade do EPI"
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
-                        value={currentQuantity}
-                        onChange={(e) => setCurrentQuantity(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="reason-select" className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Motivo</label>
-                      <select
-                        id="reason-select"
-                        title="Motivo da entrega"
-                        value={currentReason}
-                        onChange={(e) => setCurrentReason(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] font-bold text-xs"
-                      >
-                        <option value="Primeira Entrega">Primeira Entrega</option>
-                        <option value="Substituição (Desgaste/Validade)">Substituição</option>
-                        <option value="Perda">Perda</option>
-                        <option value="Dano">Dano</option>
-                      </select>
-                    </div>
-
-                    {currentPpe && currentPpe.lifespan_days > 0 && (
-                      <div className="bg-orange-50 p-3 rounded-xl border border-orange-100 flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Útil (NR-06)</span>
-                          <span className="text-xs font-bold text-orange-800">{currentPpe.lifespan_days} dias</span>
-                        </div>
-                        <div className="flex items-center justify-between mt-1 pt-2 border-t border-orange-200">
-                          <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> Próxima Troca
-                          </span>
-                          <span className="text-xs font-black text-[#8B1A1A]">
-                            {format(addDays(new Date(`${deliveryDate}T12:00:00`), currentPpe.lifespan_days), 'dd/MM/yyyy')}
-                          </span>
-                        </div>
-                      </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <span>Unidade / Local</span>
+                    {selectedWorkplace && (
+                      <span className="text-[9px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-black uppercase tracking-widest">
+                        Auto-preenchido
+                      </span>
                     )}
-                    <button 
-                      onClick={addToCart}
-                      disabled={!currentPpe || isCurrentPpeExpired}
-                      className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" /> Adicionar à Entrega
-                    </button>
-                  </div>
+                  </label>
+                  <select
+                    title="Unidade / Local de Entrega"
+                    value={selectedWorkplaceId}
+                    onChange={(e) => setSelectedWorkplaceId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm appearance-none cursor-pointer"
+                  >
+                    <option value="">— Nenhuma Unidade / Sede —</option>
+                    {workplaces.map(wp => (
+                      <option key={wp.id} value={wp.id}>{wp.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* ── CARRINHO (Lista de EPIs) ── */}
-              {cart.length > 0 && (
+              {/* --- COLUNA DIREITA: EPI E CARRINHO --- */}
+              <div className="lg:col-span-7 space-y-6 flex flex-col h-full">
+                <div className="mb-2 hidden lg:block">
+                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Package className="w-5 h-5 text-[#8B1A1A]"/> Equipamentos</h2>
+                  <p className="text-xs text-slate-400 font-medium mt-1">Busque os EPIs e adicione ao carrinho.</p>
+                </div>
+
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <Package className="w-4 h-4" />
-                    EPIs para Entrega ({cart.length})
-                  </label>
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl divide-y divide-slate-200 overflow-hidden">
-                    {cart.map((item) => (
-                      <div key={item.ppeId} className="p-4 flex items-center justify-between">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                    {/* Busca EPI */}
+                    <div className="space-y-2">
+                      <input 
+                        type="text"
+                        placeholder="Busca por CA ou Nome..."
+                        value={ppeSearchTerm}
+                        onChange={(e) => setPpeSearchTerm(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
+                      />
+                      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="max-h-[220px] overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
+                          {filteredPpes.length === 0 ? (
+                            <div className="p-6 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum EPI encontrado</div>
+                          ) : (
+                            filteredPpes.map(ppe => {
+                              const expired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
+                              const isSelected = currentPpeId === ppe.id
+                              const inCart = cart.some(item => item.ppeId === ppe.id)
+                              return (
+                                <div 
+                                  key={ppe.id}
+                                  onClick={() => !inCart && setCurrentPpeId(ppe.id)}
+                                  className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${inCart ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                                >
+                                  <div>
+                                    <p className={`font-black text-xs uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>{ppe.name}</p>
+                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                      <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded">CA {ppe.ca_number}</span>
+                                      {expired && <span className="text-[8px] font-black bg-red-100 text-red-600 px-2 py-0.5 rounded">Vencido</span>}
+                                      {inCart && <span className="text-[8px] font-black bg-green-100 text-green-600 px-2 py-0.5 rounded">Na lista</span>}
+                                    </div>
+                                  </div>
+                                  {isSelected && !inCart && <CheckCircle2 className="w-4 h-4 text-[#8B1A1A]" />}
+                                </div>
+                              )
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Controles de Qtd e Motivo */}
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <p className="font-black text-sm text-slate-800 uppercase tracking-tight">{item.ppeName}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {item.ppeCaNumber}</span>
-                            <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {item.quantity}</span>
-                            <span className="text-[9px] font-bold text-slate-400">{item.reason}</span>
+                          <label htmlFor="quantity-input" className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Quantidade</label>
+                          <input 
+                            id="quantity-input" type="number" min="1" max="100" title="Quantidade do EPI"
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-4 md:py-3 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm text-center"
+                            value={currentQuantity}
+                            onChange={(e) => setCurrentQuantity(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="reason-select" className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Motivo</label>
+                          <select
+                            id="reason-select" title="Motivo da entrega"
+                            value={currentReason} onChange={(e) => setCurrentReason(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-4 md:py-3 outline-none focus:border-[#8B1A1A] font-bold text-[11px]"
+                          >
+                            <option value="Primeira Entrega">Prim. Entrega</option>
+                            <option value="Substituição (Desgaste/Validade)">Substituição</option>
+                            <option value="Perda">Perda</option>
+                            <option value="Dano">Dano</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {currentPpe && currentPpe.lifespan_days > 0 && (
+                        <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Útil (NR-06)</span>
+                            <span className="text-xs font-bold text-orange-800">{currentPpe.lifespan_days} dias</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-1 pt-3 border-t border-orange-200/50">
+                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> Próxima Troca
+                            </span>
+                            <span className="text-xs font-black text-[#8B1A1A]">
+                              {format(addDays(new Date(`${deliveryDate}T12:00:00`), currentPpe.lifespan_days), 'dd/MM/yyyy')}
+                            </span>
                           </div>
                         </div>
-                        <button 
-                          onClick={() => removeFromCart(item.ppeId)} 
-                          title="Remover EPI"
-                          aria-label={`Remover ${item.ppeName}`}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                      )}
+                      
+                      <button 
+                        onClick={addToCart}
+                        disabled={!currentPpe || isCurrentPpeExpired}
+                        className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 mt-2"
+                      >
+                        <Plus className="w-4 h-4" /> Adicionar à Entrega
+                      </button>
+                    </div>
                   </div>
                 </div>
-              )}
 
-              <div className="pt-4 space-y-3">
-                <button 
-                  disabled={employees.length === 0 || cart.length === 0}
-                  onClick={() => setStep(2)}
-                  className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white disabled:bg-slate-300 py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
-                >
-                  Avançar para Assinatura ({cart.length} EPI{cart.length !== 1 ? 's' : ''})
-                </button>
-                <div className="flex items-center gap-2 text-slate-400">
-                    <div className="flex-1 h-[1px] bg-slate-100" />
-                    <span className="text-[8px] font-black uppercase tracking-widest">Ou</span>
-                    <div className="flex-1 h-[1px] bg-slate-100" />
+                {/* Carrinho */}
+                {cart.length > 0 && (
+                  <div className="space-y-3 pt-4 border-t border-slate-100">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      EPIs Adicionados ({cart.length})
+                    </label>
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl divide-y divide-slate-200 overflow-hidden">
+                      {cart.map((item) => (
+                        <div key={item.ppeId} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <p className="font-black text-sm text-slate-800 uppercase tracking-tight">{item.ppeName}</p>
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {item.ppeCaNumber}</span>
+                              <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {item.quantity}</span>
+                              <span className="text-[9px] font-bold text-slate-400">{item.reason}</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => removeFromCart(item.ppeId)} 
+                            title="Remover EPI"
+                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors self-end sm:self-auto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex-1 hidden lg:block"></div>
+
+                <div className="pt-6 space-y-3 lg:border-t lg:border-slate-100">
+                  <button 
+                    disabled={employees.length === 0 || cart.length === 0}
+                    onClick={() => setStep(2)}
+                    className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
+                  >
+                    Avançar para Assinatura ({cart.length} EPI{cart.length !== 1 ? 's' : ''})
+                  </button>
+                  <button 
+                    onClick={generateRemoteLink}
+                    disabled={cart.length === 0}
+                    className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
+                  >
+                    <Link2 className="w-4 h-4 text-blue-500" /> Gerar Link de Assinatura Remota
+                  </button>
                 </div>
-                <button 
-                  onClick={generateRemoteLink}
-                  disabled={cart.length === 0}
-                  className="w-full bg-white border border-slate-200 text-slate-600 py-3 rounded-xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
-                >
-                  <Link2 className="w-4 h-4 text-blue-500" /> Gerar Link de Assinatura Remota
-                </button>
               </div>
             </div>
           )}
 
           {step === 2 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div className="bg-slate-50 p-6 rounded-2xl text-sm border border-slate-200">
+            <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-right-4">
+              <div className="bg-slate-50 p-6 rounded-2xl text-sm border border-slate-200 shadow-inner">
                 <div className="flex items-center gap-2 mb-3">
-                    <span className="bg-[#8B1A1A] text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">NR-06 Compliance</span>
+                    <span className="bg-[#8B1A1A] text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest">NR-06 Compliance</span>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{selectedWorkplace?.name || "Sede"}</span>
                 </div>
-                <p className="font-bold text-slate-700 italic">
-                  &ldquo;Eu, <strong>{selectedEmployee?.full_name}</strong>, recebo nesta data {cart.length} EPI(s):&rdquo;
+                <p className="font-medium text-slate-700 leading-relaxed text-sm">
+                  &ldquo;Eu, <strong className="font-black text-slate-900 uppercase">{selectedEmployee?.full_name}</strong>, recebo nesta data os seguintes EPIs, declarando ter sido treinado para seu uso adequado:&rdquo;
                 </p>
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-4 space-y-2">
                   {cart.map(item => (
-                    <li key={item.ppeId} className="text-xs text-slate-600 font-medium flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-[#8B1A1A] rounded-full flex-shrink-0" />
-                      {item.ppeName} (CA {item.ppeCaNumber}) — Qtd: {item.quantity}
+                    <li key={item.ppeId} className="text-xs text-slate-600 font-bold flex items-start gap-2 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                      <span className="w-1.5 h-1.5 bg-[#8B1A1A] rounded-full flex-shrink-0 mt-1.5" />
+                      <span>{item.ppeName} <span className="text-slate-400 font-medium">(CA {item.ppeCaNumber})</span> <br className="sm:hidden" /><span className="sm:ml-2 text-[#8B1A1A] bg-red-50 px-2 py-0.5 rounded text-[10px] tracking-widest">Qtd: {item.quantity}</span></span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="flex bg-slate-100 p-1 rounded-xl">
+              <div className="flex bg-slate-100 p-1.5 rounded-2xl">
                 <button 
                   onClick={() => setAuthMethod('manual')}
-                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex-1 py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                  <PenLine className="w-4 h-4" /> Manual
+                  <PenLine className="w-4 h-4" /> Assinatura na Tela
                 </button>
                 <button 
                   onClick={() => setAuthMethod('facial')}
-                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex-1 py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                  <Fingerprint className="w-4 h-4" /> Biometria
+                  <Fingerprint className="w-4 h-4" /> Biometria Facial
                 </button>
               </div>
 
               {authMethod === 'manual' ? (
-                <div className="space-y-3 animate-in fade-in">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assinatura Manuscrita</label>
-                    <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic">Limpar</button>
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="flex justify-between items-end px-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área de Assinatura</label>
+                    <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>
                   </div>
-                  <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-100 shadow-inner h-64 touch-none">
+                  <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-200 shadow-inner h-64 touch-none cursor-crosshair">
                     <SignatureCanvas 
                       ref={sigCanvas}
                       canvasProps={{ className: 'w-full h-full' }}
@@ -671,26 +682,33 @@ export default function DeliveryPage() {
                   <button 
                     disabled={isSaving}
                     onClick={handleManualSave}
-                    className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50"
+                    className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50 mt-4"
                   >
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : `FINALIZAR ENTREGA (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
+                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : `CONFIRMAR ENTREGA (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4 animate-in zoom-in-95">
                   {!selectedEmployee?.face_descriptor ? (
-                    <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-center space-y-3">
-                      <ShieldAlert className="w-8 h-8 text-amber-500 mx-auto" />
-                      <p className="text-amber-800 font-bold text-sm">Biometria não cadastrada</p>
-                      <p className="text-amber-600 text-xs">O colaborador {selectedEmployee?.full_name} ainda não possui uma foto mestra.</p>
+                    <div className="bg-amber-50 border border-amber-200 p-8 rounded-3xl text-center space-y-4">
+                      <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+                        <ShieldAlert className="w-8 h-8 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-amber-800 font-black uppercase tracking-tight text-lg">Biometria Indisponível</p>
+                        <p className="text-amber-600 text-sm mt-1 leading-relaxed">O colaborador <strong className="uppercase">{selectedEmployee?.full_name}</strong> ainda não realizou o registro facial mestre.</p>
+                      </div>
+                      <button onClick={() => setAuthMethod('manual')} className="mt-4 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors">
+                        Usar Assinatura Manual
+                      </button>
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidade Certificada</span>
-                        <div className="flex items-center gap-2">
-                          <Image src={selectedEmployee.photo_url || ''} alt="User" width={24} height={24} className="w-6 h-6 rounded-full border border-slate-200 object-cover" unoptimized />
-                          <span className="text-[10px] font-bold text-slate-500">{selectedEmployee.full_name}</span>
+                      <div className="flex items-center justify-between mb-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidade Requerida</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-slate-700 uppercase">{selectedEmployee.full_name}</span>
+                          <Image src={selectedEmployee.photo_url || ''} alt="User" width={32} height={32} className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover" unoptimized />
                         </div>
                       </div>
                       <FaceCamera 
@@ -703,8 +721,10 @@ export default function DeliveryPage() {
                 </div>
               )}
 
-              <div className="pt-2 flex justify-center">
-                <button onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600">← Alterar Dados</button>
+              <div className="pt-6 flex justify-center border-t border-slate-100">
+                <button onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-800 transition-colors bg-slate-50 px-6 py-3 rounded-xl">
+                  ← Voltar e Alterar EPIs
+                </button>
               </div>
             </div>
           )}
