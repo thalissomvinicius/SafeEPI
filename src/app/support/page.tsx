@@ -1,6 +1,6 @@
 "use client"
 
-import { HelpCircle, MessageCircle, Phone, Mail, PlayCircle, BookOpen } from "lucide-react"
+import { HelpCircle, MessageCircle, Phone, PlayCircle, BookOpen } from "lucide-react"
 
 export default function SupportPage() {
   const whatsappNumber = "5591991697664"
@@ -62,7 +62,7 @@ export default function SupportPage() {
                   Como fazer uma Nova Entrega de EPI?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
-                  Acesse o menu "Nova Entrega", selecione o colaborador e a sua lotação. Escolha os EPIs do catálogo clicando em "Adicionar" e prossiga para a assinatura. A assinatura pode ser feita via biometria facial, assinatura digital desenhada ou enviando o link remoto para o celular do funcionário.
+                  Acesse o menu &quot;Nova Entrega&quot;, selecione o colaborador e a sua lotação. Escolha os EPIs do catálogo clicando em &quot;Adicionar&quot; e prossiga para a assinatura. A assinatura pode ser feita via biometria facial, assinatura digital desenhada ou enviando o link remoto para o celular do funcionário.
                 </p>
               </div>
 
@@ -82,7 +82,7 @@ export default function SupportPage() {
                   Como gerar a Ficha NR-06 (Prontuário)?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
-                  Vá na aba "Colaboradores", pesquise o funcionário e clique em "Prontuário". Lá você verá todo o histórico dele e o botão "Ficha NR-06". O sistema vai pedir que o Técnico de Segurança do Trabalho (TST) assine o documento antes de gerar o PDF.
+                  Vá na aba &quot;Colaboradores&quot;, pesquise o funcionário e clique em &quot;Prontuário&quot;. Lá você verá todo o histórico dele e o botão &quot;Ficha NR-06&quot;. O sistema vai pedir que o Técnico de Segurança do Trabalho (TST) assine o documento antes de gerar o PDF.
                 </p>
               </div>
 
@@ -92,7 +92,7 @@ export default function SupportPage() {
                   Como dar baixa / devolução em um EPI?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
-                  Pode ser feito no menu "Baixas / Substituições" ou diretamente no "Prontuário" do colaborador. Informe o motivo (Ex: desgaste, quebra) e confirme. Se o EPI quebrado retornar ao estoque como sucata, o sistema registrará isso no histórico para auditoria.
+                  Pode ser feito no menu &quot;Baixas / Substituições&quot; ou diretamente no &quot;Prontuário&quot; do colaborador. Informe o motivo (Ex: desgaste, quebra) e confirme. Se o EPI quebrado retornar ao estoque como sucata, o sistema registrará isso no histórico para auditoria.
                 </p>
               </div>
             </div>
