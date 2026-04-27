@@ -363,7 +363,8 @@ export const api = {
   },
 
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
-    // 1. Insert the movement record
+    // Insert the movement — the Supabase trigger fn_update_ppe_stock
+    // automatically updates ppes.current_stock with SECURITY DEFINER (bypasses RLS)
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('stock_movements')
@@ -371,38 +372,6 @@ export const api = {
         .select()
     )
     if (error) throw error
-
-    // 2. Fetch current stock of this PPE
-    const { data: ppeData, error: ppeErr } = await withSessionRetry(() =>
-      supabase
-        .from('ppes')
-        .select('current_stock')
-        .eq('id', movement.ppe_id)
-        .single()
-    )
-    if (ppeErr) throw ppeErr
-
-    const currentStock: number = ppeData?.current_stock ?? 0
-    let newStock: number
-
-    if (movement.type === 'ENTRADA') {
-      newStock = currentStock + movement.quantity
-    } else if (movement.type === 'SAIDA') {
-      newStock = Math.max(0, currentStock - movement.quantity)
-    } else {
-      // AJUSTE: set exact value
-      newStock = movement.quantity
-    }
-
-    // 3. Update ppes.current_stock
-    const { error: updateErr } = await withSessionRetry(() =>
-      supabase
-        .from('ppes')
-        .update({ current_stock: newStock })
-        .eq('id', movement.ppe_id)
-    )
-    if (updateErr) throw updateErr
-
     return data[0] as StockMovement
   },
 
