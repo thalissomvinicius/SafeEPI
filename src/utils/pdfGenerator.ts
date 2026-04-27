@@ -939,326 +939,444 @@ export interface MovementsReportData {
   period: string
 }
 
+// ── Helper: rounded card with shadow ──
+function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, accentColor?: [number, number, number]) {
+  // Soft shadow
+  doc.setFillColor(226, 232, 240)
+  doc.roundedRect(x + 1.5, y + 1.5, w, h, 3, 3, "F")
+  // White card
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(x, y, w, h, 3, 3, "F")
+  // Accent top bar
+  if (accentColor) {
+    doc.setFillColor(...accentColor)
+    doc.roundedRect(x, y, w, 3, 3, 3, "F")
+    doc.setFillColor(255, 255, 255)
+    doc.rect(x, y + 2, w, 2, "F") // clean bottom of radius
+  }
+}
+
 // ── Simple / Operational PDF ──
 export function generateMovementsSimplePDF(data: MovementsReportData): void {
   const doc = new jsPDF({ orientation: "portrait", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
+  const ph = doc.internal.pageSize.getHeight()
+  const mx = 14 // margin-x
 
-  // Header bar
+  // ═══ HEADER ═══
   doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pw, 36, "F")
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(16)
-  doc.setTextColor(255, 255, 255)
-  doc.text("RELATÓRIO DE MOVIMENTAÇÕES", 14, 15)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(9)
-  doc.text(`Período: ${data.period}`, 14, 26)
-  doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, pw - 14, 26, { align: "right" })
+  doc.rect(0, 0, pw, 40, "F")
 
-  // Stats bar
-  const statLabels = ["Entregas", "Devoluções", "Itens", "Pessoas"]
-  const statValues = [data.stats.deliveries, data.stats.returns, data.stats.totalItems, data.stats.uniqueEmployees]
-  const colW = pw / 4
-  statLabels.forEach((label, i) => {
-    const x = i * colW
-    doc.setFillColor(i % 2 === 0 ? 248 : 241, i % 2 === 0 ? 250 : 245, i % 2 === 0 ? 252 : 248)
-    doc.rect(x, 36, colW, 22, "F")
+  // Company name top-left
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255, 180)
+  doc.text(COMPANY_CONFIG.name.toUpperCase(), mx, 12)
+
+  // Title
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(18)
+  doc.setTextColor(255, 255, 255)
+  doc.text("Relatório de Movimentações", mx, 27)
+
+  // Period + Date
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.setTextColor(255, 255, 255, 200)
+  doc.text(`${data.period}  ·  Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, mx, 35)
+
+  // ═══ KPI CARDS ═══
+  const cardY = 48
+  const cardW = (pw - mx * 2 - 9) / 4
+  const cardH = 28
+  const kpis = [
+    { label: "Entregas", value: String(data.stats.deliveries), color: [37, 99, 235] as [number, number, number] },
+    { label: "Devoluções", value: String(data.stats.returns), color: [217, 119, 6] as [number, number, number] },
+    { label: "Itens", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
+    { label: "Pessoas", value: String(data.stats.uniqueEmployees), color: [5, 150, 105] as [number, number, number] },
+  ]
+
+  kpis.forEach((kpi, i) => {
+    const cx = mx + i * (cardW + 3)
+    drawCard(doc, cx, cardY, cardW, cardH, kpi.color)
+    // Value
     doc.setFont("helvetica", "bold")
-    doc.setFontSize(14)
-    doc.setTextColor(r, g, b)
-    doc.text(String(statValues[i]), x + colW / 2, 50, { align: "center" })
+    doc.setFontSize(18)
+    doc.setTextColor(...kpi.color)
+    doc.text(kpi.value, cx + cardW / 2, cardY + 16, { align: "center" })
+    // Label
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(100, 116, 139)
-    doc.text(label.toUpperCase(), x + colW / 2, 56, { align: "center" })
+    doc.text(kpi.label.toUpperCase(), cx + cardW / 2, cardY + 23, { align: "center" })
   })
 
-  // Table
+  // ═══ TABLE ═══
   autoTable(doc, {
-    startY: 62,
-    head: [["Data", "Colaborador", "EPI", "Qtd", "Tipo", "Unidade"]],
+    startY: cardY + cardH + 8,
+    head: [["Data", "Colaborador", "EPI / CA", "Qtd", "Tipo", "Unidade"]],
     body: data.movements.map(m => [
-      format(new Date(m.delivery_date), "dd/MM/yy"),
+      format(new Date(m.delivery_date), "dd/MM/yyyy"),
       m.employee?.full_name || "-",
-      m.ppe?.name || "-",
+      `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
       String(m.quantity),
-      m.returned_at ? "Devolução" : "Entrega",
+      m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
       m.workplace?.name || "Geral"
     ]),
-    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 8 },
-    bodyStyles: { fontSize: 8 },
+    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 8, cellPadding: 4 },
+    bodyStyles: { fontSize: 7.5, cellPadding: 3.5 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 18 },
-      3: { cellWidth: 10, halign: "center" },
-      4: { cellWidth: 22, halign: "center" },
+      0: { cellWidth: 22 },
+      3: { cellWidth: 12, halign: "center" },
+      4: { cellWidth: 24, halign: "center" },
     },
-    margin: { left: 10, right: 10 },
+    margin: { left: mx, right: mx },
     theme: "grid",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.3 },
+    didParseCell: (hookData) => {
+      if (hookData.column.index === 4 && hookData.section === "body") {
+        const val = hookData.cell.raw as string
+        if (val === "ENTREGA") {
+          hookData.cell.styles.textColor = [5, 150, 105]
+          hookData.cell.styles.fontStyle = "bold"
+        }
+        if (val === "DEVOLUÇÃO") {
+          hookData.cell.styles.textColor = [217, 119, 6]
+          hookData.cell.styles.fontStyle = "bold"
+        }
+      }
+    }
   })
 
-  // Footer
-  const ph = doc.internal.pageSize.getHeight()
+  // ═══ FOOTER ═══
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.3)
+  doc.line(mx, ph - 16, pw - mx, ph - 16)
+
   doc.setFontSize(7)
   doc.setFont("helvetica", "italic")
   doc.setTextColor(148, 163, 184)
-  doc.text(`${COMPANY_CONFIG.name} — ${COMPANY_CONFIG.systemName}`, 10, ph - 8)
-  doc.text(`Total: ${data.movements.length} registros`, pw - 10, ph - 8, { align: "right" })
+  doc.text(`${COMPANY_CONFIG.name} — ${COMPANY_CONFIG.systemName}`, mx, ph - 10)
+  doc.text(`Total: ${data.movements.length} registros`, pw - mx, ph - 10, { align: "right" })
 
   doc.save(`Movimentacoes_Simples_${format(new Date(), "yyyyMMdd")}.pdf`)
 }
 
-// ── Presentation PDF (Landscape, rich visual) ──
+// ── Presentation PDF (Landscape, executive) ──
 export function generateMovementsPresentationPDF(data: MovementsReportData): void {
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
 
-  // ── PAGE 1: Executive Summary ──
+  // ══════════════════════════════════════════
+  //  PAGE 1: EXECUTIVE DASHBOARD
+  // ══════════════════════════════════════════
 
-  // Dark sidebar accent
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, 8, ph, "F")
-
-  // Top gradient background area
+  // Full dark header bar
   doc.setFillColor(15, 23, 42)
-  doc.rect(8, 0, pw - 8, 55, "F")
+  doc.rect(0, 0, pw, 50, "F")
+
+  // Red accent line at bottom of header
+  doc.setFillColor(r, g, b)
+  doc.rect(0, 50, pw, 2.5, "F")
 
   // Company name
   doc.setFont("helvetica", "bold")
-  doc.setFontSize(10)
+  doc.setFontSize(9)
   doc.setTextColor(r, g, b)
   doc.text(COMPANY_CONFIG.name.toUpperCase(), 18, 14)
 
-  // Report title
-  doc.setFont("times", "bolditalic")
-  doc.setFontSize(28)
+  // Title
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(26)
   doc.setTextColor(255, 255, 255)
-  doc.text("Relatório de Movimentações", 18, 32)
+  doc.text("RELATÓRIO DE MOVIMENTAÇÕES DE EPI", 18, 32)
 
-  // Subtitle/period
+  // Subtitle
   doc.setFont("helvetica", "normal")
   doc.setFontSize(10)
   doc.setTextColor(148, 163, 184)
-  doc.text(`Período: ${data.period}`, 18, 42)
-  doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | ${COMPANY_CONFIG.systemName}`, 18, 50)
+  doc.text(`Período: ${data.period}  ·  Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, 18, 44)
 
-  // ── KPI Cards ──
+  // Right side - System badge
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8)
+  doc.setTextColor(100, 116, 139)
+  doc.text(COMPANY_CONFIG.systemName.toUpperCase(), pw - 18, 44, { align: "right" })
+
+  // ═══ KPI ROW ═══
+  const kpiY = 60
+  const kpiW = (pw - 36 - 15) / 4
+  const kpiH = 32
   const kpis = [
-    { label: "TOTAL ENTREGAS", value: data.stats.deliveries, color: [37, 99, 235] as [number,number,number] },
-    { label: "DEVOLUÇÕES", value: data.stats.returns, color: [217, 119, 6] as [number,number,number] },
-    { label: "ITENS MOVIM.", value: data.stats.totalItems, color: [r, g, b] as [number,number,number] },
-    { label: "COLABORAD.", value: data.stats.uniqueEmployees, color: [5, 150, 105] as [number,number,number] },
+    { label: "Total de Entregas", value: String(data.stats.deliveries), color: [37, 99, 235] as [number, number, number] },
+    { label: "Devoluções", value: String(data.stats.returns), color: [217, 119, 6] as [number, number, number] },
+    { label: "Itens Movimentados", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
+    { label: "Colaboradores", value: String(data.stats.uniqueEmployees), color: [5, 150, 105] as [number, number, number] },
   ]
 
-  const cardW = 55
-  const cardH = 34
-  const cardY = 62
-  const cardGap = 8
-  const totalCardsW = kpis.length * cardW + (kpis.length - 1) * cardGap
-  const cardStartX = (pw - totalCardsW) / 2
-
   kpis.forEach((kpi, i) => {
-    const cx = cardStartX + i * (cardW + cardGap)
-    // Card shadow effect
-    doc.setFillColor(226, 232, 240)
-    doc.roundedRect(cx + 1, cardY + 1, cardW, cardH, 4, 4, "F")
-    // Card background
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(cx, cardY, cardW, cardH, 4, 4, "F")
-    // Left accent bar
-    doc.setFillColor(...kpi.color)
-    doc.roundedRect(cx, cardY, 4, cardH, 2, 2, "F")
-    // Value
+    const cx = 18 + i * (kpiW + 5)
+    drawCard(doc, cx, kpiY, kpiW, kpiH, kpi.color)
     doc.setFont("helvetica", "bold")
-    doc.setFontSize(22)
+    doc.setFontSize(20)
     doc.setTextColor(...kpi.color)
-    doc.text(String(kpi.value), cx + cardW / 2 + 2, cardY + 20, { align: "center" })
-    // Label
+    doc.text(kpi.value, cx + kpiW / 2, kpiY + 17, { align: "center" })
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(100, 116, 139)
-    doc.text(kpi.label, cx + cardW / 2 + 2, cardY + 29, { align: "center" })
+    doc.text(kpi.label.toUpperCase(), cx + kpiW / 2, kpiY + 25, { align: "center" })
   })
 
-  // ── Bar Chart: Top EPIs ──
+  // ═══ CHART AREA ═══
+  const chartsY = kpiY + kpiH + 12
+  const chartsH = ph - chartsY - 20
+
+  // ── LEFT COLUMN: Top EPIs Bar Chart ──
+  const leftW = (pw - 36 - 10) * 0.5
+  drawCard(doc, 18, chartsY, leftW, chartsH)
+
+  // Chart title
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(30, 41, 59)
+  doc.text("TOP EPIS MAIS MOVIMENTADOS", 24, chartsY + 12)
+
+  doc.setDrawColor(241, 245, 249)
+  doc.setLineWidth(0.3)
+  doc.line(24, chartsY + 15, 18 + leftW - 6, chartsY + 15)
+
   const epiCount: Record<string, number> = {}
   data.movements.forEach(m => {
-    const name = m.ppe?.name || "Outro"
+    const name = m.ppe?.name || "Outros"
     epiCount[name] = (epiCount[name] || 0) + m.quantity
   })
-  const topEpis = Object.entries(epiCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-
-  const chartX = 18
-  const chartY = 108
-  const chartW = 120
-  const chartH = 70
+  const topEpis = Object.entries(epiCount).sort((a, b) => b[1] - a[1]).slice(0, 7)
   const barMaxVal = topEpis[0]?.[1] || 1
+  const barAreaY = chartsY + 20
+  const barAvailH = chartsH - 28
+  const singleBarH = Math.min(barAvailH / Math.max(topEpis.length, 1), 13)
+  const barAreaW = leftW - 80
 
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(9)
-  doc.setTextColor(30, 41, 59)
-  doc.text("TOP EPIS MAIS ENTREGUES", chartX, chartY - 3)
-
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-
-  const barH = (chartH - 10) / Math.max(topEpis.length, 1)
   topEpis.forEach(([name, count], i) => {
-    const y = chartY + i * barH + 4
-    const barWidth = (count / barMaxVal) * chartW
-    // Background track
-    doc.setFillColor(241, 245, 249)
-    doc.roundedRect(chartX + 40, y, chartW, barH - 4, 2, 2, "F")
-    // Filled bar
-    doc.setFillColor(r, g, b)
-    if (barWidth > 0) doc.roundedRect(chartX + 40, y, barWidth, barH - 4, 2, 2, "F")
-    // Label
+    const y = barAreaY + i * singleBarH
+    const filledW = (count / barMaxVal) * barAreaW
+
+    // Label (left aligned)
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
-    doc.setTextColor(30, 41, 59)
-    const truncated = name.length > 18 ? name.slice(0, 18) + "…" : name
-    doc.text(truncated, chartX + 38, y + barH / 2 - 0.5, { align: "right" })
-    // Count
+    doc.setTextColor(71, 85, 105)
+    const truncName = name.length > 20 ? name.slice(0, 20) + "…" : name
+    doc.text(truncName, 24, y + singleBarH / 2)
+
+    // Track
+    const barX = 24 + 50
+    doc.setFillColor(241, 245, 249)
+    doc.roundedRect(barX, y + 1, barAreaW, singleBarH - 4, 2, 2, "F")
+
+    // Filled bar
+    if (filledW > 0) {
+      doc.setFillColor(r, g, b)
+      doc.roundedRect(barX, y + 1, filledW, singleBarH - 4, 2, 2, "F")
+    }
+
+    // Count label
     doc.setFont("helvetica", "bold")
+    doc.setFontSize(7)
     doc.setTextColor(r, g, b)
-    doc.text(String(count), chartX + 44 + barWidth, y + barH / 2 - 0.5)
+    doc.text(String(count), barX + filledW + 4, y + singleBarH / 2)
   })
 
-  // ── Donut-style Pie: Entrega vs Devolução ──
-  const pieX = 220
-  const pieY = 128
-  const pieR = 28
+  if (topEpis.length === 0) {
+    doc.setFont("helvetica", "italic")
+    doc.setFontSize(9)
+    doc.setTextColor(148, 163, 184)
+    doc.text("Sem dados para exibir", 18 + leftW / 2, chartsY + chartsH / 2, { align: "center" })
+  }
 
+  // ── RIGHT COLUMN: Split into two cards ──
+  const rightX = 18 + leftW + 10
+  const rightW = pw - rightX - 18
+  const topCardH = (chartsH - 8) * 0.55
+  const bottomCardH = chartsH - topCardH - 8
+
+  // -- TOP RIGHT: Entregas vs Devoluções --
+  drawCard(doc, rightX, chartsY, rightW, topCardH)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(30, 41, 59)
-  doc.text("ENTREGAS vs DEVOLUÇÕES", pieX - 28, chartY - 3)
+  doc.text("DISTRIBUIÇÃO: ENTREGAS vs DEVOLUÇÕES", rightX + 6, chartsY + 12)
+  doc.setDrawColor(241, 245, 249)
+  doc.line(rightX + 6, chartsY + 15, rightX + rightW - 6, chartsY + 15)
 
   const total = data.stats.deliveries + data.stats.returns
   if (total > 0) {
     const delivPct = data.stats.deliveries / total
-    // Draw two rectangles as a simple horizontal stacked bar
-    const barTotalW = 80
-    const barY = pieY
-    const barHeight = 20
+    const retPct = data.stats.returns / total
+    const stackW = rightW - 24
+    const stackY = chartsY + 24
+    const stackH = 18
 
+    // Stacked horizontal bar
+    const delivW = stackW * delivPct
+    const retW = stackW * retPct
     doc.setFillColor(37, 99, 235)
-    doc.roundedRect(pieX - 28, barY, barTotalW * delivPct, barHeight, 3, 3, "F")
-    doc.setFillColor(217, 119, 6)
-    doc.roundedRect(pieX - 28 + barTotalW * delivPct, barY, barTotalW * (1 - delivPct), barHeight, 3, 3, "F")
+    doc.roundedRect(rightX + 12, stackY, delivW > 2 ? delivW : 2, stackH, 3, 3, "F")
+    if (retW > 2) {
+      doc.setFillColor(217, 119, 6)
+      doc.roundedRect(rightX + 12 + delivW, stackY, retW, stackH, 3, 3, "F")
+    }
 
-    // Legend
-    const legendY = barY + barHeight + 10
+    // Percentage labels inside bars
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(9)
+    doc.setTextColor(255, 255, 255)
+    if (delivW > 25) doc.text(`${Math.round(delivPct * 100)}%`, rightX + 12 + delivW / 2, stackY + 12, { align: "center" })
+    if (retW > 25) doc.text(`${Math.round(retPct * 100)}%`, rightX + 12 + delivW + retW / 2, stackY + 12, { align: "center" })
+
+    // Legend below
+    const legendY = stackY + stackH + 10
     doc.setFillColor(37, 99, 235)
-    doc.rect(pieX - 28, legendY, 5, 5, "F")
-    doc.setFont("helvetica", "normal")
+    doc.roundedRect(rightX + 12, legendY, 8, 8, 2, 2, "F")
+    doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(30, 41, 59)
-    doc.text(`Entregas: ${data.stats.deliveries} (${Math.round(delivPct * 100)}%)`, pieX - 20, legendY + 4.5)
+    doc.text(`Entregas: ${data.stats.deliveries}`, rightX + 24, legendY + 6)
 
     doc.setFillColor(217, 119, 6)
-    doc.rect(pieX - 28, legendY + 10, 5, 5, "F")
-    doc.text(`Devoluções: ${data.stats.returns} (${Math.round((1 - delivPct) * 100)}%)`, pieX - 20, legendY + 14.5)
+    doc.roundedRect(rightX + 12 + rightW / 2, legendY, 8, 8, 2, 2, "F")
+    doc.text(`Devoluções: ${data.stats.returns}`, rightX + 24 + rightW / 2, legendY + 6)
+  } else {
+    doc.setFont("helvetica", "italic")
+    doc.setFontSize(9)
+    doc.setTextColor(148, 163, 184)
+    doc.text("Sem dados", rightX + rightW / 2, chartsY + topCardH / 2, { align: "center" })
   }
 
-  // ── Per-Workplace breakdown ──
+  // -- BOTTOM RIGHT: Movimentações por Unidade --
+  const botY = chartsY + topCardH + 8
+  drawCard(doc, rightX, botY, rightW, bottomCardH)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(30, 41, 59)
+  doc.text("MOVIMENTAÇÕES POR UNIDADE", rightX + 6, botY + 12)
+  doc.setDrawColor(241, 245, 249)
+  doc.line(rightX + 6, botY + 15, rightX + rightW - 6, botY + 15)
+
   const wpCount: Record<string, number> = {}
   data.movements.forEach(m => {
     const wp = m.workplace?.name || "Geral"
     wpCount[wp] = (wpCount[wp] || 0) + 1
   })
-  const topWp = Object.entries(wpCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
-
-  const wpX = pw - 100
-  const wpY = chartY
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(9)
-  doc.setTextColor(30, 41, 59)
-  doc.text("MOVIM. POR UNIDADE", wpX, wpY - 3)
+  const topWp = Object.entries(wpCount).sort((a, b) => b[1] - a[1]).slice(0, 4)
+  const wpMaxVal = topWp[0]?.[1] || 1
+  const wpBarW = rightW - 80
 
   topWp.forEach(([wp, count], i) => {
-    const y = wpY + i * 14
-    const pct = count / data.movements.length
-    doc.setFillColor(241, 245, 249)
-    doc.roundedRect(wpX, y, 80, 10, 2, 2, "F")
-    doc.setFillColor(5, 150, 105)
-    doc.roundedRect(wpX, y, 80 * pct, 10, 2, 2, "F")
+    const y = botY + 20 + i * 10
+    const filledW = (count / wpMaxVal) * wpBarW
+
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
-    doc.setTextColor(255, 255, 255)
-    const wpLabel = wp.length > 22 ? wp.slice(0, 22) + "…" : wp
-    doc.text(`${wpLabel} (${count})`, wpX + 3, y + 7)
+    doc.setTextColor(71, 85, 105)
+    const wpLabel = wp.length > 16 ? wp.slice(0, 16) + "…" : wp
+    doc.text(wpLabel, rightX + 10, y + 4)
+
+    doc.setFillColor(241, 245, 249)
+    doc.roundedRect(rightX + 55, y, wpBarW, 7, 2, 2, "F")
+    if (filledW > 0) {
+      doc.setFillColor(5, 150, 105)
+      doc.roundedRect(rightX + 55, y, filledW, 7, 2, 2, "F")
+    }
+
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(7)
+    doc.setTextColor(5, 150, 105)
+    doc.text(String(count), rightX + 57 + filledW + 2, y + 5.5)
   })
 
-  // ── Footer page 1 ──
+  // ═══ FOOTER PAGE 1 ═══
   doc.setFillColor(15, 23, 42)
-  doc.rect(8, ph - 12, pw - 8, 12, "F")
+  doc.rect(0, ph - 14, pw, 14, "F")
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
   doc.setTextColor(148, 163, 184)
-  doc.text(`${COMPANY_CONFIG.name} — Confidencial — ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
-  doc.text("1", pw - 12, ph - 5)
+  doc.text(`${COMPANY_CONFIG.name}  ·  Documento Confidencial  ·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
+  doc.setTextColor(100, 116, 139)
+  doc.text("Página 1 de 2", pw - 18, ph - 5, { align: "right" })
 
-  // ── PAGE 2: Full Movement Table ──
+  // ══════════════════════════════════════════
+  //  PAGE 2: DETAILED TABLE
+  // ══════════════════════════════════════════
   doc.addPage()
 
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, 8, ph, "F")
+  // Header bar
   doc.setFillColor(15, 23, 42)
-  doc.rect(8, 0, pw - 8, 22, "F")
+  doc.rect(0, 0, pw, 28, "F")
+  doc.setFillColor(r, g, b)
+  doc.rect(0, 28, pw, 2, "F")
+
   doc.setFont("helvetica", "bold")
-  doc.setFontSize(12)
+  doc.setFontSize(14)
   doc.setTextColor(255, 255, 255)
-  doc.text("DETALHAMENTO DE MOVIMENTAÇÕES", 18, 14)
+  doc.text("DETALHAMENTO COMPLETO DE MOVIMENTAÇÕES", 18, 18)
+
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
   doc.setTextColor(148, 163, 184)
-  doc.text(`${data.period} — Total: ${data.movements.length} registros`, pw - 12, 14, { align: "right" })
+  doc.text(`${data.period}  ·  ${data.movements.length} registros`, pw - 18, 18, { align: "right" })
 
   autoTable(doc, {
-    startY: 26,
-    head: [["Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade"]],
-    body: data.movements.map(m => [
-      format(new Date(m.delivery_date), "dd/MM/yyyy"),
+    startY: 36,
+    head: [["#", "Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade"]],
+    body: data.movements.map((m, idx) => [
+      String(idx + 1),
+      format(new Date(m.delivery_date), "dd/MM/yyyy HH:mm"),
       m.employee?.full_name || "-",
       m.employee?.cpf || "-",
-      `${m.ppe?.name || "-"} (CA ${m.ppe?.ca_number || "-"})`,
+      `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
       String(m.quantity),
-      m.returned_at ? "Devolução" : "Entrega",
+      m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
       m.workplace?.name || "Geral"
     ]),
-    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 8 },
-    bodyStyles: { fontSize: 7.5 },
+    headStyles: { fillColor: [30, 41, 59], fontStyle: "bold", fontSize: 7.5, cellPadding: 4 },
+    bodyStyles: { fontSize: 7, cellPadding: 3 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 24 },
-      2: { cellWidth: 28 },
-      4: { cellWidth: 12, halign: "center" },
-      5: { cellWidth: 22, halign: "center" },
+      0: { cellWidth: 10, halign: "center", fontStyle: "bold" },
+      1: { cellWidth: 26 },
+      3: { cellWidth: 26 },
+      5: { cellWidth: 12, halign: "center" },
+      6: { cellWidth: 22, halign: "center" },
     },
-    margin: { left: 12, right: 12 },
+    margin: { left: 14, right: 14 },
     theme: "grid",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.3 },
     didParseCell: (hookData) => {
-      if (hookData.column.index === 5 && hookData.section === "body") {
+      if (hookData.column.index === 6 && hookData.section === "body") {
         const val = hookData.cell.raw as string
-        if (val === "Entrega") hookData.cell.styles.textColor = [5, 150, 105]
-        if (val === "Devolução") hookData.cell.styles.textColor = [217, 119, 6]
+        if (val === "ENTREGA") {
+          hookData.cell.styles.textColor = [5, 150, 105]
+          hookData.cell.styles.fontStyle = "bold"
+        }
+        if (val === "DEVOLUÇÃO") {
+          hookData.cell.styles.textColor = [217, 119, 6]
+          hookData.cell.styles.fontStyle = "bold"
+        }
       }
     }
   })
 
   // Footer page 2
   doc.setFillColor(15, 23, 42)
-  doc.rect(8, ph - 12, pw - 8, 12, "F")
+  doc.rect(0, ph - 14, pw, 14, "F")
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
   doc.setTextColor(148, 163, 184)
-  doc.text(`${COMPANY_CONFIG.name} — Confidencial — ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
-  doc.text("2", pw - 12, ph - 5)
+  doc.text(`${COMPANY_CONFIG.name}  ·  Documento Confidencial  ·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
+  doc.setTextColor(100, 116, 139)
+  doc.text("Página 2 de 2", pw - 18, ph - 5, { align: "right" })
 
   doc.save(`Movimentacoes_Apresentacao_${format(new Date(), "yyyyMMdd")}.pdf`)
 }
