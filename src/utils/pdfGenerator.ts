@@ -792,9 +792,9 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   if (logoBase64) {
     try {
-      const imgWidth = 60;
-      const imgHeight = 45;
-      doc.addImage(logoBase64, "PNG", centerX - imgWidth / 2, 22, imgWidth, imgHeight);
+      const imgWidth = 40;
+      const imgHeight = 30;
+      doc.addImage(logoBase64, "PNG", centerX - imgWidth / 2, 24, imgWidth, imgHeight);
     } catch {
       doc.setFont("helvetica", "bold")
       doc.setFontSize(24)
