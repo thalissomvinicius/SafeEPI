@@ -803,9 +803,8 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   if (logoBase64) {
     try {
-      // 90px height -> ~31.5mm
-      const imgHeight = 31.5;
-      const imgWidth = 42; // approx 4:3
+      const imgHeight = 36;
+      const imgWidth = 48; // approx 4:3
       doc.addImage(logoBase64, "PNG", marginX, 20, imgWidth, imgHeight);
     } catch { }
   }
@@ -831,7 +830,21 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setLineWidth(0.7)
   if (data.signatureBase64 && data.signatureBase64.startsWith('data:image/jpeg')) {
     doc.roundedRect(photoX, photoY, photoW, photoH, 3, 3, "S")
-    doc.addImage(data.signatureBase64, "JPEG", photoX+1, photoY+1, photoW-2, photoH-2)
+    try {
+      const imgProps = doc.getImageProperties(data.signatureBase64);
+      const ratio = imgProps.width / imgProps.height;
+      let drawW = photoW - 2;
+      let drawH = drawW / ratio;
+      if (drawH > photoH - 2) {
+        drawH = photoH - 2;
+        drawW = drawH * ratio;
+      }
+      const xOff = (photoW - 2 - drawW) / 2;
+      const yOff = (photoH - 2 - drawH) / 2;
+      doc.addImage(data.signatureBase64, "JPEG", photoX + 1 + xOff, photoY + 1 + yOff, drawW, drawH);
+    } catch {
+      doc.addImage(data.signatureBase64, "JPEG", photoX+1, photoY+1, photoW-2, photoH-2)
+    }
   } else {
     doc.ellipse(photoX + photoW/2, photoY + photoH/2, photoW/2, photoH/2, "S")
   }
@@ -896,7 +909,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.text(`Realizado em: ${completionText}  |  Carga Horária: ${workload}h  |  Válido até: ${validUntilText}`, centerX, 137, { align: "center" })
 
   // Rodapé (3 cols)
-  const footerY = 165
+  const footerY = 160
   
   const code = data.validationCode || `CERT-${format(new Date(data.completionDate), "yyyy")}-${Math.floor(Math.random()*10000).toString().padStart(4, '0')}`;
   const validationUrl = `https://sesmt.antaresempreendimentos.com.br/validar/${code}`;
@@ -915,7 +928,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   // Center: Signature
   if (data.instructorName) {
-    const sigLineW = 63 // ~180px
+    const sigLineW = 100 // ~280px
     const sigY = footerY + 15
     doc.setDrawColor(139, 0, 0)
     doc.setLineWidth(0.5)
@@ -967,8 +980,8 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   // Cabeçalho Simplificado
   if (logoBase64) {
     try {
-      const imgHeight = 21; // ~60px
-      const imgWidth = 28;
+      const imgHeight = 26;
+      const imgWidth = 35;
       doc.addImage(logoBase64, "PNG", marginX, 20, imgWidth, imgHeight);
     } catch { }
   }
@@ -987,11 +1000,14 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   const content = data.programContent && data.programContent.length > 0 
     ? data.programContent 
     : [
-        "1. Normas e regulamentos de segurança.",
-        "2. Identificação de riscos e perigos.",
-        "3. Procedimentos operacionais padrão (POP).",
-        "4. Uso correto e guarda de EPIs.",
-        "5. Primeiros socorros e ações de emergência."
+        "1. Normas e regulamentos de segurança aplicáveis à atividade.",
+        "2. Identificação, avaliação e controle de riscos e perigos.",
+        "3. Procedimentos operacionais padrão (POP) e Permissão de Trabalho.",
+        "4. Seleção, inspeção, uso correto e guarda de EPIs e EPCs.",
+        "5. Primeiros socorros, resgate e ações de emergência.",
+        "6. Direitos, deveres e responsabilidades do empregador e empregado.",
+        "7. Prevenção de acidentes e doenças ocupacionais.",
+        "8. Sinalização de segurança e isolamento de áreas."
       ];
     
   const tableData = [];
