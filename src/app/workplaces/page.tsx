@@ -140,13 +140,13 @@ export default function WorkplacesPage() {
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
             <HardDrive className="w-6 h-6 mr-2 text-[#8B1A1A]" />
-            Gestão de Canteiros
+            Obras e Canteiros
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Controle de locais de obra, unidades produtivas e centros de custo.</p>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Cadastro de obras, canteiros e locais operacionais da empresa.</p>
         </div>
         <button onClick={() => { setFormData({ id: undefined, name: "", address: "", manager_name: "" }); setIsModalOpen(true) }}
-          title="Novo canteiro" className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap">
-          <Plus className="w-4 h-4 mr-2" /> Novo Canteiro
+          title="Nova obra ou canteiro" className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap">
+          <Plus className="w-4 h-4 mr-2" /> Nova Obra / Canteiro
         </button>
       </div>
 
@@ -204,7 +204,7 @@ export default function WorkplacesPage() {
               ))}
               {filteredWorkplaces.length === 0 && (
                 <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl">
-                  <p className="text-slate-400 text-sm italic font-medium">Nenhum canteiro registrado.</p>
+                  <p className="text-slate-400 text-sm italic font-medium">Nenhuma obra ou canteiro registrado.</p>
                 </div>
               )}
             </div>
@@ -216,7 +216,7 @@ export default function WorkplacesPage() {
       <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center">
         <CheckCircle2 className="w-12 h-12 text-[#8B1A1A]/20 mb-4" />
         <h3 className="font-bold text-slate-800 uppercase tracking-tighter italic">Vínculo Organizacional Antares</h3>
-        <p className="text-sm text-slate-400 max-w-md mt-2 leading-relaxed">O cadastro correto do canteiro permite a auditoria por geolocalização e o rateio preciso dos custos operacionais no Balanço BI.</p>
+        <p className="text-sm text-slate-400 max-w-md mt-2 leading-relaxed">O cadastro correto da obra ou canteiro permite a auditoria por geolocalização e o rateio preciso dos custos operacionais no Balanço BI.</p>
       </div>
 
       {/* ─── MODAL: Ver Detalhes ─── */}
@@ -230,7 +230,7 @@ export default function WorkplacesPage() {
                 </div>
                 <div>
                   <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">{detailsWorkplace.name}</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Detalhes do Canteiro</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Detalhes da Obra / Canteiro</p>
                 </div>
               </div>
               <button 
@@ -300,7 +300,7 @@ export default function WorkplacesPage() {
 
                   {detailsEmployees.length === 0 && (
                     <div className="py-4 text-center">
-                      <p className="text-xs text-slate-400 italic">Nenhum colaborador ativo vinculado a este canteiro.</p>
+                      <p className="text-xs text-slate-400 italic">Nenhum colaborador ativo vinculado a esta obra ou canteiro.</p>
                     </div>
                   )}
                 </>
@@ -325,7 +325,7 @@ export default function WorkplacesPage() {
             </div>
             <form onSubmit={handleSaveWorkplace} className="p-5 sm:p-8 space-y-6">
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Nome do Canteiro / Obra</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Nome da Obra / Canteiro</label>
                 <input type="text" required placeholder="Ex: Residencial Antares I"
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold placeholder:font-normal"
                   value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
@@ -356,14 +356,14 @@ export default function WorkplacesPage() {
                   </button>
                   <button type="submit" disabled={isSaving}
                     className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900">
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar Canteiro"}
+                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar Obra / Canteiro"}
                   </button>
                 </div>
                 {isAdmin && formData.id && (
                   <button type="button" disabled={isSaving || isDeleting} onClick={handleDeleteClick}
                     className="w-full py-3 text-[10px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest border border-red-100 hover:border-red-300 hover:bg-red-50 rounded-2xl flex items-center justify-center gap-2 transition-all">
                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    Desativar / Excluir Canteiro
+                    Desativar / Excluir Obra
                   </button>
                 )}
               </div>
@@ -388,8 +388,8 @@ export default function WorkplacesPage() {
 
             <div className="p-6 space-y-4">
               <p className="text-sm text-slate-600 leading-relaxed">
-                Você está prestes a <strong>desativar</strong> o canteiro <strong className="text-slate-800">&quot;{formData.name}&quot;</strong>.
-                Os dados serão preservados no histórico de auditoria, mas o canteiro ficará invisível na plataforma.
+                Você está prestes a <strong>desativar</strong> a obra/canteiro <strong className="text-slate-800">&quot;{formData.name}&quot;</strong>.
+                Os dados serão preservados no histórico de auditoria, mas a obra/canteiro ficará invisível na plataforma.
               </p>
 
               {(deleteModal.linkedEmp > 0 || deleteModal.linkedDel > 0) && (
@@ -398,7 +398,7 @@ export default function WorkplacesPage() {
                     <AlertTriangle className="w-4 h-4" /> Vínculos Ativos Detectados
                   </p>
                   {deleteModal.linkedEmp > 0 && (
-                    <p className="text-sm text-amber-700">• <strong>{deleteModal.linkedEmp}</strong> colaborador{deleteModal.linkedEmp !== 1 ? 'es' : ''} vinculado{deleteModal.linkedEmp !== 1 ? 's' : ''} a este canteiro</p>
+                    <p className="text-sm text-amber-700">• <strong>{deleteModal.linkedEmp}</strong> colaborador{deleteModal.linkedEmp !== 1 ? 'es' : ''} vinculado{deleteModal.linkedEmp !== 1 ? 's' : ''} a esta obra/canteiro</p>
                   )}
                   {deleteModal.linkedDel > 0 && (
                     <p className="text-sm text-amber-700">• <strong>{deleteModal.linkedDel}</strong> entrega{deleteModal.linkedDel !== 1 ? 's' : ''} de EPI registrada{deleteModal.linkedDel !== 1 ? 's' : ''}</p>
@@ -425,3 +425,5 @@ export default function WorkplacesPage() {
     </div>
   )
 }
+
+

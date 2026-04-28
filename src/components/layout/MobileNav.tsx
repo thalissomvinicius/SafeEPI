@@ -12,7 +12,7 @@ const allItems = [
   { href: "/returns", label: "Baixas", icon: History, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/employees", label: "Equipe", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/workplaces", label: "Canteiros", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/workplaces", label: "Obras", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/history", label: "Histórico", icon: History, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/movements", label: "Movimentações", icon: ArrowRightLeft, roles: ['ADMIN', 'DIRETORIA'] },
@@ -131,3 +131,4 @@ export function MobileNav() {
     </>
   )
 }
+

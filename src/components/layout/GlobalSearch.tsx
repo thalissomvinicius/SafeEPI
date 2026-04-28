@@ -182,7 +182,7 @@ export function GlobalSearch() {
 
                   {results.workplaces.length > 0 && (
                     <div className="p-2 border-t border-slate-50">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2 mt-2">Canteiros de Obra</h4>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2 mt-2">Obras e Canteiros</h4>
                       {results.workplaces.map(w => (
                         <button 
                           key={w.id}

@@ -306,7 +306,7 @@ export default function EmployeesPage() {
         employeeName: emp.full_name,
         employeeCpf: emp.cpf,
         employeeRole: emp.job_title,
-        employeeDepartment: emp.department || "Geral",
+        employeeDepartment: getDepartmentName(emp.department),
         workplaceName: getWorkplaceName(emp.workplace_id),
         admissionDate: format(new Date(emp.admission_date), "dd/MM/yyyy"),
         items: employeeHistory.map(d => ({
@@ -349,6 +349,10 @@ export default function EmployeesPage() {
 
   const getWorkplaceName = (id: string | null) => {
     return workplaces.find(w => w.id === id)?.name || "Administrativo"
+  }
+
+  const getDepartmentName = (department?: string | null) => {
+    return department?.trim() || "Administrativo"
   }
 
   return (
@@ -427,8 +431,8 @@ export default function EmployeesPage() {
                   <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                   <tr>
                       <th className="px-6 py-5">Nome do Colaborador</th>
-                      <th className="px-6 py-5">Cargo / Lotação</th>
-                      <th className="px-6 py-5">Canteiro (Obra)</th>
+                      <th className="px-6 py-5">Cargo / Setor</th>
+                      <th className="px-6 py-5">Obra / Canteiro</th>
                       <th className="px-6 py-5">Status</th>
                       <th className="px-6 py-5 text-right">Ações</th>
                   </tr>
@@ -441,7 +445,7 @@ export default function EmployeesPage() {
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">{formatCpf(emp.cpf)}</p>
                       </td>
                       <td className="px-6 py-5 text-slate-500 font-medium italic">
-                          {emp.job_title} <span className="mx-1 text-slate-200">•</span> {emp.department}
+                          {emp.job_title} <span className="mx-1 text-slate-200">•</span> {getDepartmentName(emp.department)}
                       </td>
                       <td className="px-6 py-5">
                           <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter">
@@ -512,7 +516,7 @@ export default function EmployeesPage() {
                       </p>
                       <p className="text-xs text-slate-400 font-medium flex items-center">
                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2"></span>
-                         {emp.department}
+                         {getDepartmentName(emp.department)}
                       </p>
                       <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter pt-1">
                           <HardDrive className="w-3.5 h-3.5 text-[#8B1A1A]" />
@@ -692,7 +696,7 @@ export default function EmployeesPage() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="workplace_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Canteiro de Obra</label>
+                <label htmlFor="workplace_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Obra / Canteiro</label>
                 <select 
                   id="workplace_select"
                   title="Selecionar canteiro de obra"
@@ -745,7 +749,7 @@ export default function EmployeesPage() {
                         {!emp?.active && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-black uppercase">Desligado</span>}
                       </div>
                       <p className="text-slate-500 text-sm font-medium mt-1">
-                        {emp?.job_title} • CPF: {emp?.cpf} • Lotação: {getWorkplaceName(emp?.workplace_id || null)}
+                        {emp?.job_title} • CPF: {emp?.cpf} • Setor: {getDepartmentName(emp?.department)} • Canteiro: {getWorkplaceName(emp?.workplace_id || null)}
                       </p>
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto">
@@ -1059,3 +1063,4 @@ export default function EmployeesPage() {
     </div>
   )
 }
+

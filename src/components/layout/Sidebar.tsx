@@ -10,7 +10,7 @@ const menuItems = [
   { href: "/delivery", label: "Nova Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/returns", label: "Baixas / Substituições", icon: ArrowRightLeft, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
-  { href: "/workplaces", label: "Unidades", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/workplaces", label: "Obras / Canteiros", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/employees", label: "Colaboradores", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/history", label: "Histórico", icon: History, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
@@ -77,3 +77,4 @@ export function Sidebar() {
     </aside>
   )
 }
+

@@ -20,7 +20,7 @@ export function Header() {
     if (path.startsWith('/reports')) return 'Business Intelligence'
     if (path.startsWith('/training')) return 'Treinamentos'
     if (path.startsWith('/users')) return 'Administração'
-    if (path.startsWith('/workplaces')) return 'Canteiros de Obra'
+    if (path.startsWith('/workplaces')) return 'Obras e Canteiros'
     return 'Antares SESMT'
   }
 
@@ -46,3 +46,4 @@ export function Header() {
     </header>
   )
 }
+
