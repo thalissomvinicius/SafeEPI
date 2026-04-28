@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle } from "lucide-react"
+import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const menuItems = [
@@ -11,6 +11,7 @@ const menuItems = [
   { href: "/returns", label: "Baixas / Substituições", icon: ArrowRightLeft, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/workplaces", label: "Obras / Canteiros", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/job-sectors", label: "Cargos / Setores", icon: BriefcaseBusiness, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/employees", label: "Colaboradores", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/history", label: "Histórico", icon: History, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },

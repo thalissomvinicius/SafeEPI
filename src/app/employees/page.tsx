@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
-import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool } from "lucide-react"
+import Link from "next/link"
+import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
 import { api } from "@/services/api"
-import { Employee, Workplace, DeliveryWithRelations } from "@/types/database"
+import { Employee, Workplace, DeliveryWithRelations, CatalogItem } from "@/types/database"
 import { format, addDays, isPast } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -16,10 +17,15 @@ import { formatCpf, isValidCpf } from "@/utils/cpf"
 import { toast } from "sonner"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
+const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
+
 export default function EmployeesPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
+  const [jobTitles, setJobTitles] = useState<CatalogItem[]>([])
+  const [departments, setDepartments] = useState<CatalogItem[]>([])
+  const [catalogWarning, setCatalogWarning] = useState("")
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -70,12 +76,17 @@ export default function EmployeesPage() {
     try {
       // Removed synchronous setLoading(true) to avoid cascading renders in useEffect.
       // Loading is initialized to true.
-      const [empData, wpData] = await Promise.all([
+      const [empData, wpData, jobData, deptData] = await Promise.all([
         api.getEmployees(),
-        api.getWorkplaces()
+        api.getWorkplaces(),
+        api.getJobTitles(),
+        api.getDepartments()
       ])
       setEmployees(empData)
       setWorkplaces(wpData)
+      setJobTitles(jobData)
+      setDepartments(deptData)
+      setCatalogWarning("")
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
       toast.error("Falha ao carregar dados do banco de dados.")
@@ -105,6 +116,20 @@ export default function EmployeesPage() {
       return
     }
 
+    if (jobTitles.length === 0 || departments.length === 0) {
+      setCatalogWarning("Cadastre pelo menos um cargo e um setor antes de salvar colaboradores.")
+      toast.error("Cadastre cargos e setores antes de salvar colaboradores.")
+      return
+    }
+    if (!formData.role || !formData.department) {
+      setCatalogWarning("Selecione um cargo e um setor cadastrados para continuar.")
+      toast.error("Selecione cargo e setor.")
+      return
+    }
+
+    const normalizedName = normalizeName(formData.name)
+    const normalizedRole = normalizeName(formData.role)
+    const normalizedDepartment = normalizeName(formData.department)
     try {
       setIsSaving(true)
       
@@ -118,9 +143,9 @@ export default function EmployeesPage() {
       if (formData.id) {
         // Atualiza campos textuais
         const updates: Record<string, unknown> = {
-          full_name: formData.name,
-          job_title: formData.role || "Geral",
-          department: formData.department || "Administrativo",
+          full_name: normalizedName,
+          job_title: normalizedRole,
+          department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
           workplace_id: formData.workplace_id || null,
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
@@ -148,9 +173,9 @@ export default function EmployeesPage() {
         setIsModalOpen(false)
       } else {
         await api.addEmployee({
-          full_name: formData.name,
-          job_title: formData.role || "Geral",
-          department: formData.department || "Administrativo",
+          full_name: normalizedName,
+          job_title: normalizedRole,
+          department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
           admission_date: new Date().toISOString(),
           active: true,
@@ -180,8 +205,8 @@ export default function EmployeesPage() {
     setFormData({
       id: emp.id,
       name: emp.full_name,
-      role: emp.job_title,
-      department: emp.department || "",
+      role: getJobTitleName(emp.job_title),
+      department: getDepartmentName(emp.department),
       cpf: emp.cpf,
       workplace_id: emp.workplace_id || "",
       photo_url: emp.photo_url || null,
@@ -270,7 +295,7 @@ export default function EmployeesPage() {
 
   const handleSelectTst = async (emp: Employee) => {
     setTstSelectedEmployee(emp)
-    setTstRole(emp.job_title || "Técnico de Segurança do Trabalho")
+    setTstRole(getJobTitleName(emp.job_title || "Técnico de Segurança do Trabalho"))
     // If employee has a photo, use it as the signature automatically
     if (emp.photo_url) {
       try {
@@ -305,7 +330,7 @@ export default function EmployeesPage() {
       const pdfBlob = await generateNR06PDF({
         employeeName: emp.full_name,
         employeeCpf: emp.cpf,
-        employeeRole: emp.job_title,
+        employeeRole: getJobTitleName(emp.job_title),
         employeeDepartment: getDepartmentName(emp.department),
         workplaceName: getWorkplaceName(emp.workplace_id),
         admissionDate: format(new Date(emp.admission_date), "dd/MM/yyyy"),
@@ -348,11 +373,15 @@ export default function EmployeesPage() {
   }
 
   const getWorkplaceName = (id: string | null) => {
-    return workplaces.find(w => w.id === id)?.name || "Administrativo"
+    return normalizeName(workplaces.find(w => w.id === id)?.name || "Administrativo")
   }
 
   const getDepartmentName = (department?: string | null) => {
-    return department?.trim() || "Administrativo"
+    return normalizeName(department || "Administrativo")
+  }
+
+  const getJobTitleName = (jobTitle?: string | null) => {
+    return normalizeName(jobTitle || "Geral")
   }
 
   return (
@@ -445,7 +474,7 @@ export default function EmployeesPage() {
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">{formatCpf(emp.cpf)}</p>
                       </td>
                       <td className="px-6 py-5 text-slate-500 font-medium italic">
-                          {emp.job_title} <span className="mx-1 text-slate-200">•</span> {getDepartmentName(emp.department)}
+                          {getJobTitleName(emp.job_title)} <span className="mx-1 text-slate-200">•</span> {getDepartmentName(emp.department)}
                       </td>
                       <td className="px-6 py-5">
                           <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter">
@@ -512,7 +541,7 @@ export default function EmployeesPage() {
 
                     <div className="space-y-1.5">
                       <p className="text-sm text-slate-500 font-medium italic">
-                        {emp.job_title}
+                        {getJobTitleName(emp.job_title)}
                       </p>
                       <p className="text-xs text-slate-400 font-medium flex items-center">
                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2"></span>
@@ -646,8 +675,8 @@ export default function EmployeesPage() {
                   required
                   type="text" 
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold" 
+                  onChange={(e) => setFormData({...formData, name: normalizeName(e.target.value)})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase" 
                   placeholder="Nome do colaborador"
                 />
               </div>
@@ -674,26 +703,57 @@ export default function EmployeesPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Setor</label>
-                  <input 
-                    type="text" 
+                  <select
+                    required
                     value={formData.department}
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold" 
-                    placeholder="Ex: Engenharia"
-                  />
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase"
+                  >
+                    <option value="">{departments.length === 0 ? "Cadastre setores" : "Selecione"}</option>
+                    {formData.department && !departments.some(dept => dept.name === formData.department) && (
+                      <option value={formData.department}>{formData.department}</option>
+                    )}
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Função / Cargo</label>
-                <input 
-                  type="text" 
+                <select
+                  required
                   value={formData.role}
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold" 
-                  placeholder="Cargo oficial"
-                />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase"
+                >
+                  <option value="">{jobTitles.length === 0 ? "Cadastre cargos" : "Selecione"}</option>
+                  {formData.role && !jobTitles.some(job => job.name === formData.role) && (
+                    <option value={formData.role}>{formData.role}</option>
+                  )}
+                  {jobTitles.map(job => (
+                    <option key={job.id} value={job.name}>{job.name}</option>
+                  ))}
+                </select>
               </div>
+
+              {(catalogWarning || jobTitles.length === 0 || departments.length === 0) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <BriefcaseBusiness className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest leading-relaxed">
+                      {catalogWarning || "Cadastre cargos e setores antes de salvar um colaborador."}
+                    </p>
+                  </div>
+                  <Link
+                    href="/job-sectors"
+                    className="bg-[#8B1A1A] hover:bg-[#681313] text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap"
+                  >
+                    Cadastrar agora
+                  </Link>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label htmlFor="workplace_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Obra / Canteiro</label>
@@ -749,7 +809,7 @@ export default function EmployeesPage() {
                         {!emp?.active && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-black uppercase">Desligado</span>}
                       </div>
                       <p className="text-slate-500 text-sm font-medium mt-1">
-                        {emp?.job_title} • CPF: {emp?.cpf} • Setor: {getDepartmentName(emp?.department)} • Canteiro: {getWorkplaceName(emp?.workplace_id || null)}
+                        {getJobTitleName(emp?.job_title)} • CPF: {emp?.cpf} • Setor: {getDepartmentName(emp?.department)} • Canteiro: {getWorkplaceName(emp?.workplace_id || null)}
                       </p>
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto">
@@ -911,7 +971,7 @@ export default function EmployeesPage() {
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="font-black text-slate-800 text-sm truncate">{emp.full_name}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{emp.job_title} • CPF: {emp.cpf}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{getJobTitleName(emp.job_title)} • CPF: {emp.cpf}</p>
                         </div>
                         {emp.photo_url && (
                           <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 uppercase tracking-widest flex-shrink-0">✓ Foto</span>

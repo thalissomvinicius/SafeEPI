@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle } from "lucide-react"
+import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const allItems = [
@@ -13,6 +13,7 @@ const allItems = [
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/employees", label: "Equipe", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/workplaces", label: "Obras", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
+  { href: "/job-sectors", label: "Cargos", icon: BriefcaseBusiness, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/history", label: "Histórico", icon: History, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/movements", label: "Movimentações", icon: ArrowRightLeft, roles: ['ADMIN', 'DIRETORIA'] },

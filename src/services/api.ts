@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile } from "@/types/database";
+import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem } from "@/types/database";
 import { Session } from "@supabase/supabase-js";
 
 type AddTrainingResult = {
@@ -138,6 +138,27 @@ function isMissingDeliveryReturnMotiveIssue(error: unknown): boolean {
     maybeError.code === "42703" &&
     text.includes("return_motive")
   );
+}
+
+function isMissingCatalogTableIssue(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError & { status?: number };
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+  return (
+    maybeError.code === "42P01" ||
+    maybeError.code === "PGRST205" ||
+    maybeError.status === 404 ||
+    text.includes("job_titles") ||
+    text.includes("departments")
+  ) && (
+    text.includes("schema cache") ||
+    text.includes("does not exist") ||
+    text.includes("could not find")
+  );
+}
+
+function normalizeCatalogName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
 }
 
 async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
@@ -343,6 +364,121 @@ export const api = {
     const { error } = await withSessionRetry(() =>
       supabase
         .from('workplaces')
+        .update({ active: false })
+        .eq('id', id)
+    );
+    if (error) throw error;
+  },
+
+  // --- Cargos e Setores ---
+  async getJobTitles() {
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('job_titles')
+        .select('*')
+        .eq('active', true)
+        .order('name', { ascending: true })
+    );
+
+    if (error) {
+      if (isMissingCatalogTableIssue(error)) return [] as CatalogItem[];
+      throw error;
+    }
+    return data as CatalogItem[];
+  },
+
+  async addJobTitle(name: string) {
+    const normalizedName = normalizeCatalogName(name);
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('job_titles')
+        .insert([{ name: normalizedName, active: true }])
+        .select()
+    );
+
+    if (error) {
+      if (isMissingCatalogTableIssue(error)) {
+        throw new Error("A tabela job_titles ainda não existe no Supabase. Rode o SQL supabase_job_sector_catalog.sql antes de cadastrar cargos.");
+      }
+      throw error;
+    }
+    return data[0] as CatalogItem;
+  },
+
+  async updateJobTitle(id: string, name: string) {
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('job_titles')
+        .update({ name: normalizeCatalogName(name) })
+        .eq('id', id)
+        .select()
+    );
+
+    if (error) throw error;
+    return data[0] as CatalogItem;
+  },
+
+  async deleteJobTitle(id: string) {
+    const { error } = await withSessionRetry(() =>
+      supabase
+        .from('job_titles')
+        .update({ active: false })
+        .eq('id', id)
+    );
+    if (error) throw error;
+  },
+
+  async getDepartments() {
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('departments')
+        .select('*')
+        .eq('active', true)
+        .order('name', { ascending: true })
+    );
+
+    if (error) {
+      if (isMissingCatalogTableIssue(error)) return [] as CatalogItem[];
+      throw error;
+    }
+    return data as CatalogItem[];
+  },
+
+  async addDepartment(name: string) {
+    const normalizedName = normalizeCatalogName(name);
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('departments')
+        .insert([{ name: normalizedName, active: true }])
+        .select()
+    );
+
+    if (error) {
+      if (isMissingCatalogTableIssue(error)) {
+        throw new Error("A tabela departments ainda não existe no Supabase. Rode o SQL supabase_job_sector_catalog.sql antes de cadastrar setores.");
+      }
+      throw error;
+    }
+    return data[0] as CatalogItem;
+  },
+
+  async updateDepartment(id: string, name: string) {
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('departments')
+        .update({ name: normalizeCatalogName(name) })
+        .eq('id', id)
+        .select()
+    );
+
+    if (error) throw error;
+    return data[0] as CatalogItem;
+  },
+
+  async deleteDepartment(id: string) {
+    const { error } = await withSessionRetry(() =>
+      supabase
+        .from('departments')
         .update({ active: false })
         .eq('id', id)
     );

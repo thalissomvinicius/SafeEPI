@@ -22,6 +22,13 @@ export type Workplace = {
   created_at?: string;
 };
 
+export type CatalogItem = {
+  id: string;
+  name: string;
+  active: boolean;
+  created_at?: string;
+};
+
 export type PPE = {
   id: string;
   name: string;
