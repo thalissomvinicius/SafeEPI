@@ -120,7 +120,7 @@ export default function EmployeesPage() {
         const updates: Record<string, unknown> = {
           full_name: formData.name,
           job_title: formData.role || "Geral",
-          department: formData.department || `Sede ${COMPANY_CONFIG.shortName}`,
+          department: formData.department || "Administrativo",
           cpf: formData.cpf || "000.000.000-00",
           workplace_id: formData.workplace_id || null,
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
@@ -150,7 +150,7 @@ export default function EmployeesPage() {
         await api.addEmployee({
           full_name: formData.name,
           job_title: formData.role || "Geral",
-          department: formData.department || `Sede ${COMPANY_CONFIG.shortName}`,
+          department: formData.department || "Administrativo",
           cpf: formData.cpf || "000.000.000-00",
           admission_date: new Date().toISOString(),
           active: true,
@@ -348,7 +348,7 @@ export default function EmployeesPage() {
   }
 
   const getWorkplaceName = (id: string | null) => {
-    return workplaces.find(w => w.id === id)?.name || "Geral / Sede"
+    return workplaces.find(w => w.id === id)?.name || "Administrativo"
   }
 
   return (
@@ -700,7 +700,7 @@ export default function EmployeesPage() {
                   onChange={(e) => setFormData({...formData, workplace_id: e.target.value})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold"
                 >
-                  <option value="">Sede Antares / Sem Canteiro</option>
+                  <option value="">Administrativo / Sem Canteiro</option>
                   {workplaces.map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
