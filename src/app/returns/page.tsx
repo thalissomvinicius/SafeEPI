@@ -11,6 +11,8 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateReturnPDF } from "@/utils/pdfGenerator"
 import { formatCpf } from "@/utils/cpf"
+import { generateAuditCode } from "@/utils/auditCode"
+import { toast } from "sonner"
 
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -135,6 +137,7 @@ export default function ReturnsPage() {
       const newPpe = needsReplacement ? ppes.find(p => p.id === replacementPpeId) : undefined;
       const photoBase64 = authMethod === 'manual_facial' ? await getEmployeePhotoBase64() : undefined
       const persistedAuthMethod: 'manual' | 'facial' = authMethod === 'manual_facial' ? 'manual' : authMethod
+      let replacementDelivery: DeliveryWithRelations | null = null
 
       // 1. Dar Baixa no Antigo
       await api.returnDelivery(deliveryToReturn.id, returnMotive)
@@ -145,7 +148,7 @@ export default function ReturnsPage() {
         const blob = await response.blob()
         const signatureFile = new File([blob], "signature.png", { type: "image/png" })
 
-        await api.saveDelivery({
+        replacementDelivery = await api.saveDelivery({
           employee_id: selectedEmployee.id,
           ppe_id: replacementPpeId,
           workplace_id: selectedEmployee.workplace_id,
@@ -155,11 +158,12 @@ export default function ReturnsPage() {
           auth_method: persistedAuthMethod,
           signature_url: null,
           delivery_date: new Date().toISOString()
-        }, signatureFile)
+        }, signatureFile) as DeliveryWithRelations
       }
 
       const workplace = workplaces.find(w => w.id === selectedEmployee.workplace_id)
       const workplaceName = workplace?.name || "Sede"
+      const validationHash = generateAuditCode()
 
       const pdfBlob = await generateReturnPDF({
         employeeName: selectedEmployee.full_name,
@@ -172,6 +176,7 @@ export default function ReturnsPage() {
         authMethod: authMethod,
         signatureBase64: signatureDataUrl,
         photoBase64,
+        validationHash,
       })
       
       const safeEmployee = (selectedEmployee.full_name || "Baixa")
@@ -180,6 +185,35 @@ export default function ReturnsPage() {
         .replace(/[^a-zA-Z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "")
       const fileName = `Recibo_Baixa_${safeEmployee}_${format(new Date(), "ddMMyyyy")}.pdf`
+
+      try {
+        await api.archiveSignedDocument({
+          documentType: "return",
+          employeeId: selectedEmployee.id,
+          deliveryId: deliveryToReturn.id,
+          deliveryIds: [
+            deliveryToReturn.id,
+            ...(replacementDelivery?.id ? [replacementDelivery.id] : []),
+          ],
+          fileName,
+          pdfBlob,
+          authMethod,
+          signatureUrl: replacementDelivery?.signature_url || deliveryToReturn.signature_url,
+          metadata: {
+            validationHash,
+            returnMotive,
+            returnedPpeId: deliveryToReturn.ppe_id,
+            returnedPpeName: deliveryToReturn.ppe?.name || "EPI",
+            replacementPpeId: newPpe?.id,
+            replacementPpeName: newPpe?.name,
+            workplaceName,
+          },
+        })
+      } catch (archiveError) {
+        const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
+        toast.warning(message)
+      }
+
       const pdfUrl = URL.createObjectURL(pdfBlob)
 
       setLastPdfUrl((prev) => {

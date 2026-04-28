@@ -398,7 +398,29 @@ export default function EmployeesPage() {
         .replace(/[^a-zA-Z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "")
 
-      openPdfDialog(pdfBlob, `Ficha_NR06_${safeEmployee}.pdf`, {
+      const fileName = `Ficha_NR06_${safeEmployee}.pdf`
+
+      try {
+        await api.archiveSignedDocument({
+          documentType: "nr06",
+          employeeId: emp.id,
+          deliveryIds: employeeHistory.map((delivery) => delivery.id).filter(Boolean),
+          fileName,
+          pdfBlob,
+          authMethod: tstAuthMethod,
+          metadata: {
+            tstSignerName: tstName,
+            tstSignerRole: tstRole,
+            deliveryCount: employeeHistory.length,
+            workplaceName: getWorkplaceName(emp.workplace_id),
+          },
+        })
+      } catch (archiveError) {
+        const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
+        toast.warning(message)
+      }
+
+      openPdfDialog(pdfBlob, fileName, {
         title: "Prontuario NR-06 pronto",
         description: "Escolha se deseja visualizar a ficha em uma nova aba ou baixar o PDF agora.",
       })

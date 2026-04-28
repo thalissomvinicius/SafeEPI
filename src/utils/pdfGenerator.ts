@@ -5,6 +5,7 @@ import { ptBR } from "date-fns/locale"
 import { COMPANY_CONFIG } from "@/config/company"
 import QRCode from "qrcode"
 import { DeliveryWithRelations } from "@/types/database"
+import { generateAuditCode } from "@/utils/auditCode"
 
 /**
  * PDF Generator Utility for Antares EPI
@@ -108,7 +109,7 @@ export interface DeliveryPDFData {
 export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> {
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const hash = data.validationHash || Math.random().toString(36).substring(2, 12).toUpperCase()
+  const hash = data.validationHash || generateAuditCode()
 
   const pdfItems = data.items && data.items.length > 0
     ? data.items
@@ -413,12 +414,13 @@ export interface ReturnPDFData {
   authMethod: AuthMethod
   signatureBase64: string
   photoBase64?: string
+  validationHash?: string
 }
 
 export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const hash = Math.random().toString(36).substring(2, 12).toUpperCase()
+  const hash = data.validationHash || "PENDENTE"
 
   addPageHeader(doc, "RECIBO DE BAIXA / SUBSTITUIÇÃO E.P.I.", "Registro de Devolução e Troca — NR-06")
 
@@ -989,7 +991,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   // Rodapé (3 cols)
   const footerY = 160
   
-  const code = data.validationCode || `CERT-${format(new Date(data.completionDate), "yyyy")}-${Math.floor(Math.random()*10000).toString().padStart(4, '0')}`;
+  const code = data.validationCode || generateAuditCode(`CERT-${format(new Date(data.completionDate), "yyyy")}`, 10);
   const validationUrl = `https://sesmt.antaresempreendimentos.com.br/validar/${code}`;
   
   // Left: QR Code (70x70px ~ 25x25mm)

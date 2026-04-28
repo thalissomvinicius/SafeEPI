@@ -10,6 +10,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
+import { generateAuditCode } from "@/utils/auditCode"
 import { toast } from "sonner"
 
 interface DeliveryData {
@@ -189,8 +190,7 @@ function RemoteDeliveryContent() {
     }
     try {
       setIsSaving(true)
-      const payload = `${employee.id}-${ppe.id}-${Date.now()}`
-      const validationHash = btoa(payload).substring(0, 12).toUpperCase()
+      const validationHash = generateAuditCode()
       
       const response = await fetch(signatureDataUrl)
       const blob = await response.blob()
@@ -247,6 +247,35 @@ function RemoteDeliveryContent() {
       const safeName = (employee.full_name || "Comprovante").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       const safePpe = (ppe.name || "EPI").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       const fileName = `Comprovante_${shortId}_${safeName}_${safePpe}.pdf`
+
+      try {
+        await api.archiveSignedDocument({
+          documentType: "remote_delivery",
+          employeeId: employee.id,
+          deliveryId: responseData.data?.id,
+          deliveryIds: responseData.data?.id ? [responseData.data.id] : [],
+          fileName,
+          pdfBlob,
+          authMethod,
+          signatureUrl: responseData.data?.signature_url,
+          ipAddress,
+          geoLocation: location,
+          linkToken,
+          metadata: {
+            validationHash,
+            remoteLinkToken: linkToken,
+            workplaceName: workplace?.name || "Sede",
+            ppeId: ppe.id,
+            ppeName: ppe.name,
+            caNumber: ppe.ca_number,
+            quantity: deliveryData?.q || 1,
+            reason: deliveryData?.r || "Entrega Remota",
+          },
+        })
+      } catch (archiveError) {
+        const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
+        toast.warning(message)
+      }
 
       const pdfUrl = URL.createObjectURL(pdfBlob)
       setLastPdfUrl((prev) => {

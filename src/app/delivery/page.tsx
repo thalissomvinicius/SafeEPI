@@ -11,6 +11,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
+import { generateAuditCode } from "@/utils/auditCode"
 import { toast } from "sonner"
 
 interface CartItem {
@@ -209,8 +210,7 @@ export default function DeliveryPage() {
     try {
       setIsSaving(true)
       
-      const payload = `${selectedEmployeeId}-${Date.now()}`
-      const validationHash = btoa(payload).substring(0, 12).toUpperCase()
+      const validationHash = generateAuditCode()
       
       const response = await fetch(signatureDataUrl)
       const blob = await response.blob()
@@ -218,9 +218,11 @@ export default function DeliveryPage() {
       const photoBase64 = authMethod === 'manual_facial' ? await getSelectedEmployeePhotoBase64() : undefined
       const persistedAuthMethod: 'manual' | 'facial' = authMethod === 'manual_facial' ? 'manual' : authMethod
 
+      const savedDeliveries: Delivery[] = []
+
       // Save each item as a separate delivery record (same signature)
       for (const item of cart) {
-        await api.saveDelivery({
+        const savedDelivery = await api.saveDelivery({
           employee_id: selectedEmployeeId,
           ppe_id: item.ppeId,
           workplace_id: selectedWorkplaceId || null,
@@ -231,6 +233,7 @@ export default function DeliveryPage() {
           signature_url: null,
           delivery_date: new Date(deliveryDate).toISOString()
         }, signatureFile)
+        savedDeliveries.push(savedDelivery as Delivery)
       }
 
       // Generate ONE PDF with all items
@@ -264,6 +267,35 @@ export default function DeliveryPage() {
       const safeName = (selectedEmployee?.full_name || "Comprovante").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       const itemCount = cart.length > 1 ? `${cart.length}EPIs` : cart[0].ppeName.split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       const fileName = `Comprovante_${shortId}_${safeName}_${itemCount}.pdf`
+
+      try {
+        await api.archiveSignedDocument({
+          documentType: "delivery",
+          employeeId: selectedEmployeeId,
+          deliveryIds: savedDeliveries.map((delivery) => delivery.id).filter(Boolean),
+          fileName,
+          pdfBlob,
+          authMethod,
+          signatureUrl: savedDeliveries[0]?.signature_url,
+          ipAddress,
+          geoLocation: location,
+          metadata: {
+            validationHash,
+            workplaceName: selectedWorkplace?.name || "Sede",
+            itemCount: cart.length,
+            items: cart.map((item) => ({
+              ppeId: item.ppeId,
+              ppeName: item.ppeName,
+              caNumber: item.ppeCaNumber,
+              quantity: item.quantity,
+              reason: item.reason,
+            })),
+          },
+        })
+      } catch (archiveError) {
+        const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
+        toast.warning(message)
+      }
       
       const pdfUrl = URL.createObjectURL(pdfBlob)
       setLastPdfUrl((prev) => {

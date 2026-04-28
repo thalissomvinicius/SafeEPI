@@ -11,6 +11,7 @@ import SignatureCanvas from "react-signature-canvas"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateTrainingCertificate } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
+import { generateAuditCode } from "@/utils/auditCode"
 
 export default function TrainingPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
@@ -121,6 +122,7 @@ export default function TrainingPage() {
       })
 
       const trainedEmployee = employees.find(emp => emp.id === formData.employee_id)
+      const validationCode = generateAuditCode(`CERT-${format(completionDate, "yyyy")}`, 10)
       const pdfBlob = await generateTrainingCertificate({
         employeeName: trainedEmployee?.full_name || "N/A",
         employeeCpf: trainedEmployee?.cpf || "N/A",
@@ -131,6 +133,7 @@ export default function TrainingPage() {
         instructorRole: tstRole,
         signatureBase64: tstSignatureBase64,
         photoBase64: tstAuthMethod === 'manual_facial' ? tstPhotoBase64 || undefined : tstAuthMethod === 'facial' ? tstSignatureBase64 : undefined,
+        validationCode,
       })
 
       const safeEmployee = (trainedEmployee?.full_name || "Certificado")
@@ -144,7 +147,32 @@ export default function TrainingPage() {
         .replace(/[^a-zA-Z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "")
 
-      openPdfDialog(pdfBlob, `Certificado_${safeEmployee}_${safeTraining}.pdf`, {
+      const fileName = `Certificado_${safeEmployee}_${safeTraining}.pdf`
+
+      try {
+        await api.archiveSignedDocument({
+          documentType: "training_certificate",
+          employeeId: formData.employee_id,
+          trainingId: result.training.id,
+          fileName,
+          pdfBlob,
+          authMethod: tstAuthMethod,
+          metadata: {
+            validationCode,
+            trainingName: finalTrainingName,
+            completionDate: formData.completion_date,
+            expiryDate: format(expiryDate, "yyyy-MM-dd"),
+            instructorId: tstSelectedEmployee.id,
+            instructorName: tstSelectedEmployee.full_name,
+            instructorRole: tstRole,
+          },
+        })
+      } catch (archiveError) {
+        const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
+        toast.warning(message)
+      }
+
+      openPdfDialog(pdfBlob, fileName, {
         title: "Certificado pronto",
         description: "Escolha se deseja visualizar o certificado em uma nova aba ou baixar o PDF agora.",
       })

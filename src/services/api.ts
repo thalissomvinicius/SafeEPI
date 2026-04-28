@@ -7,6 +7,24 @@ type AddTrainingResult = {
   warning?: string;
 }
 
+type SignedDocumentArchivePayload = {
+  documentType: 'delivery' | 'remote_delivery' | 'return' | 'nr06' | 'training_certificate';
+  employeeId?: string | null;
+  deliveryId?: string | null;
+  deliveryIds?: string[];
+  trainingId?: string | null;
+  fileName: string;
+  pdfBlob: Blob;
+  sha256Hash?: string;
+  authMethod?: string | null;
+  signatureUrl?: string | null;
+  photoEvidenceUrl?: string | null;
+  ipAddress?: string | null;
+  geoLocation?: string | null;
+  metadata?: Record<string, unknown>;
+  linkToken?: string | null;
+};
+
 const SESSION_REFRESH_BUFFER_SECONDS = 60;
 
 type SupabaseLikeError = {
@@ -161,6 +179,14 @@ function normalizeCatalogName(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
 }
 
+async function sha256Hex(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer();
+  const hash = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hash))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
   const { data, error } = await withSessionRetry(() =>
     supabase
@@ -248,6 +274,38 @@ export const api = {
 
   async getSession() {
     return await ensureActiveSession();
+  },
+
+  async archiveSignedDocument(payload: SignedDocumentArchivePayload) {
+    const formData = new FormData();
+    const sha256Hash = payload.sha256Hash || await sha256Hex(payload.pdfBlob);
+
+    formData.append("document_type", payload.documentType);
+    formData.append("file_name", payload.fileName);
+    formData.append("pdfFile", new File([payload.pdfBlob], payload.fileName, { type: "application/pdf" }));
+    formData.append("sha256_hash", sha256Hash);
+
+    if (payload.employeeId) formData.append("employee_id", payload.employeeId);
+    if (payload.deliveryId) formData.append("delivery_id", payload.deliveryId);
+    if (payload.deliveryIds?.length) formData.append("delivery_ids", JSON.stringify(payload.deliveryIds));
+    if (payload.trainingId) formData.append("training_id", payload.trainingId);
+    if (payload.authMethod) formData.append("auth_method", payload.authMethod);
+    if (payload.signatureUrl) formData.append("signature_url", payload.signatureUrl);
+    if (payload.photoEvidenceUrl) formData.append("photo_evidence_url", payload.photoEvidenceUrl);
+    if (payload.ipAddress) formData.append("ip_address", payload.ipAddress);
+    if (payload.geoLocation) formData.append("geo_location", payload.geoLocation);
+    if (payload.linkToken) formData.append("link_token", payload.linkToken);
+    if (payload.metadata) formData.append("metadata", JSON.stringify(payload.metadata));
+
+    const res = await fetch("/api/signed-documents", {
+      method: "POST",
+      headers: await this.getAuthHeaders(),
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel arquivar o documento assinado.");
+    return data.document;
   },
 
   async getProfileRole(userId: string) {
