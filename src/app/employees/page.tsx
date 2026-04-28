@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
+const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
 
 export default function EmployeesPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
@@ -675,7 +676,7 @@ export default function EmployeesPage() {
                   required
                   type="text" 
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: normalizeName(e.target.value)})}
+                  onChange={(e) => setFormData({...formData, name: formatTypingName(e.target.value)})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase" 
                   placeholder="Nome do colaborador"
                 />

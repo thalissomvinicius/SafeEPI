@@ -9,6 +9,7 @@ import { toast } from "sonner"
 type CatalogKind = "job" | "department"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
+const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
 
 export default function JobSectorsPage() {
   const [jobTitles, setJobTitles] = useState<CatalogItem[]>([])
@@ -150,7 +151,7 @@ export default function JobSectorsPage() {
               type="text"
               required
               value={formData.name}
-              onChange={(event) => setFormData({ ...formData, name: normalizeName(event.target.value) })}
+              onChange={(event) => setFormData({ ...formData, name: formatTypingName(event.target.value) })}
               placeholder={activeTab === "job" ? "EX: AUXILIAR ADMINISTRATIVO" : "EX: ALMOXARIFADO"}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase"
             />
