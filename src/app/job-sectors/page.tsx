@@ -47,6 +47,11 @@ export default function JobSectorsPage() {
   const Icon = activeTab === "job" ? BriefcaseBusiness : Building2
 
   const resetForm = () => setFormData({ id: undefined, name: "" })
+  const selectTab = (tab: CatalogKind) => {
+    setActiveTab(tab)
+    setSearchTerm("")
+    resetForm()
+  }
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -113,18 +118,54 @@ export default function JobSectorsPage() {
 
         <div className="bg-slate-100 rounded-xl p-1 flex w-full sm:w-auto">
           <button
-            onClick={() => { setActiveTab("job"); resetForm() }}
+            onClick={() => selectTab("job")}
             className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "job" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
           >
             Cargos
           </button>
           <button
-            onClick={() => { setActiveTab("department"); resetForm() }}
+            onClick={() => selectTab("department")}
             className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "department" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
           >
             Setores
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button
+          type="button"
+          onClick={() => selectTab("job")}
+          className={`border rounded-2xl p-5 text-left transition-all flex items-center justify-between gap-4 ${activeTab === "job" ? "bg-red-50 border-[#8B1A1A]/30 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`rounded-xl p-3 ${activeTab === "job" ? "bg-[#8B1A1A] text-white" : "bg-slate-100 text-slate-500"}`}>
+              <BriefcaseBusiness className="w-5 h-5" />
+            </div>
+            <div>
+              <p className={`text-xs font-black uppercase tracking-widest ${activeTab === "job" ? "text-[#8B1A1A]" : "text-slate-500"}`}>Cargos</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cadastrar e listar cargos</p>
+            </div>
+          </div>
+          <span className="text-xs font-black text-slate-400">{jobTitles.length}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => selectTab("department")}
+          className={`border rounded-2xl p-5 text-left transition-all flex items-center justify-between gap-4 ${activeTab === "department" ? "bg-red-50 border-[#8B1A1A]/30 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`rounded-xl p-3 ${activeTab === "department" ? "bg-[#8B1A1A] text-white" : "bg-slate-100 text-slate-500"}`}>
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <p className={`text-xs font-black uppercase tracking-widest ${activeTab === "department" ? "text-[#8B1A1A]" : "text-slate-500"}`}>Setores</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cadastrar e listar setores</p>
+            </div>
+          </div>
+          <span className="text-xs font-black text-slate-400">{departments.length}</span>
+        </button>
       </div>
 
       {schemaWarning && (
@@ -143,6 +184,23 @@ export default function JobSectorsPage() {
               <h2 className="font-black text-slate-800 uppercase tracking-tighter">{formData.id ? `Editar ${singularTitle}` : `Novo ${singularTitle}`}</h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Salvo sempre em maiúsculo</p>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => selectTab("job")}
+              className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "job" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
+            >
+              Cargo
+            </button>
+            <button
+              type="button"
+              onClick={() => selectTab("department")}
+              className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "department" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
+            >
+              Setor
+            </button>
           </div>
 
           <div className="space-y-2">
@@ -175,8 +233,12 @@ export default function JobSectorsPage() {
         </form>
 
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="p-5 border-b border-slate-200 bg-slate-50/50">
-            <div className="relative max-w-md">
+          <div className="p-5 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lista atual</p>
+              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tighter">{title}</h3>
+            </div>
+            <div className="relative w-full lg:max-w-md">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
