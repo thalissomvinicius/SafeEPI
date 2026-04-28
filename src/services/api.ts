@@ -9,6 +9,13 @@ type AddTrainingResult = {
 
 const SESSION_REFRESH_BUFFER_SECONDS = 60;
 
+type SupabaseLikeError = {
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+  message?: string;
+};
+
 function isJwtExpiredError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
 
@@ -68,6 +75,44 @@ async function withSessionRetry<T>(operation: () => PromiseLike<T>): Promise<T> 
 
     return await operation();
   }
+}
+
+function normalizeDeliveryReason(reason: Delivery["reason"] | string): Delivery["reason"] {
+  const normalized = reason
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (normalized.includes("primeira")) return "Primeira Entrega";
+  if (normalized.includes("substitu")) return "Substituição (Desgaste/Validade)";
+  if (normalized.includes("perda")) return "Perda";
+  if (normalized.includes("dano")) return "Dano";
+  return "Primeira Entrega";
+}
+
+function isDeliverySchemaCompatibilityIssue(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError;
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find the") ||
+    text.includes("column") && (
+      text.includes("auth_method") ||
+      text.includes("workplace_id")
+    )
+  );
+}
+
+function isDeliveryReasonConstraintIssue(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError;
+  const text = `${maybeError.message || ""} ${maybeError.details || ""}`.toLowerCase();
+  return maybeError.code === "23514" && (text.includes("reason") || text.includes("deliveries"));
 }
 
 export const api = {
@@ -425,6 +470,7 @@ export const api = {
   async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at'>, signatureFile?: File) {
     let signatureUrl = null;
     await ensureActiveSession();
+    const normalizedReason = normalizeDeliveryReason(delivery.reason);
 
     // 1. Se houver imagem da assinatura, faz o upload para o Storage
     if (signatureFile) {
@@ -445,19 +491,58 @@ export const api = {
     }
 
     // 3. Salva o registro na tabela de entregas
-    const { data, error } = await withSessionRetry(() =>
+    const insertPayload = {
+      ...delivery,
+      reason: normalizedReason,
+      signature_url: signatureUrl,
+      delivery_date: delivery.delivery_date || new Date().toISOString(),
+    };
+
+    const firstInsertResult = await withSessionRetry(() =>
       supabase
         .from('deliveries')
-        .insert([{
-          ...delivery,
-          signature_url: signatureUrl,
-          delivery_date: delivery.delivery_date || new Date().toISOString()
-        }])
+        .insert([insertPayload])
         .select()
     );
-    
-    if (error) throw error;
-    return data[0];
+
+    if (!firstInsertResult.error && firstInsertResult.data?.[0]) {
+      return firstInsertResult.data[0];
+    }
+
+    let insertError = firstInsertResult.error;
+
+    if (isDeliverySchemaCompatibilityIssue(insertError)) {
+      const fallbackPayload = {
+        employee_id: insertPayload.employee_id,
+        ppe_id: insertPayload.ppe_id,
+        reason: insertPayload.reason,
+        quantity: insertPayload.quantity,
+        signature_url: insertPayload.signature_url,
+        ip_address: insertPayload.ip_address,
+        delivery_date: insertPayload.delivery_date,
+      };
+
+      const fallbackResult = await withSessionRetry(() =>
+        supabase
+          .from('deliveries')
+          .insert([fallbackPayload])
+          .select()
+      );
+
+      if (!fallbackResult.error && fallbackResult.data?.[0]) {
+        return fallbackResult.data[0];
+      }
+
+      insertError = fallbackResult.error;
+    }
+
+    if (isDeliveryReasonConstraintIssue(insertError)) {
+      throw new Error(
+        "Falha ao salvar entrega por incompatibilidade de motivo no banco. Verifique o CHECK da coluna reason na tabela deliveries."
+      );
+    }
+
+    throw insertError || new Error("Falha ao salvar entrega no Supabase.");
   },
 
   async returnDelivery(deliveryId: string, motive: string) {

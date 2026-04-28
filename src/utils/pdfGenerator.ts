@@ -734,7 +734,7 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
     theme: 'grid'
   })
 
-  const finalY = (doc as any).lastAutoTable?.finalY || 200
+  const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 200
   const emitDate = format(new Date(), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
   doc.setFontSize(7)
   doc.setFont("helvetica", "italic")

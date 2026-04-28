@@ -388,7 +388,7 @@ export default function WorkplacesPage() {
 
             <div className="p-6 space-y-4">
               <p className="text-sm text-slate-600 leading-relaxed">
-                Você está prestes a <strong>desativar</strong> o canteiro <strong className="text-slate-800">"{formData.name}"</strong>.
+                Você está prestes a <strong>desativar</strong> o canteiro <strong className="text-slate-800">&quot;{formData.name}&quot;</strong>.
                 Os dados serão preservados no histórico de auditoria, mas o canteiro ficará invisível na plataforma.
               </p>
 

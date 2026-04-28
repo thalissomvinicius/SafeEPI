@@ -258,9 +258,10 @@ export default function DeliveryPage() {
       setIsSaved(true)
 
       toast.success(`Entrega de ${cart.length} EPI(s) registrada com sucesso!`)
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Erro ao finalizar entrega:", err)
-      toast.error("Erro ao salvar entrega.")
+      const message = err instanceof Error ? err.message : "Erro ao salvar entrega."
+      toast.error(message)
     } finally {
       setIsSaving(false)
     }
