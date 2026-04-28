@@ -63,8 +63,9 @@ export default function EmployeesPage() {
   const [tstSelectedEmployee, setTstSelectedEmployee] = useState<Employee | null>(null)
   const [tstSearchTerm, setTstSearchTerm] = useState("")
   const [tstRole, setTstRole] = useState("Técnico de Segurança do Trabalho")
-  const [tstAuthMethod, setTstAuthMethod] = useState<'manual'|'facial'>('manual')
+  const [tstAuthMethod, setTstAuthMethod] = useState<'manual'|'facial'|'manual_facial'>('manual')
   const [tstSignatureBase64, setTstSignatureBase64] = useState<string | null>(null)
+  const [tstPhotoBase64, setTstPhotoBase64] = useState<string | null>(null)
   const [isFaceCameraTstOpen, setIsFaceCameraTstOpen] = useState(false)
   const tstSigCanvas = useRef<SignatureCanvas | null>(null)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
@@ -290,12 +291,15 @@ export default function EmployeesPage() {
     setTstRole("Técnico de Segurança do Trabalho")
     setTstAuthMethod('manual')
     setTstSignatureBase64(null)
+    setTstPhotoBase64(null)
     setTstStep(1)
     setIsTstModalOpen(true)
   }
 
   const handleSelectTst = async (emp: Employee) => {
     setTstSelectedEmployee(emp)
+    setTstSignatureBase64(null)
+    setTstPhotoBase64(null)
     setTstRole(getJobTitleName(emp.job_title || "Técnico de Segurança do Trabalho"))
     // If employee has a photo, use it as the signature automatically
     if (emp.photo_url) {
@@ -307,14 +311,14 @@ export default function EmployeesPage() {
           reader.onloadend = () => resolve(reader.result as string)
           reader.readAsDataURL(blob)
         })
-        setTstSignatureBase64(b64)
-        setTstAuthMethod('facial')
+        setTstPhotoBase64(b64)
+        setTstAuthMethod('manual_facial')
       } catch {
         // If photo fetch fails, go to manual
-        setTstSignatureBase64(null)
+        setTstPhotoBase64(null)
       }
     } else {
-      setTstSignatureBase64(null)
+      setTstAuthMethod('manual')
     }
     setTstStep(2)
   }
@@ -325,6 +329,10 @@ export default function EmployeesPage() {
     const emp = employees.find(e => e.id === selectedEmployeeId)
     if (!emp) return
     if (!tstSignatureBase64) return
+    if (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) {
+      toast.error("Cadastre uma foto do responsavel tecnico antes de usar Foto + Assinatura.")
+      return
+    }
 
     try {
       setIsGeneratingPdf(true)
@@ -350,6 +358,7 @@ export default function EmployeesPage() {
           role: tstRole,
           signatureBase64: tstSignatureBase64,
           authMethod: tstAuthMethod,
+          photoBase64: tstPhotoBase64 || undefined,
         }
       })
 
@@ -1006,24 +1015,45 @@ export default function EmployeesPage() {
                 )}
 
                 {/* Auth Method Toggle */}
-                <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-1 rounded-xl">
                   <button
                     onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(false); }}
-                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
+                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
                   >
                     <PenTool className="w-3.5 h-3.5 inline mr-1" /> Assinatura Manual
                   </button>
                   <button
+                    onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(false); }}
+                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual_facial' ? 'bg-white shadow text-emerald-700' : 'text-slate-400'}`}
+                  >
+                    <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto + Assinatura
+                  </button>
+                  <button
                     onClick={() => { setTstAuthMethod('facial'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(true); }}
-                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'facial' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
+                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'facial' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
                   >
                     <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto Biométrica
                   </button>
                 </div>
 
                 {/* Manual Signature Pad */}
-                {tstAuthMethod === 'manual' && !isFaceCameraTstOpen && (
+                {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && !isFaceCameraTstOpen && (
                   <div className="space-y-2">
+                    {tstAuthMethod === 'manual_facial' && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
+                        {tstPhotoBase64 ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={tstPhotoBase64} alt="Foto do responsavel tecnico" className="w-12 h-12 rounded-xl object-cover border border-emerald-200" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+                            <Camera className="w-5 h-5" />
+                          </div>
+                        )}
+                        <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
+                          O prontuario vai sair com foto e assinatura manual do responsavel tecnico.
+                        </p>
+                      </div>
+                    )}
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tstName} — Assine abaixo:</p>
                     {tstSignatureBase64 ? (
                       <div className="relative border-2 border-green-500 rounded-xl overflow-hidden">
@@ -1108,7 +1138,7 @@ export default function EmployeesPage() {
                   </button>
                   <button
                     onClick={exportNR06PDF}
-                    disabled={!tstSignatureBase64 || isGeneratingPdf}
+                    disabled={!tstSignatureBase64 || (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) || isGeneratingPdf}
                     className="flex-1 py-3 text-[10px] font-black text-white bg-[#8B1A1A] hover:bg-[#681313] uppercase tracking-widest rounded-xl shadow-lg shadow-red-900/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
                   >
                     {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}

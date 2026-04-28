@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
-import { CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User } from "lucide-react"
+import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User } from "lucide-react"
 import { format, addDays } from "date-fns"
 import { api } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery } from "@/types/database"
@@ -55,7 +55,7 @@ export default function DeliveryPage() {
   const [currentReason, setCurrentReason] = useState("Primeira Entrega")
 
   // Biometria Facial
-  const [authMethod, setAuthMethod] = useState<'manual' | 'facial'>('manual')
+  const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
 
   useEffect(() => {
     const captureMetadata = async () => {
@@ -185,6 +185,21 @@ export default function DeliveryPage() {
     }
   }
 
+  const getSelectedEmployeePhotoBase64 = useCallback(async () => {
+    if (!selectedEmployee?.photo_url) return undefined
+    try {
+      const photoResponse = await fetch(selectedEmployee.photo_url)
+      const photoBlob = await photoResponse.blob()
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.readAsDataURL(photoBlob)
+      })
+    } catch {
+      return undefined
+    }
+  }, [selectedEmployee])
+
   const saveDelivery = useCallback(async (signatureDataUrl: string) => {
     if (cart.length === 0) {
       toast.error("Adicione pelo menos um EPI à lista de entrega.")
@@ -200,6 +215,8 @@ export default function DeliveryPage() {
       const response = await fetch(signatureDataUrl)
       const blob = await response.blob()
       const signatureFile = new File([blob], "signature.png", { type: "image/png" })
+      const photoBase64 = authMethod === 'manual_facial' ? await getSelectedEmployeePhotoBase64() : undefined
+      const persistedAuthMethod: 'manual' | 'facial' = authMethod === 'manual_facial' ? 'manual' : authMethod
 
       // Save each item as a separate delivery record (same signature)
       for (const item of cart) {
@@ -210,7 +227,7 @@ export default function DeliveryPage() {
           reason: item.reason as Delivery['reason'],
           quantity: item.quantity,
           ip_address: ipAddress || "Desconhecido",
-          auth_method: authMethod,
+          auth_method: persistedAuthMethod,
           signature_url: null,
           delivery_date: new Date(deliveryDate).toISOString()
         }, signatureFile)
@@ -236,6 +253,7 @@ export default function DeliveryPage() {
         })),
         authMethod,
         signatureBase64: signatureDataUrl,
+        photoBase64,
         ipAddress,
         location,
         validationHash,
@@ -265,9 +283,13 @@ export default function DeliveryPage() {
     } finally {
       setIsSaving(false)
     }
-  }, [selectedEmployeeId, selectedWorkplaceId, cart, ipAddress, location, authMethod, selectedEmployee, selectedWorkplace, deliveryDate])
+  }, [selectedEmployeeId, selectedWorkplaceId, cart, ipAddress, location, authMethod, selectedEmployee, selectedWorkplace, deliveryDate, getSelectedEmployeePhotoBase64])
 
   const handleManualSave = () => {
+    if (authMethod === 'manual_facial' && !selectedEmployee?.photo_url) {
+      toast.error("Cadastre uma foto do colaborador antes de usar Foto + Assinatura.")
+      return
+    }
     if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
       toast.error("A assinatura é obrigatória.")
       return
@@ -652,23 +674,43 @@ export default function DeliveryPage() {
                 </ul>
               </div>
 
-              <div className="flex bg-slate-100 p-1.5 rounded-2xl">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
                 <button 
                   onClick={() => setAuthMethod('manual')}
-                  className={`flex-1 py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <PenLine className="w-4 h-4" /> Assinatura na Tela
                 </button>
                 <button 
+                  onClick={() => setAuthMethod('manual_facial')}
+                  className={`py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  <Camera className="w-4 h-4" /> Foto + Assinatura
+                </button>
+                <button 
                   onClick={() => setAuthMethod('facial')}
-                  className={`flex-1 py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Fingerprint className="w-4 h-4" /> Biometria Facial
                 </button>
               </div>
 
-              {authMethod === 'manual' ? (
+              {authMethod === 'manual' || authMethod === 'manual_facial' ? (
                 <div className="space-y-4 animate-in fade-in">
+                  {authMethod === 'manual_facial' && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
+                      {selectedEmployee?.photo_url ? (
+                        <Image src={selectedEmployee.photo_url} alt="Foto do colaborador" width={44} height={44} className="w-11 h-11 rounded-xl object-cover border border-emerald-200" unoptimized />
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
+                          <Camera className="w-5 h-5" />
+                        </div>
+                      )}
+                      <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
+                        O PDF vai sair com a foto cadastrada do colaborador e a assinatura manual abaixo.
+                      </p>
+                    </div>
+                  )}
                   <div className="flex justify-between items-end px-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área de Assinatura</label>
                     <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>

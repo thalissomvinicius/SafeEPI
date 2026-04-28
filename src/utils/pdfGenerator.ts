@@ -12,6 +12,7 @@ import { DeliveryWithRelations } from "@/types/database"
  */
 
 const [r, g, b] = COMPANY_CONFIG.primaryColorRgb
+type AuthMethod = 'manual' | 'facial' | 'manual_facial'
 
 // ─────────────────────────────────────────────
 // SHARED HELPERS
@@ -95,7 +96,7 @@ export interface DeliveryPDFData {
   quantity?: number
   reason?: string
   items?: { ppeName: string; ppeCaNumber: string; caExpiry?: string; quantity: number; reason: string }[]
-  authMethod: 'manual' | 'facial'
+  authMethod: AuthMethod
   signatureBase64: string
   photoBase64?: string
   ipAddress?: string
@@ -202,6 +203,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
 
   currentY += 35
   
+  const hasManualAndPhoto = data.authMethod === 'manual_facial' && Boolean(data.photoBase64)
   let isPhoto = data.authMethod === 'facial'
   let imgRatio = 1
   
@@ -214,7 +216,62 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     } catch { /* keep declared method */ }
   }
 
-  if (isPhoto && data.signatureBase64) {
+  if (hasManualAndPhoto && data.photoBase64) {
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(8)
+    doc.setTextColor(71, 85, 105)
+    doc.text("FOTO E ASSINATURA DO COLABORADOR", pageWidth / 2, currentY, { align: "center" })
+
+    const photoSize = 38
+    const sigBoxW = 92
+    const sigBoxH = 30
+    const groupW = photoSize + 12 + sigBoxW
+    const photoX = (pageWidth - groupW) / 2
+    const sigBoxX = photoX + photoSize + 12
+    const boxY = currentY + 5
+
+    doc.setDrawColor(226, 232, 240)
+    doc.setFillColor(248, 250, 252)
+    doc.roundedRect(photoX, boxY, photoSize, photoSize, 3, 3, "FD")
+    try {
+      const photoProps = doc.getImageProperties(data.photoBase64)
+      const photoRatio = photoProps.width / photoProps.height
+      let drawW = photoSize - 3
+      let drawH = drawW / photoRatio
+      if (drawH > photoSize - 3) {
+        drawH = photoSize - 3
+        drawW = drawH * photoRatio
+      }
+      doc.addImage(data.photoBase64, 'JPEG', photoX + (photoSize - drawW) / 2, boxY + (photoSize - drawH) / 2, drawW, drawH)
+    } catch { /* skip */ }
+
+    doc.setFillColor(252, 252, 252)
+    doc.roundedRect(sigBoxX, boxY + 4, sigBoxW, sigBoxH, 2, 2, "FD")
+    try {
+      const sigProps = doc.getImageProperties(data.signatureBase64)
+      const sigRatio = sigProps.width / sigProps.height
+      let drawW = sigBoxW - 8
+      let drawH = drawW / sigRatio
+      if (drawH > sigBoxH - 6) {
+        drawH = sigBoxH - 6
+        drawW = drawH * sigRatio
+      }
+      doc.addImage(data.signatureBase64, 'PNG', sigBoxX + (sigBoxW - drawW) / 2, boxY + 4 + (sigBoxH - drawH) / 2, drawW, drawH)
+    } catch { /* skip */ }
+
+    doc.setDrawColor(200, 200, 200)
+    doc.line(sigBoxX + 8, boxY + sigBoxH + 8, sigBoxX + sigBoxW - 8, boxY + sigBoxH + 8)
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(30, 41, 59)
+    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, boxY + photoSize + 9, { align: "center" })
+    doc.setFontSize(6.5)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(148, 163, 184)
+    doc.text("Foto cadastrada + assinatura manual coletada no ato", pageWidth / 2, boxY + photoSize + 14, { align: "center" })
+
+    currentY += photoSize + 24
+  } else if (isPhoto && data.signatureBase64) {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
@@ -353,8 +410,9 @@ export interface ReturnPDFData {
   returnMotive: string
   newItemName?: string
   newItemCa?: string
-  authMethod: 'manual' | 'facial'
+  authMethod: AuthMethod
   signatureBase64: string
+  photoBase64?: string
 }
 
 export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
@@ -426,7 +484,10 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   doc.setDrawColor(226, 232, 240)
   doc.roundedRect(14, sigY, pageWidth - 28, 50, 3, 3, "FD")
   try {
-    if (data.authMethod === 'facial') {
+    if (data.authMethod === 'manual_facial' && data.photoBase64) {
+      doc.addImage(data.photoBase64, 'JPEG', pageWidth / 2 - 48, sigY + 5, 30, 30)
+      doc.addImage(data.signatureBase64, 'PNG', pageWidth / 2 - 10, sigY + 8, 70, 24)
+    } else if (data.authMethod === 'facial') {
       doc.addImage(data.signatureBase64, 'JPEG', (pageWidth - 40) / 2, sigY + 3, 40, 40)
     } else {
       doc.addImage(data.signatureBase64, 'PNG', (pageWidth - 80) / 2, sigY + 5, 80, 30)
@@ -472,7 +533,8 @@ export interface NR06PDFData {
     name: string
     role: string
     signatureBase64: string
-    authMethod: 'manual' | 'facial'
+    authMethod: AuthMethod
+    photoBase64?: string
   }
 }
 
@@ -614,16 +676,31 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     try {
       const imgProps = doc.getImageProperties(tst.signatureBase64)
       const ratio = imgProps.width / imgProps.height
-      const isPhoto = ratio <= 1.5
-      const drawH = isPhoto ? 20 : 12
-      let drawW = drawH * ratio
-      if (drawW > contentWidth) {
-        drawW = contentWidth
+      if (tst.authMethod === 'manual_facial' && tst.photoBase64) {
+        const photoSize = 18
+        doc.addImage(tst.photoBase64, 'JPEG', blockX + 16, blockY + 11, photoSize, photoSize)
+        const drawH = 12
+        let drawW = drawH * ratio
+        const sigAreaW = contentWidth - photoSize - 8
+        if (drawW > sigAreaW) {
+          drawW = sigAreaW
+        }
+        const sigX = blockX + 16 + photoSize + 8 + (sigAreaW - drawW) / 2
+        const sigY = blockY + 15
+        const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+        doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
+      } else {
+        const isPhoto = ratio <= 1.5
+        const drawH = isPhoto ? 20 : 12
+        let drawW = drawH * ratio
+        if (drawW > contentWidth) {
+          drawW = contentWidth
+        }
+        const sigX = blockX + (blockWidth - drawW) / 2
+        const sigY = blockY + 12
+        const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+        doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
       }
-      const sigX = blockX + (blockWidth - drawW) / 2
-      const sigY = blockY + 12
-      const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
-      doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
     } catch { /* skip */ }
 
     doc.setDrawColor(203, 213, 225)
@@ -758,6 +835,7 @@ export interface TrainingCertificateData {
   instructorName?: string
   instructorRole?: string
   signatureBase64?: string
+  photoBase64?: string
   programContent?: string[]
   validationCode?: string
 }
@@ -828,10 +906,10 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   
   doc.setDrawColor(139, 0, 0)
   doc.setLineWidth(0.7)
-  if (data.signatureBase64 && data.signatureBase64.startsWith('data:image/jpeg')) {
+  if (data.photoBase64) {
     doc.roundedRect(photoX, photoY, photoW, photoH, 3, 3, "S")
     try {
-      const imgProps = doc.getImageProperties(data.signatureBase64);
+      const imgProps = doc.getImageProperties(data.photoBase64);
       const ratio = imgProps.width / imgProps.height;
       let drawW = photoW - 2;
       let drawH = drawW / ratio;
@@ -841,9 +919,9 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
       }
       const xOff = (photoW - 2 - drawW) / 2;
       const yOff = (photoH - 2 - drawH) / 2;
-      doc.addImage(data.signatureBase64, "JPEG", photoX + 1 + xOff, photoY + 1 + yOff, drawW, drawH);
+      doc.addImage(data.photoBase64, "JPEG", photoX + 1 + xOff, photoY + 1 + yOff, drawW, drawH);
     } catch {
-      doc.addImage(data.signatureBase64, "JPEG", photoX+1, photoY+1, photoW-2, photoH-2)
+      doc.addImage(data.photoBase64, "JPEG", photoX+1, photoY+1, photoW-2, photoH-2)
     }
   } else {
     doc.ellipse(photoX + photoW/2, photoY + photoH/2, photoW/2, photoH/2, "S")
@@ -935,7 +1013,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     doc.setLineWidth(0.5)
     doc.line(centerX - sigLineW/2, sigY, centerX + sigLineW/2, sigY)
 
-    if (data.signatureBase64 && !data.signatureBase64.startsWith('data:image/jpeg')) {
+    if (data.signatureBase64) {
       try {
         const imgProps = doc.getImageProperties(data.signatureBase64)
         const ratio = imgProps.width / imgProps.height
