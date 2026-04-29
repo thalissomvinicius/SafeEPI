@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   const isPublicPath = useCallback((path: string | null) => {
-    return path === "/login" || path?.startsWith("/delivery/remote") || path?.startsWith("/capture")
+    return path === "/login" || path?.startsWith("/delivery/remote") || path?.startsWith("/training/remote") || path?.startsWith("/capture")
   }, [])
 
   const hydrateUser = useCallback(async () => {
