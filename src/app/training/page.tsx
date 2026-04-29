@@ -84,6 +84,51 @@ export default function TrainingPage() {
     return ""
   }
 
+  const getRemoteDraftKey = useCallback((instructorId = tstSelectedEmployee?.id || "") => {
+    const training = formData.training_name === "Outro" ? customTrainingName.trim() : formData.training_name
+    return `training-signature:${formData.employee_id}:${instructorId}:${training}:${formData.completion_date}`
+  }, [customTrainingName, formData.completion_date, formData.employee_id, formData.training_name, tstSelectedEmployee?.id])
+
+  const persistRemoteDraft = useCallback((draft: {
+    participantToken?: string | null
+    participantStatus?: RemoteLinkStatus
+    participantExpiresAt?: string | null
+    instructorToken?: string | null
+    instructorStatus?: RemoteLinkStatus
+    instructorExpiresAt?: string | null
+  }) => {
+    if (typeof window === "undefined") return
+    const key = getRemoteDraftKey()
+    const current = window.localStorage.getItem(key)
+    const parsed = current ? JSON.parse(current) as Record<string, unknown> : {}
+    window.localStorage.setItem(key, JSON.stringify({ ...parsed, ...draft }))
+  }, [getRemoteDraftKey])
+
+  const restoreRemoteDraft = useCallback((instructorId: string) => {
+    if (typeof window === "undefined") return
+    const raw = window.localStorage.getItem(getRemoteDraftKey(instructorId))
+    if (!raw) return
+
+    try {
+      const draft = JSON.parse(raw) as {
+        participantToken?: string | null
+        participantStatus?: RemoteLinkStatus
+        participantExpiresAt?: string | null
+        instructorToken?: string | null
+        instructorStatus?: RemoteLinkStatus
+        instructorExpiresAt?: string | null
+      }
+      setParticipantRemoteToken(draft.participantToken || null)
+      setParticipantRemoteStatus(draft.participantStatus || "idle")
+      setParticipantRemoteExpiresAt(draft.participantExpiresAt || null)
+      setInstructorRemoteToken(draft.instructorToken || null)
+      setInstructorRemoteStatus(draft.instructorStatus || "idle")
+      setInstructorRemoteExpiresAt(draft.instructorExpiresAt || null)
+    } catch {
+      window.localStorage.removeItem(getRemoteDraftKey(instructorId))
+    }
+  }, [getRemoteDraftKey])
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -295,6 +340,7 @@ export default function TrainingPage() {
 
     setTstAuthMethod('manual')
     setStep(3)
+    restoreRemoteDraft(emp.id)
   }
 
   const generateTrainingRemoteSignatureLink = async () => {
@@ -325,6 +371,11 @@ export default function TrainingPage() {
       setParticipantRemoteToken(data.link.token)
       setParticipantRemoteStatus("pending")
       setParticipantRemoteExpiresAt(data.link.expires_at)
+      persistRemoteDraft({
+        participantToken: data.link.token,
+        participantStatus: "pending",
+        participantExpiresAt: data.link.expires_at,
+      })
       await navigator.clipboard.writeText(url)
       toast.success(`Link de assinatura do treinamento copiado. Valido por ${remoteWaitHours}h e uso unico.`)
     } catch (err: unknown) {
@@ -357,6 +408,11 @@ export default function TrainingPage() {
       setInstructorRemoteToken(data.link.token)
       setInstructorRemoteStatus("pending")
       setInstructorRemoteExpiresAt(data.link.expires_at)
+      persistRemoteDraft({
+        instructorToken: data.link.token,
+        instructorStatus: "pending",
+        instructorExpiresAt: data.link.expires_at,
+      })
       await navigator.clipboard.writeText(url)
       toast.success(`Link de assinatura do instrutor copiado. Valido por ${remoteWaitHours}h e uso unico.`)
     } catch (err: unknown) {
@@ -385,6 +441,10 @@ export default function TrainingPage() {
       if (payload.status === "expired") {
         if (target === "participant") setParticipantRemoteStatus("expired")
         if (target === "instructor") setInstructorRemoteStatus("expired")
+        persistRemoteDraft(target === "participant"
+          ? { participantStatus: "expired" }
+          : { instructorStatus: "expired" }
+        )
       }
       return false
     }
@@ -406,8 +466,12 @@ export default function TrainingPage() {
     applyRemoteSignature(target, evidence)
     if (target === "participant") setParticipantRemoteStatus("completed")
     if (target === "instructor") setInstructorRemoteStatus("completed")
+    persistRemoteDraft(target === "participant"
+      ? { participantStatus: "completed" }
+      : { instructorStatus: "completed" }
+    )
     return true
-  }, [applyRemoteSignature])
+  }, [applyRemoteSignature, persistRemoteDraft])
 
   const syncRemoteSignatures = useCallback(async () => {
     if (!participantRemoteToken && !instructorRemoteToken) return
@@ -900,6 +964,39 @@ export default function TrainingPage() {
                             {renderRemoteStatusText(tstSignatureBase64 ? "completed" : participantRemoteStatus, participantRemoteExpiresAt, "colaborador")}
                           </div>
                         )}
+                        <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pendencias do certificado</p>
+                            <p className="text-[10px] text-slate-400 font-bold">Gere os links do colaborador e do instrutor antes de sair desta tela.</p>
+                          </div>
+                          <button
+                            onClick={generateInstructorRemoteSignatureLink}
+                            className="w-full py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Link2 className="w-4 h-4 text-blue-500" />
+                            Gerar link para assinatura do instrutor
+                          </button>
+                          {instructorRemoteToken && (
+                            <div className={`rounded-xl border p-3 text-[10px] font-black uppercase tracking-widest ${
+                              instructorRemoteStatus === "completed" || instructorSignatureBase64
+                                ? "bg-green-50 border-green-200 text-green-700"
+                                : instructorRemoteStatus === "expired"
+                                  ? "bg-red-50 border-red-200 text-red-700"
+                                  : "bg-blue-50 border-blue-200 text-blue-700"
+                            }`}>
+                              {renderRemoteStatusText(instructorSignatureBase64 ? "completed" : instructorRemoteStatus, instructorRemoteExpiresAt, "instrutor")}
+                            </div>
+                          )}
+                          {(participantRemoteToken || instructorRemoteToken) && (
+                            <button
+                              onClick={() => void syncRemoteSignatures()}
+                              disabled={isCheckingRemoteSignatures}
+                              className="w-full py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all disabled:opacity-50"
+                            >
+                              {isCheckingRemoteSignatures ? "Consultando assinaturas..." : "Atualizar assinaturas remotas"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -937,7 +1034,7 @@ export default function TrainingPage() {
                       </button>
                       <button
                         onClick={() => setStep(4)}
-                        disabled={!tstSignatureBase64 || (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) || isSaving}
+                        disabled={isSaving}
                         className="flex-1 py-4 text-[10px] font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-red-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
