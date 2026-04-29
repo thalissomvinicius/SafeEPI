@@ -42,6 +42,13 @@ export default function TrainingPage() {
   const [isFaceCameraTstOpen, setIsFaceCameraTstOpen] = useState(false)
   const tstSigCanvas = useRef<SignatureCanvas | null>(null)
 
+  const getTrainedEmployee = () => employees.find(item => item.id === formData.employee_id) || null
+
+  const getTrainedEmployeeDescriptor = () => {
+    const descriptor = getTrainedEmployee()?.face_descriptor
+    return descriptor && descriptor.length > 0 ? new Float32Array(descriptor) : undefined
+  }
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -231,25 +238,7 @@ export default function TrainingPage() {
       }
     }
 
-    const trainedEmployee = employees.find(item => item.id === formData.employee_id)
-    if (trainedEmployee?.photo_url) {
-      try {
-        const res = await fetch(trainedEmployee.photo_url)
-        const blob = await res.blob()
-        const b64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(blob)
-        })
-        setTstPhotoBase64(b64)
-        setTstAuthMethod('manual_facial')
-      } catch {
-        setTstPhotoBase64(null)
-        setTstAuthMethod('manual')
-      }
-    } else {
-      setTstAuthMethod('manual')
-    }
+    setTstAuthMethod('manual')
     setStep(3)
   }
 
@@ -556,8 +545,8 @@ export default function TrainingPage() {
 
                 {step === 3 && tstSelectedEmployee && (
                   <div className="p-8 space-y-5">
-                    {/* Notice for Missing Photo */}
-                    {!employees.find(item => item.id === formData.employee_id)?.photo_url && !tstSignatureBase64 && (
+                    {/* Notice for Missing Facial Descriptor */}
+                    {!getTrainedEmployee()?.face_descriptor && !tstSignatureBase64 && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
                         <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                         <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest leading-relaxed">
@@ -568,13 +557,13 @@ export default function TrainingPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-1 rounded-xl">
                       <button
-                        onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(false); }}
+                        onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setTstPhotoBase64(null); setIsFaceCameraTstOpen(false); }}
                         className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
                       >
                         <PenTool className="w-3.5 h-3.5 inline mr-1" /> Assinatura Manual
                       </button>
                       <button
-                        onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(false); }}
+                        onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); setTstPhotoBase64(null); setIsFaceCameraTstOpen(true); }}
                         className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual_facial' ? 'bg-white shadow text-emerald-700' : 'text-slate-400'}`}
                       >
                         <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto + Assinatura
@@ -586,6 +575,16 @@ export default function TrainingPage() {
                         <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto Biométrica
                       </button>
                     </div>
+
+                    {tstAuthMethod === 'manual_facial' && isFaceCameraTstOpen && (
+                      <div className="space-y-3">
+                        <FaceCamera
+                          targetDescriptor={getTrainedEmployeeDescriptor()}
+                          onCapture={(_, img) => { setTstPhotoBase64(img); setIsFaceCameraTstOpen(false); }}
+                          onCancel={() => { setIsFaceCameraTstOpen(false); setTstAuthMethod('manual'); setTstPhotoBase64(null); }}
+                        />
+                      </div>
+                    )}
 
                     {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && !isFaceCameraTstOpen && (
                       <div className="space-y-3">
@@ -600,11 +599,18 @@ export default function TrainingPage() {
                               </div>
                             )}
                             <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
-                              O certificado vai sair com a foto do responsavel tecnico e a assinatura manual.
+                              Foto capturada agora para evidenciar a assinatura. A foto cadastrada fica apenas como base de comparacao biometrica.
                             </p>
+                            <button
+                              onClick={() => { setTstPhotoBase64(null); setIsFaceCameraTstOpen(true); }}
+                              title="Refazer foto"
+                              className="ml-auto p-2 text-emerald-800 hover:bg-emerald-100 rounded-lg transition-all"
+                            >
+                              <Camera className="w-4 h-4" />
+                            </button>
                           </div>
                         )}
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{employees.find(item => item.id === formData.employee_id)?.full_name || "Colaborador"} — Assine abaixo:</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{getTrainedEmployee()?.full_name || "Colaborador"} - Assine abaixo:</p>
                         {tstSignatureBase64 ? (
                           <div className="relative border-2 border-green-500 rounded-xl overflow-hidden">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -668,6 +674,7 @@ export default function TrainingPage() {
                           </div>
                         ) : (
                           <FaceCamera
+                            targetDescriptor={getTrainedEmployeeDescriptor()}
                             onCapture={(_, img) => { setTstSignatureBase64(img); setIsFaceCameraTstOpen(false); }}
                             onCancel={() => { setIsFaceCameraTstOpen(false); setTstAuthMethod('manual'); }}
                           />

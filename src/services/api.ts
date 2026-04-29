@@ -203,6 +203,18 @@ async function sha256Hex(blob: Blob): Promise<string> {
     .join("");
 }
 
+async function readResponseJson<T = unknown>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text) return {} as T;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const message = text.length > 180 ? `${text.slice(0, 180)}...` : text;
+    throw new Error(message || "Resposta invalida do servidor.");
+  }
+}
+
 async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
   const { data, error } = await withSessionRetry(() =>
     supabase
@@ -319,7 +331,7 @@ export const api = {
       body: formData,
     });
 
-    const data = await res.json();
+    const data = await readResponseJson<{ error?: string; document?: SignedDocument }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel arquivar o documento assinado.");
     return data.document;
   },
