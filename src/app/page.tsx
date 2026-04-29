@@ -107,17 +107,17 @@ export default function Dashboard() {
   if (loading) return <DashboardSkeleton />
 
   return (
-    <div className="p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-100 pb-8 gap-4">
-        <div>
+    <div className="p-4 sm:p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-stretch md:items-end border-b border-slate-100 pb-6 md:pb-8 gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">SESMT Digital • Cloud</span>
+            <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-wide md:tracking-widest uppercase italic">SESMT Digital • Cloud</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter text-slate-800">SafeEPI Dashboard</h1>
-          <p className="text-slate-500 font-medium mt-1">Gestão de Segurança Sincronizada com Supabase.</p>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tighter text-slate-800 leading-tight">Painel de Risco Operacional</h1>
+          <p className="text-sm sm:text-base text-slate-500 font-medium mt-1">Cada entrega registrada. Cada risco sob controle.</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/delivery" className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center">
+          <Link href="/delivery" className="w-full md:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center">
             Nova Entrega <ArrowRight className="w-4 h-4 ml-2" />
           </Link>
         </div>
@@ -133,7 +133,7 @@ export default function Dashboard() {
         ].map((item, idx) => {
           const Icon = item.icon
           return (
-            <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-slate-400 font-black text-[10px] uppercase tracking-widest">{item.title}</span>
                 <div className={`p-2 rounded-lg ${item.bg}`}>
