@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2 } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
 import { api } from "@/services/api"
 import { Employee, Workplace, DeliveryWithRelations, CatalogItem } from "@/types/database"
@@ -14,6 +14,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateNR06PDF } from "@/utils/pdfGenerator"
 import { formatCpf, isValidCpf } from "@/utils/cpf"
+import { copyTextToClipboard } from "@/utils/clipboard"
 import { toast } from "sonner"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
@@ -545,7 +546,6 @@ export default function EmployeesPage() {
         expires_hours: captureWaitHours,
       })
       const link = `${window.location.origin}/capture/${emp.id}?t=${data.link.token}`
-      await navigator.clipboard.writeText(link)
       persistPendingCaptureDraft({
         token: data.link.token,
         linkUrl: link,
@@ -555,8 +555,13 @@ export default function EmployeesPage() {
         employeeName: emp.full_name,
         employeeCpf: emp.cpf,
       })
+      const copied = await copyTextToClipboard(link)
       setViewMode("pending")
-      toast.success(`Link de registro facial copiado. Valido por ${captureWaitHours}h e uso unico.`)
+      if (copied) {
+        toast.success(`Link de registro facial copiado. Valido por ${captureWaitHours}h e uso unico.`)
+      } else {
+        toast.warning("Link gerado e salvo em Pendencias. Use o botao Copiar ou copie manualmente.")
+      }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Erro desconhecido"
       toast.error(`Erro ao gerar link: ${errorMsg}. Verifique a tabela 'remote_links'.`)
@@ -739,13 +744,27 @@ export default function EmployeesPage() {
                         {draft.status === "pending" ? `Aguardando registro ate ${formatRemoteExpiry(draft.expiresAt)}` : `Ultimo prazo: ${formatRemoteExpiry(draft.expiresAt)}`}
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
                         <button
-                          onClick={() => void navigator.clipboard.writeText(draft.linkUrl).then(() => toast.success("Link copiado novamente."))}
+                          onClick={() => void copyTextToClipboard(draft.linkUrl).then((copied) => {
+                            if (copied) {
+                              toast.success("Link copiado novamente.")
+                            } else {
+                              toast.warning("Nao foi possivel copiar automaticamente. Abra o link e copie pela barra do navegador.")
+                            }
+                          })}
                           className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Clipboard className="w-3.5 h-3.5" /> Copiar
                         </button>
+                        <a
+                          href={draft.linkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Abrir
+                        </a>
                         <button
                           onClick={() => void checkPendingCaptureDraft(draft)}
                           disabled={isChecking}

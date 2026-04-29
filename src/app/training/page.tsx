@@ -12,6 +12,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateTrainingCertificate } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { generateAuditCode } from "@/utils/auditCode"
+import { copyTextToClipboard } from "@/utils/clipboard"
 
 type RemoteSignatureEvidence = {
   signatureBase64: string
@@ -520,8 +521,12 @@ export default function TrainingPage() {
         participantStatus: "pending",
         participantExpiresAt: data.link.expires_at,
       })
-      await navigator.clipboard.writeText(url)
-      toast.success(`Link de assinatura do treinamento copiado. Valido por ${remoteWaitHours}h e uso unico.`)
+      const copied = await copyTextToClipboard(url)
+      if (copied) {
+        toast.success(`Link de assinatura do treinamento copiado. Valido por ${remoteWaitHours}h e uso unico.`)
+      } else {
+        toast.warning("Link de assinatura gerado. Copie pela aba de pendencias se o navegador bloquear a area de transferencia.")
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erro ao gerar link."
       toast.error(message)
@@ -557,8 +562,12 @@ export default function TrainingPage() {
         instructorStatus: "pending",
         instructorExpiresAt: data.link.expires_at,
       })
-      await navigator.clipboard.writeText(url)
-      toast.success(`Link de assinatura do instrutor copiado. Valido por ${remoteWaitHours}h e uso unico.`)
+      const copied = await copyTextToClipboard(url)
+      if (copied) {
+        toast.success(`Link de assinatura do instrutor copiado. Valido por ${remoteWaitHours}h e uso unico.`)
+      } else {
+        toast.warning("Link do instrutor gerado. Copie pela aba de pendencias se o navegador bloquear a area de transferencia.")
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erro ao gerar link."
       toast.error(message)

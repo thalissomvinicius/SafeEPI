@@ -12,6 +12,7 @@ import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
+import { copyTextToClipboard } from "@/utils/clipboard"
 import { toast } from "sonner"
 
 interface CartItem {
@@ -542,7 +543,6 @@ export default function DeliveryPage() {
           expires_hours: remoteWaitHours
         })
         const url = `${baseUrl}/delivery/remote?t=${data.link.token}`
-        await navigator.clipboard.writeText(url)
         persistPendingDraft({
           token: data.link.token,
           linkUrl: url,
@@ -555,8 +555,13 @@ export default function DeliveryPage() {
           deliveryDate,
           item: cart[0],
         })
+        const copied = await copyTextToClipboard(url)
         setViewMode("pending")
-        toast.success(`Link de assinatura remota copiado. Valido por ${remoteWaitHours}h e uso unico.`)
+        if (copied) {
+          toast.success(`Link de assinatura remota copiado. Valido por ${remoteWaitHours}h e uso unico.`)
+        } else {
+          toast.warning("Link gerado e salvo em Pendencias. Use o botao Copiar ou copie manualmente.")
+        }
         return
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
@@ -791,13 +796,27 @@ export default function DeliveryPage() {
                         {draft.status === "pending" ? `Assinatura do colaborador aguardando ate ${formatRemoteExpiry(draft.expiresAt)}` : `Ultimo prazo: ${formatRemoteExpiry(draft.expiresAt)}`}
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
                         <button
-                          onClick={() => void navigator.clipboard.writeText(draft.linkUrl).then(() => toast.success("Link copiado novamente."))}
+                          onClick={() => void copyTextToClipboard(draft.linkUrl).then((copied) => {
+                            if (copied) {
+                              toast.success("Link copiado novamente.")
+                            } else {
+                              toast.warning("Nao foi possivel copiar automaticamente. Abra o link e copie pela barra do navegador.")
+                            }
+                          })}
                           className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Clipboard className="w-3.5 h-3.5" /> Copiar
                         </button>
+                        <a
+                          href={draft.linkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Abrir
+                        </a>
                         <button
                           onClick={() => void checkPendingDraft(draft)}
                           disabled={isChecking}
