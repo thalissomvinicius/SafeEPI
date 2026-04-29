@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { getSupabaseAdminConfigError, supabaseAdmin } from "@/lib/supabaseAdmin"
 import type { Company, Profile } from "@/types/database"
 
 type AppRole = Profile["role"]
@@ -80,6 +80,11 @@ async function ensureUserCompany(user: { id: string; email?: string | null }, ro
 }
 
 export async function GET(request: Request) {
+  const configError = getSupabaseAdminConfigError()
+  if (configError) {
+    return NextResponse.json({ error: configError }, { status: 500 })
+  }
+
   const authHeader = request.headers.get("authorization")
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null
 

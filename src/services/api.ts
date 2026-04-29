@@ -420,17 +420,18 @@ export const api = {
     const res = await fetch('/api/me', {
       headers: await this.getAuthHeaders(),
     });
-    const data = await res.json();
+    const data = await readResponseJson<{ error?: string; user?: CurrentUser }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel validar o perfil.");
-    return data.user as CurrentUser;
+    if (!data.user) throw new Error("Perfil nao encontrado na resposta do servidor.");
+    return data.user;
   },
 
   async getUsers() {
     const res = await fetch('/api/users', {
       headers: await this.getAuthHeaders(),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await readResponseJson<{ error?: string; users?: (Profile & { email: string, created_at: string, last_sign_in_at: string })[] }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel carregar usuarios.");
     return data.users as (Profile & { email: string, created_at: string, last_sign_in_at: string })[];
   },
 
@@ -440,8 +441,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await readResponseJson<{ error?: string }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel criar usuario.");
     return data;
   },
 
@@ -451,8 +452,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await readResponseJson<{ error?: string }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel atualizar usuario.");
     return data;
   },
 
@@ -461,8 +462,8 @@ export const api = {
       method: 'DELETE',
       headers: await this.getAuthHeaders(),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await readResponseJson<{ error?: string }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel excluir usuario.");
     return data;
   },
 
@@ -477,8 +478,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await readResponseJson<{ error?: string; link?: { token: string; status: string; expires_at: string } }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel criar link remoto.");
     return data as { link: { token: string; status: string; expires_at: string } };
   },
 
@@ -725,7 +726,7 @@ export const api = {
       body: JSON.stringify({ id, updates: finalUpdates })
     });
 
-    const result = await response.json();
+    const result = await readResponseJson<{ error?: string; employee?: Employee }>(response);
     console.log('[updateEmployee] Server response:', result);
 
     if (!response.ok) {
@@ -745,7 +746,7 @@ export const api = {
       body: JSON.stringify({ id, removePhoto: true })
     });
 
-    const result = await response.json();
+    const result = await readResponseJson<{ error?: string; employee?: Employee }>(response);
     console.log('[removeEmployeePhoto] Server response:', result);
 
     if (!response.ok) throw new Error(result.error || 'Erro ao remover foto');
