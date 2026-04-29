@@ -147,7 +147,7 @@ export default function UsersPage() {
           <p className="text-slate-500 font-medium mt-1">Controle de níveis de segurança, senhas e permissões da plataforma.</p>
         </div>
         <div className="flex items-center gap-4">
-            <div className="hidden sm:block bg-red-50 text-[#2563EB] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-100">
+            <div className="hidden sm:block bg-blue-50 text-[#2563EB] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-100">
             Acesso Restrito
             </div>
             <button 
@@ -169,7 +169,7 @@ export default function UsersPage() {
           users.map((user) => (
             <div 
               key={user.id} 
-              className={`bg-white border ${user.id === currentUser?.id ? 'border-[#2563EB]/30 bg-red-50/10' : 'border-slate-200'} rounded-2xl p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-sm hover:shadow-md transition-all group`}
+              className={`bg-white border ${user.id === currentUser?.id ? 'border-[#2563EB]/30 bg-blue-50/30' : 'border-slate-200'} rounded-2xl p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-sm hover:shadow-md transition-all group`}
             >
               <div className="flex items-center gap-4 flex-1">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black shrink-0 ${
@@ -226,7 +226,7 @@ export default function UsersPage() {
                     onClick={() => handleDelete(user.id)}
                     disabled={updatingId === user.id || user.id === currentUser?.id}
                     title="Excluir Usuário"
-                    className="p-2 bg-white border border-red-200 text-red-500 rounded-lg hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-50"
+                    className="p-2 bg-white border border-blue-200 text-red-500 rounded-lg hover:bg-blue-50 hover:text-red-700 transition-colors disabled:opacity-50"
                 >
                     <Trash2 className="w-4 h-4" />
                 </button>

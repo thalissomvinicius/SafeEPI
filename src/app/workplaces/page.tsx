@@ -170,7 +170,7 @@ export default function WorkplacesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredWorkplaces.map((w) => (
                 <div key={w.id} className="group p-6 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-[#2563EB]/30 transition-all hover:shadow-md relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-12 -mt-12 group-hover:bg-red-50 transition-colors" />
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-12 -mt-12 group-hover:bg-blue-50 transition-colors" />
                   <div className="flex items-center gap-3 mb-4 relative z-10">
                     <div className="bg-slate-100 p-2.5 rounded-xl group-hover:bg-[#2563EB] group-hover:text-white transition-colors">
                       <HardDrive className="w-5 h-5" />
@@ -269,7 +269,7 @@ export default function WorkplacesPage() {
                       <p className="text-2xl font-black text-blue-700">{detailsEmployees.length}</p>
                       <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-0.5">Colaboradores Ativos</p>
                     </div>
-                    <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-center">
+                    <div className="bg-red-50 border border-blue-100 rounded-2xl p-4 text-center">
                       <Shield className="w-6 h-6 text-[#2563EB] mx-auto mb-1" />
                       <p className="text-2xl font-black text-[#2563EB]">{detailsDeliveries.length}</p>
                       <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mt-0.5">Entregas de EPI</p>
@@ -355,13 +355,13 @@ export default function WorkplacesPage() {
                     Cancelar
                   </button>
                   <button type="submit" disabled={isSaving}
-                    className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center border-b-4 border-red-900">
+                    className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-900/15 flex items-center justify-center">
                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar Obra / Canteiro"}
                   </button>
                 </div>
                 {isAdmin && formData.id && (
                   <button type="button" disabled={isSaving || isDeleting} onClick={handleDeleteClick}
-                    className="w-full py-3 text-[10px] font-black text-blue-300 hover:text-red-600 uppercase tracking-widest border border-red-100 hover:border-red-300 hover:bg-red-50 rounded-2xl flex items-center justify-center gap-2 transition-all">
+                    className="w-full py-3 text-[10px] font-black text-slate-400 hover:text-red-600 uppercase tracking-widest border border-slate-200 hover:border-red-200 hover:bg-red-50 rounded-2xl flex items-center justify-center gap-2 transition-all">
                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     Desativar / Excluir Obra
                   </button>
@@ -375,8 +375,8 @@ export default function WorkplacesPage() {
       {/* â”€â”€â”€ MODAL: Confirmação de Exclusão â”€â”€â”€ */}
       {deleteModal.open && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-2 border-red-200">
-            <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-2 border-blue-200">
+            <div className="bg-red-50 p-6 border-b border-blue-100 flex items-start gap-4">
               <div className="p-3 bg-red-100 rounded-2xl shrink-0">
                 <AlertTriangle className="w-6 h-6 text-[#2563EB]" />
               </div>

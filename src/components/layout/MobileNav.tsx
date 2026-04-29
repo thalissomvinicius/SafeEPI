@@ -118,7 +118,7 @@ export function MobileNav() {
                     setIsMenuOpen(false)
                     logout()
                   }}
-                  className="w-full flex items-center justify-center gap-3 p-5 rounded-2xl bg-red-50 text-[#2563EB] font-black uppercase tracking-widest text-xs border-b-4 border-red-200 active:border-b-0 transition-all"
+                  className="w-full flex items-center justify-center gap-3 p-5 rounded-2xl bg-blue-50 text-[#2563EB] font-black uppercase tracking-widest text-xs shadow-sm hover:bg-blue-100 transition-all"
                 >
                   <LogOut className="w-5 h-5" />
                   Encerrar Sessão

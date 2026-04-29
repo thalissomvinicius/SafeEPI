@@ -177,7 +177,7 @@ export default function JobSectorsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
         <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 h-fit space-y-5">
           <div className="flex items-center gap-3">
-            <div className="bg-red-50 text-[#2563EB] rounded-xl p-3">
+            <div className="bg-blue-50 text-[#2563EB] rounded-xl p-3">
               <Icon className="w-5 h-5" />
             </div>
             <div>
@@ -280,7 +280,7 @@ export default function JobSectorsPage() {
                     <button
                       onClick={() => handleDelete(item)}
                       title="Desativar cadastro"
-                      className="text-red-500 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest border border-red-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
+                      className="text-red-500 hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest border border-blue-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

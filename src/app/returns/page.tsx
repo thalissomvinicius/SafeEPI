@@ -367,7 +367,7 @@ export default function ReturnsPage() {
                           key={opt.val}
                           type="button"
                           onClick={() => setReturnMotive(opt.val)}
-                          className={`p-3 rounded-2xl border text-xs font-black uppercase tracking-tight transition-all flex flex-col items-center justify-center text-center gap-1 ${returnMotive === opt.val ? 'border-[#2563EB] bg-red-50 text-[#2563EB] shadow-md shadow-red-900/10' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
+                          className={`p-3 rounded-2xl border text-xs font-black uppercase tracking-tight transition-all flex flex-col items-center justify-center text-center gap-1 ${returnMotive === opt.val ? 'border-[#2563EB] bg-blue-50 text-[#2563EB] shadow-md shadow-blue-900/10' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
                         >
                           <span>{opt.label}</span>
                           <span className={`text-[9px] font-bold ${returnMotive === opt.val ? 'text-blue-300' : 'text-slate-400'}`}>
@@ -429,7 +429,7 @@ export default function ReturnsPage() {
 
                   <button 
                     onClick={() => setStep(2)}
-                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10"
+                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-900/10"
                   >
                     Prosseguir para Assinatura
                   </button>

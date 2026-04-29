@@ -90,12 +90,12 @@ export default function LoginPage() {
           )}
 
           {errorMsg && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-400/30 text-red-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-400/30 text-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-black uppercase tracking-widest">Acesso nao autorizado</p>
-                  <p className="text-xs text-red-100/80 font-medium mt-1 leading-relaxed">{errorMsg}</p>
+                  <p className="text-xs text-blue-100/80 font-medium mt-1 leading-relaxed">{errorMsg}</p>
                 </div>
               </div>
             </div>
@@ -132,7 +132,7 @@ export default function LoginPage() {
               <button 
                 type="submit" 
                 disabled={loading || !!successMsg}
-                className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-blue-950/35 border-b-4 border-blue-900 flex items-center justify-center disabled:opacity-70"
+                className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-blue-950/35 shadow-lg shadow-blue-900/15 flex items-center justify-center disabled:opacity-70"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : successMsg ? "Acesso Confirmado" : "Iniciar Sessao"}
               </button>

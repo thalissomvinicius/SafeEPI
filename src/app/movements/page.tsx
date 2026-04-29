@@ -432,7 +432,7 @@ export default function MovementsPage() {
               {/* Simple PDF */}
               <button
                 onClick={handleSimplePDF}
-                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all"
+                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50 transition-all"
               >
                 <div className="w-14 h-14 rounded-2xl bg-slate-100 group-hover:bg-[#2563EB]/10 flex items-center justify-center mb-4 transition-all">
                   <FileDown className="w-7 h-7 text-slate-500 group-hover:text-[#2563EB]" />
@@ -449,7 +449,7 @@ export default function MovementsPage() {
               {/* Presentation PDF */}
               <button
                 onClick={handlePresentationPDF}
-                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all"
+                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50 transition-all"
               >
                 <div className="w-14 h-14 rounded-2xl bg-[#2563EB]/10 group-hover:bg-[#2563EB]/20 flex items-center justify-center mb-4 transition-all">
                   <Presentation className="w-7 h-7 text-[#2563EB]" />
@@ -458,7 +458,7 @@ export default function MovementsPage() {
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                   Relatório executivo com gráficos visuais e layout premium. Ideal para reuniões com gestores e diretoria.
                 </p>
-                <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#2563EB] bg-red-50 border border-red-100 px-3 py-1.5 rounded-lg">
+                <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#2563EB] bg-red-50 border border-blue-100 px-3 py-1.5 rounded-lg">
                   Paisagem Â· 2 páginas
                 </span>
               </button>

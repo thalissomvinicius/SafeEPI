@@ -413,7 +413,7 @@ function RemoteDeliveryContent() {
 
           {/* Error message */}
           {verifyError && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2 animate-in fade-in">
+            <div className="bg-red-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 animate-in fade-in">
               <ShieldAlert className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-red-700 text-[11px] sm:text-xs font-bold">{verifyError}</p>
             </div>

@@ -26,7 +26,7 @@ export default function SupportPage() {
           </div>
           
           <h3 className="font-black text-xl uppercase tracking-tighter mb-2 relative z-10">Fale com o Desenvolvedor</h3>
-          <p className="text-red-100 text-sm mb-8 relative z-10">Está com problemas ou tem alguma dúvida que não encontrou aqui? Entre em contato agora mesmo.</p>
+          <p className="text-blue-100 text-sm mb-8 relative z-10">Está com problemas ou tem alguma dúvida que não encontrou aqui? Entre em contato agora mesmo.</p>
           
           <div className="mt-auto space-y-3 relative z-10">
             <a 
@@ -40,7 +40,7 @@ export default function SupportPage() {
             </a>
             
             <div className="text-center pt-4 border-t border-white/20">
-              <p className="text-xs font-medium text-red-200">Suporte Técnico:</p>
+              <p className="text-xs font-medium text-blue-100">Suporte Técnico:</p>
               <p className="text-sm font-black tracking-widest mt-0.5">(91) 99169-7664</p>
               <p className="text-[10px] font-bold uppercase tracking-widest mt-2">Vinicius Dev</p>
             </div>
@@ -58,7 +58,7 @@ export default function SupportPage() {
             <div className="space-y-6">
               <div className="space-y-2 border-b border-slate-100 pb-4">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">1</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">1</span>
                   Como fazer uma Nova Entrega de EPI?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
@@ -68,7 +68,7 @@ export default function SupportPage() {
 
               <div className="space-y-2 border-b border-slate-100 pb-4">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">2</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">2</span>
                   O estoque não está baixando, e agora?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
@@ -78,7 +78,7 @@ export default function SupportPage() {
 
               <div className="space-y-2 border-b border-slate-100 pb-4">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">3</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">3</span>
                   Como gerar a Ficha NR-06 (Prontuário)?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
@@ -88,7 +88,7 @@ export default function SupportPage() {
 
               <div className="space-y-2">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">4</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">4</span>
                   Como dar baixa / devolução em um EPI?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">

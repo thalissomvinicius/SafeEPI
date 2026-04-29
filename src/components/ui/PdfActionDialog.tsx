@@ -61,7 +61,7 @@ export function PdfActionDialog({
             </a>
 
             <a
-              className="flex items-center justify-center gap-2 rounded-2xl bg-[#2563EB] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/15 transition-all hover:bg-[#1D4ED8]"
+              className="flex items-center justify-center gap-2 rounded-2xl bg-[#2563EB] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]"
               download={fileName}
               href={url}
               onClick={onDownload}

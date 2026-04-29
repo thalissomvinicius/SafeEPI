@@ -98,7 +98,7 @@ export default function InventoryPage() {
         <button 
           onClick={() => setIsModalOpen(true)}
           title="Abrir formulário de entrada de estoque"
-          className="w-full md:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xl shadow-blue-900/20 px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center border-b-4 border-red-900"
+          className="w-full md:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xl shadow-blue-900/20 px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-blue-900/15"
         >
           <Plus className="w-4 h-4 mr-2" />
           Registrar Entrada
@@ -165,7 +165,7 @@ export default function InventoryPage() {
                                     </td>
                                     <td className="px-4 md:px-6 py-5 text-center">
                                         {ppe.current_stock <= 10 ? (
-                                            <span className="px-1.5 sm:px-2 py-1 bg-red-50 text-[#2563EB] text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-red-100 block sm:inline-block">Estoque<br className="sm:hidden"/> Baixo</span>
+                                            <span className="px-1.5 sm:px-2 py-1 bg-blue-50 text-[#2563EB] text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-blue-100 block sm:inline-block">Estoque<br className="sm:hidden"/> Baixo</span>
                                         ) : (
                                             <span className="px-1.5 sm:px-2 py-1 bg-green-50 text-green-700 text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-green-100 block sm:inline-block">Ok</span>
                                         )}
@@ -315,7 +315,7 @@ export default function InventoryPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 border-b-4 border-red-900 flex items-center justify-center"
+                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 shadow-lg shadow-blue-900/15 flex items-center justify-center"
                 >
                   {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Movimentação"}
                 </button>

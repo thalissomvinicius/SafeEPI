@@ -787,7 +787,7 @@ export default function TrainingPage() {
                           status === "completed"
                             ? "bg-green-50 text-green-700 border-green-200"
                             : status === "expired"
-                              ? "bg-red-50 text-red-700 border-red-200"
+                              ? "bg-red-50 text-red-700 border-blue-200"
                               : "bg-amber-50 text-amber-700 border-amber-200"
                         }`}>
                           {status === "completed" ? "Assinaturas concluídas" : status === "expired" ? "Link expirado" : "Aguardando assinatura"}
@@ -941,7 +941,7 @@ export default function TrainingPage() {
                     <div className="pt-6">
                       <button 
                         type="submit"
-                        className="w-full px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-red-900/10"
+                        className="w-full px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-blue-900/10"
                       >
                         Próxima Etapa: Instrutor
                       </button>
@@ -979,7 +979,7 @@ export default function TrainingPage() {
                           <button
                             key={emp.id}
                             onClick={() => handleSelectTst(emp)}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all text-left group"
+                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50 transition-all text-left group"
                           >
                             {emp.photo_url ? (
                               <div className="relative">
@@ -1158,7 +1158,7 @@ export default function TrainingPage() {
                             participantRemoteStatus === "completed" || tstSignatureBase64
                               ? "bg-green-50 border-green-200 text-green-700"
                               : participantRemoteStatus === "expired"
-                                ? "bg-red-50 border-red-200 text-red-700"
+                                ? "bg-red-50 border-blue-200 text-red-700"
                                 : "bg-blue-50 border-blue-200 text-blue-700"
                           }`}>
                             {renderRemoteStatusText(tstSignatureBase64 ? "completed" : participantRemoteStatus, participantRemoteExpiresAt, "colaborador")}
@@ -1181,7 +1181,7 @@ export default function TrainingPage() {
                               instructorRemoteStatus === "completed" || instructorSignatureBase64
                                 ? "bg-green-50 border-green-200 text-green-700"
                                 : instructorRemoteStatus === "expired"
-                                  ? "bg-red-50 border-red-200 text-red-700"
+                                  ? "bg-red-50 border-blue-200 text-red-700"
                                   : "bg-blue-50 border-blue-200 text-blue-700"
                             }`}>
                               {renderRemoteStatusText(instructorSignatureBase64 ? "completed" : instructorRemoteStatus, instructorRemoteExpiresAt, "instrutor")}
@@ -1330,7 +1330,7 @@ export default function TrainingPage() {
                           instructorRemoteStatus === "completed" || instructorSignatureBase64
                             ? "bg-green-50 border-green-200 text-green-700"
                             : instructorRemoteStatus === "expired"
-                              ? "bg-red-50 border-red-200 text-red-700"
+                              ? "bg-red-50 border-blue-200 text-red-700"
                               : "bg-blue-50 border-blue-200 text-blue-700"
                         }`}>
                           {renderRemoteStatusText(instructorSignatureBase64 ? "completed" : instructorRemoteStatus, instructorRemoteExpiresAt, "instrutor")}

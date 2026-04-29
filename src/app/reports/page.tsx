@@ -462,7 +462,7 @@ export default function ReportsPage() {
       <div className="bg-slate-900 rounded-2xl p-5 sm:p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-slate-900/40 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#2563EB]/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
         <div className="flex items-center gap-4 relative z-10 w-full sm:w-auto">
-            <div className="bg-[#2563EB] p-4 rounded-xl shadow-lg shadow-red-900/50">
+            <div className="bg-[#2563EB] p-4 rounded-xl shadow-lg shadow-blue-900/30">
                 <ShieldCheck className="w-8 h-8 text-white" />
             </div>
             <div>

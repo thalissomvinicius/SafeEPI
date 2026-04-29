@@ -712,7 +712,7 @@ export default function EmployeesPage() {
                   const statusStyle = draft.status === "completed"
                     ? "bg-green-50 text-green-700 border-green-200"
                     : draft.status === "expired"
-                      ? "bg-red-50 text-red-700 border-red-200"
+                      ? "bg-red-50 text-red-700 border-blue-200"
                       : "bg-amber-50 text-amber-700 border-amber-200"
                   const StatusIcon = draft.status === "completed" ? ShieldCheck : draft.status === "expired" ? XCircle : Hourglass
 
@@ -901,7 +901,7 @@ export default function EmployeesPage() {
                           )}
                           <button 
                             onClick={() => openProfile(emp.id)}
-                            className="text-[#2563EB] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest border border-red-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
+                            className="text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest border border-blue-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
                           >
                           Prontuário
                           </button>
@@ -972,7 +972,7 @@ export default function EmployeesPage() {
                         )}
                         <button 
                           onClick={() => openProfile(emp.id)}
-                          className="flex-[2] text-white hover:bg-[#1D4ED8] bg-[#2563EB] font-black text-[10px] uppercase tracking-widest border border-red-900 py-3 rounded-xl shadow-sm shadow-blue-900/20 transition-all text-center"
+                          className="flex-[2] text-white hover:bg-[#1D4ED8] bg-[#2563EB] font-black text-[10px] uppercase tracking-widest border border-blue-600 py-3 rounded-xl shadow-sm shadow-blue-900/20 transition-all text-center"
                         >
                           Prontuário
                         </button>
@@ -1184,7 +1184,7 @@ export default function EmployeesPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-1 px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl shadow-lg shadow-red-900/10 uppercase tracking-widest transition-all flex items-center justify-center"
+                  className="flex-1 px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl shadow-lg shadow-blue-900/10 uppercase tracking-widest transition-all flex items-center justify-center"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar Cadastro"}
                 </button>
@@ -1274,7 +1274,7 @@ export default function EmployeesPage() {
                               {!delivery.returned_at && emp?.active && (
                                 <button 
                                   onClick={() => handleReturnItem(delivery.id)}
-                                  className="text-[#2563EB] hover:bg-red-50 text-[10px] font-black uppercase tracking-widest border border-red-100 px-4 py-2 rounded-xl transition-all self-start sm:self-auto"
+                                  className="text-[#2563EB] hover:bg-blue-50 text-[10px] font-black uppercase tracking-widest border border-blue-100 px-4 py-2 rounded-xl transition-all self-start sm:self-auto"
                                 >
                                   Dar Baixa
                                 </button>
@@ -1298,10 +1298,10 @@ export default function EmployeesPage() {
                   </div>
                   
                   {emp?.active && (
-                    <div className="p-4 border-t border-slate-200 bg-red-50/50 flex justify-end">
+                    <div className="p-4 border-t border-slate-200 bg-blue-50/50 flex justify-end">
                       <button 
                         onClick={handleTerminateEmployee}
-                        className="text-red-700 hover:bg-red-700 hover:text-white border border-red-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center"
+                        className="text-red-700 hover:bg-red-700 hover:text-white border border-blue-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center"
                       >
                         <UserMinus className="w-4 h-4 mr-2" />
                         Desligar Colaborador (Dar baixa em tudo)
@@ -1361,7 +1361,7 @@ export default function EmployeesPage() {
                       <button
                         key={emp.id}
                         onClick={() => handleSelectTst(emp)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all text-left group"
+                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50 transition-all text-left group"
                       >
                         {emp.photo_url ? (
                           <Image src={emp.photo_url} alt={emp.full_name} width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-green-500" unoptimized />

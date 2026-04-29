@@ -657,7 +657,7 @@ export default function DeliveryPage() {
               <a
                 href={lastPdfUrl}
                 download={lastPdfFileName || `ficha_epi_${COMPANY_CONFIG.shortName.toLowerCase()}.pdf`}
-                className="px-8 py-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl font-bold transition-all shadow-lg shadow-red-900/10 flex items-center justify-center border-b-4 border-red-900"
+                className="px-8 py-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/10 flex items-center justify-center shadow-lg shadow-blue-900/15"
               >
                 <FileDown className="w-5 h-5 mr-3" />
                 Baixar PDF
@@ -757,7 +757,7 @@ export default function DeliveryPage() {
                   const statusStyle = draft.status === "completed"
                     ? "bg-green-50 text-green-700 border-green-200"
                     : draft.status === "expired"
-                      ? "bg-red-50 text-red-700 border-red-200"
+                      ? "bg-red-50 text-red-700 border-blue-200"
                       : "bg-amber-50 text-amber-700 border-amber-200"
                   const StatusIcon = draft.status === "completed" ? CheckCircle2 : draft.status === "expired" ? XCircle : Hourglass
 
@@ -905,7 +905,7 @@ export default function DeliveryPage() {
                               <div 
                                 key={emp.id}
                                 onClick={() => handleEmployeeChange(emp.id)}
-                                className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-red-50/50 border-l-4 border-[#2563EB]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                                className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-blue-50/70 border-l-4 border-[#2563EB]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
                               >
                                 <div>
                                   <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-[#2563EB]' : 'text-slate-700'}`}>
@@ -983,7 +983,7 @@ export default function DeliveryPage() {
                                 <div 
                                   key={ppe.id}
                                   onClick={() => !inCart && setCurrentPpeId(ppe.id)}
-                                  className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${inCart ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-red-50/50 border-l-4 border-[#2563EB]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                                  className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${inCart ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-blue-50/70 border-l-4 border-[#2563EB]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
                                 >
                                   <div>
                                     <p className={`font-black text-xs uppercase tracking-tight ${isSelected ? 'text-[#2563EB]' : 'text-slate-700'}`}>{ppe.name}</p>
@@ -1107,7 +1107,7 @@ export default function DeliveryPage() {
                           <button 
                             onClick={() => removeFromCart(item.ppeId)} 
                             title="Remover EPI"
-                            className="text-blue-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors self-end sm:self-auto"
+                            className="text-slate-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors self-end sm:self-auto"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1125,7 +1125,7 @@ export default function DeliveryPage() {
                     onClick={() => {
                       if (validateCartForDelivery()) setStep(2)
                     }}
-                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
+                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/10 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
                   >
                     Avançar para Assinatura ({cart.length} EPI{cart.length !== 1 ? 's' : ''})
                   </button>
@@ -1237,7 +1237,7 @@ export default function DeliveryPage() {
                   <button 
                     disabled={isSaving}
                     onClick={handleManualSave}
-                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50 mt-4"
+                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center shadow-lg shadow-blue-900/15 disabled:opacity-50 mt-4"
                   >
                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : `CONFIRMAR ENTREGA (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
                   </button>

@@ -232,7 +232,7 @@ export default function HistoryPage() {
                         <button 
                           onClick={() => handleDownloadPDF(rec)}
                           disabled={downloadingId === rec.id}
-                          className="text-[#2563EB] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end w-full p-2 rounded transition-all group-hover:underline disabled:opacity-30"
+                          className="text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end w-full p-2 rounded transition-all group-hover:underline disabled:opacity-30"
                         >
                             {downloadingId === rec.id ? (
                               <Loader2 className="w-4 h-4 mr-1 animate-spin" />

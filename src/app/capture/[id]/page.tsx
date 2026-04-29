@@ -242,7 +242,7 @@ function CaptureContent() {
             <button 
               onClick={handleConfirm}
               disabled={isSaving}
-              className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-lg shadow-green-900/20 border-b-4 border-green-800 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/15 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSaving ? (
                 <><Loader2 className="w-5 h-5 animate-spin" /> Salvando...</>
@@ -300,7 +300,7 @@ function CaptureContent() {
 
             <button 
               onClick={handleCpfVerify}
-              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-blue-900/20 border-b-4 border-red-900 flex items-center justify-center gap-2"
+              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-blue-900/20 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4" /> Verificar CPF
             </button>
@@ -333,7 +333,7 @@ function CaptureContent() {
 
         <button 
           onClick={() => setIsCapturing(true)}
-          className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 border-b-4 border-red-900 flex items-center justify-center gap-2"
+          className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
         >
           <Camera className="w-5 h-5" /> Iniciar Câmera
         </button>

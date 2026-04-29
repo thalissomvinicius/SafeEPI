@@ -133,7 +133,7 @@ export default function PpesPage() {
                   setFormData({ id: undefined, name: "", ca: "", valCa: "", cost: "", stock: "" })
                   setIsModalOpen(true)
                 }}
-                className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center border-b-4 border-red-900"
+                className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center shadow-lg shadow-blue-900/15"
             >
                 <Plus className="w-4 h-4 mr-2" />
                 Novo EPI
@@ -199,7 +199,7 @@ export default function PpesPage() {
                       {(() => {
                         const diffDays = Math.ceil((new Date(ppe.ca_expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
                         if (diffDays < 0) {
-                          return <span className="text-[9px] font-black text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded uppercase tracking-widest">CA vencido</span>
+                          return <span className="text-[9px] font-black text-red-700 bg-red-50 border border-blue-200 px-2 py-1 rounded uppercase tracking-widest">CA vencido</span>
                         }
                         if (diffDays <= 90) {
                           return <span className="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded uppercase tracking-widest">Vence em {diffDays}d</span>
@@ -213,7 +213,7 @@ export default function PpesPage() {
                                 {ppe.current_stock || 0}
                             </span>
                             {ppe.current_stock <= 5 && (
-                                <span className="text-[8px] font-black text-[#2563EB] uppercase tracking-widest bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Repor!</span>
+                                <span className="text-[8px] font-black text-[#2563EB] uppercase tracking-widest bg-red-50 px-1.5 py-0.5 rounded border border-blue-100">Repor!</span>
                             )}
                         </div>
                     </td>
@@ -343,7 +343,7 @@ export default function PpesPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all flex items-center justify-center font-bold border-b-4 border-red-900 shadow-xl shadow-red-900/10"
+                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all flex items-center justify-center font-bold shadow-lg shadow-blue-900/15 shadow-xl shadow-blue-900/10"
                 >
                   {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar no Catálogo"}
                 </button>
