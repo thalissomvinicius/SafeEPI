@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
@@ -87,7 +87,7 @@ export default function DeliveryPage() {
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
   const [deliveryDate, setDeliveryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
 
-  // ── CART: Multi-EPI ──
+  // â”€â”€ CART: Multi-EPI â”€â”€
   const [cart, setCart] = useState<CartItem[]>([])
   const [currentPpeId, setCurrentPpeId] = useState("")
   const [currentQuantity, setCurrentQuantity] = useState(1)
@@ -276,7 +276,7 @@ export default function DeliveryPage() {
     }
   }
 
-  // ── Cart operations ──
+  // â”€â”€ Cart operations â”€â”€
   useEffect(() => {
     const timer = window.setTimeout(() => {
       loadPendingDrafts()
@@ -326,7 +326,7 @@ export default function DeliveryPage() {
     setPpeSearchTerm("")
     toast.success(autoReturnDeliveryIds.length > 0
       ? `${currentPpe.name} adicionado com baixa automatica da posse anterior.`
-      : `${currentPpe.name} adicionado à entrega.`
+      : `${currentPpe.name} adicionado Ã  entrega.`
     )
   }
 
@@ -365,7 +365,7 @@ export default function DeliveryPage() {
 
   const saveDelivery = useCallback(async (signatureDataUrl: string) => {
     if (cart.length === 0) {
-      toast.error("Adicione pelo menos um EPI à lista de entrega.")
+      toast.error("Adicione pelo menos um EPI Ã  lista de entrega.")
       return
     }
     if (!validateCartForDelivery()) return
@@ -518,7 +518,7 @@ export default function DeliveryPage() {
 
   const generateRemoteLink = async () => {
       if (cart.length === 0) {
-        toast.error("Adicione pelo menos um EPI à lista antes de gerar o link.")
+        toast.error("Adicione pelo menos um EPI Ã  lista antes de gerar o link.")
 	        return
 	      }
       if (cart.length > 1) {
@@ -626,7 +626,7 @@ export default function DeliveryPage() {
   if (loadingOptions) {
       return (
           <div className="flex flex-col items-center justify-center py-40">
-              <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
+              <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
               <p className="font-bold text-slate-500 uppercase tracking-widest text-xs italic">Sincronizando Sessão {COMPANY_CONFIG.shortName}...</p>
           </div>
       )
@@ -635,7 +635,7 @@ export default function DeliveryPage() {
   if (isSaved) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[70vh] p-6 animate-in zoom-in duration-500 text-center">
-        <div className="bg-red-50 p-4 rounded-full mb-6 text-[#8B1A1A]">
+        <div className="bg-red-50 p-4 rounded-full mb-6 text-[#2563EB]">
           <CheckCircle2 className="w-16 h-16" />
         </div>
         <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter italic">Comprovante Digital Gerado</h2>
@@ -651,13 +651,13 @@ export default function DeliveryPage() {
                 rel="noopener noreferrer"
                 className="px-8 py-4 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition-all border border-slate-200 shadow-sm flex items-center justify-center"
               >
-                <ExternalLink className="w-5 h-5 mr-3 text-[#8B1A1A]" />
+                <ExternalLink className="w-5 h-5 mr-3 text-[#2563EB]" />
                 Visualizar PDF
               </a>
               <a
                 href={lastPdfUrl}
                 download={lastPdfFileName || `ficha_epi_${COMPANY_CONFIG.shortName.toLowerCase()}.pdf`}
-                className="px-8 py-4 bg-[#8B1A1A] hover:bg-[#681313] text-white rounded-xl font-bold transition-all shadow-lg shadow-red-900/10 flex items-center justify-center border-b-4 border-red-900"
+                className="px-8 py-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl font-bold transition-all shadow-lg shadow-red-900/10 flex items-center justify-center border-b-4 border-red-900"
               >
                 <FileDown className="w-5 h-5 mr-3" />
                 Baixar PDF
@@ -677,7 +677,7 @@ export default function DeliveryPage() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto pb-24 lg:pb-8">
-      <div className="mb-6 lg:mb-8 border-l-4 border-[#8B1A1A] pl-4">
+      <div className="mb-6 lg:mb-8 border-l-4 border-[#2563EB] pl-4">
         <h1 className="text-2xl lg:text-3xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
         <p className="text-slate-500 font-medium text-sm lg:text-base mt-1">Compliance NR-06 com Rastreabilidade de Autoria.</p>
       </div>
@@ -686,7 +686,7 @@ export default function DeliveryPage() {
         <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
           <button
             onClick={() => setViewMode("new")}
-            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "new" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "new" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
           >
             <Plus className="w-4 h-4" /> Nova Entrega
           </button>
@@ -711,7 +711,7 @@ export default function DeliveryPage() {
           <select
             value={remoteWaitHours}
             onChange={(event) => setRemoteWaitHours(Number(event.target.value))}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#8B1A1A]"
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#2563EB]"
             title="Tempo de espera da assinatura"
           >
             <option value={1}>1h</option>
@@ -849,8 +849,8 @@ export default function DeliveryPage() {
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40">
         {/* Progress Bar Header */}
         <div className="flex bg-slate-50 border-b border-slate-100">
-          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 1 ? 'bg-white text-[#8B1A1A] border-b-2 border-[#8B1A1A]' : 'text-slate-400 border-b-2 border-transparent'}`}>1. Seleção e Carrinho</div>
-          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 2 ? 'bg-white text-[#8B1A1A] border-b-2 border-[#8B1A1A]' : 'text-slate-400 border-b-2 border-transparent'}`}>2. Autenticação e Assinatura</div>
+          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 1 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-400 border-b-2 border-transparent'}`}>1. Seleção e Carrinho</div>
+          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 2 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-400 border-b-2 border-transparent'}`}>2. Autenticação e Assinatura</div>
         </div>
 
         <div className="p-4 sm:p-6 lg:p-8">
@@ -860,14 +860,14 @@ export default function DeliveryPage() {
               {/* --- COLUNA ESQUERDA: DADOS BASE --- */}
               <div className="lg:col-span-5 space-y-6 lg:border-r lg:border-slate-100 lg:pr-8">
                 <div className="mb-2 hidden lg:block">
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><User className="w-5 h-5 text-[#8B1A1A]"/> Favorecido</h2>
+                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><User className="w-5 h-5 text-[#2563EB]"/> Favorecido</h2>
                   <p className="text-xs text-slate-400 font-medium mt-1">Quem irá receber os equipamentos.</p>
                 </div>
 
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-[#8B1A1A]" />
+                      <Calendar className="w-4 h-4 text-[#2563EB]" />
                       Data da Entrega
                     </h3>
                     <p className="text-[10px] font-medium text-slate-500 italic mt-0.5">Entregas retroativas.</p>
@@ -877,7 +877,7 @@ export default function DeliveryPage() {
                     title="Data da Entrega"
                     value={deliveryDate}
                     onChange={(e) => setDeliveryDate(e.target.value)}
-                    className="w-full sm:w-auto bg-white border border-slate-200 text-slate-900 rounded-xl px-4 py-3 sm:py-2 outline-none focus:border-[#8B1A1A] font-bold text-sm shadow-sm"
+                    className="w-full sm:w-auto bg-white border border-slate-200 text-slate-900 rounded-xl px-4 py-3 sm:py-2 outline-none focus:border-[#2563EB] font-bold text-sm shadow-sm"
                   />
                 </div>
 
@@ -891,7 +891,7 @@ export default function DeliveryPage() {
                       placeholder="Busca por nome ou CPF..."
                       value={employeeSearchTerm}
                       onChange={(e) => setEmployeeSearchTerm(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#2563EB] focus:bg-white transition-all font-bold text-sm"
                     />
                     
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
@@ -905,10 +905,10 @@ export default function DeliveryPage() {
                               <div 
                                 key={emp.id}
                                 onClick={() => handleEmployeeChange(emp.id)}
-                                className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                                className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-red-50/50 border-l-4 border-[#2563EB]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
                               >
                                 <div>
-                                  <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>
+                                  <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-[#2563EB]' : 'text-slate-700'}`}>
                                     {emp.full_name}
                                   </p>
                                   {emp.cpf && (
@@ -919,7 +919,7 @@ export default function DeliveryPage() {
                                     </div>
                                   )}
                                 </div>
-                                {isSelected && <CheckCircle2 className="w-5 h-5 text-[#8B1A1A]" />}
+                                {isSelected && <CheckCircle2 className="w-5 h-5 text-[#2563EB]" />}
                               </div>
                             )
                           })
@@ -942,9 +942,9 @@ export default function DeliveryPage() {
                     title="Unidade / Local de Entrega"
                     value={selectedWorkplaceId}
                     onChange={(e) => setSelectedWorkplaceId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm appearance-none cursor-pointer"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#2563EB] focus:bg-white transition-all font-bold text-sm appearance-none cursor-pointer"
                   >
-                    <option value="">— Nenhuma Unidade / Sede —</option>
+                    <option value="">- Nenhuma Unidade / Sede -</option>
                     {workplaces.map(wp => (
                       <option key={wp.id} value={wp.id}>{wp.name}</option>
                     ))}
@@ -955,7 +955,7 @@ export default function DeliveryPage() {
               {/* --- COLUNA DIREITA: EPI E CARRINHO --- */}
               <div className="lg:col-span-7 space-y-6 flex flex-col h-full">
                 <div className="mb-2 hidden lg:block">
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Package className="w-5 h-5 text-[#8B1A1A]"/> Equipamentos</h2>
+                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Package className="w-5 h-5 text-[#2563EB]"/> Equipamentos</h2>
                   <p className="text-xs text-slate-400 font-medium mt-1">Busque os EPIs e adicione ao carrinho.</p>
                 </div>
 
@@ -968,7 +968,7 @@ export default function DeliveryPage() {
                         placeholder="Busca por CA ou Nome..."
                         value={ppeSearchTerm}
                         onChange={(e) => setPpeSearchTerm(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-[#2563EB] focus:bg-white transition-all font-bold text-sm"
                       />
                       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                         <div className="max-h-[220px] overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
@@ -983,17 +983,17 @@ export default function DeliveryPage() {
                                 <div 
                                   key={ppe.id}
                                   onClick={() => !inCart && setCurrentPpeId(ppe.id)}
-                                  className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${inCart ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-red-50/50 border-l-4 border-[#8B1A1A]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                                  className={`p-4 cursor-pointer transition-colors flex items-center justify-between ${inCart ? 'opacity-40 cursor-not-allowed' : isSelected ? 'bg-red-50/50 border-l-4 border-[#2563EB]' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
                                 >
                                   <div>
-                                    <p className={`font-black text-xs uppercase tracking-tight ${isSelected ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>{ppe.name}</p>
+                                    <p className={`font-black text-xs uppercase tracking-tight ${isSelected ? 'text-[#2563EB]' : 'text-slate-700'}`}>{ppe.name}</p>
                                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                       <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded">CA {ppe.ca_number}</span>
                                       {expired && <span className="text-[8px] font-black bg-red-100 text-red-600 px-2 py-0.5 rounded">Vencido</span>}
                                       {inCart && <span className="text-[8px] font-black bg-green-100 text-green-600 px-2 py-0.5 rounded">Na lista</span>}
                                     </div>
                                   </div>
-                                  {isSelected && !inCart && <CheckCircle2 className="w-4 h-4 text-[#8B1A1A]" />}
+                                  {isSelected && !inCart && <CheckCircle2 className="w-4 h-4 text-[#2563EB]" />}
                                 </div>
                               )
                             })
@@ -1009,7 +1009,7 @@ export default function DeliveryPage() {
                           <label htmlFor="quantity-input" className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Quantidade</label>
                           <input 
                             id="quantity-input" type="number" min="1" max="100" title="Quantidade do EPI"
-                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-4 md:py-3 outline-none focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-sm text-center"
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-4 md:py-3 outline-none focus:border-[#2563EB] focus:bg-white transition-all font-bold text-sm text-center"
                             value={currentQuantity}
                             onChange={(e) => setCurrentQuantity(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
                           />
@@ -1019,7 +1019,7 @@ export default function DeliveryPage() {
                           <select
                             id="reason-select" title="Motivo da entrega"
                             value={effectiveCurrentReason} onChange={(e) => setCurrentReason(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-4 md:py-3 outline-none focus:border-[#8B1A1A] font-bold text-[11px]"
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-4 md:py-3 outline-none focus:border-[#2563EB] font-bold text-[11px]"
                           >
                             <option value="Primeira Entrega">Prim. Entrega</option>
                             <option value={SUBSTITUTION_REASON}>Substituição</option>
@@ -1053,14 +1053,14 @@ export default function DeliveryPage() {
                       {currentPpe && currentPpe.lifespan_days > 0 && (
                         <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Útil (NR-06)</span>
+                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Ãštil (NR-06)</span>
                             <span className="text-xs font-bold text-orange-800">{currentPpe.lifespan_days} dias</span>
                           </div>
                           <div className="flex items-center justify-between mt-1 pt-3 border-t border-orange-200/50">
                             <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
                               <Clock className="w-3 h-3" /> Próxima Troca
                             </span>
-                            <span className="text-xs font-black text-[#8B1A1A]">
+                            <span className="text-xs font-black text-[#2563EB]">
                               {format(addDays(new Date(`${deliveryDate}T12:00:00`), currentPpe.lifespan_days), 'dd/MM/yyyy')}
                             </span>
                           </div>
@@ -1072,7 +1072,7 @@ export default function DeliveryPage() {
                         disabled={!currentPpe || isCurrentPpeExpired}
                         className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 mt-2"
                       >
-                        <Plus className="w-4 h-4" /> Adicionar à Entrega
+                        <Plus className="w-4 h-4" /> Adicionar Ã  Entrega
                       </button>
                     </div>
                   </div>
@@ -1107,7 +1107,7 @@ export default function DeliveryPage() {
                           <button 
                             onClick={() => removeFromCart(item.ppeId)} 
                             title="Remover EPI"
-                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors self-end sm:self-auto"
+                            className="text-blue-300 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors self-end sm:self-auto"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1125,7 +1125,7 @@ export default function DeliveryPage() {
                     onClick={() => {
                       if (validateCartForDelivery()) setStep(2)
                     }}
-                    className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
+                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-red-900/10 border-b-4 border-red-900 flex items-center justify-center gap-2"
                   >
                     Avançar para Assinatura ({cart.length} EPI{cart.length !== 1 ? 's' : ''})
                   </button>
@@ -1138,7 +1138,7 @@ export default function DeliveryPage() {
             <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-right-4">
               <div className="bg-slate-50 p-6 rounded-2xl text-sm border border-slate-200 shadow-inner">
                 <div className="flex items-center gap-2 mb-3">
-                    <span className="bg-[#8B1A1A] text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest">NR-06 Compliance</span>
+                    <span className="bg-[#2563EB] text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest">NR-06 Compliance</span>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{selectedWorkplace?.name || "Sede"}</span>
                 </div>
                 <p className="font-medium text-slate-700 leading-relaxed text-sm">
@@ -1147,9 +1147,9 @@ export default function DeliveryPage() {
                 <ul className="mt-4 space-y-2">
                   {cart.map(item => (
                     <li key={item.ppeId} className="text-xs text-slate-600 font-bold flex items-start gap-2 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                      <span className="w-1.5 h-1.5 bg-[#8B1A1A] rounded-full flex-shrink-0 mt-1.5" />
+                      <span className="w-1.5 h-1.5 bg-[#2563EB] rounded-full flex-shrink-0 mt-1.5" />
                       <span>
-                        {item.ppeName} <span className="text-slate-400 font-medium">(CA {item.ppeCaNumber})</span> <br className="sm:hidden" /><span className="sm:ml-2 text-[#8B1A1A] bg-red-50 px-2 py-0.5 rounded text-[10px] tracking-widest">Qtd: {item.quantity}</span>
+                        {item.ppeName} <span className="text-slate-400 font-medium">(CA {item.ppeCaNumber})</span> <br className="sm:hidden" /><span className="sm:ml-2 text-[#2563EB] bg-red-50 px-2 py-0.5 rounded text-[10px] tracking-widest">Qtd: {item.quantity}</span>
                         {item.autoReturnNote && (
                           <span className="block mt-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
                             {item.autoReturnNote}
@@ -1225,7 +1225,7 @@ export default function DeliveryPage() {
                     <>
                   <div className="flex justify-between items-end px-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área de Assinatura</label>
-                    <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>
+                    <button onClick={clearSignature} className="text-[10px] font-black text-[#2563EB] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>
                   </div>
                   <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-200 shadow-inner h-64 touch-none cursor-crosshair">
                     <SignatureCanvas 
@@ -1237,7 +1237,7 @@ export default function DeliveryPage() {
                   <button 
                     disabled={isSaving}
                     onClick={handleManualSave}
-                    className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50 mt-4"
+                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center border-b-4 border-red-900 disabled:opacity-50 mt-4"
                   >
                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : `CONFIRMAR ENTREGA (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
                   </button>
@@ -1294,7 +1294,7 @@ export default function DeliveryPage() {
 
               <div className="pt-6 flex justify-center border-t border-slate-100">
                 <button onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-800 transition-colors bg-slate-50 px-6 py-3 rounded-xl">
-                  ← Voltar e Alterar EPIs
+                  â† Voltar e Alterar EPIs
                 </button>
               </div>
             </div>

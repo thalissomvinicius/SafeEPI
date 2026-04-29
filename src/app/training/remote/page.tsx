@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
@@ -106,7 +106,7 @@ function RemoteTrainingSignatureContent() {
   if (phase === "loading") {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
       </div>
     )
   }
@@ -153,12 +153,12 @@ function RemoteTrainingSignatureContent() {
             placeholder="000.000.000-00"
             maxLength={14}
             inputMode="numeric"
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-center font-black tracking-widest outline-none focus:border-[#8B1A1A]"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-center font-black tracking-widest outline-none focus:border-[#2563EB]"
           />
           <button
             onClick={verifyCpf}
             disabled={cpfInput.replace(/\D/g, "").length < 11}
-            className="w-full py-4 rounded-xl bg-[#8B1A1A] text-white font-black uppercase tracking-widest text-xs disabled:opacity-40"
+            className="w-full py-4 rounded-xl bg-[#2563EB] text-white font-black uppercase tracking-widest text-xs disabled:opacity-40"
           >
             Verificar CPF
           </button>
@@ -228,7 +228,7 @@ function RemoteTrainingSignatureContent() {
                   }
                   void saveSignature(sigCanvas.current!.toDataURL("image/png"), capturedPhotoBase64)
                 }}
-                className="flex-1 py-3 rounded-xl bg-[#8B1A1A] text-white font-black uppercase tracking-widest text-[10px] disabled:opacity-50"
+                className="flex-1 py-3 rounded-xl bg-[#2563EB] text-white font-black uppercase tracking-widest text-[10px] disabled:opacity-50"
               >
                 {isSaving ? "Salvando..." : "Confirmar assinatura"}
               </button>
@@ -253,7 +253,7 @@ function RemoteTrainingSignatureContent() {
 
 export default function RemoteTrainingSignaturePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A]" /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" /></div>}>
       <RemoteTrainingSignatureContent />
     </Suspense>
   )

@@ -154,7 +154,9 @@ export async function POST(request: Request) {
       .filter((id) => typeof id === "string" && id.length > 0)
 
     const metadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
+    const companyId = String(formData.get("company_id") || "") || null
     const insertPayload = {
+      company_id: companyId,
       document_type: documentType,
       employee_id: employeeId,
       delivery_id: String(formData.get("delivery_id") || "") || null,

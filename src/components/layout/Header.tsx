@@ -39,7 +39,7 @@ export function Header() {
       <div className="flex items-center gap-2 md:gap-4">
         <div className="hidden md:flex flex-col items-end mr-2">
             <span className="text-xs font-black text-slate-800 uppercase tracking-tighter">{user?.user_metadata?.full_name || user?.email}</span>
-            <span className="text-[9px] font-black text-[#8B1A1A] uppercase tracking-widest italic">{user?.role}</span>
+            <span className="text-[9px] font-black text-[#2563EB] uppercase tracking-widest italic">{user?.role}</span>
         </div>
         
         <NotificationBell />

@@ -20,8 +20,8 @@ export const COMPANY_CONFIG = {
   logoUrl: process.env.NEXT_PUBLIC_COMPANY_LOGO_URL || "",
   
   // Cores da marca (hex) - usadas nos PDFs
-  primaryColor: "#8B1A1A",   // Vermelho SafeEPI
-  primaryColorRgb: [139, 26, 26] as [number, number, number],
+  primaryColor: "#2563EB",
+  primaryColorRgb: [37, 99, 235] as [number, number, number],
   
   // Rodapé dos documentos
   systemName: "Sistema SESMT Digital",

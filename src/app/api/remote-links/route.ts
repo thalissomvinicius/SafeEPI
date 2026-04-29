@@ -17,6 +17,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "employee_id e type são obrigatórios" }, { status: 400 })
     }
 
+    if (!auth.user.company_id) {
+      return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
+    }
+
     const dbType = type === "training_signature" ? "delivery" : type
     const linkData = type === "training_signature"
       ? { ...(data || {}), remoteType: "training_signature" }
@@ -27,6 +31,7 @@ export async function POST(request: NextRequest) {
         .from("remote_links")
         .update({ status: "expired" })
         .eq("employee_id", employee_id)
+        .eq("company_id", auth.user.company_id)
         .eq("type", dbType)
         .eq("status", "pending")
     }
@@ -38,6 +43,7 @@ export async function POST(request: NextRequest) {
       .from("remote_links")
       .insert({
         employee_id,
+        company_id: auth.user.company_id,
         type: dbType,
         token,
         status: "pending",

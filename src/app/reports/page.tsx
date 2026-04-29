@@ -45,7 +45,7 @@ export default function ReportsPage() {
   const [investmentByWorkplace, setInvestmentByWorkplace] = useState<{name: string, value: number}[]>([])
   const [ppeUsageData, setPpeUsageData] = useState<{name: string, value: number}[]>([])
   
-  const COLORS = ['#8B1A1A', '#1e293b', '#475569', '#64748b', '#94a3b8']
+  const COLORS = ['#2563EB', '#1e293b', '#475569', '#64748b', '#94a3b8']
 
   // Auth protection
   useEffect(() => {
@@ -173,7 +173,7 @@ export default function ReportsPage() {
   if (authLoading || (user && user.role === 'ALMOXARIFE')) {
     return (
       <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
+        <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
         <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Validando acesso...</p>
       </div>
     )
@@ -232,10 +232,10 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 overflow-hidden">
         <div>
             <div className="flex items-center gap-2 mb-1">
-                <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Analytics / Supabase</span>
+                <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Analytics / Supabase</span>
             </div>
             <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-                <TrendingDown className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+                <TrendingDown className="w-6 h-6 mr-2 text-[#2563EB]" />
                 BI & Inteligência SafeEPI
             </h1>
             <p className="text-slate-500 text-sm mt-1 font-medium italic">Extração de custos operacionais e conformidade normativa.</p>
@@ -249,7 +249,7 @@ export default function ReportsPage() {
               title="Filtro de Período"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-              className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 pl-10 pr-8 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#8B1A1A] appearance-none"
+              className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 pl-10 pr-8 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB] appearance-none"
             >
               <option value="month">Neste Mês</option>
               <option value="last30">Ãšltimos 30 Dias</option>
@@ -272,7 +272,7 @@ export default function ReportsPage() {
                   setSpecificMonthSel(e.target.value)
                   setSpecificMonth(`${specificYearSel}-${e.target.value}`)
                 }}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#8B1A1A]"
+                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               >
                 {['01','02','03','04','05','06','07','08','09','10','11','12'].map((m, i) => (
                   <option key={m} value={m}>{['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][i]}</option>
@@ -287,7 +287,7 @@ export default function ReportsPage() {
                   setSpecificYearSel(e.target.value)
                   setSpecificMonth(`${e.target.value}-${specificMonthSel}`)
                 }}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#8B1A1A]"
+                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               >
                 {[2023,2024,2025,2026,2027].map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -303,7 +303,7 @@ export default function ReportsPage() {
                 title="Data Início"
                 value={customStartDate}
                 onChange={e => setCustomStartDate(e.target.value)}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#8B1A1A]"
+                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               />
               <span className="flex items-center text-slate-400 font-bold">a</span>
               <input 
@@ -311,7 +311,7 @@ export default function ReportsPage() {
                 title="Data Fim"
                 value={customEndDate}
                 onChange={e => setCustomEndDate(e.target.value)}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#8B1A1A]"
+                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               />
             </div>
           )}
@@ -319,7 +319,7 @@ export default function ReportsPage() {
             onClick={handleExportPDF}
             className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm"
           >
-              <Download className="w-4 h-4 mr-2 text-[#8B1A1A]" />
+              <Download className="w-4 h-4 mr-2 text-[#2563EB]" />
               Exportar PDF
           </button>
         </div>
@@ -331,7 +331,7 @@ export default function ReportsPage() {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{stat.label}</p>
             <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-slate-800 tracking-tighter">{stat.value}</span>
-                <span className="text-[10px] font-bold text-[#8B1A1A] bg-red-50 px-2 py-0.5 rounded">
+                <span className="text-[10px] font-bold text-[#2563EB] bg-red-50 px-2 py-0.5 rounded">
                     {stat.change}
                 </span>
             </div>
@@ -348,7 +348,7 @@ export default function ReportsPage() {
                       <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Investimento por Canteiro</h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Distribuição total de custos (R$)</p>
                   </div>
-                  <PieChartIcon className="w-5 h-5 text-[#8B1A1A]" />
+                  <PieChartIcon className="w-5 h-5 text-[#2563EB]" />
               </div>
               
               <div className="h-[300px] min-h-[300px] w-full min-w-0">
@@ -386,7 +386,7 @@ export default function ReportsPage() {
                       <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Top 5 Consumo de EPIs</h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Itens mais retirados pela equipe</p>
                   </div>
-                  <BarChartIcon className="w-5 h-5 text-[#8B1A1A]" />
+                  <BarChartIcon className="w-5 h-5 text-[#2563EB]" />
               </div>
               
               <div className="h-[300px] min-h-[300px] w-full min-w-0">
@@ -408,7 +408,7 @@ export default function ReportsPage() {
                           />
                           <Bar 
                             dataKey="value" 
-                            fill="#8B1A1A" 
+                            fill="#2563EB" 
                             radius={[0, 10, 10, 0]} 
                             barSize={20}
                             animationDuration={2000}
@@ -425,7 +425,7 @@ export default function ReportsPage() {
                   <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Ranking de Investimento</h3>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Valores totais por canteiro de obra</p>
               </div>
-              <TrendingDown className="w-5 h-5 text-[#8B1A1A]" />
+              <TrendingDown className="w-5 h-5 text-[#2563EB]" />
           </div>
           
           <div className="space-y-6 flex-1 overflow-y-auto pr-2">
@@ -433,11 +433,11 @@ export default function ReportsPage() {
                 <div key={i} className="space-y-2">
                     <div className="flex justify-between items-end">
                         <span className="text-sm font-bold text-slate-600 uppercase tracking-tighter">{wp.name}</span>
-                        <span className="text-xs font-black text-[#8B1A1A]">R$ {wp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-xs font-black text-[#2563EB]">R$ {wp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div 
-                            className="h-full bg-[#8B1A1A] transition-all duration-1000" 
+                            className="h-full bg-[#2563EB] transition-all duration-1000" 
                             ref={(el) => {
                                 if (el) {
                                     el.style.width = `${Math.min(100, (wp.value / (investmentByWorkplace[0]?.value || 1)) * 100)}%`
@@ -455,14 +455,14 @@ export default function ReportsPage() {
               O algoritmo SafeEPI analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
             </p>
             <div className="mt-8 relative w-24 h-24">
-               <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#8B1A1A]/20 border-r-[#8B1A1A]/40 animate-[spin_3s_linear_infinite] transition-all"></div>
+               <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#2563EB]/20 border-r-[#2563EB]/40 animate-[spin_3s_linear_infinite] transition-all"></div>
             </div>
         </div>
 
       <div className="bg-slate-900 rounded-2xl p-5 sm:p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-slate-900/40 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#8B1A1A]/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#2563EB]/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
         <div className="flex items-center gap-4 relative z-10 w-full sm:w-auto">
-            <div className="bg-[#8B1A1A] p-4 rounded-xl shadow-lg shadow-red-900/50">
+            <div className="bg-[#2563EB] p-4 rounded-xl shadow-lg shadow-red-900/50">
                 <ShieldCheck className="w-8 h-8 text-white" />
             </div>
             <div>
@@ -483,7 +483,7 @@ export default function ReportsPage() {
                 onClick={handleExportPDF}
                 className="flex-1 sm:flex-none bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-slate-50 transition-all flex items-center justify-center border-b-4 border-slate-200 gap-2"
             >
-                <Download className="w-4 h-4 text-[#8B1A1A]" />
+                <Download className="w-4 h-4 text-[#2563EB]" />
                 PDF
             </button>
         </div>

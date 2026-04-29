@@ -111,13 +111,13 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-100 pb-8 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">SESMT Digital • Cloud</span>
+            <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">SESMT Digital • Cloud</span>
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-slate-800">SafeEPI Dashboard</h1>
           <p className="text-slate-500 font-medium mt-1">Gestão de Segurança Sincronizada com Supabase.</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/delivery" className="bg-[#8B1A1A] hover:bg-[#681313] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-red-900/20 transition-all flex items-center">
+          <Link href="/delivery" className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center">
             Nova Entrega <ArrowRight className="w-4 h-4 ml-2" />
           </Link>
         </div>
@@ -125,7 +125,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
-          { title: "Entregas Realizadas", value: stats.deliveries, subtitle: "Total no banco de dados", icon: PackageCheck, color: "text-[#8B1A1A]", bg: "bg-red-50" },
+          { title: "Entregas Realizadas", value: stats.deliveries, subtitle: "Total no banco de dados", icon: PackageCheck, color: "text-[#2563EB]", bg: "bg-red-50" },
           { title: "Equipe Ativa", value: stats.employees, subtitle: "Colaboradores cadastrados", icon: Users, color: "text-slate-800", bg: "bg-slate-100" },
           { title: "Estoque Baixo", value: stats.lowStock, subtitle: "Itens com 5 ou menos", icon: Boxes, color: "text-blue-700", bg: "bg-blue-50" },
           { title: "PDFs Auditados", value: stats.signedDocuments, subtitle: "Arquivo juridico ativo", icon: Archive, color: "text-emerald-700", bg: "bg-emerald-50" },
@@ -157,7 +157,7 @@ export default function Dashboard() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Ãšltimos 7 dias em tempo real</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-[#8B1A1A] rounded-full animate-pulse"></div>
+                    <div className="w-3 h-3 bg-[#2563EB] rounded-full animate-pulse"></div>
                     <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Live Sync</span>
                 </div>
             </div>
@@ -167,8 +167,8 @@ export default function Dashboard() {
                     <AreaChart data={chartData}>
                         <defs>
                             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#8B1A1A" stopOpacity={0.1}/>
-                                <stop offset="95%" stopColor="#8B1A1A" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="#2563EB" stopOpacity={0.1}/>
+                                <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -183,12 +183,12 @@ export default function Dashboard() {
                         <Tooltip 
                             formatter={(value) => [value ?? 0, "Entregas"]}
                             contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold'}}
-                            cursor={{stroke: '#8B1A1A', strokeWidth: 2, strokeDasharray: '4 4'}}
+                            cursor={{stroke: '#2563EB', strokeWidth: 2, strokeDasharray: '4 4'}}
                         />
                         <Area 
                             type="monotone" 
                             dataKey="value" 
-                            stroke="#8B1A1A" 
+                            stroke="#2563EB" 
                             strokeWidth={4} 
                             fillOpacity={1} 
                             fill="url(#colorValue)" 
@@ -225,7 +225,7 @@ export default function Dashboard() {
                 </div>
             </div>
             <div className="p-6 bg-slate-50 mt-auto border-t border-slate-100">
-                <Link href="/history" className="text-[10px] font-black text-[#8B1A1A] uppercase tracking-widest hover:underline flex items-center justify-center">
+                <Link href="/history" className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest hover:underline flex items-center justify-center">
                     Ver auditoria completa <ArrowRight className="w-3 h-3 ml-1" />
                 </Link>
             </div>

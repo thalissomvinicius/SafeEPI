@@ -59,15 +59,15 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 overflow-y-auto relative py-12 px-4">
-      <div className="absolute inset-x-0 top-0 h-px bg-red-300/30 pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-px bg-blue-300/30 pointer-events-none" />
 
       <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-700">
         <div className="text-center mb-10">
-          <div className="mx-auto w-16 h-16 bg-[#8B1A1A] p-3 rounded-2xl shadow-xl shadow-red-950/50 mb-6 flex items-center justify-center">
+          <div className="mx-auto w-16 h-16 bg-[#2563EB] p-3 rounded-2xl shadow-xl shadow-blue-950/40 mb-6 flex items-center justify-center">
             <ShieldCheck className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-black text-white uppercase tracking-tight">
-            SafeEPI <span className="text-red-400">SESMT</span>
+            SafeEPI <span className="text-blue-300">SESMT</span>
           </h1>
           <p className="text-slate-400 text-sm mt-3 font-medium uppercase tracking-[0.2em]">Autenticacao Restrita</p>
         </div>
@@ -109,7 +109,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading || !!successMsg}
-                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-600 outline-none disabled:opacity-70"
+                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-600 outline-none disabled:opacity-70"
                 placeholder="nome@empresa.com.br"
                 required
               />
@@ -122,7 +122,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading || !!successMsg}
-                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-600 outline-none disabled:opacity-70"
+                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-600 outline-none disabled:opacity-70"
                 placeholder="Digite sua senha"
                 required
               />
@@ -132,7 +132,7 @@ export default function LoginPage() {
               <button 
                 type="submit" 
                 disabled={loading || !!successMsg}
-                className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-red-950/40 border-b-4 border-red-950 flex items-center justify-center disabled:opacity-70"
+                className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all shadow-2xl shadow-blue-950/35 border-b-4 border-blue-900 flex items-center justify-center disabled:opacity-70"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : successMsg ? "Acesso Confirmado" : "Iniciar Sessao"}
               </button>

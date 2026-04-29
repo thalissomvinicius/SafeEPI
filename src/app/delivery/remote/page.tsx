@@ -315,7 +315,7 @@ function RemoteDeliveryContent() {
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (phase === 'loading') return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
-      <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
+      <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
       <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Validando Link de Assinatura...</p>
     </div>
   )
@@ -346,9 +346,9 @@ function RemoteDeliveryContent() {
         {lastPdfUrl && (
           <>
             <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer" className="px-8 py-4 border border-slate-200 bg-white text-slate-700 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2">
-              <ExternalLink className="w-5 h-5 text-[#8B1A1A]" /> Visualizar PDF
+              <ExternalLink className="w-5 h-5 text-[#2563EB]" /> Visualizar PDF
             </a>
-            <a href={lastPdfUrl} download={lastPdfFileName || "comprovante_safeepi.pdf"} className="px-8 py-4 bg-[#8B1A1A] text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2">
+            <a href={lastPdfUrl} download={lastPdfFileName || "comprovante_safeepi.pdf"} className="px-8 py-4 bg-[#2563EB] text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2">
               <FileDown className="w-5 h-5" /> Baixar PDF
             </a>
           </>
@@ -365,7 +365,7 @@ function RemoteDeliveryContent() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-block bg-[#8B1A1A] text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">Verificação de Identidade</div>
+          <div className="inline-block bg-[#2563EB] text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">Verificação de Identidade</div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirme seus Dados</h1>
           <p className="text-slate-500 text-xs sm:text-sm">Para sua segurança, informe seus dados pessoais antes de assinar.</p>
         </div>
@@ -404,7 +404,7 @@ function RemoteDeliveryContent() {
               placeholder="000.000.000-00"
               value={inputCpf}
               onChange={(e) => handleCpfChange(e.target.value)}
-              className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-3 sm:p-4 outline-none focus:border-[#8B1A1A] transition-all font-bold text-sm tracking-wider"
+              className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-3 sm:p-4 outline-none focus:border-[#2563EB] transition-all font-bold text-sm tracking-wider"
               maxLength={14}
               autoComplete="off"
               autoFocus
@@ -423,7 +423,7 @@ function RemoteDeliveryContent() {
           <button 
             onClick={handleVerify}
             disabled={inputCpf.replace(/\D/g, '').length < 11}
-            className="w-full bg-[#8B1A1A] hover:bg-[#681313] active:bg-[#501010] disabled:bg-slate-300 text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg flex items-center justify-center gap-2"
+            className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#501010] disabled:bg-slate-300 text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg flex items-center justify-center gap-2"
           >
             <UserCheck className="w-4 h-4" />
             Verificar Identidade
@@ -510,7 +510,7 @@ function RemoteDeliveryContent() {
                 <>
               <div className="flex justify-between items-center">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assine no espaço abaixo:</label>
-                <button onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-black text-[#8B1A1A] uppercase italic">Limpar</button>
+                <button onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-black text-[#2563EB] uppercase italic">Limpar</button>
               </div>
               <div className="bg-white rounded-xl sm:rounded-2xl border-2 border-slate-100 h-48 sm:h-64 overflow-hidden touch-none">
                 <SignatureCanvas ref={sigCanvas} canvasProps={{ className: 'w-full h-full' }} />
@@ -518,7 +518,7 @@ function RemoteDeliveryContent() {
               <button onClick={() => {
                 if (sigCanvas.current?.isEmpty()) return alert("Assine antes de confirmar.")
                 saveDelivery(sigCanvas.current!.getTrimmedCanvas().toDataURL())
-              }} disabled={isSaving} className="w-full bg-[#8B1A1A] hover:bg-[#681313] active:bg-[#501010] text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs shadow-lg disabled:opacity-50 flex items-center justify-center">
+              }} disabled={isSaving} className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#501010] text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs shadow-lg disabled:opacity-50 flex items-center justify-center">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Recebimento"}
               </button>
                 </>

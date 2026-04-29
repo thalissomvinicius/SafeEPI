@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from("profiles")
       .select("*")
+      .eq("company_id", auth.user.company_id)
 
     if (profilesError) {
       return NextResponse.json({ error: profilesError.message }, { status: 400 })
@@ -61,6 +62,10 @@ export async function POST(request: Request) {
     const { email, password, full_name, role } = await request.json()
     const normalizedRole = normalizeRole(role)
 
+    if (!auth.user.company_id) {
+      return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
+    }
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -80,11 +85,26 @@ export async function POST(request: Request) {
           email,
           full_name,
           role: normalizedRole,
+          company_id: auth.user.company_id,
         })
 
       if (profileError) {
         await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
         return NextResponse.json({ error: profileError.message }, { status: 400 })
+      }
+
+      const { error: companyUserError } = await supabaseAdmin
+        .from("company_users")
+        .upsert({
+          company_id: auth.user.company_id,
+          user_id: authData.user.id,
+          role: normalizedRole,
+          active: true,
+        }, { onConflict: "company_id,user_id" })
+
+      if (companyUserError) {
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        return NextResponse.json({ error: companyUserError.message }, { status: 400 })
       }
     }
 
@@ -139,11 +159,27 @@ export async function PUT(request: Request) {
           email: existingUserData.user.email ?? null,
           full_name: existingUserData.user.user_metadata?.full_name || null,
           role: normalizeRole(existingUserData.user.user_metadata?.role),
+          company_id: auth.user.company_id,
           ...profileUpdates,
         })
 
       if (profileError) {
         return NextResponse.json({ error: profileError.message }, { status: 400 })
+      }
+    }
+
+    if (auth.user.company_id && normalizedRole) {
+      const { error: companyUserError } = await supabaseAdmin
+        .from("company_users")
+        .upsert({
+          company_id: auth.user.company_id,
+          user_id: id,
+          role: normalizedRole,
+          active: true,
+        }, { onConflict: "company_id,user_id" })
+
+      if (companyUserError) {
+        return NextResponse.json({ error: companyUserError.message }, { status: 400 })
       }
     }
 

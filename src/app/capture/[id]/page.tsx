@@ -154,12 +154,12 @@ function CaptureContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
       </div>
     )
   }
 
-  // â”€â”€ ERRO / LINK EXPIRADO / LINK JÃ USADO â”€â”€
+  // â”€â”€ ERRO / LINK EXPIRADO / LINK JÁ USADO â”€â”€
   if (pageError || !employee) {
     const isExpired = linkStatus === 'expired'
     const isCompleted = linkStatus === 'completed'
@@ -269,7 +269,7 @@ function CaptureContent() {
       <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center">
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5">
           <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-            <Lock className="w-7 h-7 text-[#8B1A1A]" />
+            <Lock className="w-7 h-7 text-[#2563EB]" />
           </div>
           
           <div>
@@ -288,7 +288,7 @@ function CaptureContent() {
               onChange={(e) => { setCpfInput(formatCpf(e.target.value)); setCpfError(""); }}
               placeholder="000.000.000-00"
               maxLength={14}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-center text-lg font-bold focus:border-[#8B1A1A] focus:outline-none transition-all tracking-widest"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-center text-lg font-bold focus:border-[#2563EB] focus:outline-none transition-all tracking-widest"
               autoFocus
               inputMode="numeric"
               onKeyDown={(e) => e.key === 'Enter' && handleCpfVerify()}
@@ -300,7 +300,7 @@ function CaptureContent() {
 
             <button 
               onClick={handleCpfVerify}
-              className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-red-900/20 border-b-4 border-red-900 flex items-center justify-center gap-2"
+              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-blue-900/20 border-b-4 border-red-900 flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4" /> Verificar CPF
             </button>
@@ -333,7 +333,7 @@ function CaptureContent() {
 
         <button 
           onClick={() => setIsCapturing(true)}
-          className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl shadow-red-900/20 border-b-4 border-red-900 flex items-center justify-center gap-2"
+          className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 border-b-4 border-red-900 flex items-center justify-center gap-2"
         >
           <Camera className="w-5 h-5" /> Iniciar Câmera
         </button>
@@ -350,7 +350,7 @@ export default function RemoteCapturePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
       </div>
     }>
       <CaptureContent />

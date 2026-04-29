@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
@@ -616,7 +616,7 @@ export default function EmployeesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center">
-            <Users className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+            <Users className="w-6 h-6 mr-2 text-[#2563EB]" />
             Equipe {COMPANY_CONFIG.shortName}
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de prontuários de EPI sincronizada com o {COMPANY_CONFIG.systemName}.</p>
@@ -624,7 +624,7 @@ export default function EmployeesPage() {
         {canEdit ? (
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
+            className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
           >
             <Plus className="w-4 h-4 mr-2" />
             Novo Colaborador
@@ -641,7 +641,7 @@ export default function EmployeesPage() {
         <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
           <button
             onClick={() => setViewMode("employees")}
-            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "employees" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "employees" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
           >
             <Users className="w-4 h-4" /> Colaboradores
           </button>
@@ -666,7 +666,7 @@ export default function EmployeesPage() {
           <select
             value={captureWaitHours}
             onChange={(event) => setCaptureWaitHours(Number(event.target.value))}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#8B1A1A]"
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#2563EB]"
             title="Tempo de espera do registro facial"
           >
             <option value={1}>1h</option>
@@ -808,7 +808,7 @@ export default function EmployeesPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               title="Buscar colaborador"
               aria-label="Buscar colaborador por nome ou CPF"
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] transition-all"
+              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
         </div>
@@ -866,7 +866,7 @@ export default function EmployeesPage() {
                       </td>
                       <td className="px-6 py-5">
                           <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter">
-                              <HardDrive className="w-3 h-3 text-[#8B1A1A]" />
+                              <HardDrive className="w-3 h-3 text-[#2563EB]" />
                               {getWorkplaceName(emp.workplace_id)}
                           </div>
                       </td>
@@ -901,7 +901,7 @@ export default function EmployeesPage() {
                           )}
                           <button 
                             onClick={() => openProfile(emp.id)}
-                            className="text-[#8B1A1A] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest border border-red-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
+                            className="text-[#2563EB] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest border border-red-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
                           >
                           Prontuário
                           </button>
@@ -947,7 +947,7 @@ export default function EmployeesPage() {
                          {getDepartmentName(emp.department)}
                       </p>
                       <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter pt-1">
-                          <HardDrive className="w-3.5 h-3.5 text-[#8B1A1A]" />
+                          <HardDrive className="w-3.5 h-3.5 text-[#2563EB]" />
                           {getWorkplaceName(emp.workplace_id)}
                       </div>
                       {(() => {
@@ -972,7 +972,7 @@ export default function EmployeesPage() {
                         )}
                         <button 
                           onClick={() => openProfile(emp.id)}
-                          className="flex-[2] text-white hover:bg-[#681313] bg-[#8B1A1A] font-black text-[10px] uppercase tracking-widest border border-red-900 py-3 rounded-xl shadow-sm shadow-red-900/20 transition-all text-center"
+                          className="flex-[2] text-white hover:bg-[#1D4ED8] bg-[#2563EB] font-black text-[10px] uppercase tracking-widest border border-red-900 py-3 rounded-xl shadow-sm shadow-blue-900/20 transition-all text-center"
                         >
                           Prontuário
                         </button>
@@ -1044,7 +1044,7 @@ export default function EmployeesPage() {
                   <button 
                     type="button"
                     onClick={() => setIsFaceCameraOpen(true)}
-                    className="flex flex-col items-center justify-center w-24 h-24 rounded-full border-2 border-dashed border-slate-300 text-slate-400 hover:text-[#8B1A1A] hover:border-[#8B1A1A] transition-all bg-slate-50"
+                    className="flex flex-col items-center justify-center w-24 h-24 rounded-full border-2 border-dashed border-slate-300 text-slate-400 hover:text-[#2563EB] hover:border-[#2563EB] transition-all bg-slate-50"
                   >
                     <Camera className="w-8 h-8 mb-1" />
                     <span className="text-[8px] font-black uppercase tracking-widest text-center px-2">Biometria<br/>Facial</span>
@@ -1077,7 +1077,7 @@ export default function EmployeesPage() {
                   type="text" 
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: formatTypingName(e.target.value)})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase" 
                   placeholder="Nome do colaborador"
                 />
               </div>
@@ -1090,14 +1090,14 @@ export default function EmployeesPage() {
                       <span className="text-red-500 text-[8px] font-bold">CPF Inválido</span>
                     )}
                     {formData.cpf && isValidCpf(formData.cpf) && (
-                      <span className="text-green-500 text-[8px] font-bold">✓ Válido</span>
+                      <span className="text-green-500 text-[8px] font-bold">âœ“ Válido</span>
                     )}
                   </label>
                   <input 
                     type="text" 
                     value={formData.cpf}
                     onChange={(e) => setFormData({...formData, cpf: formatCpf(e.target.value)})}
-                    className={`w-full bg-slate-50 border ${formData.cpf && !isValidCpf(formData.cpf) ? 'border-red-300 focus:border-red-500' : 'border-slate-200 focus:border-[#8B1A1A]'} rounded-xl px-4 py-3 text-sm focus:outline-none transition-all font-bold`} 
+                    className={`w-full bg-slate-50 border ${formData.cpf && !isValidCpf(formData.cpf) ? 'border-red-300 focus:border-red-500' : 'border-slate-200 focus:border-[#2563EB]'} rounded-xl px-4 py-3 text-sm focus:outline-none transition-all font-bold`} 
                     placeholder="000.000.000-00"
                     maxLength={14}
                   />
@@ -1108,7 +1108,7 @@ export default function EmployeesPage() {
                     required
                     value={formData.department}
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase"
                   >
                     <option value="">{departments.length === 0 ? "Cadastre setores" : "Selecione"}</option>
                     {formData.department && !departments.some(dept => dept.name === formData.department) && (
@@ -1127,7 +1127,7 @@ export default function EmployeesPage() {
                   required
                   value={formData.role}
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase"
                 >
                   <option value="">{jobTitles.length === 0 ? "Cadastre cargos" : "Selecione"}</option>
                   {formData.role && !jobTitles.some(job => job.name === formData.role) && (
@@ -1149,7 +1149,7 @@ export default function EmployeesPage() {
                   </div>
                   <Link
                     href="/job-sectors"
-                    className="bg-[#8B1A1A] hover:bg-[#681313] text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap"
+                    className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap"
                   >
                     Cadastrar agora
                   </Link>
@@ -1163,7 +1163,7 @@ export default function EmployeesPage() {
                   title="Selecionar canteiro de obra"
                   value={formData.workplace_id}
                   onChange={(e) => setFormData({...formData, workplace_id: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
                 >
                   <option value="">Administrativo / Sem Canteiro</option>
                   {workplaces.map(w => (
@@ -1184,7 +1184,7 @@ export default function EmployeesPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-1 px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-xl shadow-lg shadow-red-900/10 uppercase tracking-widest transition-all flex items-center justify-center"
+                  className="flex-1 px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl shadow-lg shadow-red-900/10 uppercase tracking-widest transition-all flex items-center justify-center"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar Cadastro"}
                 </button>
@@ -1217,7 +1217,7 @@ export default function EmployeesPage() {
                       <button 
                         onClick={openTstModal}
                         disabled={loadingHistory || employeeHistory.length === 0}
-                        className="flex-1 sm:flex-none bg-[#8B1A1A] hover:bg-[#681313] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md flex items-center justify-center disabled:opacity-50"
+                        className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md flex items-center justify-center disabled:opacity-50"
                       >
                         <FileDown className="w-4 h-4 mr-2" /> Ficha NR-06
                       </button>
@@ -1234,13 +1234,13 @@ export default function EmployeesPage() {
                   <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/30">
                     {loadingHistory ? (
                       <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#8B1A1A]" />
+                        <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#2563EB]" />
                       </div>
                     ) : (
                       <div className="space-y-6">
                         <div className="flex items-center justify-between">
                           <h3 className="font-black text-slate-700 uppercase tracking-widest text-sm flex items-center">
-                            <History className="w-4 h-4 mr-2 text-[#8B1A1A]" />
+                            <History className="w-4 h-4 mr-2 text-[#2563EB]" />
                             Histórico de Movimentações
                           </h3>
                         </div>
@@ -1264,7 +1264,7 @@ export default function EmployeesPage() {
                                   )}
                                   <span>Motivo: {delivery.reason}</span>
                                   {delivery.returned_at && (
-                                    <span className="text-[#8B1A1A] font-bold">
+                                    <span className="text-[#2563EB] font-bold">
                                       Baixado em: {format(new Date(delivery.returned_at), "dd/MM/yyyy")} ({delivery.return_motive})
                                     </span>
                                   )}
@@ -1274,7 +1274,7 @@ export default function EmployeesPage() {
                               {!delivery.returned_at && emp?.active && (
                                 <button 
                                   onClick={() => handleReturnItem(delivery.id)}
-                                  className="text-[#8B1A1A] hover:bg-red-50 text-[10px] font-black uppercase tracking-widest border border-red-100 px-4 py-2 rounded-xl transition-all self-start sm:self-auto"
+                                  className="text-[#2563EB] hover:bg-red-50 text-[10px] font-black uppercase tracking-widest border border-red-100 px-4 py-2 rounded-xl transition-all self-start sm:self-auto"
                                 >
                                   Dar Baixa
                                 </button>
@@ -1323,7 +1323,7 @@ export default function EmployeesPage() {
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Assinar Prontuário</h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                  {tstStep === 1 ? "Etapa 1 — Identificação do TST" : "Etapa 2 — Assinatura do Responsável"}
+                  {tstStep === 1 ? "Etapa 1 - Identificação do TST" : "Etapa 2 - Assinatura do Responsável"}
                 </p>
               </div>
               <button onClick={() => setIsTstModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors" title="Fechar">
@@ -1331,12 +1331,12 @@ export default function EmployeesPage() {
               </button>
             </div>
 
-            {/* Step 1 — Select TST from employee list */}
+            {/* Step 1 - Select TST from employee list */}
             {tstStep === 1 && (
               <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
                   <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest">
-                    📋 Selecione o Técnico de Segurança do Trabalho cadastrado no sistema.
+                    ðŸ“‹ Selecione o Técnico de Segurança do Trabalho cadastrado no sistema.
                   </p>
                 </div>
 
@@ -1347,7 +1347,7 @@ export default function EmployeesPage() {
                     value={tstSearchTerm}
                     onChange={e => setTstSearchTerm(e.target.value)}
                     placeholder="Buscar por nome ou CPF..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold focus:border-[#8B1A1A] outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold focus:border-[#2563EB] outline-none"
                   />
                 </div>
 
@@ -1361,7 +1361,7 @@ export default function EmployeesPage() {
                       <button
                         key={emp.id}
                         onClick={() => handleSelectTst(emp)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#8B1A1A]/30 hover:bg-red-50/30 transition-all text-left group"
+                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all text-left group"
                       >
                         {emp.photo_url ? (
                           <Image src={emp.photo_url} alt={emp.full_name} width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-green-500" unoptimized />
@@ -1375,7 +1375,7 @@ export default function EmployeesPage() {
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{getJobTitleName(emp.job_title)} • CPF: {emp.cpf}</p>
                         </div>
                         {emp.photo_url && (
-                          <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 uppercase tracking-widest flex-shrink-0">✓ Foto</span>
+                          <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 uppercase tracking-widest flex-shrink-0">âœ“ Foto</span>
                         )}
                       </button>
                     ))
@@ -1392,7 +1392,7 @@ export default function EmployeesPage() {
               </div>
             )}
 
-            {/* Step 2 — Capture Signature */}
+            {/* Step 2 - Capture Signature */}
             {tstStep === 2 && (
               <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                 {/* Notice for Missing Photo */}
@@ -1445,7 +1445,7 @@ export default function EmployeesPage() {
                         </p>
                       </div>
                     )}
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tstName} — Assine abaixo:</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tstName} - Assine abaixo:</p>
                     {tstSignatureBase64 ? (
                       <div className="relative border-2 border-green-500 rounded-xl overflow-hidden">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1457,7 +1457,7 @@ export default function EmployeesPage() {
                         >
                           <X className="w-3 h-3" />
                         </button>
-                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-600 uppercase tracking-widest bg-green-50 px-2 py-0.5 rounded">✓ Assinatura Capturada</div>
+                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-600 uppercase tracking-widest bg-green-50 px-2 py-0.5 rounded">âœ“ Assinatura Capturada</div>
                       </div>
                     ) : (
                       <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
@@ -1484,7 +1484,7 @@ export default function EmployeesPage() {
                             }
                             setTstSignatureBase64(tstSigCanvas.current.toDataURL('image/png'))
                           }}
-                          className="flex-1 py-2 text-[10px] font-black text-white bg-[#8B1A1A] uppercase tracking-widest rounded-xl hover:bg-[#681313]"
+                          className="flex-1 py-2 text-[10px] font-black text-white bg-[#2563EB] uppercase tracking-widest rounded-xl hover:bg-[#1D4ED8]"
                         >
                           Confirmar
                         </button>
@@ -1507,7 +1507,7 @@ export default function EmployeesPage() {
                         >
                           <X className="w-3 h-3" />
                         </button>
-                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-400 uppercase tracking-widest bg-green-900/80 px-2 py-0.5 rounded">✓ Foto Capturada</div>
+                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-400 uppercase tracking-widest bg-green-900/80 px-2 py-0.5 rounded">âœ“ Foto Capturada</div>
                       </div>
                     ) : (
                       <FaceCamera
@@ -1525,12 +1525,12 @@ export default function EmployeesPage() {
                     onClick={() => setTstStep(1)}
                     className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50"
                   >
-                    ← Voltar
+                    â† Voltar
                   </button>
                   <button
                     onClick={exportNR06PDF}
                     disabled={!tstSignatureBase64 || (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) || isGeneratingPdf}
-                    className="flex-1 py-3 text-[10px] font-black text-white bg-[#8B1A1A] hover:bg-[#681313] uppercase tracking-widest rounded-xl shadow-lg shadow-red-900/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                    className="flex-1 py-3 text-[10px] font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
                   >
                     {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
                     {isGeneratingPdf ? "Gerando PDF..." : "Gerar Prontuário NR-06"}

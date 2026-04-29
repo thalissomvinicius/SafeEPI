@@ -136,16 +136,16 @@ export default function WorkplacesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Infraestrutura SafeEPI</span>
+            <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Infraestrutura SafeEPI</span>
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-            <HardDrive className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+            <HardDrive className="w-6 h-6 mr-2 text-[#2563EB]" />
             Obras e Canteiros
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Cadastro de obras, canteiros e locais operacionais da empresa.</p>
         </div>
         <button onClick={() => { setFormData({ id: undefined, name: "", address: "", manager_name: "" }); setIsModalOpen(true) }}
-          title="Nova obra ou canteiro" className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap">
+          title="Nova obra ou canteiro" className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap">
           <Plus className="w-4 h-4 mr-2" /> Nova Obra / Canteiro
         </button>
       </div>
@@ -157,22 +157,22 @@ export default function WorkplacesPage() {
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" placeholder="Buscar por nome ou responsável..."
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] transition-all" />
+              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all" />
           </div>
         </div>
         <div className="p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A] mb-2" />
+              <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mb-2" />
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sincronizando...</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredWorkplaces.map((w) => (
-                <div key={w.id} className="group p-6 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-[#8B1A1A]/30 transition-all hover:shadow-md relative overflow-hidden">
+                <div key={w.id} className="group p-6 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-[#2563EB]/30 transition-all hover:shadow-md relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-12 -mt-12 group-hover:bg-red-50 transition-colors" />
                   <div className="flex items-center gap-3 mb-4 relative z-10">
-                    <div className="bg-slate-100 p-2.5 rounded-xl group-hover:bg-[#8B1A1A] group-hover:text-white transition-colors">
+                    <div className="bg-slate-100 p-2.5 rounded-xl group-hover:bg-[#2563EB] group-hover:text-white transition-colors">
                       <HardDrive className="w-5 h-5" />
                     </div>
                     <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg leading-tight">{w.name}</h3>
@@ -191,11 +191,11 @@ export default function WorkplacesPage() {
                     <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[8px] font-black rounded border border-green-100 uppercase tracking-widest">Operacional</span>
                     <div className="flex gap-3 items-center">
                       <button onClick={() => openEditWorkplace(w)}
-                        className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#8B1A1A] transition-colors">
+                        className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#2563EB] transition-colors">
                         Editar
                       </button>
                       <button onClick={() => openDetailsWorkplace(w)}
-                        className="text-[10px] font-black text-[#8B1A1A] uppercase tracking-widest hover:underline flex items-center gap-1">
+                        className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest hover:underline flex items-center gap-1">
                         <Eye className="w-3 h-3" /> Ver detalhes â†’
                       </button>
                     </div>
@@ -214,7 +214,7 @@ export default function WorkplacesPage() {
 
       {/* Info block */}
       <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center">
-        <CheckCircle2 className="w-12 h-12 text-[#8B1A1A]/20 mb-4" />
+        <CheckCircle2 className="w-12 h-12 text-[#2563EB]/20 mb-4" />
         <h3 className="font-bold text-slate-800 uppercase tracking-tighter italic">Vínculo Organizacional SafeEPI</h3>
         <p className="text-sm text-slate-400 max-w-md mt-2 leading-relaxed">O cadastro correto da obra ou canteiro permite a auditoria por geolocalização e o rateio preciso dos custos operacionais no Balanço BI.</p>
       </div>
@@ -225,8 +225,8 @@ export default function WorkplacesPage() {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
             <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-3">
-                <div className="bg-[#8B1A1A]/10 p-3 rounded-2xl">
-                  <HardDrive className="w-5 h-5 text-[#8B1A1A]" />
+                <div className="bg-[#2563EB]/10 p-3 rounded-2xl">
+                  <HardDrive className="w-5 h-5 text-[#2563EB]" />
                 </div>
                 <div>
                   <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">{detailsWorkplace.name}</h2>
@@ -259,7 +259,7 @@ export default function WorkplacesPage() {
               {/* Stats */}
               {detailsLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#8B1A1A]" />
+                  <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" />
                 </div>
               ) : (
                 <>
@@ -270,9 +270,9 @@ export default function WorkplacesPage() {
                       <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-0.5">Colaboradores Ativos</p>
                     </div>
                     <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-center">
-                      <Shield className="w-6 h-6 text-[#8B1A1A] mx-auto mb-1" />
-                      <p className="text-2xl font-black text-[#8B1A1A]">{detailsDeliveries.length}</p>
-                      <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mt-0.5">Entregas de EPI</p>
+                      <Shield className="w-6 h-6 text-[#2563EB] mx-auto mb-1" />
+                      <p className="text-2xl font-black text-[#2563EB]">{detailsDeliveries.length}</p>
+                      <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mt-0.5">Entregas de EPI</p>
                     </div>
                   </div>
 
@@ -282,8 +282,8 @@ export default function WorkplacesPage() {
                       <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                         {detailsEmployees.slice(0, 8).map(emp => (
                           <div key={emp.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl">
-                            <div className="w-6 h-6 rounded-full bg-[#8B1A1A]/10 flex items-center justify-center shrink-0">
-                              <User className="w-3 h-3 text-[#8B1A1A]" />
+                            <div className="w-6 h-6 rounded-full bg-[#2563EB]/10 flex items-center justify-center shrink-0">
+                              <User className="w-3 h-3 text-[#2563EB]" />
                             </div>
                             <div>
                               <p className="text-xs font-bold text-slate-800 uppercase tracking-tight">{emp.full_name}</p>
@@ -327,7 +327,7 @@ export default function WorkplacesPage() {
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Nome da Obra / Canteiro</label>
                 <input type="text" required placeholder="Ex: Residencial SafeEPI I"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold placeholder:font-normal"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold placeholder:font-normal"
                   value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
               </div>
               <div className="space-y-2">
@@ -335,7 +335,7 @@ export default function WorkplacesPage() {
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input type="text" placeholder="Nome do encarregado"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold placeholder:font-normal"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold placeholder:font-normal"
                     value={formData.manager_name} onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })} />
                 </div>
               </div>
@@ -344,7 +344,7 @@ export default function WorkplacesPage() {
                 <div className="relative">
                   <MapPin className="absolute left-4 top-4 w-4 h-4 text-slate-400" />
                   <textarea rows={3} placeholder="Rua, Número, Bairro, Cidade..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold placeholder:font-normal resize-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold placeholder:font-normal resize-none"
                     value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
                 </div>
               </div>
@@ -355,13 +355,13 @@ export default function WorkplacesPage() {
                     Cancelar
                   </button>
                   <button type="submit" disabled={isSaving}
-                    className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-red-900/20 flex items-center justify-center border-b-4 border-red-900">
+                    className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center border-b-4 border-red-900">
                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar Obra / Canteiro"}
                   </button>
                 </div>
                 {isAdmin && formData.id && (
                   <button type="button" disabled={isSaving || isDeleting} onClick={handleDeleteClick}
-                    className="w-full py-3 text-[10px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest border border-red-100 hover:border-red-300 hover:bg-red-50 rounded-2xl flex items-center justify-center gap-2 transition-all">
+                    className="w-full py-3 text-[10px] font-black text-blue-300 hover:text-red-600 uppercase tracking-widest border border-red-100 hover:border-red-300 hover:bg-red-50 rounded-2xl flex items-center justify-center gap-2 transition-all">
                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     Desativar / Excluir Obra
                   </button>
@@ -378,11 +378,11 @@ export default function WorkplacesPage() {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-2 border-red-200">
             <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
               <div className="p-3 bg-red-100 rounded-2xl shrink-0">
-                <AlertTriangle className="w-6 h-6 text-[#8B1A1A]" />
+                <AlertTriangle className="w-6 h-6 text-[#2563EB]" />
               </div>
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Atenção - Risco de Dados</h2>
-                <p className="text-xs text-[#8B1A1A] font-bold uppercase tracking-widest mt-1">Confirmação exigida - ADMIN</p>
+                <p className="text-xs text-[#2563EB] font-bold uppercase tracking-widest mt-1">Confirmação exigida - ADMIN</p>
               </div>
             </div>
 
@@ -413,7 +413,7 @@ export default function WorkplacesPage() {
                   Cancelar
                 </button>
                 <button onClick={handleConfirmDelete} disabled={isDeleting}
-                  className="flex-[2] px-4 py-3 text-xs font-black text-white bg-[#8B1A1A] hover:bg-red-700 rounded-2xl uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
+                  className="flex-[2] px-4 py-3 text-xs font-black text-white bg-[#2563EB] hover:bg-red-700 rounded-2xl uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
                   {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   Confirmar Desativação
                 </button>

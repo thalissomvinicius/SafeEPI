@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { Bell, AlertTriangle, Calendar, Package, Loader2, RefreshCw } from "lucide-react"
@@ -96,9 +96,9 @@ export function NotificationBell() {
         className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all relative group"
         title="Notificações"
       >
-        <Bell className="w-5 h-5 text-slate-600 group-hover:text-[#8B1A1A] transition-colors" />
+        <Bell className="w-5 h-5 text-slate-600 group-hover:text-[#2563EB] transition-colors" />
         {notifications.length > 0 && (
-          <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#8B1A1A] border-2 border-white rounded-full animate-bounce"></span>
+          <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#2563EB] border-2 border-white rounded-full animate-bounce"></span>
         )}
       </button>
 
@@ -111,7 +111,7 @@ export function NotificationBell() {
           <div className="absolute right-0 mt-3 w-80 md:w-96 bg-white border border-slate-200 rounded-3xl shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="font-black text-slate-800 uppercase tracking-tighter">Central de Alertas</h3>
-              <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{notifications.length}</span>
+              <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{notifications.length}</span>
             </div>
 
             <div className="max-h-[400px] overflow-y-auto">

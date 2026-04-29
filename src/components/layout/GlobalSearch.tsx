@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useRef } from "react"
 import { Search, User, Shield, HardDrive, X, Loader2, ArrowRight } from "lucide-react"
@@ -85,7 +85,7 @@ export function GlobalSearch() {
       {/* Mobile Search Icon */}
       <button 
         onClick={() => setIsOpen(true)}
-        className="md:hidden p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-[#8B1A1A] transition-all"
+        className="md:hidden p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:text-[#2563EB] transition-all"
         title="Buscar"
       >
         <Search className="w-5 h-5" />
@@ -94,9 +94,9 @@ export function GlobalSearch() {
       {/* Desktop Search Bar */}
       <button 
         onClick={() => setIsOpen(true)}
-        className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:border-[#8B1A1A]/30 hover:bg-white transition-all w-64 group"
+        className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-400 hover:border-[#2563EB]/30 hover:bg-white transition-all w-64 group"
       >
-        <Search className="w-4 h-4 group-hover:text-[#8B1A1A] transition-colors" />
+        <Search className="w-4 h-4 group-hover:text-[#2563EB] transition-colors" />
         <span className="text-xs font-bold uppercase tracking-widest flex-1 text-left">Busca Global...</span>
         <kbd className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded-md font-sans">Ctrl+K</kbd>
       </button>
@@ -107,7 +107,7 @@ export function GlobalSearch() {
           
         <div className="bg-white w-full max-w-2xl md:rounded-3xl shadow-2xl z-[110] overflow-hidden animate-in zoom-in-95 md:slide-in-from-top-10 duration-300 flex flex-col border border-slate-100 h-full md:h-auto">
           <div className="p-4 md:p-6 border-b border-slate-100 flex items-center gap-2 md:gap-4">
-            <Search className="w-5 h-5 md:w-6 md:h-6 text-[#8B1A1A]" />
+            <Search className="w-5 h-5 md:w-6 md:h-6 text-[#2563EB]" />
             <input 
               ref={inputRef}
               type="text" 
@@ -146,13 +146,13 @@ export function GlobalSearch() {
                           className="w-full p-4 hover:bg-slate-50 rounded-2xl flex items-center gap-4 transition-colors group"
                         >
                           <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-                            <User className="w-5 h-5 text-[#8B1A1A]" />
+                            <User className="w-5 h-5 text-[#2563EB]" />
                           </div>
                           <div className="flex-1 text-left">
                             <p className="text-sm font-bold text-slate-800 uppercase tracking-tight">{e.full_name}</p>
                             <p className="text-[10px] text-slate-400 font-medium">CPF: {e.cpf}</p>
                           </div>
-                          <ArrowRight className="w-4 h-4 text-slate-200 group-hover:text-[#8B1A1A] group-hover:translate-x-1 transition-all" />
+                          <ArrowRight className="w-4 h-4 text-slate-200 group-hover:text-[#2563EB] group-hover:translate-x-1 transition-all" />
                         </button>
                       ))}
                     </div>
@@ -174,7 +174,7 @@ export function GlobalSearch() {
                             <p className="text-sm font-bold text-slate-800 uppercase tracking-tight">{p.name}</p>
                             <p className="text-[10px] text-slate-400 font-medium">C.A: {p.ca_number}</p>
                           </div>
-                          <ArrowRight className="w-4 h-4 text-slate-200 group-hover:text-[#8B1A1A] group-hover:translate-x-1 transition-all" />
+                          <ArrowRight className="w-4 h-4 text-slate-200 group-hover:text-[#2563EB] group-hover:translate-x-1 transition-all" />
                         </button>
                       ))}
                     </div>
@@ -195,7 +195,7 @@ export function GlobalSearch() {
                           <div className="flex-1 text-left">
                             <p className="text-sm font-bold text-slate-800 uppercase tracking-tight">{w.name}</p>
                           </div>
-                          <ArrowRight className="w-4 h-4 text-slate-200 group-hover:text-[#8B1A1A] group-hover:translate-x-1 transition-all" />
+                          <ArrowRight className="w-4 h-4 text-slate-200 group-hover:text-[#2563EB] group-hover:translate-x-1 transition-all" />
                         </button>
                       ))}
                     </div>

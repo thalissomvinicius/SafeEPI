@@ -16,11 +16,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "ID do colaborador é obrigatório" }, { status: 400 })
     }
 
+    if (!auth.user.company_id) {
+      return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
+    }
+
     if (removePhoto) {
       const { data, error } = await supabaseAdmin
         .from("employees")
         .update({ photo_url: null, face_descriptor: null })
         .eq("id", id)
+        .eq("company_id", auth.user.company_id)
         .select()
 
       if (error) {
@@ -37,6 +42,7 @@ export async function PUT(request: NextRequest) {
         .from("employees")
         .update(updates)
         .eq("id", id)
+        .eq("company_id", auth.user.company_id)
         .select()
 
       if (error) {

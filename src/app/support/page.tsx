@@ -11,7 +11,7 @@ export default function SupportPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tighter text-slate-800 flex items-center">
-            <HelpCircle className="w-8 h-8 mr-3 text-[#8B1A1A]" />
+            <HelpCircle className="w-8 h-8 mr-3 text-[#2563EB]" />
             Ajuda e Suporte
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Tire dúvidas, aprenda a usar o sistema ou fale diretamente com o suporte técnico.</p>
@@ -20,7 +20,7 @@ export default function SupportPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Support Contact Card */}
-        <div className="md:col-span-1 bg-[#8B1A1A] rounded-3xl p-6 text-white shadow-xl shadow-red-900/20 relative overflow-hidden flex flex-col">
+        <div className="md:col-span-1 bg-[#2563EB] rounded-3xl p-6 text-white shadow-xl shadow-blue-900/20 relative overflow-hidden flex flex-col">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <MessageCircle className="w-32 h-32" />
           </div>
@@ -33,7 +33,7 @@ export default function SupportPage() {
               href={whatsappLink} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="w-full bg-white text-[#8B1A1A] hover:bg-slate-100 px-4 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center transition-all shadow-md"
+              className="w-full bg-white text-[#2563EB] hover:bg-slate-100 px-4 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center transition-all shadow-md"
             >
               <Phone className="w-5 h-5 mr-2" />
               Chamar no WhatsApp
@@ -51,14 +51,14 @@ export default function SupportPage() {
         <div className="md:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm">
             <h2 className="font-black text-slate-800 text-xl flex items-center mb-6">
-              <BookOpen className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+              <BookOpen className="w-6 h-6 mr-2 text-[#2563EB]" />
               Dúvidas Frequentes (FAQ)
             </h2>
 
             <div className="space-y-6">
               <div className="space-y-2 border-b border-slate-100 pb-4">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#8B1A1A] flex items-center justify-center text-xs font-black mr-3">1</span>
+                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">1</span>
                   Como fazer uma Nova Entrega de EPI?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
@@ -68,7 +68,7 @@ export default function SupportPage() {
 
               <div className="space-y-2 border-b border-slate-100 pb-4">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#8B1A1A] flex items-center justify-center text-xs font-black mr-3">2</span>
+                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">2</span>
                   O estoque não está baixando, e agora?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
@@ -78,7 +78,7 @@ export default function SupportPage() {
 
               <div className="space-y-2 border-b border-slate-100 pb-4">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#8B1A1A] flex items-center justify-center text-xs font-black mr-3">3</span>
+                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">3</span>
                   Como gerar a Ficha NR-06 (Prontuário)?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
@@ -88,7 +88,7 @@ export default function SupportPage() {
 
               <div className="space-y-2">
                 <h4 className="font-bold text-slate-800 flex items-center">
-                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#8B1A1A] flex items-center justify-center text-xs font-black mr-3">4</span>
+                  <span className="w-6 h-6 rounded-full bg-red-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">4</span>
                   Como dar baixa / devolução em um EPI?
                 </h4>
                 <p className="text-sm text-slate-500 pl-9">
@@ -98,9 +98,9 @@ export default function SupportPage() {
             </div>
           </div>
           
-          <div className="bg-[#8B1A1A]/5 rounded-3xl p-6 border border-[#8B1A1A]/10 flex flex-col sm:flex-row items-center gap-6">
-            <div className="w-16 h-16 rounded-full bg-[#8B1A1A]/10 flex items-center justify-center shrink-0">
-              <PlayCircle className="w-8 h-8 text-[#8B1A1A]" />
+          <div className="bg-[#2563EB]/5 rounded-3xl p-6 border border-[#2563EB]/10 flex flex-col sm:flex-row items-center gap-6">
+            <div className="w-16 h-16 rounded-full bg-[#2563EB]/10 flex items-center justify-center shrink-0">
+              <PlayCircle className="w-8 h-8 text-[#2563EB]" />
             </div>
             <div>
               <h3 className="font-black text-slate-800 text-lg uppercase tracking-tighter">Precisa de um Treinamento?</h3>

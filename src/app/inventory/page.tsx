@@ -87,10 +87,10 @@ export default function InventoryPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-             <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Almoxarifado SafeEPI</span>
+             <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Almoxarifado SafeEPI</span>
           </div>
           <h1 className="text-3xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-            <Package className="w-8 h-8 mr-3 text-[#8B1A1A]" />
+            <Package className="w-8 h-8 mr-3 text-[#2563EB]" />
             Controle de Estoque
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium italic">Gestão de saldo físico e auditoria de entradas e saídas de EPIs.</p>
@@ -98,7 +98,7 @@ export default function InventoryPage() {
         <button 
           onClick={() => setIsModalOpen(true)}
           title="Abrir formulário de entrada de estoque"
-          className="w-full md:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-xl shadow-red-900/20 px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center border-b-4 border-red-900"
+          className="w-full md:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xl shadow-blue-900/20 px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center border-b-4 border-red-900"
         >
           <Plus className="w-4 h-4 mr-2" />
           Registrar Entrada
@@ -111,7 +111,7 @@ export default function InventoryPage() {
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden min-h-[500px]">
              <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm flex items-center gap-2">
-                    <Settings2 className="w-4 h-4 text-[#8B1A1A]" />
+                    <Settings2 className="w-4 h-4 text-[#2563EB]" />
                     Saldos Disponíveis
                 </h3>
                 <div className="relative w-48">
@@ -121,7 +121,7 @@ export default function InventoryPage() {
                         placeholder="Buscar EPI..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[#8B1A1A]"
+                        className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[#2563EB]"
                     />
                 </div>
              </div>
@@ -159,13 +159,13 @@ export default function InventoryPage() {
                                     </td>
                                     <td className="hidden md:table-cell px-4 md:px-6 py-5 text-slate-400 font-medium italic text-xs">Unidade (Und)</td>
                                     <td className="px-4 md:px-6 py-5 text-center">
-                                        <span className={`text-lg sm:text-xl font-black tracking-tighter ${ppe.current_stock > 10 ? 'text-slate-800' : 'text-[#8B1A1A]'}`}>
+                                        <span className={`text-lg sm:text-xl font-black tracking-tighter ${ppe.current_stock > 10 ? 'text-slate-800' : 'text-[#2563EB]'}`}>
                                             {ppe.current_stock}
                                         </span>
                                     </td>
                                     <td className="px-4 md:px-6 py-5 text-center">
                                         {ppe.current_stock <= 10 ? (
-                                            <span className="px-1.5 sm:px-2 py-1 bg-red-50 text-[#8B1A1A] text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-red-100 block sm:inline-block">Estoque<br className="sm:hidden"/> Baixo</span>
+                                            <span className="px-1.5 sm:px-2 py-1 bg-red-50 text-[#2563EB] text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-red-100 block sm:inline-block">Estoque<br className="sm:hidden"/> Baixo</span>
                                         ) : (
                                             <span className="px-1.5 sm:px-2 py-1 bg-green-50 text-green-700 text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-green-100 block sm:inline-block">Ok</span>
                                         )}
@@ -182,22 +182,22 @@ export default function InventoryPage() {
         {/* Lado Direito: Histórico de Movimentações */}
         <div className="space-y-6">
            <div className="bg-slate-900 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden h-full min-h-[500px]">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#8B1A1A]/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#2563EB]/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
               <h3 className="font-black text-white uppercase tracking-tighter text-sm flex items-center gap-2 mb-8 relative z-10">
-                 <History className="w-5 h-5 text-[#8B1A1A]" />
+                 <History className="w-5 h-5 text-[#2563EB]" />
                  Auditoria de Fluxo
               </h3>
 
               <div className="space-y-6 relative z-10 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                 {movements.map(m => (
                     <div key={m.id} className="flex gap-4 items-start group">
-                        <div className={`p-2 rounded-xl shrink-0 ${m.type === 'ENTRADA' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                        <div className={`p-2 rounded-xl shrink-0 ${m.type === 'ENTRADA' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-blue-300'}`}>
                             {m.type === 'ENTRADA' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
                         </div>
                         <div className="flex-1 space-y-1">
                             <div className="flex justify-between items-start">
                                 <p className="text-[11px] font-black text-white uppercase tracking-tighter truncate max-w-[150px]">{m.ppe?.name}</p>
-                                <span className={`text-xs font-black italic ${m.type === 'ENTRADA' ? 'text-green-400' : 'text-red-400'}`}>
+                                <span className={`text-xs font-black italic ${m.type === 'ENTRADA' ? 'text-green-400' : 'text-blue-300'}`}>
                                     {m.type === 'ENTRADA' ? '+' : '-'}{Math.abs(m.quantity)}
                                 </span>
                             </div>
@@ -252,7 +252,7 @@ export default function InventoryPage() {
                 <select 
                   id="ppe_select"
                   title="Selecionar equipamento para movimentação"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold appearance-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold appearance-none"
                   value={formData.ppe_id}
                   onChange={(e) => setFormData({...formData, ppe_id: e.target.value})}
                 >
@@ -268,7 +268,7 @@ export default function InventoryPage() {
                     <select 
                         id="type_select"
                         title="Selecionar tipo de movimentação"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold"
                         value={formData.type}
                         onChange={(e) => setFormData({...formData, type: e.target.value as "ENTRADA" | "SAIDA" | "AJUSTE"})}
                     >
@@ -283,7 +283,7 @@ export default function InventoryPage() {
                         id="quantity_input"
                         title="Informar quantidade"
                         type="number" 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold text-center"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold text-center"
                         value={formData.quantity}
                         onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
                     />
@@ -296,7 +296,7 @@ export default function InventoryPage() {
                   id="motive_input"
                   title="Informar motivo"
                   type="text" 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold"
                   placeholder="Ex: Nota Fiscal 1234 / Reposição Mensal"
                   value={formData.motive}
                   onChange={(e) => setFormData({...formData, motive: e.target.value})}
@@ -315,7 +315,7 @@ export default function InventoryPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-red-900/20 border-b-4 border-red-900 flex items-center justify-center"
+                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 border-b-4 border-red-900 flex items-center justify-center"
                 >
                   {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Movimentação"}
                 </button>

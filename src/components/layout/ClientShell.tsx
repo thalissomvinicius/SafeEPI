@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
@@ -38,7 +38,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
                   href="https://wa.me/5591991697664" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="font-black text-[#8B1A1A] hover:underline transition-all"
+                  className="font-black text-[#2563EB] hover:underline transition-all"
                 >
                   Vinicius Dev
                 </a>

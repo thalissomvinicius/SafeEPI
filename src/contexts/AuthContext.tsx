@@ -1,10 +1,11 @@
-"use client"
+﻿"use client"
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react"
 import { api } from "@/services/api"
 import { useRouter, usePathname } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import type { Company } from "@/types/database"
 
 export type User = {
   id: string
@@ -14,6 +15,8 @@ export type User = {
     role?: "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
   }
   role?: "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
+  company_id?: string | null
+  company?: Company | null
 }
 
 type AuthContextType = {
@@ -52,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...session.user,
         email: profile.email || session.user.email,
         role: profile.role,
+        company_id: profile.company_id,
+        company: profile.company,
         user_metadata: {
           ...session.user.user_metadata,
           full_name: profile.full_name || session.user.user_metadata?.full_name,
@@ -111,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   if (loading || (!user && !isPublicPath(pathname))) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
-        <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
+        <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
         <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Verificando seguranca...</p>
       </div>
     )

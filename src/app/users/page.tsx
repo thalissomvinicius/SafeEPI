@@ -130,7 +130,7 @@ export default function UsersPage() {
   if (authLoading || (currentUser && currentUser.role !== 'ADMIN')) {
     return (
       <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="w-10 h-10 animate-spin text-[#8B1A1A] mb-4" />
+        <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
         <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Validando credenciais de administrador...</p>
       </div>
     )
@@ -141,18 +141,18 @@ export default function UsersPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-8">
         <div>
           <h1 className="text-3xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-            <UserCog className="w-8 h-8 mr-3 text-[#8B1A1A]" />
+            <UserCog className="w-8 h-8 mr-3 text-[#2563EB]" />
             Gestão de Acessos SafeEPI
           </h1>
           <p className="text-slate-500 font-medium mt-1">Controle de níveis de segurança, senhas e permissões da plataforma.</p>
         </div>
         <div className="flex items-center gap-4">
-            <div className="hidden sm:block bg-red-50 text-[#8B1A1A] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-100">
+            <div className="hidden sm:block bg-red-50 text-[#2563EB] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-100">
             Acesso Restrito
             </div>
             <button 
                 onClick={openNewUserModal}
-                className="bg-[#8B1A1A] hover:bg-[#681313] text-white px-5 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-md flex items-center gap-2"
+                className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-md flex items-center gap-2"
             >
                 <Plus className="w-4 h-4" /> Novo Usuário
             </button>
@@ -169,11 +169,11 @@ export default function UsersPage() {
           users.map((user) => (
             <div 
               key={user.id} 
-              className={`bg-white border ${user.id === currentUser?.id ? 'border-[#8B1A1A]/30 bg-red-50/10' : 'border-slate-200'} rounded-2xl p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-sm hover:shadow-md transition-all group`}
+              className={`bg-white border ${user.id === currentUser?.id ? 'border-[#2563EB]/30 bg-red-50/10' : 'border-slate-200'} rounded-2xl p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-sm hover:shadow-md transition-all group`}
             >
               <div className="flex items-center gap-4 flex-1">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black shrink-0 ${
-                  user.role === 'ADMIN' ? 'bg-[#8B1A1A] text-white' : 
+                  user.role === 'ADMIN' ? 'bg-[#2563EB] text-white' : 
                   user.role === 'DIRETORIA' ? 'bg-slate-800 text-white' : 
                   'bg-slate-100 text-slate-600'
                 }`}>
@@ -184,7 +184,7 @@ export default function UsersPage() {
                     <h3 className="font-bold text-slate-800 text-lg tracking-tight">
                       {user.full_name || "Usuário Sem Nome"}
                       {user.id === currentUser?.id && (
-                        <span className="ml-2 text-[10px] bg-[#8B1A1A]/10 text-[#8B1A1A] px-2 py-0.5 rounded uppercase font-black tracking-widest italic">Você</span>
+                        <span className="ml-2 text-[10px] bg-[#2563EB]/10 text-[#2563EB] px-2 py-0.5 rounded uppercase font-black tracking-widest italic">Você</span>
                       )}
                     </h3>
                   </div>
@@ -202,8 +202,8 @@ export default function UsersPage() {
                     disabled={updatingId === user.id || user.id === currentUser?.id}
                     onChange={(e) => handleRoleChange(user.id, e.target.value)}
                     title="Alterar permissão"
-                    className={`w-full sm:w-48 bg-white border border-slate-200 text-slate-900 rounded-lg px-4 py-2 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-[#8B1A1A] transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                      user.role === 'ADMIN' ? 'text-[#8B1A1A]' : 'text-slate-600'
+                    className={`w-full sm:w-48 bg-white border border-slate-200 text-slate-900 rounded-lg px-4 py-2 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-[#2563EB] transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                      user.role === 'ADMIN' ? 'text-[#2563EB]' : 'text-slate-600'
                     }`}
                   >
                     <option value="ADMIN">Administrador</option>
@@ -232,7 +232,7 @@ export default function UsersPage() {
                 </button>
 
                 {updatingId === user.id ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-[#8B1A1A]" />
+                  <Loader2 className="w-5 h-5 animate-spin text-[#2563EB]" />
                 ) : (
                   <div className="w-5" />
                 )}
@@ -263,7 +263,7 @@ export default function UsersPage() {
           <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h2 className="text-lg font-black uppercase tracking-tighter text-slate-800 flex items-center gap-2">
-                {formData.id ? <><Key className="w-5 h-5 text-[#8B1A1A]" /> Redefinir Senha</> : <><UserCog className="w-5 h-5 text-[#8B1A1A]" /> Novo Usuário</>}
+                {formData.id ? <><Key className="w-5 h-5 text-[#2563EB]" /> Redefinir Senha</> : <><UserCog className="w-5 h-5 text-[#2563EB]" /> Novo Usuário</>}
               </h2>
               <button 
                 onClick={() => setIsModalOpen(false)}
@@ -282,7 +282,7 @@ export default function UsersPage() {
                             type="text" required
                             value={formData.full_name}
                             onChange={e => setFormData({...formData, full_name: e.target.value})}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] font-bold text-sm"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
                             placeholder="Ex: João Silva"
                         />
                     </div>
@@ -292,7 +292,7 @@ export default function UsersPage() {
                             type="email" required
                             value={formData.email}
                             onChange={e => setFormData({...formData, email: e.target.value})}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] font-bold text-sm"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
                             placeholder="joao@empresa.com.br"
                         />
                     </div>
@@ -302,7 +302,7 @@ export default function UsersPage() {
                             value={formData.role}
                             title="Nível de Acesso"
                             onChange={e => setFormData({...formData, role: e.target.value})}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] font-bold text-sm uppercase"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm uppercase"
                         >
                             <option value="ADMIN">Administrador</option>
                             <option value="ALMOXARIFE">Almoxarife</option>
@@ -327,7 +327,7 @@ export default function UsersPage() {
                       type="password" required minLength={6}
                       value={formData.password}
                       onChange={e => setFormData({...formData, password: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] font-bold text-sm"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
                       placeholder="Mínimo de 6 caracteres"
                   />
               </div>
@@ -343,7 +343,7 @@ export default function UsersPage() {
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-3 bg-[#8B1A1A] hover:bg-[#681313] text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-colors flex items-center justify-center disabled:opacity-50"
+                  className="flex-1 px-4 py-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-colors flex items-center justify-center disabled:opacity-50"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (formData.id ? 'Salvar Senha' : 'Criar Conta')}
                 </button>

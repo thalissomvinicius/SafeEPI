@@ -308,7 +308,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
   if (showInstructions) {
     return (
       <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center space-y-4 sm:space-y-6 border border-slate-200 shadow-xl shadow-slate-200/50">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#8B1A1A]/10 rounded-full flex items-center justify-center text-[#8B1A1A]">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#2563EB]/10 rounded-full flex items-center justify-center text-[#2563EB]">
           <UserCheck className="w-8 h-8 sm:w-10 sm:h-10" />
         </div>
         <div className="space-y-1.5">
@@ -347,11 +347,11 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
 
         <button 
           onClick={() => setShowInstructions(false)}
-          className="w-full bg-[#8B1A1A] hover:bg-[#681313] active:bg-[#501010] text-white py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg shadow-[#8B1A1A]/20"
+          className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#501010] text-white py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg shadow-[#2563EB]/20"
         >
           Entendi, Iniciar Câmera
         </button>
-        <button onClick={onCancel} className="text-[#8B1A1A] text-[10px] font-bold uppercase hover:underline">{cancelLabel}</button>
+        <button onClick={onCancel} className="text-[#2563EB] text-[10px] font-bold uppercase hover:underline">{cancelLabel}</button>
       </div>
     )
   }
@@ -380,7 +380,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
       {error ? (
         <div className="text-center p-5 sm:p-6 space-y-3 sm:space-y-4">
           <ShieldAlert className="w-10 h-10 sm:w-12 sm:h-12 text-red-500 mx-auto" />
-          <p className="text-red-400 font-bold text-[11px] sm:text-xs leading-relaxed max-w-[280px] mx-auto">{error}</p>
+          <p className="text-blue-300 font-bold text-[11px] sm:text-xs leading-relaxed max-w-[280px] mx-auto">{error}</p>
           <div className="flex flex-col gap-2">
             <button onClick={() => { setError(null); startCamera(); }} className="bg-slate-800 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 active:bg-slate-600">Tentar Novamente</button>
             <button onClick={onCancel} className="text-slate-500 text-[10px] font-bold uppercase hover:text-slate-400">Cancelar</button>

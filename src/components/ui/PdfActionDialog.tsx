@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Download, ExternalLink, FileText, X } from "lucide-react"
 
@@ -26,7 +26,7 @@ export function PdfActionDialog({
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
           <div className="min-w-0">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#8B1A1A]">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#2563EB]">
               <FileText className="h-3.5 w-3.5" />
               PDF pronto
             </div>
@@ -56,12 +56,12 @@ export function PdfActionDialog({
               rel="noopener noreferrer"
               target="_blank"
             >
-              <ExternalLink className="h-4 w-4 text-[#8B1A1A]" />
+              <ExternalLink className="h-4 w-4 text-[#2563EB]" />
               Visualizar em nova aba
             </a>
 
             <a
-              className="flex items-center justify-center gap-2 rounded-2xl bg-[#8B1A1A] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/15 transition-all hover:bg-[#681313]"
+              className="flex items-center justify-center gap-2 rounded-2xl bg-[#2563EB] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/15 transition-all hover:bg-[#1D4ED8]"
               download={fileName}
               href={url}
               onClick={onDownload}

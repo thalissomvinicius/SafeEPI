@@ -131,7 +131,7 @@ export default function HistoryPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-slate-800 flex items-center uppercase tracking-tighter">
-            <History className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+            <History className="w-6 h-6 mr-2 text-[#2563EB]" />
             Auditoria SafeEPI • Live
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Consulta direta ao banco de dados Supabase para conformidade NR-06.</p>
@@ -147,7 +147,7 @@ export default function HistoryPage() {
               placeholder="Buscar colaborador ou ID da entrega..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] transition-all"
+              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function HistoryPage() {
         <div className="overflow-x-auto min-h-[300px] flex flex-col">
           {loading ? (
              <div className="flex flex-col items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A] mb-2" />
+                <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mb-2" />
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Acessando Arquivo Digital...</p>
              </div>
           ) : (
@@ -217,7 +217,7 @@ export default function HistoryPage() {
                       {signedDocument ? (
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                            <Fingerprint className="w-3.5 h-3.5 text-[#8B1A1A]" />
+                            <Fingerprint className="w-3.5 h-3.5 text-[#2563EB]" />
                             {signedDocument.sha256_hash.slice(0, 12)}...
                           </div>
                           <p className="text-[9px] font-bold text-slate-400 uppercase">
@@ -232,7 +232,7 @@ export default function HistoryPage() {
                         <button 
                           onClick={() => handleDownloadPDF(rec)}
                           disabled={downloadingId === rec.id}
-                          className="text-[#8B1A1A] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end w-full p-2 rounded transition-all group-hover:underline disabled:opacity-30"
+                          className="text-[#2563EB] hover:bg-red-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end w-full p-2 rounded transition-all group-hover:underline disabled:opacity-30"
                         >
                             {downloadingId === rec.id ? (
                               <Loader2 className="w-4 h-4 mr-1 animate-spin" />

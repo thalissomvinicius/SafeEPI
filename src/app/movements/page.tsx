@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, Shield, Users, FileDown, Presentation, X } from "lucide-react"
@@ -112,9 +112,9 @@ export default function MovementsPage() {
 
   const getPeriodLabel = () => {
     if (dateFilter === 'month') return `Mês de ${format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}`
-    if (dateFilter === 'last30') return 'Últimos 30 dias'
-    if (dateFilter === 'last60') return 'Últimos 60 dias'
-    if (dateFilter === 'last90') return 'Últimos 90 dias'
+    if (dateFilter === 'last30') return 'Ãšltimos 30 dias'
+    if (dateFilter === 'last60') return 'Ãšltimos 60 dias'
+    if (dateFilter === 'last90') return 'Ãšltimos 90 dias'
     if (dateFilter === 'all') return 'Todo o período'
     if (dateFilter === 'specific_month' && specificMonth) return `Mês ${specificMonth}`
     if (dateFilter === 'custom' && customStartDate && customEndDate) return `${customStartDate} a ${customEndDate}`
@@ -124,8 +124,8 @@ export default function MovementsPage() {
   const handleSimplePDF = () => {
     const blob = generateMovementsSimplePDF({ movements: filteredMovements, stats, period: getPeriodLabel() })
     openPdfDialog(blob, `Movimentacoes_Simples_${new Date().toISOString().slice(0,10)}.pdf`, {
-      title: "PDF Simples — Movimentações",
-      description: `Período: ${getPeriodLabel()} · ${filteredMovements.length} registros`
+      title: "PDF Simples - Movimentações",
+      description: `Período: ${getPeriodLabel()} Â· ${filteredMovements.length} registros`
     })
     setShowPdfModal(false)
   }
@@ -133,8 +133,8 @@ export default function MovementsPage() {
   const handlePresentationPDF = () => {
     const blob = generateMovementsPresentationPDF({ movements: filteredMovements, stats, period: getPeriodLabel() })
     openPdfDialog(blob, `Movimentacoes_Apresentacao_${new Date().toISOString().slice(0,10)}.pdf`, {
-      title: "PDF Apresentação — Movimentações",
-      description: `Período: ${getPeriodLabel()} · ${filteredMovements.length} registros`
+      title: "PDF Apresentação - Movimentações",
+      description: `Período: ${getPeriodLabel()} Â· ${filteredMovements.length} registros`
     })
     setShowPdfModal(false)
   }
@@ -144,7 +144,7 @@ export default function MovementsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-            <ArrowRightLeft className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+            <ArrowRightLeft className="w-6 h-6 mr-2 text-[#2563EB]" />
             Movimentações Mensais
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium italic">Monitoramento completo de entradas e saídas por período.</p>
@@ -162,7 +162,7 @@ export default function MovementsPage() {
           <button
             onClick={() => setShowPdfModal(true)}
             title="Gerar relatório em PDF"
-            className="flex-1 md:flex-none bg-[#8B1A1A] hover:bg-[#681313] text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-red-900/20 flex items-center justify-center gap-2"
+            className="flex-1 md:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
           >
             <FileDown className="w-4 h-4" />
             PDF
@@ -190,7 +190,7 @@ export default function MovementsPage() {
                   onClick={() => setDateFilter(opt.id as DateFilter)}
                   className={`px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ${
                     dateFilter === opt.id
-                      ? "bg-[#8B1A1A] border-[#8B1A1A] text-white shadow-md shadow-red-900/20"
+                      ? "bg-[#2563EB] border-[#2563EB] text-white shadow-md shadow-blue-900/20"
                       : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-white hover:border-slate-300"
                   }`}
                 >
@@ -210,7 +210,7 @@ export default function MovementsPage() {
                 onClick={() => setDateFilter('specific_month')}
                 className={`px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ${
                   dateFilter === 'specific_month'
-                    ? "bg-[#8B1A1A] border-[#8B1A1A] text-white shadow-md shadow-red-900/20"
+                    ? "bg-[#2563EB] border-[#2563EB] text-white shadow-md shadow-blue-900/20"
                     : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-white hover:border-slate-300"
                 }`}
               >
@@ -221,7 +221,7 @@ export default function MovementsPage() {
                 onClick={() => setDateFilter('custom')}
                 className={`px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ${
                   dateFilter === 'custom'
-                    ? "bg-[#8B1A1A] border-[#8B1A1A] text-white shadow-md shadow-red-900/20"
+                    ? "bg-[#2563EB] border-[#2563EB] text-white shadow-md shadow-blue-900/20"
                     : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-white hover:border-slate-300"
                 }`}
               >
@@ -242,7 +242,7 @@ export default function MovementsPage() {
               aria-label="Pesquisar movimentações"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#8B1A1A] outline-none transition-all"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none transition-all"
             />
           </div>
         </div>
@@ -261,7 +261,7 @@ export default function MovementsPage() {
                   setSpecificMonthSel(e.target.value)
                   setSpecificMonth(`${specificYearSel}-${e.target.value}`)
                 }}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#8B1A1A] outline-none"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
               >
                 {['01','02','03','04','05','06','07','08','09','10','11','12'].map((m, i) => (
                   <option key={m} value={m}>{['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][i]}</option>
@@ -276,7 +276,7 @@ export default function MovementsPage() {
                   setSpecificYearSel(e.target.value)
                   setSpecificMonth(`${e.target.value}-${specificMonthSel}`)
                 }}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#8B1A1A] outline-none"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
               >
                 {[2023,2024,2025,2026,2027].map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -297,7 +297,7 @@ export default function MovementsPage() {
                 aria-label="Data de início"
                 value={customStartDate}
                 onChange={e => setCustomStartDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#8B1A1A] outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
               />
             </div>
             <div className="flex-1">
@@ -309,7 +309,7 @@ export default function MovementsPage() {
                 aria-label="Data de fim"
                 value={customEndDate}
                 onChange={e => setCustomEndDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#8B1A1A] outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
               />
             </div>
           </div>
@@ -321,7 +321,7 @@ export default function MovementsPage() {
         {[
           { label: "Entregas", value: stats.deliveries, icon: ArrowUpRight, color: "text-blue-600", bg: "bg-blue-50" },
           { label: "Devoluções", value: stats.returns, icon: ArrowDownLeft, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "Itens Movimentados", value: stats.totalItems, icon: Shield, color: "text-[#8B1A1A]", bg: "bg-red-50" },
+          { label: "Itens Movimentados", value: stats.totalItems, icon: Shield, color: "text-[#2563EB]", bg: "bg-red-50" },
           { label: "Pessoas Atendidas", value: stats.uniqueEmployees, icon: Users, color: "text-slate-600", bg: "bg-slate-50" },
         ].map((s, i) => (
           <div key={i} className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex items-center gap-4">
@@ -341,7 +341,7 @@ export default function MovementsPage() {
         <div className="overflow-x-auto min-h-[400px]">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-              <Loader2 className="w-10 h-10 animate-spin mb-4 text-[#8B1A1A]" />
+              <Loader2 className="w-10 h-10 animate-spin mb-4 text-[#2563EB]" />
               <p className="text-sm font-black uppercase tracking-widest italic">Acessando Banco de Dados...</p>
             </div>
           ) : (
@@ -432,41 +432,41 @@ export default function MovementsPage() {
               {/* Simple PDF */}
               <button
                 onClick={handleSimplePDF}
-                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#8B1A1A]/30 hover:bg-red-50/30 transition-all"
+                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all"
               >
-                <div className="w-14 h-14 rounded-2xl bg-slate-100 group-hover:bg-[#8B1A1A]/10 flex items-center justify-center mb-4 transition-all">
-                  <FileDown className="w-7 h-7 text-slate-500 group-hover:text-[#8B1A1A]" />
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 group-hover:bg-[#2563EB]/10 flex items-center justify-center mb-4 transition-all">
+                  <FileDown className="w-7 h-7 text-slate-500 group-hover:text-[#2563EB]" />
                 </div>
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-2">PDF Simples</h3>
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                   Relatório operacional com tabela completa e resumo de indicadores. Ideal para arquivo e controle interno.
                 </p>
                 <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg">
-                  Retrato · 1 página+
+                  Retrato Â· 1 página+
                 </span>
               </button>
 
               {/* Presentation PDF */}
               <button
                 onClick={handlePresentationPDF}
-                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#8B1A1A]/30 hover:bg-red-50/30 transition-all"
+                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all"
               >
-                <div className="w-14 h-14 rounded-2xl bg-[#8B1A1A]/10 group-hover:bg-[#8B1A1A]/20 flex items-center justify-center mb-4 transition-all">
-                  <Presentation className="w-7 h-7 text-[#8B1A1A]" />
+                <div className="w-14 h-14 rounded-2xl bg-[#2563EB]/10 group-hover:bg-[#2563EB]/20 flex items-center justify-center mb-4 transition-all">
+                  <Presentation className="w-7 h-7 text-[#2563EB]" />
                 </div>
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-2">PDF Apresentação</h3>
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                   Relatório executivo com gráficos visuais e layout premium. Ideal para reuniões com gestores e diretoria.
                 </p>
-                <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#8B1A1A] bg-red-50 border border-red-100 px-3 py-1.5 rounded-lg">
-                  Paisagem · 2 páginas
+                <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#2563EB] bg-red-50 border border-red-100 px-3 py-1.5 rounded-lg">
+                  Paisagem Â· 2 páginas
                 </span>
               </button>
             </div>
 
             <div className="px-6 pb-6">
               <p className="text-[10px] text-center text-slate-400 italic">
-                Período: <strong>{getPeriodLabel()}</strong> · {filteredMovements.length} movimentações
+                Período: <strong>{getPeriodLabel()}</strong> Â· {filteredMovements.length} movimentações
               </p>
             </div>
           </div>

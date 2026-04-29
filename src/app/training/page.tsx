@@ -714,14 +714,14 @@ export default function TrainingPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-              <Award className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+              <Award className="w-6 h-6 mr-2 text-[#2563EB]" />
               Treinamentos SafeEPI
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de competências e normas regulamentadoras (NRs).</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
+          className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
         >
           <Plus className="w-4 h-4 mr-2" />
           Registrar Treinamento
@@ -739,7 +739,7 @@ export default function TrainingPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               title="Buscar treinamento"
               aria-label="Buscar treinamento"
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] transition-all"
+              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
         </div>
@@ -747,7 +747,7 @@ export default function TrainingPage() {
         <div className="overflow-x-auto min-h-[300px]">
           {loading ? (
              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#8B1A1A]" />
+                <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#2563EB]" />
                 <p className="text-sm font-medium italic">Acessando registros do Supabase...</p>
             </div>
           ) : (
@@ -797,7 +797,7 @@ export default function TrainingPage() {
                         <button
                           onClick={(event) => { event.stopPropagation(); void openPendingDraft(draft); }}
                           title="Abrir pendência"
-                          className="p-2 bg-amber-50 hover:bg-[#8B1A1A] hover:text-white text-amber-700 rounded-lg transition-all"
+                          className="p-2 bg-amber-50 hover:bg-[#2563EB] hover:text-white text-amber-700 rounded-lg transition-all"
                         >
                           <Link2 className="w-4 h-4" />
                         </button>
@@ -828,7 +828,7 @@ export default function TrainingPage() {
                         <button
                           onClick={() => downloadCertificate(rec)}
                           title="Baixar Certificado"
-                          className="p-2 bg-slate-100 hover:bg-[#8B1A1A] hover:text-white text-slate-600 rounded-lg transition-all"
+                          className="p-2 bg-slate-100 hover:bg-[#2563EB] hover:text-white text-slate-600 rounded-lg transition-all"
                         >
                           <FileDown className="w-4 h-4" />
                         </button>
@@ -849,7 +849,7 @@ export default function TrainingPage() {
       </div>
 
       <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center">
-        <CheckCircle2 className="w-12 h-12 text-[#8B1A1A]/20 mb-4" />
+        <CheckCircle2 className="w-12 h-12 text-[#2563EB]/20 mb-4" />
         <h3 className="font-bold text-slate-800 uppercase tracking-tighter">Certificação NR-01</h3>
         <p className="text-sm text-slate-400 max-w-md mt-2">
           Treinamentos periódicos garantem a segurança e reduzem o risco de acidentes de trabalho.
@@ -882,7 +882,7 @@ export default function TrainingPage() {
                     <div className="space-y-2">
                       <label id="label-colaborador" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador Treinado</label>
                       <select 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
                         value={formData.employee_id}
                         title="Selecionar Colaborador"
                         aria-labelledby="label-colaborador"
@@ -902,7 +902,7 @@ export default function TrainingPage() {
                     <div className="space-y-2">
                       <label id="label-treinamento" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo de Treinamento</label>
                       <select 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
                         value={formData.training_name}
                         title="Tipo de Treinamento"
                         aria-labelledby="label-treinamento"
@@ -920,7 +920,7 @@ export default function TrainingPage() {
                             placeholder="Digite o nome da Norma ou Treinamento"
                             value={customTrainingName}
                             onChange={(e) => setCustomTrainingName(e.target.value)}
-                            className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold"
+                            className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
                             autoFocus
                           />
                       )}
@@ -934,14 +934,14 @@ export default function TrainingPage() {
                         title="Data de Realização"
                         aria-labelledby="label-data"
                         onChange={(e) => setFormData({...formData, completion_date: e.target.value})}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                       />
                     </div>
 
                     <div className="pt-6">
                       <button 
                         type="submit"
-                        className="w-full px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-xl uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-red-900/10"
+                        className="w-full px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-red-900/10"
                       >
                         Próxima Etapa: Instrutor
                       </button>
@@ -965,7 +965,7 @@ export default function TrainingPage() {
                         value={tstSearchTerm}
                         onChange={e => setTstSearchTerm(e.target.value)}
                         placeholder="Buscar instrutor..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold focus:border-[#8B1A1A] outline-none"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold focus:border-[#2563EB] outline-none"
                       />
                     </div>
 
@@ -979,7 +979,7 @@ export default function TrainingPage() {
                           <button
                             key={emp.id}
                             onClick={() => handleSelectTst(emp)}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#8B1A1A]/30 hover:bg-red-50/30 transition-all text-left group"
+                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#2563EB]/30 hover:bg-red-50/30 transition-all text-left group"
                           >
                             {emp.photo_url ? (
                               <div className="relative">
@@ -1140,7 +1140,7 @@ export default function TrainingPage() {
                                 }
                                 setTstSignatureBase64(tstSigCanvas.current?.toDataURL('image/png') || null)
                               }}
-                              className="flex-1 py-3 text-[10px] font-black text-white bg-[#8B1A1A] uppercase tracking-widest rounded-xl hover:bg-[#681313] transition-all"
+                              className="flex-1 py-3 text-[10px] font-black text-white bg-[#2563EB] uppercase tracking-widest rounded-xl hover:bg-[#1D4ED8] transition-all"
                             >
                               Confirmar Assinatura
                             </button>
@@ -1235,7 +1235,7 @@ export default function TrainingPage() {
                       <button
                         onClick={() => setStep(4)}
                         disabled={isSaving}
-                        className="flex-1 py-4 text-[10px] font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-red-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 py-4 text-[10px] font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         Proxima: Assinatura do Instrutor
@@ -1312,7 +1312,7 @@ export default function TrainingPage() {
                               }
                               setInstructorSignatureBase64(instructorSigCanvas.current?.toDataURL('image/png') || null)
                             }}
-                            className="flex-1 py-3 text-[10px] font-black text-white bg-[#8B1A1A] uppercase tracking-widest rounded-xl hover:bg-[#681313] transition-all"
+                            className="flex-1 py-3 text-[10px] font-black text-white bg-[#2563EB] uppercase tracking-widest rounded-xl hover:bg-[#1D4ED8] transition-all"
                           >
                             Confirmar Assinatura
                           </button>
@@ -1357,7 +1357,7 @@ export default function TrainingPage() {
                       <button
                         onClick={handleAddTraining}
                         disabled={!instructorSignatureBase64 || isSaving}
-                        className="flex-1 py-4 text-[10px] font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-red-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 py-4 text-[10px] font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                         Finalizar e Gerar Certificado

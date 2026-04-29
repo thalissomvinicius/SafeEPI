@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
@@ -239,7 +239,7 @@ export default function ReturnsPage() {
     emp.cpf.includes(searchTerm)
   )
 
-  if (loading) return <div className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-[#8B1A1A]" /></div>
+  if (loading) return <div className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-[#2563EB]" /></div>
 
   if (isSaved) {
     return (
@@ -253,9 +253,9 @@ export default function ReturnsPage() {
           {lastPdfUrl && (
             <>
               <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer" className="border border-slate-200 bg-white text-slate-700 px-6 py-3 rounded-xl font-bold flex items-center justify-center">
-                <ExternalLink className="w-5 h-5 mr-2 text-[#8B1A1A]" /> Visualizar PDF
+                <ExternalLink className="w-5 h-5 mr-2 text-[#2563EB]" /> Visualizar PDF
               </a>
-              <a href={lastPdfUrl} download={lastPdfFileName || "recibo_baixa.pdf"} className="bg-[#8B1A1A] text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center">
+              <a href={lastPdfUrl} download={lastPdfFileName || "recibo_baixa.pdf"} className="bg-[#2563EB] text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center">
                 <FileDown className="w-5 h-5 mr-2" /> Baixar PDF
               </a>
             </>
@@ -272,7 +272,7 @@ export default function ReturnsPage() {
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 pb-24 md:pb-8">
       <div className="mb-6">
         <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center">
-          <ArrowRightLeft className="w-6 h-6 mr-2 text-[#8B1A1A]" /> 
+          <ArrowRightLeft className="w-6 h-6 mr-2 text-[#2563EB]" /> 
           Baixas e Substituições {COMPANY_CONFIG.shortName}
         </h1>
         <p className="text-slate-500 font-medium text-sm">Devolução e troca de equipamentos desgastados no {COMPANY_CONFIG.systemName}.</p>
@@ -290,7 +290,7 @@ export default function ReturnsPage() {
                 placeholder="Buscar colaborador..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:border-[#8B1A1A] outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:border-[#2563EB] outline-none"
               />
             </div>
           </div>
@@ -299,9 +299,9 @@ export default function ReturnsPage() {
               <button 
                 key={emp.id}
                 onClick={() => selectEmployee(emp)}
-                className={`w-full text-left p-3 rounded-xl mb-1 transition-all flex flex-col ${selectedEmployee?.id === emp.id ? 'bg-[#8B1A1A]/10 border border-[#8B1A1A]/30' : 'hover:bg-slate-50 border border-transparent'}`}
+                className={`w-full text-left p-3 rounded-xl mb-1 transition-all flex flex-col ${selectedEmployee?.id === emp.id ? 'bg-[#2563EB]/10 border border-[#2563EB]/30' : 'hover:bg-slate-50 border border-transparent'}`}
               >
-                <span className={`font-black text-xs uppercase tracking-tighter truncate w-full ${selectedEmployee?.id === emp.id ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>{emp.full_name}</span>
+                <span className={`font-black text-xs uppercase tracking-tighter truncate w-full ${selectedEmployee?.id === emp.id ? 'text-[#2563EB]' : 'text-slate-700'}`}>{emp.full_name}</span>
                 <span className="text-[9px] text-slate-400 font-bold">{formatCpf(emp.cpf)}</span>
               </button>
             ))}
@@ -318,7 +318,7 @@ export default function ReturnsPage() {
           ) : !deliveryToReturn ? (
             <div className="animate-in fade-in">
               <h2 className="text-sm font-black uppercase text-slate-800 tracking-widest mb-4 border-b border-slate-100 pb-2">EPIs em posse de {selectedEmployee.full_name}</h2>
-              {loadingDeliveries ? <Loader2 className="w-6 h-6 animate-spin text-[#8B1A1A]" /> : (
+              {loadingDeliveries ? <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" /> : (
                 <div className="grid gap-3">
                   {activeDeliveries.length === 0 ? (
                     <p className="text-slate-400 text-xs font-bold uppercase">Nenhum EPI pendente de devolução.</p>
@@ -367,10 +367,10 @@ export default function ReturnsPage() {
                           key={opt.val}
                           type="button"
                           onClick={() => setReturnMotive(opt.val)}
-                          className={`p-3 rounded-2xl border text-xs font-black uppercase tracking-tight transition-all flex flex-col items-center justify-center text-center gap-1 ${returnMotive === opt.val ? 'border-[#8B1A1A] bg-red-50 text-[#8B1A1A] shadow-md shadow-red-900/10' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
+                          className={`p-3 rounded-2xl border text-xs font-black uppercase tracking-tight transition-all flex flex-col items-center justify-center text-center gap-1 ${returnMotive === opt.val ? 'border-[#2563EB] bg-red-50 text-[#2563EB] shadow-md shadow-red-900/10' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
                         >
                           <span>{opt.label}</span>
-                          <span className={`text-[9px] font-bold ${returnMotive === opt.val ? 'text-red-400' : 'text-slate-400'}`}>
+                          <span className={`text-[9px] font-bold ${returnMotive === opt.val ? 'text-blue-300' : 'text-slate-400'}`}>
                             {['Demissão', 'Erro de Entrega'].includes(opt.val) ? '(Não requer novo)' : '(Requer Novo)'}
                           </span>
                         </button>
@@ -429,7 +429,7 @@ export default function ReturnsPage() {
 
                   <button 
                     onClick={() => setStep(2)}
-                    className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10"
+                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-red-900/10"
                   >
                     Prosseguir para Assinatura
                   </button>
@@ -467,7 +467,7 @@ export default function ReturnsPage() {
                       )}
                       <div className="flex justify-between items-center">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assinatura do Colaborador</label>
-                        <button onClick={clearSignature} className="text-[10px] font-black text-[#8B1A1A] uppercase hover:underline">Limpar</button>
+                        <button onClick={clearSignature} className="text-[10px] font-black text-[#2563EB] uppercase hover:underline">Limpar</button>
                       </div>
                       <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-100 shadow-inner h-64 touch-none">
                         <SignatureCanvas ref={sigCanvas} canvasProps={{ className: 'w-full h-full' }} penColor="#000000" />
@@ -478,7 +478,7 @@ export default function ReturnsPage() {
                           if (!sigCanvas.current?.isEmpty()) saveReturn(sigCanvas.current!.getTrimmedCanvas().toDataURL("image/png"))
                           else alert("A assinatura é obrigatória.")
                         }}
-                        className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em]"
+                        className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em]"
                       >
                         {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Confirmar e Finalizar"}
                       </button>

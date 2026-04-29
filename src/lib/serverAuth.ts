@@ -11,6 +11,7 @@ type AuthorizationResult =
         id: string
         email: string | null
         role: AppRole
+        company_id: string | null
       }
     }
   | {
@@ -57,16 +58,26 @@ export async function requireAuthorizedUser(
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("role")
+    .select("role,company_id")
     .eq("id", user.id)
+    .maybeSingle()
+
+  const { data: membership } = await supabaseAdmin
+    .from("company_users")
+    .select("company_id,role")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle()
 
   const fallbackRole = normalizeRole(user.user_metadata?.role)
   const role = (
     ADMIN_BYPASS_EMAILS.has(user.email ?? "")
       ? "ADMIN"
-      : normalizeRole(profile?.role || fallbackRole)
+      : normalizeRole(membership?.role || profile?.role || fallbackRole)
   ) as AppRole
+  const companyId = (membership?.company_id || profile?.company_id || null) as string | null
 
   if (allowedRoles && !allowedRoles.includes(role)) {
     return {
@@ -81,6 +92,7 @@ export async function requireAuthorizedUser(
       id: user.id,
       email: user.email ?? null,
       role,
+      company_id: companyId,
     },
   }
 }

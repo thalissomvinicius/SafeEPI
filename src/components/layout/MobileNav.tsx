@@ -45,7 +45,7 @@ export function MobileNav() {
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center justify-center p-2 rounded-lg min-w-[64px] transition-colors ${
-                isActive ? "text-[#8B1A1A]" : "text-slate-400"
+                isActive ? "text-[#2563EB]" : "text-slate-400"
               }`}
             >
               <Icon className="w-6 h-6 mb-1" />
@@ -101,11 +101,11 @@ export function MobileNav() {
                       onClick={() => setIsMenuOpen(false)}
                       className={`flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all ${
                         isActive 
-                          ? "bg-[#8B1A1A]/5 border-[#8B1A1A]/20 text-[#8B1A1A]" 
+                          ? "bg-[#2563EB]/5 border-[#2563EB]/20 text-[#2563EB]" 
                           : "bg-white border-slate-50 text-slate-600 hover:border-slate-200"
                       }`}
                     >
-                      <Icon className={`w-8 h-8 mb-3 ${isActive ? "text-[#8B1A1A]" : "text-slate-400"}`} />
+                      <Icon className={`w-8 h-8 mb-3 ${isActive ? "text-[#2563EB]" : "text-slate-400"}`} />
                       <span className="text-[10px] font-black uppercase tracking-widest text-center">{item.label}</span>
                     </Link>
                   )
@@ -118,7 +118,7 @@ export function MobileNav() {
                     setIsMenuOpen(false)
                     logout()
                   }}
-                  className="w-full flex items-center justify-center gap-3 p-5 rounded-2xl bg-red-50 text-[#8B1A1A] font-black uppercase tracking-widest text-xs border-b-4 border-red-200 active:border-b-0 transition-all"
+                  className="w-full flex items-center justify-center gap-3 p-5 rounded-2xl bg-red-50 text-[#2563EB] font-black uppercase tracking-widest text-xs border-b-4 border-red-200 active:border-b-0 transition-all"
                 >
                   <LogOut className="w-5 h-5" />
                   Encerrar Sessão

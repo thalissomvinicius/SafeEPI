@@ -107,10 +107,10 @@ export default function JobSectorsPage() {
       <div className="flex flex-col lg:flex-row justify-between gap-4 lg:items-end">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Padrão RH SafeEPI</span>
+            <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Padrão RH SafeEPI</span>
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-            <BriefcaseBusiness className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+            <BriefcaseBusiness className="w-6 h-6 mr-2 text-[#2563EB]" />
             Cargos e Setores
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Cadastre opções padronizadas para usar no cadastro dos colaboradores.</p>
@@ -119,13 +119,13 @@ export default function JobSectorsPage() {
         <div className="bg-slate-100 rounded-xl p-1 flex w-full sm:w-auto">
           <button
             onClick={() => selectTab("job")}
-            className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "job" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
+            className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "job" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-400"}`}
           >
             Cargos
           </button>
           <button
             onClick={() => selectTab("department")}
-            className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "department" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
+            className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "department" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-400"}`}
           >
             Setores
           </button>
@@ -136,14 +136,14 @@ export default function JobSectorsPage() {
         <button
           type="button"
           onClick={() => selectTab("job")}
-          className={`border rounded-2xl p-5 text-left transition-all flex items-center justify-between gap-4 ${activeTab === "job" ? "bg-red-50 border-[#8B1A1A]/30 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}
+          className={`border rounded-2xl p-5 text-left transition-all flex items-center justify-between gap-4 ${activeTab === "job" ? "bg-red-50 border-[#2563EB]/30 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}
         >
           <div className="flex items-center gap-3">
-            <div className={`rounded-xl p-3 ${activeTab === "job" ? "bg-[#8B1A1A] text-white" : "bg-slate-100 text-slate-500"}`}>
+            <div className={`rounded-xl p-3 ${activeTab === "job" ? "bg-[#2563EB] text-white" : "bg-slate-100 text-slate-500"}`}>
               <BriefcaseBusiness className="w-5 h-5" />
             </div>
             <div>
-              <p className={`text-xs font-black uppercase tracking-widest ${activeTab === "job" ? "text-[#8B1A1A]" : "text-slate-500"}`}>Cargos</p>
+              <p className={`text-xs font-black uppercase tracking-widest ${activeTab === "job" ? "text-[#2563EB]" : "text-slate-500"}`}>Cargos</p>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cadastrar e listar cargos</p>
             </div>
           </div>
@@ -153,14 +153,14 @@ export default function JobSectorsPage() {
         <button
           type="button"
           onClick={() => selectTab("department")}
-          className={`border rounded-2xl p-5 text-left transition-all flex items-center justify-between gap-4 ${activeTab === "department" ? "bg-red-50 border-[#8B1A1A]/30 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}
+          className={`border rounded-2xl p-5 text-left transition-all flex items-center justify-between gap-4 ${activeTab === "department" ? "bg-red-50 border-[#2563EB]/30 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}
         >
           <div className="flex items-center gap-3">
-            <div className={`rounded-xl p-3 ${activeTab === "department" ? "bg-[#8B1A1A] text-white" : "bg-slate-100 text-slate-500"}`}>
+            <div className={`rounded-xl p-3 ${activeTab === "department" ? "bg-[#2563EB] text-white" : "bg-slate-100 text-slate-500"}`}>
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <p className={`text-xs font-black uppercase tracking-widest ${activeTab === "department" ? "text-[#8B1A1A]" : "text-slate-500"}`}>Setores</p>
+              <p className={`text-xs font-black uppercase tracking-widest ${activeTab === "department" ? "text-[#2563EB]" : "text-slate-500"}`}>Setores</p>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cadastrar e listar setores</p>
             </div>
           </div>
@@ -177,7 +177,7 @@ export default function JobSectorsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
         <form onSubmit={handleSave} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 h-fit space-y-5">
           <div className="flex items-center gap-3">
-            <div className="bg-red-50 text-[#8B1A1A] rounded-xl p-3">
+            <div className="bg-red-50 text-[#2563EB] rounded-xl p-3">
               <Icon className="w-5 h-5" />
             </div>
             <div>
@@ -190,14 +190,14 @@ export default function JobSectorsPage() {
             <button
               type="button"
               onClick={() => selectTab("job")}
-              className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "job" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
+              className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "job" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-400"}`}
             >
               Cargo
             </button>
             <button
               type="button"
               onClick={() => selectTab("department")}
-              className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "department" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-400"}`}
+              className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === "department" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-400"}`}
             >
               Setor
             </button>
@@ -211,7 +211,7 @@ export default function JobSectorsPage() {
               value={formData.name}
               onChange={(event) => setFormData({ ...formData, name: formatTypingName(event.target.value) })}
               placeholder={activeTab === "job" ? "EX: AUXILIAR ADMINISTRATIVO" : "EX: ALMOXARIFADO"}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] focus:outline-none transition-all font-bold uppercase"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase"
             />
           </div>
 
@@ -224,7 +224,7 @@ export default function JobSectorsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+              className="flex-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               {formData.id ? "Salvar Alteração" : `Cadastrar ${singularTitle}`}
@@ -245,7 +245,7 @@ export default function JobSectorsPage() {
                 placeholder={`Buscar ${title.toLowerCase()}...`}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] transition-all"
+                className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
               />
             </div>
           </div>
@@ -253,7 +253,7 @@ export default function JobSectorsPage() {
           <div className="divide-y divide-slate-50 min-h-[320px]">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-24">
-                <Loader2 className="w-8 h-8 animate-spin text-[#8B1A1A] mb-2" />
+                <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mb-2" />
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Carregando cadastros...</p>
               </div>
             ) : filteredItems.length === 0 ? (

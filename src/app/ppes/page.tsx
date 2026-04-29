@@ -112,10 +112,10 @@ export default function PpesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
            <div className="flex items-center gap-2 mb-1">
-             <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Catálogo Técnico {COMPANY_CONFIG.shortName}</span>
+             <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Catálogo Técnico {COMPANY_CONFIG.shortName}</span>
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase text-3xl sm:text-2xl">
-            <Shield className="w-6 h-6 mr-2 text-[#8B1A1A]" />
+            <Shield className="w-6 h-6 mr-2 text-[#2563EB]" />
             EPIs e CAs {COMPANY_CONFIG.shortName}
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão técnica de conformidade no {COMPANY_CONFIG.systemName}.</p>
@@ -125,7 +125,7 @@ export default function PpesPage() {
                 href="/inventory"
                 className="flex-1 sm:flex-none border border-slate-200 bg-white text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center hover:bg-slate-50"
             >
-                <Package className="w-4 h-4 mr-2 text-[#8B1A1A]" />
+                <Package className="w-4 h-4 mr-2 text-[#2563EB]" />
                 Estoque
             </Link>
             <button 
@@ -133,7 +133,7 @@ export default function PpesPage() {
                   setFormData({ id: undefined, name: "", ca: "", valCa: "", cost: "", stock: "" })
                   setIsModalOpen(true)
                 }}
-                className="flex-1 sm:flex-none bg-[#8B1A1A] hover:bg-[#681313] text-white shadow-lg shadow-red-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center border-b-4 border-red-900"
+                className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center border-b-4 border-red-900"
             >
                 <Plus className="w-4 h-4 mr-2" />
                 Novo EPI
@@ -150,7 +150,7 @@ export default function PpesPage() {
               placeholder="Buscar por Nº CA ou Equipamento..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#8B1A1A] transition-all"
+              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
         </div>
@@ -209,11 +209,11 @@ export default function PpesPage() {
                     </td>
                     <td className="px-6 py-5 text-center">
                         <div className="flex flex-col items-center">
-                            <span className={`text-lg font-black tracking-tighter ${ppe.current_stock <= 5 ? 'text-[#8B1A1A]' : 'text-slate-700'}`}>
+                            <span className={`text-lg font-black tracking-tighter ${ppe.current_stock <= 5 ? 'text-[#2563EB]' : 'text-slate-700'}`}>
                                 {ppe.current_stock || 0}
                             </span>
                             {ppe.current_stock <= 5 && (
-                                <span className="text-[8px] font-black text-[#8B1A1A] uppercase tracking-widest bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Repor!</span>
+                                <span className="text-[8px] font-black text-[#2563EB] uppercase tracking-widest bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Repor!</span>
                             )}
                         </div>
                     </td>
@@ -228,7 +228,7 @@ export default function PpesPage() {
                         <Link 
                             href="/inventory"
                             title="Gerenciar estoque deste item"
-                            className="text-slate-400 hover:text-[#8B1A1A] font-black text-[10px] uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100 italic"
+                            className="text-slate-400 hover:text-[#2563EB] font-black text-[10px] uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100 italic"
                         >
                         Estoque
                         </Link>
@@ -273,7 +273,7 @@ export default function PpesPage() {
                   type="text" 
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] transition-all font-bold" 
                   placeholder="Ex: Óculos de Proteção"
                 />
               </div>
@@ -286,7 +286,7 @@ export default function PpesPage() {
                     type="text" 
                     value={formData.ca}
                     onChange={(e) => setFormData({...formData, ca: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                     placeholder="Ex: 54321"
                   />
                 </div>
@@ -298,7 +298,7 @@ export default function PpesPage() {
                     step="0.01"
                     value={formData.cost}
                     onChange={(e) => setFormData({...formData, cost: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                     placeholder="0.00"
                   />
                 </div>
@@ -313,7 +313,7 @@ export default function PpesPage() {
                     min="0"
                     value={formData.stock}
                     onChange={(e) => setFormData({...formData, stock: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold disabled:opacity-50" 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold disabled:opacity-50" 
                     placeholder="0"
                     disabled={!!formData.id}
                     title={formData.id ? "O estoque deve ser gerenciado na tela de Estoque" : ""}
@@ -326,7 +326,7 @@ export default function PpesPage() {
                     type="date" 
                     value={formData.valCa}
                     onChange={(e) => setFormData({...formData, valCa: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#8B1A1A] transition-all font-bold" 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                   />
                 </div>
               </div>
@@ -343,7 +343,7 @@ export default function PpesPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#8B1A1A] hover:bg-[#681313] rounded-2xl uppercase tracking-widest transition-all flex items-center justify-center font-bold border-b-4 border-red-900 shadow-xl shadow-red-900/10"
+                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all flex items-center justify-center font-bold border-b-4 border-red-900 shadow-xl shadow-red-900/10"
                 >
                   {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar no Catálogo"}
                 </button>

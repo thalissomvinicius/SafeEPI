@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument } from "@/types/database";
+import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, CurrentUser } from "@/types/database";
 import { Session } from "@supabase/supabase-js";
 
 type AddTrainingResult = {
@@ -230,6 +230,33 @@ async function readResponseJson<T = unknown>(res: Response): Promise<T> {
   }
 }
 
+let cachedCompanyId: string | null = null;
+
+async function getCurrentCompanyId(): Promise<string | null> {
+  if (cachedCompanyId) return cachedCompanyId;
+
+  const session = await ensureActiveSession();
+  const token = session?.access_token;
+  if (!token) return null;
+
+  const res = await fetch("/api/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await readResponseJson<{ user?: CurrentUser; error?: string }>(res);
+
+  if (!res.ok) {
+    throw new Error(data.error || "Nao foi possivel identificar a empresa atual.");
+  }
+
+  cachedCompanyId = data.user?.company_id || null;
+  return cachedCompanyId;
+}
+
+async function withCompanyId<T extends Record<string, unknown>>(payload: T): Promise<T & { company_id?: string }> {
+  const companyId = await getCurrentCompanyId();
+  return companyId ? { ...payload, company_id: companyId } : payload;
+}
+
 async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
   const { data, error } = await withSessionRetry(() =>
     supabase
@@ -251,17 +278,18 @@ async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
 
 async function insertStockOutMovement(ppeId: string, quantity: number, motive: string): Promise<void> {
   if (quantity <= 0) return;
+  const payload = await withCompanyId({
+    ppe_id: ppeId,
+    quantity,
+    type: "SAIDA",
+    motive,
+    created_by_name: "Sistema (Entrega)",
+  });
 
   const firstTry = await withSessionRetry(() =>
     supabase
       .from("stock_movements")
-      .insert([{
-        ppe_id: ppeId,
-        quantity,
-        type: "SAIDA",
-        motive,
-        created_by_name: "Sistema (Entrega)",
-      }])
+      .insert([payload])
       .select()
   );
 
@@ -282,6 +310,7 @@ async function insertStockOutMovement(ppeId: string, quantity: number, motive: s
     supabase
       .from("stock_movements")
       .insert([{
+        ...(payload.company_id ? { company_id: payload.company_id } : {}),
         ppe_id: ppeId,
         quantity,
         type: "SAIDA",
@@ -311,6 +340,7 @@ export const api = {
   },
 
   async logout() {
+    cachedCompanyId = null;
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   },
@@ -322,8 +352,10 @@ export const api = {
   async archiveSignedDocument(payload: SignedDocumentArchivePayload) {
     const formData = new FormData();
     const sha256Hash = payload.sha256Hash || await sha256Hex(payload.pdfBlob);
+    const companyId = await getCurrentCompanyId();
 
     formData.append("document_type", payload.documentType);
+    if (companyId) formData.append("company_id", companyId);
     formData.append("file_name", payload.fileName);
     formData.append("pdfFile", new File([payload.pdfBlob], payload.fileName, { type: "application/pdf" }));
     formData.append("sha256_hash", sha256Hash);
@@ -390,7 +422,7 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Nao foi possivel validar o perfil.");
-    return data.user as Profile;
+    return data.user as CurrentUser;
   },
 
   async getUsers() {
@@ -464,10 +496,11 @@ export const api = {
   },
 
   async addWorkplace(workplace: Omit<Workplace, 'id' | 'created_at'>) {
+    const payload = await withCompanyId(workplace as Record<string, unknown>);
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('workplaces')
-        .insert([workplace])
+        .insert([payload])
         .select()
     );
     
@@ -518,10 +551,11 @@ export const api = {
 
   async addJobTitle(name: string) {
     const normalizedName = normalizeCatalogName(name);
+    const payload = await withCompanyId({ name: normalizedName, active: true });
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('job_titles')
-        .insert([{ name: normalizedName, active: true }])
+        .insert([payload])
         .select()
     );
 
@@ -575,10 +609,11 @@ export const api = {
 
   async addDepartment(name: string) {
     const normalizedName = normalizeCatalogName(name);
+    const payload = await withCompanyId({ name: normalizedName, active: true });
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('departments')
-        .insert([{ name: normalizedName, active: true }])
+        .insert([payload])
         .select()
     );
 
@@ -646,10 +681,11 @@ export const api = {
       photoUrl = publicUrl;
     }
 
+    const employeePayload = await withCompanyId({ ...employee, photo_url: photoUrl } as Record<string, unknown>);
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('employees')
-        .insert([{ ...employee, photo_url: photoUrl }])
+        .insert([employeePayload])
         .select()
     );
     
@@ -741,10 +777,11 @@ export const api = {
   },
 
   async addPpe(ppe: Omit<PPE, 'id' | 'created_at'>) {
+    const payload = await withCompanyId(ppe as Record<string, unknown>);
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('ppes')
-        .insert([ppe])
+        .insert([payload])
         .select()
     );
     
@@ -784,10 +821,11 @@ export const api = {
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
     // Insert the movement — the Supabase trigger fn_update_ppe_stock
     // automatically updates ppes.current_stock with SECURITY DEFINER (bypasses RLS)
+    const payload = await withCompanyId(movement as Record<string, unknown>);
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('stock_movements')
-        .insert([movement])
+        .insert([payload])
         .select()
     )
     if (error) throw error
@@ -855,12 +893,12 @@ export const api = {
     }
 
     // 3. Salva o registro na tabela de entregas
-    const insertPayload = {
+    const insertPayload = await withCompanyId({
       ...delivery,
       reason: normalizedReason,
       signature_url: signatureUrl,
       delivery_date: delivery.delivery_date || new Date().toISOString(),
-    };
+    } as Record<string, unknown>);
 
     const firstInsertResult = await withSessionRetry(() =>
       supabase
@@ -886,6 +924,7 @@ export const api = {
 
     if (isDeliverySchemaCompatibilityIssue(insertError)) {
       const fallbackPayload = {
+        ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
         employee_id: insertPayload.employee_id,
         ppe_id: insertPayload.ppe_id,
         reason: insertPayload.reason,
@@ -980,10 +1019,11 @@ export const api = {
   },
 
   async addTraining(training: Omit<Training, 'id' | 'created_at'>): Promise<AddTrainingResult> {
+    const payload = await withCompanyId(training as Record<string, unknown>);
     const { data, error } = await withSessionRetry(() =>
       supabase
         .from('trainings')
-        .insert([training])
+        .insert([payload])
         .select()
     );
 
@@ -1005,6 +1045,7 @@ export const api = {
     }
 
     const fallbackTraining = {
+      ...(payload.company_id ? { company_id: payload.company_id } : {}),
       employee_id: training.employee_id,
       training_name: training.training_name,
       completion_date: training.completion_date,

@@ -709,7 +709,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(7)
     doc.setTextColor(71, 85, 105)
-    doc.text("ASSINATURA DO RESPONSÃVEL TÉCNICO", pageWidth / 2, blockY + 7, { align: "center" })
+    doc.text("ASSINATURA DO RESPONSÁVEL TÉCNICO", pageWidth / 2, blockY + 7, { align: "center" })
 
     try {
       const imgProps = doc.getImageProperties(tst.signatureBase64)
@@ -1137,7 +1137,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(18)
   doc.setTextColor(26, 26, 46)
-  doc.text("CONTEÃšDO PROGRAMÃTICO", centerX, 30, { align: "center" })
+  doc.text("CONTEÃšDO PROGRAMÁTICO", centerX, 30, { align: "center" })
 
   doc.setFont("helvetica", "italic")
   doc.setFontSize(14)
