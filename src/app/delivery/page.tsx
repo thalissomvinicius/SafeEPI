@@ -1003,13 +1003,6 @@ export default function DeliveryPage() {
                   >
                     Avançar para Assinatura ({cart.length} EPI{cart.length !== 1 ? 's' : ''})
                   </button>
-                  <button 
-                    onClick={generateRemoteLink}
-                    disabled={cart.length === 0}
-                    className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
-                  >
-                    <Link2 className="w-4 h-4 text-blue-500" /> Gerar Link de Assinatura Remota
-                  </button>
                 </div>
               </div>
             </div>
