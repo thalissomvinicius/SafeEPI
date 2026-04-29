@@ -236,7 +236,7 @@ export default function ReportsPage() {
             </div>
             <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
                 <TrendingDown className="w-6 h-6 mr-2 text-[#8B1A1A]" />
-                BI & Inteligência Antares
+                BI & Inteligência SafeEPI
             </h1>
             <p className="text-slate-500 text-sm mt-1 font-medium italic">Extração de custos operacionais e conformidade normativa.</p>
         </div>
@@ -452,7 +452,7 @@ export default function ReportsPage() {
             )}
           </div>
             <p className="text-slate-400 text-sm mt-4 italic font-medium">
-              O algoritmo Antares analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
+              O algoritmo SafeEPI analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
             </p>
             <div className="mt-8 relative w-24 h-24">
                <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#8B1A1A]/20 border-r-[#8B1A1A]/40 animate-[spin_3s_linear_infinite] transition-all"></div>

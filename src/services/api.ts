@@ -237,12 +237,6 @@ async function getCurrentCompanyId(): Promise<string | null> {
   return cachedCompanyId;
 }
 
-async function withCompanyId<T extends { company_id?: string | null }>(payload: T): Promise<T> {
-  if (payload.company_id) return payload;
-  const companyId = await getCurrentCompanyId();
-  return companyId ? { ...payload, company_id: companyId } : payload;
-}
-
 async function readResponseJson<T = unknown>(res: Response): Promise<T> {
   const text = await res.text();
   if (!text) return {} as T;

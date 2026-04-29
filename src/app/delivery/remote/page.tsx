@@ -348,7 +348,7 @@ function RemoteDeliveryContent() {
             <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer" className="px-8 py-4 border border-slate-200 bg-white text-slate-700 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2">
               <ExternalLink className="w-5 h-5 text-[#8B1A1A]" /> Visualizar PDF
             </a>
-            <a href={lastPdfUrl} download={lastPdfFileName || "comprovante_antares.pdf"} className="px-8 py-4 bg-[#8B1A1A] text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2">
+            <a href={lastPdfUrl} download={lastPdfFileName || "comprovante_safeepi.pdf"} className="px-8 py-4 bg-[#8B1A1A] text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2">
               <FileDown className="w-5 h-5" /> Baixar PDF
             </a>
           </>

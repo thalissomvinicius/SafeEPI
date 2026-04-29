@@ -4,7 +4,7 @@ import { HelpCircle, MessageCircle, Phone, PlayCircle, BookOpen } from "lucide-r
 
 export default function SupportPage() {
   const whatsappNumber = "5591991697664"
-  const whatsappLink = `https://wa.me/${whatsappNumber}?text=Olá%20Vinicius,%20preciso%20de%20ajuda%20com%20o%20sistema%20Antares%20EPI.`
+  const whatsappLink = `https://wa.me/${whatsappNumber}?text=Olá%20Vinicius,%20preciso%20de%20ajuda%20com%20o%20sistema%20SafeEPI%20EPI.`
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in relative">

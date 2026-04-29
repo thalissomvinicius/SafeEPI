@@ -107,7 +107,7 @@ export default function JobSectorsPage() {
       <div className="flex flex-col lg:flex-row justify-between gap-4 lg:items-end">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Padrão RH Antares</span>
+            <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Padrão RH SafeEPI</span>
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
             <BriefcaseBusiness className="w-6 h-6 mr-2 text-[#8B1A1A]" />

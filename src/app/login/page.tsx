@@ -44,7 +44,7 @@ export default function LoginPage() {
       await api.login(email.trim(), password)
       await api.getCurrentUser()
       setRedirectCountdown(3)
-      setSuccessMsg("Login efetuado com sucesso. Preparando seu painel Antares...")
+      setSuccessMsg("Login efetuado com sucesso. Preparando seu painel SafeEPI...")
     } catch (err) {
       const error = err as Error
       console.error("Login failed:", error)
@@ -67,7 +67,7 @@ export default function LoginPage() {
             <ShieldCheck className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-black text-white uppercase tracking-tight">
-            Antares <span className="text-red-400">SESMT</span>
+            SafeEPI <span className="text-red-400">SESMT</span>
           </h1>
           <p className="text-slate-400 text-sm mt-3 font-medium uppercase tracking-[0.2em]">Autenticacao Restrita</p>
         </div>
@@ -110,7 +110,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading || !!successMsg}
                 className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-600 outline-none disabled:opacity-70"
-                placeholder="nome@antares.com.br"
+                placeholder="nome@safeepi.com.br"
                 required
               />
             </div>

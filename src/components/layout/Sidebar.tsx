@@ -33,9 +33,9 @@ export function Sidebar() {
   return (
     <aside className="w-64 bg-white border-r border-slate-200 text-slate-600 hidden md:flex flex-col h-screen sticky top-0 shadow-sm">
       <div className="h-28 flex flex-col items-center justify-center border-b border-slate-100 bg-slate-50/50 p-4">
-        {/* Logo Placeholder - O usuário deve salvar a imagem como public/logo.png */}
+        {/* Identidade visual do SafeEPI */}
         <div className="relative w-full h-12 mb-2 flex justify-center items-center">
-            <span className="text-[#8B1A1A] font-black text-2xl tracking-tighter">ANTARES</span>
+            <span className="text-[#8B1A1A] font-black text-2xl tracking-tighter">SAFEEPI</span>
         </div>
         <span className="text-[10px] text-slate-500 font-bold tracking-[0.3em] uppercase">Empreendimentos</span>
       </div>
@@ -71,7 +71,7 @@ export function Sidebar() {
         </button>
         <div className="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
           <p>Sistema SESMT Digital</p>
-          <p className="mt-1 text-[#8B1A1A]">Antares v1.0</p>
+          <p className="mt-1 text-[#8B1A1A]">SafeEPI v1.0</p>
         </div>
       </div>
     </aside>

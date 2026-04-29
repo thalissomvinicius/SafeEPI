@@ -132,7 +132,7 @@ export default function HistoryPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tight text-slate-800 flex items-center uppercase tracking-tighter">
             <History className="w-6 h-6 mr-2 text-[#8B1A1A]" />
-            Auditoria Antares • Live
+            Auditoria SafeEPI • Live
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Consulta direta ao banco de dados Supabase para conformidade NR-06.</p>
         </div>

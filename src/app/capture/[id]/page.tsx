@@ -278,7 +278,7 @@ function CaptureContent() {
           
           <div>
             <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Verificação de Identidade</h1>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Antares SESMT Digital</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">SafeEPI Digital</p>
           </div>
 
           <p className="text-sm text-slate-500">
@@ -324,7 +324,7 @@ function CaptureContent() {
         
         <div>
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Cadastro de Biometria</h1>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Antares SESMT Digital</p>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">SafeEPI Digital</p>
         </div>
 
         <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-2">

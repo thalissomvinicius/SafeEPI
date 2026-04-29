@@ -87,7 +87,7 @@ export default function InventoryPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-             <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Almoxarifado Antares</span>
+             <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Almoxarifado SafeEPI</span>
           </div>
           <h1 className="text-3xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
             <Package className="w-8 h-8 mr-3 text-[#8B1A1A]" />

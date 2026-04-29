@@ -455,7 +455,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
               )}
               <div className="flex flex-col min-w-0">
                 <span className="text-[9px] sm:text-[10px] font-black text-white uppercase tracking-wider leading-none mb-0.5 truncate">{statusText}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none">Antares Digital</span>
+                <span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none">SafeEPI Digital</span>
               </div>
             </div>
             <button 

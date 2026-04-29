@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AlertTriangle, ArrowRight, ShieldCheck, FileWarning, Fingerprint, TimerReset } from "lucide-react"
+import { AlertTriangle, ArrowRight, ShieldCheck, FileWarning, TimerReset } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/services/api"
 import { DeliveryWithRelations } from "@/types/database"

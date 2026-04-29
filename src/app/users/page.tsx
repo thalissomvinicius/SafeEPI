@@ -142,7 +142,7 @@ export default function UsersPage() {
         <div>
           <h1 className="text-3xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
             <UserCog className="w-8 h-8 mr-3 text-[#8B1A1A]" />
-            Gestão de Acessos Antares
+            Gestão de Acessos SafeEPI
           </h1>
           <p className="text-slate-500 font-medium mt-1">Controle de níveis de segurança, senhas e permissões da plataforma.</p>
         </div>
@@ -293,7 +293,7 @@ export default function UsersPage() {
                             value={formData.email}
                             onChange={e => setFormData({...formData, email: e.target.value})}
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#8B1A1A] font-bold text-sm"
-                            placeholder="joao@antares.com.br"
+                            placeholder="joao@safeepi.com.br"
                         />
                     </div>
                     <div>

@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SafeEPI
 
-## Getting Started
+**Gestao digital de EPI, evidencias e conformidade para operacoes que levam seguranca a serio.**
 
-First, run the development server:
+SafeEPI e uma plataforma desenvolvida para organizar, documentar e fortalecer a rotina de entrega, controle e auditoria de Equipamentos de Protecao Individual. O projeto centraliza informacoes criticas do SESMT em um ambiente moderno, rastreavel e preparado para operacoes com multiplas empresas.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Visao Geral
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+O SafeEPI nasce para reduzir improvisos em processos de seguranca do trabalho. Cada entrega, assinatura, registro facial, treinamento e documento assinado passa a fazer parte de uma trilha digital clara, com historico, evidencias e contexto suficiente para apoiar auditorias internas, fiscalizacoes e tomadas de decisao.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Mais do que um cadastro de EPI, o sistema atua como uma camada de governanca operacional: conecta colaboradores, almoxarifado, treinamentos, documentos e indicadores em um fluxo unico.
 
-## Learn More
+## O Que O Projeto Representa
 
-To learn more about Next.js, take a look at the following resources:
+- **Conformidade documentada:** registros estruturados para apoiar rotinas ligadas a NR-06 e controles internos.
+- **Evidencia forte:** assinaturas, biometria facial, IP, data, hora, geolocalizacao e comprovantes em PDF.
+- **Rastreabilidade real:** historico de entregas, devolucoes, substituicoes, treinamentos e documentos assinados.
+- **Gestao multiempresa:** base preparada para separar dados por empresa, usuario e permissao.
+- **Experiencia moderna:** interface responsiva, pensada para escritorio, almoxarifado e operacao em campo.
+- **Inteligencia operacional:** paineis e relatorios para acompanhar estoque, validade, recorrencias e pontos de atencao.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Modulos Em Destaque
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Entrega de EPIs
 
-## Deploy on Vercel
+Controle de entrega por colaborador, com carrinho de multiplos itens, validacao de estoque, assinatura e geracao de comprovante. O fluxo foi pensado para transformar uma rotina sensivel em um processo objetivo e auditavel.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Captura Remota
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Links seguros permitem registrar evidencias fora do computador principal, apoiando cenarios em campo e reduzindo atrito para colaboradores que precisam concluir assinaturas ou capturas biometricas.
+
+### Treinamentos
+
+O modulo de treinamentos organiza participantes, certificados, cargas horarias e assinaturas, criando uma trilha documental mais consistente para requisitos de capacitacao.
+
+### Documentos Assinados
+
+Comprovantes, certificados e termos podem ser arquivados com metadados relevantes, preservando evidencias para consultas futuras.
+
+### Estoque e Movimentacoes
+
+Entradas, saidas, saldo, validade de CA e movimentacoes ficam conectados ao fluxo de entrega, evitando controles paralelos e reduzindo perda de informacao.
+
+### Auditoria e LGPD
+
+O desenho do banco e das rotas considera segregacao por empresa, politicas de acesso, logs e cuidado com dados pessoais sensiveis.
+
+## Identidade Do Produto
+
+SafeEPI foi pensado para transmitir confianca sem pesar a rotina. A proposta visual combina clareza, objetividade e uma linguagem de produto profissional, mantendo o foco no que importa: seguranca, evidencia e controle.
+
+O nome reflete o compromisso central do projeto: tornar a gestao de EPI mais segura, verificavel e facil de acompanhar.
+
+## Status
+
+Projeto em evolucao ativa, com foco em:
+
+- endurecimento de seguranca e politicas de acesso;
+- amadurecimento da estrutura multiempresa;
+- melhoria dos fluxos de assinatura e captura remota;
+- organizacao de documentos para auditoria;
+- refinamento de indicadores gerenciais.
+
+---
+
+**SafeEPI**  
+Seguranca registrada. Evidencia preservada. Gestao sob controle.

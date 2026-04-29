@@ -77,7 +77,7 @@ export function MobileNav() {
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-[2.5rem]">
               <div className="flex flex-col">
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Menu Geral</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Antares SESMT Digital</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SafeEPI Digital</p>
               </div>
               <button 
                 onClick={() => setIsMenuOpen(false)}

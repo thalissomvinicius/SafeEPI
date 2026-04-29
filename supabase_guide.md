@@ -1,11 +1,11 @@
-# Guia de Configuração: Supabase (Antares Empreendimentos)
+# Guia de Configuração: Supabase (SafeEPI)
 
 Siga estes passos para deixar o banco de dados pronto para o sistema:
 
 ### 1. Criar o Projeto
 1. Acesse [supabase.com](https://supabase.com) e faça login.
 2. Clique em **"New Project"**.
-3. **Name:** `Antares-EPI`
+3. **Name:** `SafeEPI`
 4. **Region:** Escolha `South America (São Paulo)` para menor latência.
 5. **Database Password:** Crie uma senha forte e salve em local seguro.
 

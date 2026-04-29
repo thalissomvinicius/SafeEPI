@@ -22,8 +22,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Antares Gestão | SESMT Digital",
-  description: "Sistema de Controle de EPI - Antares Empreendimentos",
+  title: "SafeEPI | SESMT Digital",
+  description: "Sistema de Controle de EPI - SafeEPI",
 };
 
 import { AuthProvider } from "@/contexts/AuthContext";

@@ -8,7 +8,7 @@ import { DeliveryWithRelations } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
 
 /**
- * PDF Generator Utility for Antares EPI
+ * PDF Generator Utility for SafeEPI
  * Version: 1.1.2 - Fixes layout and colors
  */
 
@@ -1046,7 +1046,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   const footerY = 160
   
   const code = data.validationCode || generateAuditCode(`CERT-${format(new Date(data.completionDate), "yyyy")}`, 10);
-  const validationUrl = `https://sesmt.antaresempreendimentos.com.br/validar/${code}`;
+  const validationUrl = `https://safeepi.com.br/validar/${code}`;
   
   // Left: QR Code (70x70px ~ 25x25mm)
   try {
@@ -1057,7 +1057,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     doc.setTextColor(119, 119, 119) // #777777
     doc.text(`Autenticação:`, marginX + 12.5, footerY + 28, { align: "center" })
     doc.setFontSize(5.5)
-    doc.text(`sesmt.antaresempreendimentos.com.br`, marginX + 12.5, footerY + 31, { align: "center" })
+    doc.text(`safeepi.com.br`, marginX + 12.5, footerY + 31, { align: "center" })
     doc.text(`/validar/${code}`, marginX + 12.5, footerY + 33.5, { align: "center" })
   } catch {}
 
@@ -1257,7 +1257,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setTextColor(85, 85, 85)
   const nrNumberMatch = data.trainingName.match(/NR-?(\d+)/i);
   const nrNumber = nrNumberMatch ? nrNumberMatch[1] : "06";
-  const legalText = `Este certificado é válido conforme NR-${nrNumber} e demais legislações vigentes.\nEmitido pelo SESMT da Antares Empreendimentos.`;
+  const legalText = `Este certificado é válido conforme NR-${nrNumber} e demais legislações vigentes.\nEmitido pelo SESMT da SafeEPI.`;
   doc.text(legalText, marginX + 5, versoFooterY + 8)
 
   // Right QR Code

@@ -136,7 +136,7 @@ export default function WorkplacesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Infraestrutura Antares</span>
+            <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Infraestrutura SafeEPI</span>
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
             <HardDrive className="w-6 h-6 mr-2 text-[#8B1A1A]" />
@@ -215,7 +215,7 @@ export default function WorkplacesPage() {
       {/* Info block */}
       <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center">
         <CheckCircle2 className="w-12 h-12 text-[#8B1A1A]/20 mb-4" />
-        <h3 className="font-bold text-slate-800 uppercase tracking-tighter italic">Vínculo Organizacional Antares</h3>
+        <h3 className="font-bold text-slate-800 uppercase tracking-tighter italic">Vínculo Organizacional SafeEPI</h3>
         <p className="text-sm text-slate-400 max-w-md mt-2 leading-relaxed">O cadastro correto da obra ou canteiro permite a auditoria por geolocalização e o rateio preciso dos custos operacionais no Balanço BI.</p>
       </div>
 
@@ -326,7 +326,7 @@ export default function WorkplacesPage() {
             <form onSubmit={handleSaveWorkplace} className="p-5 sm:p-8 space-y-6">
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Nome da Obra / Canteiro</label>
-                <input type="text" required placeholder="Ex: Residencial Antares I"
+                <input type="text" required placeholder="Ex: Unidade SafeEPI I"
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#8B1A1A] focus:bg-white transition-all font-bold placeholder:font-normal"
                   value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
               </div>
