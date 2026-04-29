@@ -136,7 +136,7 @@ export default function Dashboard() {
             <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">SESMT Digital • Cloud</span>
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-slate-800">Painel de Risco Operacional</h1>
-          <p className="text-slate-500 font-medium mt-1">Gestão de Segurança Sincronizada com Supabase.</p>
+          <p className="text-slate-500 font-medium mt-1">Cada entrega registrada. Cada risco sob controle.</p>
         </div>
         <div className="flex gap-2">
           <Link href="/delivery" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center">
