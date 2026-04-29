@@ -21,6 +21,30 @@ type RemoteSignatureEvidence = {
 
 type RemoteLinkStatus = "idle" | "pending" | "completed" | "expired"
 
+type PendingTrainingDraft = {
+  key: string
+  employeeId: string
+  employeeName: string
+  instructorId: string
+  instructorName: string
+  trainingName: string
+  completionDate: string
+  expiryDate: string
+  participantToken?: string | null
+  participantStatus?: RemoteLinkStatus
+  participantExpiresAt?: string | null
+  instructorToken?: string | null
+  instructorStatus?: RemoteLinkStatus
+  instructorExpiresAt?: string | null
+}
+
+const TRAINING_OPTIONS = [
+  "Uso e Guarda de EPI (NR-06)",
+  "Integração de Segurança (NR-01)",
+  "Trabalho em Altura (NR-35)",
+  "Segurança Elétrica (NR-10)",
+]
+
 export default function TrainingPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [trainings, setTrainings] = useState<TrainingWithRelations[]>([])
@@ -29,6 +53,7 @@ export default function TrainingPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [pendingDrafts, setPendingDrafts] = useState<PendingTrainingDraft[]>([])
 
   // Form State
   const [formData, setFormData] = useState({
@@ -84,6 +109,53 @@ export default function TrainingPage() {
     return ""
   }
 
+  const getDraftVisualStatus = (draft: PendingTrainingDraft): RemoteLinkStatus => {
+    if (draft.participantStatus === "expired" || draft.instructorStatus === "expired") return "expired"
+    if (draft.participantStatus === "completed" && draft.instructorStatus === "completed") return "completed"
+    return "pending"
+  }
+
+  const loadPendingDrafts = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const drafts: PendingTrainingDraft[] = []
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index)
+      if (!key?.startsWith("training-signature:")) continue
+
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(key) || "{}") as Partial<PendingTrainingDraft>
+        if (!parsed.participantToken && !parsed.instructorToken) continue
+
+        const [, employeeId = "", instructorId = "", trainingName = "", completionDate = ""] = key.split(":")
+        const employee = employees.find(item => item.id === (parsed.employeeId || employeeId))
+        const instructor = employees.find(item => item.id === (parsed.instructorId || instructorId))
+        const draftCompletionDate = parsed.completionDate || completionDate || format(new Date(), "yyyy-MM-dd")
+
+        drafts.push({
+          key,
+          employeeId: parsed.employeeId || employeeId,
+          employeeName: parsed.employeeName || employee?.full_name || "Colaborador",
+          instructorId: parsed.instructorId || instructorId,
+          instructorName: parsed.instructorName || instructor?.full_name || "Instrutor",
+          trainingName: parsed.trainingName || trainingName || "Treinamento",
+          completionDate: draftCompletionDate,
+          expiryDate: parsed.expiryDate || format(addYears(new Date(draftCompletionDate), 1), "yyyy-MM-dd"),
+          participantToken: parsed.participantToken || null,
+          participantStatus: parsed.participantStatus || "idle",
+          participantExpiresAt: parsed.participantExpiresAt || null,
+          instructorToken: parsed.instructorToken || null,
+          instructorStatus: parsed.instructorStatus || "idle",
+          instructorExpiresAt: parsed.instructorExpiresAt || null,
+        })
+      } catch {
+        // Ignore malformed drafts.
+      }
+    }
+
+    setPendingDrafts(drafts.sort((a, b) => b.completionDate.localeCompare(a.completionDate)))
+  }, [employees])
+
   const getRemoteDraftKey = useCallback((instructorId = tstSelectedEmployee?.id || "") => {
     const training = formData.training_name === "Outro" ? customTrainingName.trim() : formData.training_name
     return `training-signature:${formData.employee_id}:${instructorId}:${training}:${formData.completion_date}`
@@ -101,8 +173,23 @@ export default function TrainingPage() {
     const key = getRemoteDraftKey()
     const current = window.localStorage.getItem(key)
     const parsed = current ? JSON.parse(current) as Record<string, unknown> : {}
-    window.localStorage.setItem(key, JSON.stringify({ ...parsed, ...draft }))
-  }, [getRemoteDraftKey])
+    const trainedEmployee = employees.find(item => item.id === formData.employee_id)
+    const trainingName = formData.training_name === "Outro" ? customTrainingName.trim() : formData.training_name
+    const completionDate = formData.completion_date
+    const expiryDate = format(addYears(new Date(completionDate), 1), "yyyy-MM-dd")
+    window.localStorage.setItem(key, JSON.stringify({
+      ...parsed,
+      employeeId: formData.employee_id,
+      employeeName: trainedEmployee?.full_name || "",
+      instructorId: tstSelectedEmployee?.id || "",
+      instructorName: tstSelectedEmployee?.full_name || "",
+      trainingName,
+      completionDate,
+      expiryDate,
+      ...draft,
+    }))
+    loadPendingDrafts()
+  }, [customTrainingName, employees, formData.completion_date, formData.employee_id, formData.training_name, getRemoteDraftKey, loadPendingDrafts, tstSelectedEmployee?.full_name, tstSelectedEmployee?.id])
 
   const restoreRemoteDraft = useCallback((instructorId: string) => {
     if (typeof window === "undefined") return
@@ -173,6 +260,14 @@ export default function TrainingPage() {
     }
     fetchInitialData()
   }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadPendingDrafts()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [loadPendingDrafts])
 
   const handleAddTraining = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -274,6 +369,10 @@ export default function TrainingPage() {
       })
 
       await loadData()
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(getRemoteDraftKey())
+        loadPendingDrafts()
+      }
       setIsModalOpen(false)
       resetForm()
       if (result.warning) {
@@ -341,6 +440,51 @@ export default function TrainingPage() {
     setTstAuthMethod('manual')
     setStep(3)
     restoreRemoteDraft(emp.id)
+  }
+
+  const openPendingDraft = async (draft: PendingTrainingDraft) => {
+    const instructor = employees.find(item => item.id === draft.instructorId) || null
+    const isKnownTraining = TRAINING_OPTIONS.includes(draft.trainingName)
+
+    setFormData({
+      employee_id: draft.employeeId,
+      training_name: isKnownTraining ? draft.trainingName : "Outro",
+      completion_date: draft.completionDate,
+    })
+    setCustomTrainingName(isKnownTraining ? "" : draft.trainingName)
+    setTstSelectedEmployee(instructor)
+    setTstSearchTerm("")
+    setTstSignatureBase64(null)
+    setTstPhotoBase64(null)
+    setInstructorSignatureBase64(null)
+    setParticipantRemoteToken(draft.participantToken || null)
+    setParticipantRemoteStatus(draft.participantStatus || "idle")
+    setParticipantRemoteExpiresAt(draft.participantExpiresAt || null)
+    setInstructorRemoteToken(draft.instructorToken || null)
+    setInstructorRemoteStatus(draft.instructorStatus || "idle")
+    setInstructorRemoteExpiresAt(draft.instructorExpiresAt || null)
+    setTstRole(instructor?.job_title || "Técnico de Segurança do Trabalho")
+    setTstAuthMethod("manual")
+    setIsFaceCameraTstOpen(false)
+    setStep(instructor ? 3 : 2)
+    setIsModalOpen(true)
+
+    if (instructor?.photo_url) {
+      try {
+        const res = await fetch(instructor.photo_url)
+        const blob = await res.blob()
+        const b64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(blob)
+        })
+        setInstructorPhotoBase64(b64)
+      } catch {
+        setInstructorPhotoBase64(null)
+      }
+    } else {
+      setInstructorPhotoBase64(null)
+    }
   }
 
   const generateTrainingRemoteSignatureLink = async () => {
@@ -550,6 +694,12 @@ export default function TrainingPage() {
     t.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const filteredPendingDrafts = pendingDrafts.filter(draft =>
+    draft.trainingName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    draft.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    draft.instructorName.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -604,6 +754,48 @@ export default function TrainingPage() {
                  </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 font-medium">
+                {filteredPendingDrafts.map((draft) => {
+                  const status = getDraftVisualStatus(draft)
+                  return (
+                    <tr
+                      key={draft.key}
+                      onClick={() => void openPendingDraft(draft)}
+                      className="hover:bg-amber-50/70 transition-colors group cursor-pointer bg-amber-50/20"
+                    >
+                      <td className="px-6 py-5 font-bold text-slate-800">
+                        <div>{draft.employeeName}</div>
+                        <div className="text-[9px] text-slate-400 uppercase tracking-widest mt-1">Instrutor: {draft.instructorName}</div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 italic">{draft.trainingName}</td>
+                      <td className="px-6 py-4 text-slate-400">
+                        <div className="flex items-center">
+                          <Calendar className="w-3 h-3 mr-2" /> {new Date(draft.completionDate).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-400">{new Date(draft.expiryDate).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-full border ${
+                          status === "completed"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : status === "expired"
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
+                          {status === "completed" ? "Assinaturas concluídas" : status === "expired" ? "Link expirado" : "Aguardando assinatura"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={(event) => { event.stopPropagation(); void openPendingDraft(draft); }}
+                          title="Abrir pendência"
+                          className="p-2 bg-amber-50 hover:bg-[#8B1A1A] hover:text-white text-amber-700 rounded-lg transition-all"
+                        >
+                          <Link2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
                 {filteredTrainings.map((rec, i) => (
                   <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-5 font-bold text-slate-800">{rec.employee?.full_name}</td>
@@ -707,10 +899,9 @@ export default function TrainingPage() {
                         aria-labelledby="label-treinamento"
                         onChange={(e) => setFormData({...formData, training_name: e.target.value})}
                       >
-                        <option>Uso e Guarda de EPI (NR-06)</option>
-                        <option>Integração de Segurança (NR-01)</option>
-                        <option>Trabalho em Altura (NR-35)</option>
-                        <option>Segurança Elétrica (NR-10)</option>
+                        {TRAINING_OPTIONS.map(option => (
+                          <option key={option}>{option}</option>
+                        ))}
                         <option value="Outro">Outro (Especificar...)</option>
                       </select>
                       
