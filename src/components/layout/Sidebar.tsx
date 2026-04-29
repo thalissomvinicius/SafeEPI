@@ -8,7 +8,6 @@ import { useAuth } from "@/contexts/AuthContext"
 const menuItems = [
   { href: "/", label: "Dashboard", icon: Home, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/delivery", label: "Nova Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
-  { href: "/returns", label: "Baixas / Substituições", icon: ArrowRightLeft, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/workplaces", label: "Obras / Canteiros", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/job-sectors", label: "Cargos / Setores", icon: BriefcaseBusiness, roles: ['ADMIN', 'DIRETORIA'] },
