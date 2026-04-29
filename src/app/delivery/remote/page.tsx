@@ -225,6 +225,7 @@ function RemoteDeliveryContent() {
         workplaceName: workplace?.name || "Sede",
         ppeName: ppe.name,
         ppeCaNumber: ppe.ca_number,
+        ppeCaExpiry: ppe.ca_expiry_date,
         quantity: deliveryData?.q || 1,
         reason: deliveryData?.r || "Entrega Remota",
         authMethod,

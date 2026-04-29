@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2 } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
 import { api } from "@/services/api"
 import { Employee, Workplace, DeliveryWithRelations, CatalogItem } from "@/types/database"
@@ -19,6 +19,19 @@ import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
+
+type RemoteLinkStatus = "pending" | "completed" | "expired"
+
+type PendingCaptureDraft = {
+  key: string
+  token: string
+  linkUrl: string
+  status: RemoteLinkStatus
+  expiresAt: string | null
+  employeeId: string
+  employeeName: string
+  employeeCpf: string
+}
 
 const getBiometryStatus = (employee: Employee) => {
   const hasPhoto = Boolean(employee.photo_url)
@@ -61,6 +74,10 @@ export default function EmployeesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isFaceCameraOpen, setIsFaceCameraOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<"employees" | "pending">("employees")
+  const [pendingCaptureDrafts, setPendingCaptureDrafts] = useState<PendingCaptureDraft[]>([])
+  const [captureWaitHours, setCaptureWaitHours] = useState(24)
+  const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
   
   // Prontuario State
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
@@ -103,6 +120,65 @@ export default function EmployeesPage() {
   const { user } = useAuth()
   const canEdit = user?.role === 'ADMIN'
 
+  const formatRemoteExpiry = (value: string | null) => {
+    if (!value) return "sem prazo"
+    return new Date(value).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const loadPendingCaptureDrafts = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const drafts: PendingCaptureDraft[] = []
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index)
+      if (!key?.startsWith("capture-biometry:")) continue
+
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(key) || "{}") as PendingCaptureDraft
+        if (!parsed.token || !parsed.employeeId) continue
+        drafts.push({ ...parsed, key, status: parsed.status || "pending" })
+      } catch {
+        window.localStorage.removeItem(key)
+      }
+    }
+
+    setPendingCaptureDrafts(drafts.sort((a, b) => (b.expiresAt || "").localeCompare(a.expiresAt || "")))
+  }, [])
+
+  const persistPendingCaptureDraft = useCallback((draft: Omit<PendingCaptureDraft, "key">) => {
+    if (typeof window === "undefined") return
+    const key = `capture-biometry:${draft.token}`
+    window.localStorage.setItem(key, JSON.stringify({ ...draft, key }))
+    loadPendingCaptureDrafts()
+  }, [loadPendingCaptureDrafts])
+
+  const updatePendingCaptureDraft = useCallback((token: string, updates: Partial<PendingCaptureDraft>) => {
+    if (typeof window === "undefined") return
+    const key = `capture-biometry:${token}`
+    const current = window.localStorage.getItem(key)
+    if (!current) return
+
+    try {
+      const parsed = JSON.parse(current) as PendingCaptureDraft
+      window.localStorage.setItem(key, JSON.stringify({ ...parsed, ...updates, key }))
+      loadPendingCaptureDrafts()
+    } catch {
+      window.localStorage.removeItem(key)
+      loadPendingCaptureDrafts()
+    }
+  }, [loadPendingCaptureDrafts])
+
+  const removePendingCaptureDraft = useCallback((token: string) => {
+    if (typeof window === "undefined") return
+    window.localStorage.removeItem(`capture-biometry:${token}`)
+    loadPendingCaptureDrafts()
+  }, [loadPendingCaptureDrafts])
+
   // Fetch real data from Supabase
   const loadData = async () => {
     try {
@@ -131,9 +207,10 @@ export default function EmployeesPage() {
     // Initial load - wrapped in setTimeout to ensure it's asynchronous and avoid cascading render warnings
     const timer = setTimeout(() => {
       loadData()
+      loadPendingCaptureDrafts()
     }, 0)
     return () => clearTimeout(timer)
-  }, [])
+  }, [loadPendingCaptureDrafts])
 
   const filteredEmployees = employees.filter(emp => 
     emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -446,6 +523,75 @@ export default function EmployeesPage() {
     return normalizeName(jobTitle || "Geral")
   }
 
+  const generateCaptureRemoteLink = async (emp: Employee) => {
+    try {
+      const data = await api.createRemoteLink({
+        employee_id: emp.id,
+        type: 'capture',
+        expires_hours: captureWaitHours,
+      })
+      const link = `${window.location.origin}/capture/${emp.id}?t=${data.link.token}`
+      await navigator.clipboard.writeText(link)
+      persistPendingCaptureDraft({
+        token: data.link.token,
+        linkUrl: link,
+        status: "pending",
+        expiresAt: data.link.expires_at,
+        employeeId: emp.id,
+        employeeName: emp.full_name,
+        employeeCpf: emp.cpf,
+      })
+      setViewMode("pending")
+      toast.success(`Link de registro facial copiado. Valido por ${captureWaitHours}h e uso unico.`)
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Erro desconhecido"
+      toast.error(`Erro ao gerar link: ${errorMsg}. Verifique a tabela 'remote_links'.`)
+    }
+  }
+
+  const checkPendingCaptureDraft = useCallback(async (draft: PendingCaptureDraft) => {
+    try {
+      setCheckingPendingToken(draft.token)
+      const res = await fetch(`/api/remote-links?token=${draft.token}&include_completed=1`)
+      const payload = await res.json()
+
+      if (!res.ok) {
+        if (payload.status === "expired") {
+          updatePendingCaptureDraft(draft.token, { status: "expired" })
+          toast.warning("Link expirado. Gere um novo link de registro facial.")
+        } else {
+          toast.error(payload.error || "Nao foi possivel consultar esta pendencia.")
+        }
+        return
+      }
+
+      const status = payload.link?.status as RemoteLinkStatus | undefined
+      if (status === "completed") {
+        updatePendingCaptureDraft(draft.token, { status: "completed" })
+        toast.success("Registro facial concluido no banco para comparacao biometrica.")
+        await loadData()
+        return
+      }
+
+      if (payload.link?.expires_at && new Date(payload.link.expires_at) < new Date()) {
+        updatePendingCaptureDraft(draft.token, { status: "expired", expiresAt: payload.link.expires_at })
+        toast.warning("Link expirado. Gere um novo link de registro facial.")
+        return
+      }
+
+      updatePendingCaptureDraft(draft.token, {
+        status: "pending",
+        expiresAt: payload.link?.expires_at || draft.expiresAt,
+      })
+      toast.info("Ainda aguardando registro facial do colaborador.")
+    } catch (err) {
+      console.error("Erro ao consultar pendencia de registro facial:", err)
+      toast.error("Erro ao consultar a pendencia.")
+    } finally {
+      setCheckingPendingToken(null)
+    }
+  }, [updatePendingCaptureDraft])
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in relative">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -471,6 +617,152 @@ export default function EmployeesPage() {
           </div>
         )}
       </div>
+
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
+          <button
+            onClick={() => setViewMode("employees")}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "employees" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+          >
+            <Users className="w-4 h-4" /> Colaboradores
+          </button>
+          <button
+            onClick={() => setViewMode("pending")}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "pending" ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+          >
+            <Hourglass className="w-4 h-4" /> Pendencias
+            {pendingCaptureDrafts.length > 0 && (
+              <span className="min-w-5 h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] flex items-center justify-center">
+                {pendingCaptureDrafts.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-4 shadow-sm">
+          <div>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Espera do registro</p>
+            <p className="text-[10px] text-slate-400 font-bold">Validade do link facial.</p>
+          </div>
+          <select
+            value={captureWaitHours}
+            onChange={(event) => setCaptureWaitHours(Number(event.target.value))}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#8B1A1A]"
+            title="Tempo de espera do registro facial"
+          >
+            <option value={1}>1h</option>
+            <option value={4}>4h</option>
+            <option value={8}>8h</option>
+            <option value={12}>12h</option>
+            <option value={24}>24h</option>
+            <option value={48}>48h</option>
+          </select>
+        </div>
+      </div>
+
+      {viewMode === "pending" ? (
+        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40 animate-in fade-in">
+          <div className="p-5 sm:p-6 border-b border-slate-100 bg-amber-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                <Hourglass className="w-5 h-5 text-amber-600" />
+                Pendencias de Registro Facial
+              </h2>
+              <p className="text-xs text-amber-700 font-bold mt-1">Links aguardando foto para comparacao biometrica no banco.</p>
+            </div>
+            <button
+              onClick={() => pendingCaptureDrafts.forEach((draft) => { if (draft.status === "pending") void checkPendingCaptureDraft(draft) })}
+              disabled={pendingCaptureDrafts.length === 0 || checkingPendingToken !== null}
+              className="bg-white border border-amber-200 text-amber-700 px-4 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${checkingPendingToken ? "animate-spin" : ""}`} /> Atualizar Status
+            </button>
+          </div>
+
+          <div className="p-4 sm:p-6">
+            {pendingCaptureDrafts.length === 0 ? (
+              <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+                <ShieldCheck className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                <p className="text-sm font-black text-slate-500 uppercase tracking-widest">Nenhuma pendencia facial</p>
+                <p className="text-xs text-slate-400 mt-2 font-medium">Quando gerar um link de registro de imagem, ele aparece aqui.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {pendingCaptureDrafts.map((draft) => {
+                  const isChecking = checkingPendingToken === draft.token
+                  const statusStyle = draft.status === "completed"
+                    ? "bg-green-50 text-green-700 border-green-200"
+                    : draft.status === "expired"
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
+                  const StatusIcon = draft.status === "completed" ? ShieldCheck : draft.status === "expired" ? XCircle : Hourglass
+
+                  return (
+                    <div key={draft.token} className="border border-slate-200 rounded-2xl p-4 sm:p-5 bg-white shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-800 uppercase tracking-tight truncate">{draft.employeeName}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1">{formatCpf(draft.employeeCpf)}</p>
+                        </div>
+                        <span className={`px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 whitespace-nowrap ${statusStyle}`}>
+                          <StatusIcon className="w-3 h-3" />
+                          {draft.status === "completed" ? "Registrada" : draft.status === "expired" ? "Expirada" : "Aguardando"}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                          <Fingerprint className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-black text-xs text-slate-800 uppercase tracking-tight">Registro de foto facial</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Uso exclusivo para comparacao biometrica.</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                        <Hourglass className="w-3.5 h-3.5" />
+                        {draft.status === "pending" ? `Aguardando registro ate ${formatRemoteExpiry(draft.expiresAt)}` : `Ultimo prazo: ${formatRemoteExpiry(draft.expiresAt)}`}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button
+                          onClick={() => void navigator.clipboard.writeText(draft.linkUrl).then(() => toast.success("Link copiado novamente."))}
+                          className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <Clipboard className="w-3.5 h-3.5" /> Copiar
+                        </button>
+                        <button
+                          onClick={() => void checkPendingCaptureDraft(draft)}
+                          disabled={isChecking}
+                          className="py-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} /> Checar
+                        </button>
+                        <button
+                          onClick={() => {
+                            const emp = employees.find(item => item.id === draft.employeeId)
+                            if (emp) openEditEmployee(emp)
+                          }}
+                          className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <Camera className="w-3.5 h-3.5" /> Abrir
+                        </button>
+                        <button
+                          onClick={() => removePendingCaptureDraft(draft.token)}
+                          className="py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Limpar
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
         <div className="p-5 border-b border-slate-200 bg-slate-50/30">
@@ -664,6 +956,7 @@ export default function EmployeesPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* Modal Adicionar Colaborador */}
       {isModalOpen && (
@@ -729,16 +1022,8 @@ export default function EmployeesPage() {
                   <button
                     type="button"
                     onClick={async () => {
-                      try {
-                        if (!formData.id) return
-                        const data = await api.createRemoteLink({ employee_id: formData.id, type: 'capture' })
-                        const link = `${window.location.origin}/capture/${formData.id}?t=${data.link.token}`;
-                        navigator.clipboard.writeText(link);
-                        toast.success("Link copiado! Válido por 24h e uso único.");
-                      } catch (err: unknown) {
-                        const errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
-                        toast.error(`Erro ao gerar link: ${errorMsg}. Verifique a tabela 'remote_links'.`);
-                      }
+                      const emp = employees.find(item => item.id === formData.id)
+                      if (emp) await generateCaptureRemoteLink(emp)
                     }}
                     className="mt-3 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
                   >

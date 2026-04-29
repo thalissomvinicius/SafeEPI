@@ -269,7 +269,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.setFontSize(6.5)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(148, 163, 184)
-    doc.text("Foto cadastrada + assinatura manual coletada no ato", pageWidth / 2, boxY + photoSize + 14, { align: "center" })
+    doc.text("Foto capturada no ato + assinatura manual coletada no ato", pageWidth / 2, boxY + photoSize + 14, { align: "center" })
 
     currentY += photoSize + 24
   } else if (isPhoto && data.signatureBase64) {
