@@ -55,6 +55,33 @@ async function resolveUserId(request: Request) {
   return data.user.id
 }
 
+async function resolveCompanyId(createdBy: string | null, linkToken: string | null, formCompanyId: string | null) {
+  if (linkToken) {
+    const { data: link } = await supabaseAdmin
+      .from("remote_links")
+      .select("company_id")
+      .eq("token", linkToken)
+      .maybeSingle()
+
+    if (link?.company_id) return link.company_id as string
+  }
+
+  if (createdBy) {
+    const { data: membership } = await supabaseAdmin
+      .from("company_users")
+      .select("company_id")
+      .eq("user_id", createdBy)
+      .eq("active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (membership?.company_id) return membership.company_id as string
+  }
+
+  return formCompanyId
+}
+
 async function validateRemoteLink(linkToken: string | null, employeeId: string | null) {
   if (!linkToken) return false
 
@@ -85,6 +112,7 @@ export async function POST(request: Request) {
     const employeeId = String(formData.get("employee_id") || "") || null
     const linkToken = String(formData.get("link_token") || "") || null
     const createdBy = await resolveUserId(request)
+    const formCompanyId = String(formData.get("company_id") || "") || null
 
     if (!pdfFile || !(pdfFile instanceof File) || pdfFile.size === 0) {
       return NextResponse.json({ error: "PDF assinado nao informado." }, { status: 400 })
@@ -154,7 +182,14 @@ export async function POST(request: Request) {
       .filter((id) => typeof id === "string" && id.length > 0)
 
     const metadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
+    const companyId = await resolveCompanyId(createdBy, linkToken, formCompanyId)
+
+    if (!companyId) {
+      return NextResponse.json({ error: "Empresa ativa nao encontrada para arquivar documento." }, { status: 403 })
+    }
+
     const insertPayload = {
+      company_id: companyId,
       document_type: documentType,
       employee_id: employeeId,
       delivery_id: String(formData.get("delivery_id") || "") || null,

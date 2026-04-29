@@ -17,6 +17,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "employee_id e type são obrigatórios" }, { status: 400 })
     }
 
+    if (!auth.user.companyId) {
+      return NextResponse.json({ error: "Empresa ativa nao encontrada para esta sessao." }, { status: 403 })
+    }
+
+    const { data: employee } = await supabaseAdmin
+      .from("employees")
+      .select("id")
+      .eq("id", employee_id)
+      .eq("company_id", auth.user.companyId)
+      .maybeSingle()
+
+    if (!employee) {
+      return NextResponse.json({ error: "Colaborador nao pertence a empresa ativa." }, { status: 403 })
+    }
+
     const dbType = type === "training_signature" ? "delivery" : type
     const linkData = type === "training_signature"
       ? { ...(data || {}), remoteType: "training_signature" }
@@ -26,6 +41,7 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin
         .from("remote_links")
         .update({ status: "expired" })
+        .eq("company_id", auth.user.companyId)
         .eq("employee_id", employee_id)
         .eq("type", dbType)
         .eq("status", "pending")
@@ -37,6 +53,7 @@ export async function POST(request: NextRequest) {
     const { data: link, error } = await supabaseAdmin
       .from("remote_links")
       .insert({
+        company_id: auth.user.companyId,
         employee_id,
         type: dbType,
         token,
@@ -122,10 +139,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Token não informado" }, { status: 400 })
     }
 
+    if (!auth.user.companyId) {
+      return NextResponse.json({ error: "Empresa ativa nao encontrada para esta sessao." }, { status: 403 })
+    }
+
     const { data: link, error } = await supabaseAdmin
       .from("remote_links")
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("token", token)
+      .eq("company_id", auth.user.companyId)
       .eq("status", "pending")
       .select()
       .single()

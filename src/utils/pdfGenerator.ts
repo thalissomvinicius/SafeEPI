@@ -201,6 +201,9 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   const termText = "Declaro ter recebido o(s) EPI(s) listado(s) acima em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m), responsabilizando-me pela sua guarda e conservação conforme NR-06 do MTE."
   const splitTerm = doc.splitTextToSize(termText, pageWidth - 36)
   doc.text(splitTerm, 18, currentY + 13, { align: "left" })
+  doc.setFontSize(6.5)
+  doc.setTextColor(100, 116, 139)
+  doc.text("Registro eletronico com evidencias tecnicas de autenticacao, hash, IP/GPS quando disponivel e trilha de auditoria.", 18, currentY + 22)
 
   currentY += 35
   
@@ -376,6 +379,15 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFont("helvetica", "bold")
   doc.setTextColor(71, 85, 105)
   doc.text(data.location || "Coordenadas não capturadas", metaX, currentY + 35)
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(7)
+  doc.setTextColor(r, g, b)
+  doc.text("CADEIA DE CUSTODIA DIGITAL", pageWidth / 2, currentY + 10, { align: "center" })
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(6.3)
+  doc.setTextColor(71, 85, 105)
+  doc.text(doc.splitTextToSize("PDF arquivado com hash SHA-256, trilha de auditoria imutavel e vinculo da empresa. Retificacoes devem gerar novo documento.", 70), pageWidth / 2, currentY + 16, { align: "center" })
 
   try {
     const qrText = `${COMPANY_CONFIG.systemName} | Valid: ${hash} | Date: ${today}`

@@ -9,6 +9,8 @@ import Image from "next/image"
 import { Suspense } from "react"
 import { toast } from "sonner"
 
+const BIOMETRIC_CONSENT_TEXT = "Autorizo o tratamento de imagem facial e dados biometricos para identificacao em entregas, devolucoes e registros de EPI, conforme finalidade de seguranca do trabalho e controles NR-06."
+
 interface LinkData {
   id: string
   employee_id: string
@@ -44,6 +46,7 @@ function CaptureContent() {
   const [isCapturing, setIsCapturing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [biometricConsent, setBiometricConsent] = useState(false)
   
   // Preview da foto capturada
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
@@ -133,6 +136,7 @@ function CaptureContent() {
           id: employee!.id,
           photo_url: capturedPhoto,
           face_descriptor: Array.from(capturedDescriptor),
+          biometric_consent: biometricConsent,
           token: linkToken // Passa o token para validação e conclusão no servidor
         })
       })
@@ -332,11 +336,30 @@ function CaptureContent() {
         </div>
 
         <button 
-          onClick={() => setIsCapturing(true)}
+          onClick={() => {
+            if (!biometricConsent) {
+              toast.error("Confirme o consentimento LGPD antes de iniciar a camera.")
+              return
+            }
+            setIsCapturing(true)
+          }}
           className="w-full bg-[#8B1A1A] hover:bg-[#681313] text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl shadow-red-900/20 border-b-4 border-red-900 flex items-center justify-center gap-2"
         >
           <Camera className="w-5 h-5" /> Iniciar Câmera
         </button>
+
+        <label className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-left">
+          <input
+            type="checkbox"
+            checked={biometricConsent}
+            onChange={(e) => setBiometricConsent(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-[11px] leading-relaxed text-slate-600">
+            <span className="block text-[10px] font-black uppercase tracking-widest text-blue-700">Consentimento LGPD</span>
+            {BIOMETRIC_CONSENT_TEXT}
+          </span>
+        </label>
 
         <p className="text-[9px] text-slate-400 italic">
           Certifique-se de estar em um local bem iluminado e retire óculos escuros ou bonés.

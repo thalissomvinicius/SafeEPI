@@ -1,5 +1,6 @@
 export type Employee = {
   id: string;
+  company_id?: string | null;
   full_name: string;
   cpf: string;
   job_title: string;
@@ -10,11 +11,17 @@ export type Employee = {
   termination_date?: string | null;
   photo_url?: string | null;
   face_descriptor?: number[] | null; // Armazenado como JSONB
+  biometric_consent?: boolean | null;
+  biometric_consent_at?: string | null;
+  biometric_consent_method?: string | null;
+  biometric_consent_text?: string | null;
+  biometric_revoked_at?: string | null;
   created_at?: string;
 };
 
 export type Workplace = {
   id: string;
+  company_id?: string | null;
   name: string;
   address: string | null;
   manager_name: string | null;
@@ -24,6 +31,7 @@ export type Workplace = {
 
 export type CatalogItem = {
   id: string;
+  company_id?: string | null;
   name: string;
   active: boolean;
   created_at?: string;
@@ -31,6 +39,7 @@ export type CatalogItem = {
 
 export type PPE = {
   id: string;
+  company_id?: string | null;
   name: string;
   manufacturer: string | null;
   ca_number: string;
@@ -44,6 +53,7 @@ export type PPE = {
 
 export type StockMovement = {
   id: string;
+  company_id?: string | null;
   ppe_id: string;
   quantity: number;
   type: 'ENTRADA' | 'SAIDA' | 'AJUSTE';
@@ -56,6 +66,7 @@ export type StockMovement = {
 
 export type Delivery = {
   id: string;
+  company_id?: string | null;
   employee_id: string;
   ppe_id: string;
   delivery_date: string;
@@ -72,6 +83,7 @@ export type Delivery = {
 
 export type Training = {
   id: string;
+  company_id?: string | null;
   employee_id: string;
   training_name: string;
   completion_date: string;
@@ -112,6 +124,7 @@ export type TrainingWithRelations = Training & {
 
 export type SignedDocument = {
   id: string;
+  company_id?: string | null;
   document_type: 'delivery' | 'remote_delivery' | 'return' | 'nr06' | 'training_certificate';
   employee_id: string | null;
   delivery_id: string | null;
@@ -134,8 +147,46 @@ export type SignedDocument = {
 
 export type Profile = {
   id: string;
+  company_id?: string | null;
   email: string | null;
   full_name: string | null;
   role: 'ADMIN' | 'ALMOXARIFE' | 'DIRETORIA';
   created_at?: string;
+};
+
+export type Company = {
+  id: string;
+  name: string;
+  legal_name?: string | null;
+  document?: string | null;
+  active: boolean;
+  created_at?: string;
+};
+
+export type AuditEvent = {
+  id: string;
+  company_id: string | null;
+  actor_id: string | null;
+  table_name: string;
+  record_id: string | null;
+  action: 'INSERT' | 'UPDATE' | 'DELETE';
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type LgpdConsent = {
+  id: string;
+  company_id: string;
+  employee_id: string;
+  consent_type: 'biometric' | 'photo_evidence' | 'geolocation';
+  consent_text: string;
+  granted: boolean;
+  granted_at: string | null;
+  revoked_at: string | null;
+  source: string;
+  created_by: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
 };

@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument } from "@/types/database";
+import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, Company } from "@/types/database";
 import { Session } from "@supabase/supabase-js";
 
 type AddTrainingResult = {
@@ -218,6 +218,31 @@ function dataUrlToFile(dataUrl: string, fileName: string): File {
   return new File([bytes], fileName, { type: mimeType });
 }
 
+let cachedCompanyId: string | null | undefined;
+
+async function getCurrentCompanyId(): Promise<string | null> {
+  if (cachedCompanyId !== undefined) return cachedCompanyId;
+
+  const res = await fetch('/api/me', {
+    headers: await api.getAuthHeaders(),
+  });
+  const data = await readResponseJson<{ current_company?: Company | null }>(res);
+
+  if (!res.ok) {
+    cachedCompanyId = null;
+    return null;
+  }
+
+  cachedCompanyId = data.current_company?.id || null;
+  return cachedCompanyId;
+}
+
+async function withCompanyId<T extends { company_id?: string | null }>(payload: T): Promise<T> {
+  if (payload.company_id) return payload;
+  const companyId = await getCurrentCompanyId();
+  return companyId ? { ...payload, company_id: companyId } : payload;
+}
+
 async function readResponseJson<T = unknown>(res: Response): Promise<T> {
   const text = await res.text();
   if (!text) return {} as T;
@@ -313,6 +338,7 @@ export const api = {
   async logout() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    cachedCompanyId = null;
   },
 
   async getSession() {
@@ -341,6 +367,8 @@ export const api = {
     if (payload.ipAddress) formData.append("ip_address", payload.ipAddress);
     if (payload.geoLocation) formData.append("geo_location", payload.geoLocation);
     if (payload.linkToken) formData.append("link_token", payload.linkToken);
+    const companyId = await getCurrentCompanyId();
+    if (companyId) formData.append("company_id", companyId);
     if (payload.metadata) formData.append("metadata", JSON.stringify(payload.metadata));
 
     const res = await fetch("/api/signed-documents", {
@@ -390,6 +418,7 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Nao foi possivel validar o perfil.");
+    cachedCompanyId = data.current_company?.id || null;
     return data.user as Profile;
   },
 

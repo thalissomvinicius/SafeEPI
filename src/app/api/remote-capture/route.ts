@@ -37,9 +37,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { id, photo_url, face_descriptor, token } = body
+    const { id, photo_url, face_descriptor, token, biometric_consent } = body
 
-    if (!id || !photo_url || !face_descriptor) {
+    if (!id || !photo_url || !face_descriptor || !biometric_consent) {
       return NextResponse.json({ error: 'Dados incompletos para registro da biometria.' }, { status: 400 })
     }
 
@@ -73,7 +73,12 @@ export async function POST(request: Request) {
       .from('employees')
       .update({
         photo_url,
-        face_descriptor
+        face_descriptor,
+        biometric_consent: true,
+        biometric_consent_at: new Date().toISOString(),
+        biometric_consent_method: 'captura_remota',
+        biometric_consent_text: 'Autorizo o tratamento de imagem facial e dados biometricos para identificacao em entregas, devolucoes e registros de EPI, conforme finalidade de seguranca do trabalho e controles NR-06.',
+        biometric_revoked_at: null
       })
       .eq('id', id)
       .select()

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Archive, Boxes } from "lucide-react"
+import { AlertTriangle, ArrowRight, ShieldCheck, FileWarning, Fingerprint, TimerReset } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/services/api"
 import { DeliveryWithRelations } from "@/types/database"
@@ -49,8 +49,13 @@ export default function Dashboard() {
     deliveries: 0,
     employees: 0,
     criticalCAs: 0,
+    expiredCAs: 0,
     lowStock: 0,
     signedDocuments: 0,
+    unsignedDeliveries: 0,
+    missingBiometrics: 0,
+    overdueReplacements: 0,
+    riskScore: 0,
   })
   const [recentDeliveries, setRecentDeliveries] = useState<DeliveryWithRelations[]>([])
   const [chartData, setChartData] = useState<{name: string, value: number}[]>([])
@@ -71,15 +76,32 @@ export default function Dashboard() {
         const criticalCount = ppeData.filter(p => {
           const expiry = new Date(p.ca_expiry_date)
           const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-          return diffDays < 90
+          return diffDays >= 0 && diffDays < 90
         }).length
+        const expiredCAs = ppeData.filter(p => new Date(p.ca_expiry_date) < now).length
+        const lowStock = ppeData.filter(p => p.active && (p.current_stock || 0) <= 5).length
+        const activeEmployees = empData.filter(e => e.active)
+        const missingBiometrics = activeEmployees.filter(e => !e.biometric_consent || !e.photo_url || !e.face_descriptor?.length).length
+        const unsignedDeliveries = Math.max(0, deliveryData.length - documentData.length)
+        const overdueReplacements = deliveryData.filter(d => {
+          if (d.returned_at || !d.ppe?.lifespan_days) return false
+          const dueDate = new Date(d.delivery_date)
+          dueDate.setDate(dueDate.getDate() + d.ppe.lifespan_days)
+          return dueDate < now
+        }).length
+        const riskScore = expiredCAs * 3 + overdueReplacements * 3 + unsignedDeliveries * 2 + lowStock * 2 + missingBiometrics + criticalCount
 
         setStats({
           deliveries: deliveryData.length,
-          employees: empData.filter(e => e.active).length,
+          employees: activeEmployees.length,
           criticalCAs: criticalCount,
-          lowStock: ppeData.filter(p => p.active && (p.current_stock || 0) <= 5).length,
-          signedDocuments: documentData.length
+          expiredCAs,
+          lowStock,
+          signedDocuments: documentData.length,
+          unsignedDeliveries,
+          missingBiometrics,
+          overdueReplacements,
+          riskScore
         })
 
         // Chart Data (Last 7 Days)
@@ -113,11 +135,11 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">SESMT Digital • Cloud</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter text-slate-800">Antares Dashboard</h1>
+          <h1 className="text-4xl font-black tracking-tighter text-slate-800">Painel de Risco Operacional</h1>
           <p className="text-slate-500 font-medium mt-1">Gestão de Segurança Sincronizada com Supabase.</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/delivery" className="bg-[#8B1A1A] hover:bg-[#681313] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-red-900/20 transition-all flex items-center">
+          <Link href="/delivery" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center">
             Nova Entrega <ArrowRight className="w-4 h-4 ml-2" />
           </Link>
         </div>
@@ -125,10 +147,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
-          { title: "Entregas Realizadas", value: stats.deliveries, subtitle: "Total no banco de dados", icon: PackageCheck, color: "text-[#8B1A1A]", bg: "bg-red-50" },
-          { title: "Equipe Ativa", value: stats.employees, subtitle: "Colaboradores cadastrados", icon: Users, color: "text-slate-800", bg: "bg-slate-100" },
-          { title: "Estoque Baixo", value: stats.lowStock, subtitle: "Itens com 5 ou menos", icon: Boxes, color: "text-blue-700", bg: "bg-blue-50" },
-          { title: "PDFs Auditados", value: stats.signedDocuments, subtitle: "Arquivo juridico ativo", icon: Archive, color: "text-emerald-700", bg: "bg-emerald-50" },
+          { title: "Risco Geral", value: stats.riskScore, subtitle: "Peso operacional atual", icon: ShieldCheck, color: "text-blue-700", bg: "bg-blue-50" },
+          { title: "CAs Vencidos", value: stats.expiredCAs, subtitle: "Exige bloqueio de entrega", icon: AlertTriangle, color: "text-red-700", bg: "bg-red-50" },
+          { title: "Trocas Vencidas", value: stats.overdueReplacements, subtitle: "EPIs acima da vida util", icon: TimerReset, color: "text-amber-700", bg: "bg-amber-50" },
+          { title: "PDFs Pendentes", value: stats.unsignedDeliveries, subtitle: "Entregas sem arquivo juridico", icon: FileWarning, color: "text-slate-700", bg: "bg-slate-100" },
           { title: "CAs em Alerta", value: stats.criticalCAs, subtitle: "Atenção necessária", icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
         ].map((item, idx) => {
           const Icon = item.icon

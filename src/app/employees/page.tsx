@@ -20,6 +20,7 @@ import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
+const BIOMETRIC_CONSENT_TEXT = "Autorizo o tratamento de imagem facial e dados biometricos para identificacao em entregas, devolucoes e registros de EPI, conforme finalidade de seguranca do trabalho e controles NR-06."
 
 type RemoteLinkStatus = "pending" | "completed" | "expired"
 
@@ -96,6 +97,8 @@ export default function EmployeesPage() {
     workplace_id: string;
     photo_url?: string | null;
     face_descriptor?: number[] | null;
+    biometric_consent?: boolean;
+    biometric_consent_at?: string | null;
   }>({ 
     name: "", 
     role: "", 
@@ -103,7 +106,9 @@ export default function EmployeesPage() {
     cpf: "",
     workplace_id: "",
     photo_url: null,
-    face_descriptor: null
+    face_descriptor: null,
+    biometric_consent: false,
+    biometric_consent_at: null
   })
   // TST Signer State
   const [isTstModalOpen, setIsTstModalOpen] = useState(false)
@@ -221,6 +226,11 @@ export default function EmployeesPage() {
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name) return
+    const hasBiometricData = Boolean(formData.photo_url || formData.face_descriptor?.length)
+    if (hasBiometricData && !formData.biometric_consent) {
+      toast.error("Registre o consentimento LGPD antes de salvar biometria facial.")
+      return
+    }
     if (formData.cpf && !isValidCpf(formData.cpf)) {
       alert("O CPF informado é inválido. Por favor, verifique.")
       return
@@ -240,6 +250,19 @@ export default function EmployeesPage() {
     const normalizedName = normalizeName(formData.name)
     const normalizedRole = normalizeName(formData.role)
     const normalizedDepartment = normalizeName(formData.department)
+    const biometricConsentFields = hasBiometricData && formData.biometric_consent ? {
+      biometric_consent: true,
+      biometric_consent_at: formData.biometric_consent_at || new Date().toISOString(),
+      biometric_consent_method: "termo_digital",
+      biometric_consent_text: BIOMETRIC_CONSENT_TEXT,
+      biometric_revoked_at: null,
+    } : {
+      biometric_consent: false,
+      biometric_consent_at: null,
+      biometric_consent_method: null,
+      biometric_consent_text: null,
+      biometric_revoked_at: new Date().toISOString(),
+    }
     try {
       setIsSaving(true)
       
@@ -258,7 +281,8 @@ export default function EmployeesPage() {
           department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
           workplace_id: formData.workplace_id || null,
-          face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
+          face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null,
+          ...biometricConsentFields
         }
 
         // Se tem foto HTTP existente, mantém
@@ -279,7 +303,7 @@ export default function EmployeesPage() {
         await loadData()
 
         toast.success("Cadastro atualizado com sucesso!")
-        setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
+        setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null, biometric_consent: false, biometric_consent_at: null })
         setIsModalOpen(false)
       } else {
         await api.addEmployee({
@@ -291,14 +315,15 @@ export default function EmployeesPage() {
           active: true,
           workplace_id: formData.workplace_id || null,
           photo_url: null,
-          face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
+          face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null,
+          ...biometricConsentFields
         }, photoFile)
         toast.success("Colaborador cadastrado com sucesso!")
         
         // Novo cadastro: recarrega a lista completa para incluir o novo
         setLoading(true)
         await loadData()
-        setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
+        setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null, biometric_consent: false, biometric_consent_at: null })
         setIsModalOpen(false)
       }
     } catch (error: unknown) {
@@ -320,13 +345,15 @@ export default function EmployeesPage() {
       cpf: emp.cpf,
       workplace_id: emp.workplace_id || "",
       photo_url: emp.photo_url || null,
-      face_descriptor: emp.face_descriptor ? Array.from(emp.face_descriptor) : null
+      face_descriptor: emp.face_descriptor ? Array.from(emp.face_descriptor) : null,
+      biometric_consent: Boolean(emp.biometric_consent),
+      biometric_consent_at: emp.biometric_consent_at || null
     })
     setIsModalOpen(true)
   }
 
   const closeEditModal = () => {
-    setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
+    setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null, biometric_consent: false, biometric_consent_at: null })
     setIsModalOpen(false)
   }
 
@@ -1032,7 +1059,7 @@ export default function EmployeesPage() {
                     />
                     <button 
                       type="button" 
-                      onClick={() => setFormData({...formData, photo_url: null, face_descriptor: null})} 
+                      onClick={() => setFormData({...formData, photo_url: null, face_descriptor: null, biometric_consent: false, biometric_consent_at: null})} 
                       className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
                       title="Remover biometria"
                     >
@@ -1043,7 +1070,13 @@ export default function EmployeesPage() {
                 ) : (
                   <button 
                     type="button"
-                    onClick={() => setIsFaceCameraOpen(true)}
+                    onClick={() => {
+                      if (!formData.biometric_consent) {
+                        toast.error("Marque o consentimento LGPD antes de capturar biometria.")
+                        return
+                      }
+                      setIsFaceCameraOpen(true)
+                    }}
                     className="flex flex-col items-center justify-center w-24 h-24 rounded-full border-2 border-dashed border-slate-300 text-slate-400 hover:text-[#8B1A1A] hover:border-[#8B1A1A] transition-all bg-slate-50"
                   >
                     <Camera className="w-8 h-8 mb-1" />
@@ -1068,6 +1101,23 @@ export default function EmployeesPage() {
                     Salve o cadastro para gerar<br/>o link de captura remota
                   </p>
                 )}
+
+                <label className="mt-4 flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 text-left">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.biometric_consent)}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      biometric_consent: e.target.checked,
+                      biometric_consent_at: e.target.checked ? (formData.biometric_consent_at || new Date().toISOString()) : null
+                    })}
+                    className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-blue-700">Consentimento LGPD para biometria</span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-slate-600">{BIOMETRIC_CONSENT_TEXT}</span>
+                  </span>
+                </label>
               </div>
 
               <div className="space-y-2">
