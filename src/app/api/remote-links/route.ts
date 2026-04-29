@@ -17,11 +17,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "employee_id e type são obrigatórios" }, { status: 400 })
     }
 
+    const dbType = type === "training_signature" ? "delivery" : type
+    const linkData = type === "training_signature"
+      ? { ...(data || {}), remoteType: "training_signature" }
+      : data || null
+
     await supabaseAdmin
       .from("remote_links")
       .update({ status: "expired" })
       .eq("employee_id", employee_id)
-      .eq("type", type)
+      .eq("type", dbType)
       .eq("status", "pending")
 
     const token = crypto.randomBytes(32).toString("hex")
@@ -31,10 +36,10 @@ export async function POST(request: NextRequest) {
       .from("remote_links")
       .insert({
         employee_id,
-        type,
+        type: dbType,
         token,
         status: "pending",
-        data: data || null,
+        data: linkData,
         expires_at,
       })
       .select()

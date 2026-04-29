@@ -14,10 +14,9 @@ export async function POST(request: NextRequest) {
       .from("remote_links")
       .select("*")
       .eq("token", token)
-      .eq("type", "training_signature")
       .single()
 
-    if (linkError || !link) {
+    if (linkError || !link || (link.type !== "training_signature" && link.data?.remoteType !== "training_signature")) {
       return NextResponse.json({ error: "Link nao encontrado ou invalido." }, { status: 404 })
     }
 

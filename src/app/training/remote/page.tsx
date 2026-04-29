@@ -52,7 +52,7 @@ function RemoteTrainingSignatureContent() {
           return
         }
 
-        if (payload.link.type !== "training_signature") {
+        if (payload.link.type !== "training_signature" && payload.link.data?.remoteType !== "training_signature") {
           setErrorMsg("Este link nao e de assinatura de treinamento.")
           setPhase("error")
           return
