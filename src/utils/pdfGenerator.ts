@@ -96,7 +96,7 @@ export interface DeliveryPDFData {
   ppeCaExpiry?: string
   quantity?: number
   reason?: string
-  items?: { ppeName: string; ppeCaNumber: string; caExpiry?: string; quantity: number; reason: string }[]
+  items?: { ppeName: string; ppeCaNumber: string; caExpiry?: string; quantity: number; reason: string; autoReturnNote?: string }[]
   authMethod: AuthMethod
   signatureBase64: string
   photoBase64?: string
@@ -176,7 +176,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
       item.ppeCaNumber,
       item.caExpiry ? format(new Date(item.caExpiry), "dd/MM/yyyy") : "—",
       String(item.quantity),
-      item.reason,
+      item.autoReturnNote ? `${item.reason}\n${item.autoReturnNote}` : item.reason,
       data.deliveryDate ? format(new Date(data.deliveryDate), "dd/MM/yyyy") : format(new Date(), "dd/MM/yyyy")
     ]),
     styles: { fontSize: 8.5, cellPadding: 4, font: "helvetica" },

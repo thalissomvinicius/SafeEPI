@@ -217,6 +217,12 @@ function RemoteDeliveryContent() {
       
       const responseData = await apiRes.json()
       if (!apiRes.ok) throw new Error(responseData.error || "Erro ao salvar na nuvem")
+      const autoReturnedDeliveryIds = Array.isArray(responseData.autoReturnedDeliveryIds)
+        ? responseData.autoReturnedDeliveryIds as string[]
+        : []
+      const autoReturnNote = autoReturnedDeliveryIds.length > 0
+        ? `Baixa automatica do registro anterior${autoReturnedDeliveryIds.length > 1 ? ` (${autoReturnedDeliveryIds.length})` : ""}.`
+        : undefined
 
       const pdfBlob = await generateDeliveryPDF({
         employeeName: employee.full_name,
@@ -228,6 +234,14 @@ function RemoteDeliveryContent() {
         ppeCaExpiry: ppe.ca_expiry_date,
         quantity: deliveryData?.q || 1,
         reason: deliveryData?.r || "Entrega Remota",
+        items: [{
+          ppeName: ppe.name,
+          ppeCaNumber: ppe.ca_number,
+          caExpiry: ppe.ca_expiry_date,
+          quantity: deliveryData?.q || 1,
+          reason: deliveryData?.r || "Entrega Remota",
+          autoReturnNote,
+        }],
         authMethod,
         signatureBase64: signatureDataUrl,
         photoBase64,
@@ -263,6 +277,8 @@ function RemoteDeliveryContent() {
             caNumber: ppe.ca_number,
             quantity: deliveryData?.q || 1,
             reason: deliveryData?.r || "Entrega Remota",
+            autoReturnedDeliveryIds,
+            autoReturnNote,
           },
         })
       } catch (archiveError) {
@@ -279,7 +295,10 @@ function RemoteDeliveryContent() {
       })
       setLastPdfFileName(fileName)
 
-      toast.success("Assinatura salva e comprovante gerado!")
+      toast.success(autoReturnedDeliveryIds.length > 0
+        ? "Assinatura salva, baixa automatica feita e comprovante gerado!"
+        : "Assinatura salva e comprovante gerado!"
+      )
       setPhase('done')
     } catch (err: unknown) {
       console.error(err)

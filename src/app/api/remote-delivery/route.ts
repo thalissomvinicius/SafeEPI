@@ -45,6 +45,32 @@ function isDeliverySchemaCompatibilityIssue(error: unknown) {
   );
 }
 
+function isMissingReturnMotiveIssue(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError;
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+
+  return (
+    (maybeError.code === "PGRST204" || maybeError.code === "42703") &&
+    text.includes("return_motive")
+  );
+}
+
+function shouldAutoReturnReason(reason: string) {
+  return reason !== "Primeira Entrega";
+}
+
+function getAutoReturnMotive(reason: string) {
+  const normalized = reason
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (normalized.includes("perda")) return "Baixa automatica por perda/extravio";
+  if (normalized.includes("dano")) return "Baixa automatica por dano/quebra";
+  return "Baixa automatica por substituicao";
+}
+
 export async function POST(req: Request) {
   try {
     // Inicializa o cliente DENTRO da função para evitar erros de build na Vercel 
@@ -179,6 +205,44 @@ export async function POST(req: Request) {
       throw new Error("Entrega remota nao retornou registro salvo.");
     }
 
+    let autoReturnedDeliveryIds: string[] = [];
+    if (shouldAutoReturnReason(reason)) {
+      const { data: activeSamePpe, error: activeSamePpeError } = await supabaseAdmin
+        .from('deliveries')
+        .select('id')
+        .eq('employee_id', employee_id)
+        .eq('ppe_id', ppe_id)
+        .is('returned_at', null)
+        .neq('id', savedDelivery.id);
+
+      if (activeSamePpeError) throw activeSamePpeError;
+
+      const previousDeliveryIds = (activeSamePpe || [])
+        .map((item: { id?: string }) => item.id)
+        .filter((id): id is string => Boolean(id));
+
+      if (previousDeliveryIds.length > 0) {
+        const returnedAt = new Date().toISOString();
+        const { error: returnError } = await supabaseAdmin
+          .from('deliveries')
+          .update({ returned_at: returnedAt, return_motive: getAutoReturnMotive(reason) })
+          .in('id', previousDeliveryIds);
+
+        if (returnError && isMissingReturnMotiveIssue(returnError)) {
+          const { error: fallbackReturnError } = await supabaseAdmin
+            .from('deliveries')
+            .update({ returned_at: returnedAt })
+            .in('id', previousDeliveryIds);
+
+          if (fallbackReturnError) throw fallbackReturnError;
+        } else if (returnError) {
+          throw returnError;
+        }
+
+        autoReturnedDeliveryIds = previousDeliveryIds;
+      }
+    }
+
     const { data: afterStockData, error: afterStockError } = await supabaseAdmin
       .from('ppes')
       .select('current_stock')
@@ -238,7 +302,7 @@ export async function POST(req: Request) {
         .eq('token', token)
     }
     
-    return NextResponse.json({ success: true, data: savedDelivery });
+    return NextResponse.json({ success: true, data: savedDelivery, autoReturnedDeliveryIds });
 
   } catch (error: unknown) {
     console.error('Remote delivery save error:', error);

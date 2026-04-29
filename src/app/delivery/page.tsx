@@ -6,7 +6,7 @@ import SignatureCanvas from "react-signature-canvas"
 import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle } from "lucide-react"
 import { format, addDays } from "date-fns"
 import { api } from "@/services/api"
-import { Employee, PPE, Workplace, Delivery } from "@/types/database"
+import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
@@ -21,6 +21,8 @@ interface CartItem {
   ppeCaExpiry: string
   quantity: number
   reason: string
+  autoReturnDeliveryIds?: string[]
+  autoReturnNote?: string
 }
 
 type RemoteLinkStatus = "pending" | "completed" | "expired"
@@ -37,6 +39,19 @@ type PendingDeliveryDraft = {
   workplaceName: string
   deliveryDate: string
   item: CartItem
+}
+
+const SUBSTITUTION_REASON = "Substituição (Desgaste/Validade)"
+
+const getAutoReturnMotive = (reason: string) => {
+  const normalized = reason
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
+  if (normalized.includes("perda")) return "Baixa automatica por perda/extravio"
+  if (normalized.includes("dano")) return "Baixa automatica por dano/quebra"
+  return "Baixa automatica por substituicao"
 }
 
 export default function DeliveryPage() {
@@ -60,6 +75,8 @@ export default function DeliveryPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [ppes, setPpes] = useState<PPE[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
+  const [activeDeliveries, setActiveDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [loadingActiveDeliveries, setLoadingActiveDeliveries] = useState(false)
   const [loadingOptions, setLoadingOptions] = useState(true)
 
   // Estados dos formulários selecionados
@@ -138,9 +155,43 @@ export default function DeliveryPage() {
     }
   }, [lastPdfUrl])
 
+  useEffect(() => {
+    if (!selectedEmployeeId) {
+      const timer = window.setTimeout(() => setActiveDeliveries([]), 0)
+      return () => window.clearTimeout(timer)
+    }
+
+    const timer = window.setTimeout(() => {
+      const loadEmployeeActiveDeliveries = async () => {
+        try {
+          setLoadingActiveDeliveries(true)
+          const history = await api.getEmployeeHistory(selectedEmployeeId)
+          setActiveDeliveries(history.filter(delivery => !delivery.returned_at))
+        } catch (err) {
+          console.error("Erro ao carregar EPIs ativos do colaborador:", err)
+          setActiveDeliveries([])
+        } finally {
+          setLoadingActiveDeliveries(false)
+        }
+      }
+
+      void loadEmployeeActiveDeliveries()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [selectedEmployeeId])
+
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const currentPpe = ppes.find(p => p.id === currentPpeId)
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
+  const currentActiveSamePpeDeliveries = activeDeliveries.filter(delivery => delivery.ppe_id === currentPpeId && !delivery.returned_at)
+
+  const shouldAutoReturn = (reason: string, deliveries = currentActiveSamePpeDeliveries) =>
+    deliveries.length > 0 && reason !== "Primeira Entrega"
+
+  const effectiveCurrentReason = currentActiveSamePpeDeliveries.length > 0 && currentReason === "Primeira Entrega"
+    ? SUBSTITUTION_REASON
+    : currentReason
 
   const formatRemoteExpiry = (value: string | null) => {
     if (!value) return "sem prazo"
@@ -252,17 +303,30 @@ export default function DeliveryPage() {
       return
     }
 
+    const selectedReason = effectiveCurrentReason
+    const autoReturnDeliveryIds = shouldAutoReturn(selectedReason)
+      ? currentActiveSamePpeDeliveries.map(delivery => delivery.id)
+      : []
+    const firstAutoReturnDelivery = currentActiveSamePpeDeliveries[0]
+
     setCart(prev => [...prev, {
       ppeId: currentPpeId,
       ppeName: currentPpe.name,
       ppeCaNumber: currentPpe.ca_number,
       ppeCaExpiry: currentPpe.ca_expiry_date,
       quantity: currentQuantity,
-      reason: currentReason
+      reason: selectedReason,
+      autoReturnDeliveryIds,
+      autoReturnNote: autoReturnDeliveryIds.length > 0
+        ? `Baixa automatica do registro anterior${autoReturnDeliveryIds.length > 1 ? ` (${autoReturnDeliveryIds.length})` : ""}${firstAutoReturnDelivery ? ` entregue em ${format(new Date(firstAutoReturnDelivery.delivery_date), "dd/MM/yyyy")}` : ""}.`
+        : undefined
     }])
     setCurrentQuantity(1)
     setPpeSearchTerm("")
-    toast.success(`${currentPpe.name} adicionado à entrega.`)
+    toast.success(autoReturnDeliveryIds.length > 0
+      ? `${currentPpe.name} adicionado com baixa automatica da posse anterior.`
+      : `${currentPpe.name} adicionado à entrega.`
+    )
   }
 
   const removeFromCart = (ppeId: string) => {
@@ -317,6 +381,7 @@ export default function DeliveryPage() {
       const persistedAuthMethod: 'manual' | 'facial' = authMethod === 'manual_facial' ? 'manual' : authMethod
 
       const savedDeliveries: Delivery[] = []
+      const autoReturnedDeliveryIds: string[] = []
 
       // Save each item as a separate delivery record (same signature)
       for (const item of cart) {
@@ -332,6 +397,13 @@ export default function DeliveryPage() {
           delivery_date: new Date(deliveryDate).toISOString()
         }, signatureFile)
         savedDeliveries.push(savedDelivery as Delivery)
+
+        const previousDeliveryIds = item.autoReturnDeliveryIds || []
+        for (const previousDeliveryId of previousDeliveryIds) {
+          if (previousDeliveryId === (savedDelivery as Delivery).id) continue
+          await api.returnDelivery(previousDeliveryId, getAutoReturnMotive(item.reason))
+          autoReturnedDeliveryIds.push(previousDeliveryId)
+        }
       }
 
       // Generate ONE PDF with all items
@@ -350,7 +422,8 @@ export default function DeliveryPage() {
           ppeCaNumber: item.ppeCaNumber,
           caExpiry: item.ppeCaExpiry,
           quantity: item.quantity,
-          reason: item.reason
+          reason: item.reason,
+          autoReturnNote: item.autoReturnNote
         })),
         authMethod,
         signatureBase64: signatureDataUrl,
@@ -387,7 +460,10 @@ export default function DeliveryPage() {
               caNumber: item.ppeCaNumber,
               quantity: item.quantity,
               reason: item.reason,
+              autoReturnDeliveryIds: item.autoReturnDeliveryIds || [],
+              autoReturnNote: item.autoReturnNote,
             })),
+            autoReturnedDeliveryIds,
           },
         })
       } catch (archiveError) {
@@ -404,8 +480,14 @@ export default function DeliveryPage() {
       })
       setLastPdfFileName(fileName)
       setIsSaved(true)
+      if (autoReturnedDeliveryIds.length > 0) {
+        setActiveDeliveries(prev => prev.filter(delivery => !autoReturnedDeliveryIds.includes(delivery.id)))
+      }
 
-      toast.success(`Entrega de ${cart.length} EPI(s) registrada com sucesso!`)
+      toast.success(autoReturnedDeliveryIds.length > 0
+        ? `Entrega registrada com ${autoReturnedDeliveryIds.length} baixa(s) automatica(s).`
+        : `Entrega de ${cart.length} EPI(s) registrada com sucesso!`
+      )
     } catch (err: unknown) {
       console.error("Erro ao finalizar entrega:", err)
       const message = err instanceof Error ? err.message : "Erro ao salvar entrega."
@@ -692,7 +774,15 @@ export default function DeliveryPage() {
                           <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {draft.item.ppeCaNumber}</span>
                           <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {draft.item.quantity}</span>
                           <span className="text-[9px] font-bold text-slate-400">{draft.item.reason}</span>
+                          {draft.item.autoReturnDeliveryIds && draft.item.autoReturnDeliveryIds.length > 0 && (
+                            <span className="text-[9px] font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">Baixa automática</span>
+                          )}
                         </div>
+                        {draft.item.autoReturnNote && (
+                          <p className="mt-3 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex">
+                            {draft.item.autoReturnNote}
+                          </p>
+                        )}
                       </div>
 
                       <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
@@ -908,16 +998,37 @@ export default function DeliveryPage() {
                           <label htmlFor="reason-select" className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Motivo</label>
                           <select
                             id="reason-select" title="Motivo da entrega"
-                            value={currentReason} onChange={(e) => setCurrentReason(e.target.value)}
+                            value={effectiveCurrentReason} onChange={(e) => setCurrentReason(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-4 md:py-3 outline-none focus:border-[#8B1A1A] font-bold text-[11px]"
                           >
                             <option value="Primeira Entrega">Prim. Entrega</option>
-                            <option value="Substituição (Desgaste/Validade)">Substituição</option>
+                            <option value={SUBSTITUTION_REASON}>Substituição</option>
                             <option value="Perda">Perda</option>
                             <option value="Dano">Dano</option>
                           </select>
                         </div>
                       </div>
+
+                      {loadingActiveDeliveries && selectedEmployeeId && (
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-3">
+                          <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consultando EPIs em posse...</p>
+                        </div>
+                      )}
+
+                      {!loadingActiveDeliveries && currentPpe && currentActiveSamePpeDeliveries.length > 0 && (
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-start gap-3">
+                          <div className="bg-amber-100 text-amber-700 rounded-lg p-2 flex-shrink-0">
+                            <ShieldAlert className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Baixa automática na nova entrega</p>
+                            <p className="text-xs text-amber-700 font-semibold mt-1 leading-relaxed">
+                              {selectedEmployee?.full_name || "Colaborador"} já possui {currentPpe.name} em posse. Ao confirmar esta entrega como {effectiveCurrentReason}, o registro anterior será baixado no histórico.
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {currentPpe && currentPpe.lifespan_days > 0 && (
                         <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex flex-col gap-2">
@@ -963,7 +1074,15 @@ export default function DeliveryPage() {
                               <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {item.ppeCaNumber}</span>
                               <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {item.quantity}</span>
                               <span className="text-[9px] font-bold text-slate-400">{item.reason}</span>
+                              {item.autoReturnDeliveryIds && item.autoReturnDeliveryIds.length > 0 && (
+                                <span className="text-[9px] font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">Baixa automática</span>
+                              )}
                             </div>
+                            {item.autoReturnNote && (
+                              <p className="mt-2 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex">
+                                {item.autoReturnNote}
+                              </p>
+                            )}
                           </div>
                           <button 
                             onClick={() => removeFromCart(item.ppeId)} 
@@ -1009,7 +1128,14 @@ export default function DeliveryPage() {
                   {cart.map(item => (
                     <li key={item.ppeId} className="text-xs text-slate-600 font-bold flex items-start gap-2 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
                       <span className="w-1.5 h-1.5 bg-[#8B1A1A] rounded-full flex-shrink-0 mt-1.5" />
-                      <span>{item.ppeName} <span className="text-slate-400 font-medium">(CA {item.ppeCaNumber})</span> <br className="sm:hidden" /><span className="sm:ml-2 text-[#8B1A1A] bg-red-50 px-2 py-0.5 rounded text-[10px] tracking-widest">Qtd: {item.quantity}</span></span>
+                      <span>
+                        {item.ppeName} <span className="text-slate-400 font-medium">(CA {item.ppeCaNumber})</span> <br className="sm:hidden" /><span className="sm:ml-2 text-[#8B1A1A] bg-red-50 px-2 py-0.5 rounded text-[10px] tracking-widest">Qtd: {item.quantity}</span>
+                        {item.autoReturnNote && (
+                          <span className="block mt-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
+                            {item.autoReturnNote}
+                          </span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>
