@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User } from "lucide-react"
+import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle } from "lucide-react"
 import { format, addDays } from "date-fns"
 import { api } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery } from "@/types/database"
@@ -23,6 +23,22 @@ interface CartItem {
   reason: string
 }
 
+type RemoteLinkStatus = "pending" | "completed" | "expired"
+
+type PendingDeliveryDraft = {
+  key: string
+  token: string
+  linkUrl: string
+  status: RemoteLinkStatus
+  expiresAt: string | null
+  employeeId: string
+  employeeName: string
+  workplaceId: string
+  workplaceName: string
+  deliveryDate: string
+  item: CartItem
+}
+
 export default function DeliveryPage() {
   const [step, setStep] = useState(1)
   const sigCanvas = useRef<SignatureCanvas | null>(null)
@@ -31,6 +47,10 @@ export default function DeliveryPage() {
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null)
   const [lastPdfFileName, setLastPdfFileName] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [viewMode, setViewMode] = useState<"new" | "pending">("new")
+  const [pendingDrafts, setPendingDrafts] = useState<PendingDeliveryDraft[]>([])
+  const [remoteWaitHours, setRemoteWaitHours] = useState(24)
+  const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
 
   // Metadados de Autenticidade
   const [ipAddress, setIpAddress] = useState<string>("")
@@ -121,6 +141,65 @@ export default function DeliveryPage() {
   const currentPpe = ppes.find(p => p.id === currentPpeId)
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
 
+  const formatRemoteExpiry = (value: string | null) => {
+    if (!value) return "sem prazo"
+    return new Date(value).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const loadPendingDrafts = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const drafts: PendingDeliveryDraft[] = []
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index)
+      if (!key?.startsWith("delivery-signature:")) continue
+
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(key) || "{}") as PendingDeliveryDraft
+        if (!parsed.token || !parsed.item) continue
+        drafts.push({ ...parsed, key, status: parsed.status || "pending" })
+      } catch {
+        window.localStorage.removeItem(key)
+      }
+    }
+
+    setPendingDrafts(drafts.sort((a, b) => (b.expiresAt || "").localeCompare(a.expiresAt || "")))
+  }, [])
+
+  const persistPendingDraft = useCallback((draft: Omit<PendingDeliveryDraft, "key">) => {
+    if (typeof window === "undefined") return
+    const key = `delivery-signature:${draft.token}`
+    window.localStorage.setItem(key, JSON.stringify({ ...draft, key }))
+    loadPendingDrafts()
+  }, [loadPendingDrafts])
+
+  const updatePendingDraft = useCallback((token: string, updates: Partial<PendingDeliveryDraft>) => {
+    if (typeof window === "undefined") return
+    const key = `delivery-signature:${token}`
+    const current = window.localStorage.getItem(key)
+    if (!current) return
+
+    try {
+      const parsed = JSON.parse(current) as PendingDeliveryDraft
+      window.localStorage.setItem(key, JSON.stringify({ ...parsed, ...updates, key }))
+      loadPendingDrafts()
+    } catch {
+      window.localStorage.removeItem(key)
+      loadPendingDrafts()
+    }
+  }, [loadPendingDrafts])
+
+  const removePendingDraft = useCallback((token: string) => {
+    if (typeof window === "undefined") return
+    window.localStorage.removeItem(`delivery-signature:${token}`)
+    loadPendingDrafts()
+  }, [loadPendingDrafts])
+
   const isCurrentPpeExpired = currentPpe ? new Date(currentPpe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0) : false
 
   const filteredPpes = ppes.filter(ppe => 
@@ -144,6 +223,14 @@ export default function DeliveryPage() {
   }
 
   // ── Cart operations ──
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadPendingDrafts()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [loadPendingDrafts])
+
   const addToCart = () => {
     if (!currentPpe) return
     if (isCurrentPpeExpired) {
@@ -381,15 +468,84 @@ export default function DeliveryPage() {
         const data = await api.createRemoteLink({
           employee_id: selectedEmployeeId,
           type: 'delivery',
-          data: deliveryDataPayload
+          data: deliveryDataPayload,
+          expires_hours: remoteWaitHours
         })
         const url = `${baseUrl}/delivery/remote?t=${data.link.token}`
-        navigator.clipboard.writeText(url)
-        toast.success("Link de assinatura remota copiado! Válido por 24h.");
+        await navigator.clipboard.writeText(url)
+        persistPendingDraft({
+          token: data.link.token,
+          linkUrl: url,
+          status: "pending",
+          expiresAt: data.link.expires_at,
+          employeeId: selectedEmployeeId,
+          employeeName: selectedEmployee?.full_name || "Colaborador",
+          workplaceId: selectedWorkplaceId,
+          workplaceName: selectedWorkplace?.name || "Sede",
+          deliveryDate,
+          item: cart[0],
+        })
+        setViewMode("pending")
+        toast.success(`Link de assinatura remota copiado. Valido por ${remoteWaitHours}h e uso unico.`)
+        return
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
         toast.error(`Erro ao gerar link: ${errorMsg}.`);
       }
+  }
+
+  const checkPendingDraft = useCallback(async (draft: PendingDeliveryDraft) => {
+    try {
+      setCheckingPendingToken(draft.token)
+      const res = await fetch(`/api/remote-links?token=${draft.token}&include_completed=1`)
+      const payload = await res.json()
+
+      if (!res.ok) {
+        if (payload.status === "expired") {
+          updatePendingDraft(draft.token, { status: "expired" })
+          toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
+        } else {
+          toast.error(payload.error || "Nao foi possivel consultar esta pendencia.")
+        }
+        return
+      }
+
+      const status = payload.link?.status as RemoteLinkStatus | undefined
+      if (status === "completed") {
+        updatePendingDraft(draft.token, { status: "completed" })
+        toast.success("Assinatura do colaborador concluida e entrega registrada.")
+        return
+      }
+
+      if (payload.link?.expires_at && new Date(payload.link.expires_at) < new Date()) {
+        updatePendingDraft(draft.token, { status: "expired", expiresAt: payload.link.expires_at })
+        toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
+        return
+      }
+
+      updatePendingDraft(draft.token, {
+        status: "pending",
+        expiresAt: payload.link?.expires_at || draft.expiresAt,
+      })
+      toast.info("Ainda aguardando assinatura do colaborador.")
+    } catch (err) {
+      console.error("Erro ao consultar pendencia de assinatura:", err)
+      toast.error("Erro ao consultar a pendencia.")
+    } finally {
+      setCheckingPendingToken(null)
+    }
+  }, [updatePendingDraft])
+
+  const restorePendingDraft = (draft: PendingDeliveryDraft) => {
+    setSelectedEmployeeId(draft.employeeId)
+    setSelectedWorkplaceId(draft.workplaceId)
+    setDeliveryDate(draft.deliveryDate)
+    setCurrentPpeId(draft.item.ppeId)
+    setCurrentQuantity(draft.item.quantity)
+    setCurrentReason(draft.item.reason)
+    setCart([draft.item])
+    setStep(1)
+    setViewMode("new")
   }
 
   if (loadingOptions) {
@@ -450,6 +606,148 @@ export default function DeliveryPage() {
         <h1 className="text-2xl lg:text-3xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
         <p className="text-slate-500 font-medium text-sm lg:text-base mt-1">Compliance NR-06 com Rastreabilidade de Autoria.</p>
       </div>
+
+      <div className="mb-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
+          <button
+            onClick={() => setViewMode("new")}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "new" ? "bg-white text-[#8B1A1A] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+          >
+            <Plus className="w-4 h-4" /> Nova Entrega
+          </button>
+          <button
+            onClick={() => setViewMode("pending")}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "pending" ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+          >
+            <Hourglass className="w-4 h-4" /> Pendencias
+            {pendingDrafts.length > 0 && (
+              <span className="min-w-5 h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] flex items-center justify-center">
+                {pendingDrafts.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-4 shadow-sm">
+          <div>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Espera da assinatura</p>
+            <p className="text-[10px] text-slate-400 font-bold">Validade do link remoto.</p>
+          </div>
+          <select
+            value={remoteWaitHours}
+            onChange={(event) => setRemoteWaitHours(Number(event.target.value))}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#8B1A1A]"
+            title="Tempo de espera da assinatura"
+          >
+            <option value={1}>1h</option>
+            <option value={4}>4h</option>
+            <option value={8}>8h</option>
+            <option value={12}>12h</option>
+            <option value={24}>24h</option>
+            <option value={48}>48h</option>
+          </select>
+        </div>
+      </div>
+
+      {viewMode === "pending" ? (
+        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40 animate-in fade-in">
+          <div className="p-5 sm:p-6 border-b border-slate-100 bg-amber-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                <Hourglass className="w-5 h-5 text-amber-600" />
+                Pendencias de Assinatura
+              </h2>
+              <p className="text-xs text-amber-700 font-bold mt-1">Entregas de EPI aguardando assinatura do colaborador.</p>
+            </div>
+            <button
+              onClick={() => pendingDrafts.forEach((draft) => { if (draft.status === "pending") void checkPendingDraft(draft) })}
+              disabled={pendingDrafts.length === 0 || checkingPendingToken !== null}
+              className="bg-white border border-amber-200 text-amber-700 px-4 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${checkingPendingToken ? "animate-spin" : ""}`} /> Atualizar Status
+            </button>
+          </div>
+
+          <div className="p-4 sm:p-6">
+            {pendingDrafts.length === 0 ? (
+              <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+                <CheckCircle2 className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                <p className="text-sm font-black text-slate-500 uppercase tracking-widest">Nenhuma pendencia de assinatura</p>
+                <p className="text-xs text-slate-400 mt-2 font-medium">Quando gerar um link remoto de EPI, ele aparece aqui.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {pendingDrafts.map((draft) => {
+                  const isChecking = checkingPendingToken === draft.token
+                  const statusStyle = draft.status === "completed"
+                    ? "bg-green-50 text-green-700 border-green-200"
+                    : draft.status === "expired"
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
+                  const StatusIcon = draft.status === "completed" ? CheckCircle2 : draft.status === "expired" ? XCircle : Hourglass
+
+                  return (
+                    <div key={draft.token} className="border border-slate-200 rounded-2xl p-4 sm:p-5 bg-white shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-slate-800 uppercase tracking-tight truncate">{draft.employeeName}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{draft.workplaceName} - {new Date(`${draft.deliveryDate}T12:00:00`).toLocaleDateString("pt-BR")}</p>
+                        </div>
+                        <span className={`px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 whitespace-nowrap ${statusStyle}`}>
+                          <StatusIcon className="w-3 h-3" />
+                          {draft.status === "completed" ? "Assinada" : draft.status === "expired" ? "Expirada" : "Aguardando"}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                        <p className="font-black text-xs text-slate-800 uppercase tracking-tight">{draft.item.ppeName}</p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {draft.item.ppeCaNumber}</span>
+                          <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {draft.item.quantity}</span>
+                          <span className="text-[9px] font-bold text-slate-400">{draft.item.reason}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                        <Clock className="w-3.5 h-3.5" />
+                        {draft.status === "pending" ? `Assinatura do colaborador aguardando ate ${formatRemoteExpiry(draft.expiresAt)}` : `Ultimo prazo: ${formatRemoteExpiry(draft.expiresAt)}`}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button
+                          onClick={() => void navigator.clipboard.writeText(draft.linkUrl).then(() => toast.success("Link copiado novamente."))}
+                          className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <Clipboard className="w-3.5 h-3.5" /> Copiar
+                        </button>
+                        <button
+                          onClick={() => void checkPendingDraft(draft)}
+                          disabled={isChecking}
+                          className="py-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} /> Checar
+                        </button>
+                        <button
+                          onClick={() => restorePendingDraft(draft)}
+                          className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <Package className="w-3.5 h-3.5" /> Reabrir
+                        </button>
+                        <button
+                          onClick={() => removePendingDraft(draft.token)}
+                          className="py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Limpar
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
 
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40">
         {/* Progress Bar Header */}
@@ -850,6 +1148,7 @@ export default function DeliveryPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }
