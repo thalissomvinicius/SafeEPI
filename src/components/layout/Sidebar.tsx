@@ -32,12 +32,12 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 text-slate-600 hidden md:flex flex-col h-screen sticky top-0 shadow-sm">
-      <div className="h-28 flex flex-col items-center justify-center border-b border-slate-100 bg-slate-50/50 p-4">
-        {/* Logo Placeholder - O usuário deve salvar a imagem como public/logo.png */}
-        <div className="relative w-full h-12 mb-2 flex justify-center items-center">
-            <span className="text-[#2563EB] font-black text-2xl tracking-tighter">SafeEPI</span>
-        </div>
-        <span className="text-[10px] text-slate-500 font-bold tracking-[0.3em] uppercase">Gestao de EPIs</span>
+      <div className="h-32 flex flex-col items-center justify-center border-b border-slate-100 bg-white p-4">
+        <img
+          src="/logo.png"
+          alt="SafeEPI"
+          className="h-20 w-auto max-w-[190px] object-contain"
+        />
       </div>
       
       <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto custom-scrollbar">
