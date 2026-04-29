@@ -108,13 +108,13 @@ export function NotificationBell() {
             className="fixed inset-0 z-[60]" 
             onClick={() => setIsOpen(false)}
           ></div>
-          <div className="absolute right-0 mt-3 w-80 md:w-96 bg-white border border-slate-200 rounded-3xl shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div className="fixed right-3 left-3 top-16 md:absolute md:left-auto md:right-0 md:top-auto md:mt-3 md:w-96 bg-white border border-slate-200 rounded-2xl md:rounded-3xl shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h3 className="font-black text-slate-800 uppercase tracking-tighter">Central de Alertas</h3>
               <span className="bg-[#8B1A1A] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{notifications.length}</span>
             </div>
 
-            <div className="max-h-[400px] overflow-y-auto">
+            <div className="max-h-[60dvh] md:max-h-[400px] overflow-y-auto">
               {loading ? (
                 <div className="p-10 flex flex-col items-center justify-center text-slate-400">
                   <Loader2 className="w-6 h-6 animate-spin mb-2" />

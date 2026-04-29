@@ -102,11 +102,11 @@ export function GlobalSearch() {
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center p-0 md:px-4 md:pt-20">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsOpen(false)}></div>
           
-        <div className="bg-white w-full max-w-2xl md:rounded-3xl shadow-2xl z-[110] overflow-hidden animate-in zoom-in-95 md:slide-in-from-top-10 duration-300 flex flex-col border border-slate-100 h-full md:h-auto">
-          <div className="p-4 md:p-6 border-b border-slate-100 flex items-center gap-2 md:gap-4">
+        <div className="bg-white w-full max-w-2xl md:rounded-3xl shadow-2xl z-[110] overflow-hidden animate-in zoom-in-95 md:slide-in-from-top-10 duration-300 flex flex-col border border-slate-100 h-[100dvh] md:h-auto">
+          <div className="p-4 pt-[calc(env(safe-area-inset-top)+1rem)] md:p-6 border-b border-slate-100 flex items-center gap-2 md:gap-4">
             <Search className="w-5 h-5 md:w-6 md:h-6 text-[#8B1A1A]" />
             <input 
               ref={inputRef}
@@ -125,7 +125,7 @@ export function GlobalSearch() {
               )}
             </div>
 
-            <div className="max-h-[500px] overflow-y-auto p-2">
+            <div className="flex-1 md:max-h-[500px] overflow-y-auto p-2">
               {query.length < 2 ? (
                 <div className="p-12 text-center text-slate-400">
                   <p className="text-sm font-bold uppercase tracking-widest italic">Digite para começar a buscar...</p>
@@ -204,8 +204,9 @@ export function GlobalSearch() {
               )}
             </div>
             
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              <span>Dica: Use as setas para navegar</span>
+            <div className="p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-slate-50 border-t border-slate-100 flex justify-between items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-wide md:tracking-widest">
+              <span className="hidden sm:inline">Dica: Use as setas para navegar</span>
+              <span className="sm:hidden">Busca SafeEPI</span>
               <span>Pressione <kbd className="bg-white px-1 py-0.5 rounded border border-slate-200 text-slate-500">ESC</kbd> para fechar</span>
             </div>
           </div>
