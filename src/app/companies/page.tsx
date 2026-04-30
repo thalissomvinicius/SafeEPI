@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation"
 import {
   Building2,
   CheckCircle2,
+  CreditCard,
   FileBadge2,
+  GraduationCap,
   ImageIcon,
   Loader2,
   Mail,
@@ -17,6 +19,7 @@ import {
   Plus,
   Search,
   Shield,
+  ShieldOff,
   UploadCloud,
   UserCog,
   Users,
@@ -39,6 +42,9 @@ type CompanyForm = {
   logo_url: string
   primary_color: string
   active: boolean
+  training_enabled: boolean
+  subscription_status: "ACTIVE" | "PAST_DUE" | "SUSPENDED"
+  suspended_reason: string
 }
 
 type UserForm = {
@@ -61,6 +67,9 @@ const emptyCompanyForm: CompanyForm = {
   logo_url: "",
   primary_color: "#2563EB",
   active: true,
+  training_enabled: false,
+  subscription_status: "ACTIVE",
+  suspended_reason: "",
 }
 
 const emptyUserForm: UserForm = {
@@ -184,6 +193,9 @@ export default function CompaniesPage() {
       logo_url: company.logo_url || "",
       primary_color: company.primary_color || "#2563EB",
       active: company.active,
+      training_enabled: company.training_enabled ?? false,
+      subscription_status: company.subscription_status || (company.active ? "ACTIVE" : "SUSPENDED"),
+      suspended_reason: company.suspended_reason || "",
     })
     setLogoFile(null)
     setLogoPreview(company.logo_url || "")
@@ -228,11 +240,18 @@ export default function CompaniesPage() {
       let savedCompanyId = companyForm.id || ""
 
       if (companyForm.id) {
-        const updated = await api.updateCompany({ ...companyForm, id: companyForm.id })
+        const updated = await api.updateCompany({
+          ...companyForm,
+          active: companyForm.subscription_status !== "SUSPENDED" && companyForm.active,
+          id: companyForm.id,
+        })
         savedCompanyId = updated?.id || companyForm.id
         toast.success("Empresa atualizada com sucesso.")
       } else {
-        const created = await api.createCompany(companyForm)
+        const created = await api.createCompany({
+          ...companyForm,
+          active: companyForm.subscription_status !== "SUSPENDED" && companyForm.active,
+        })
         savedCompanyId = created?.id || ""
         if (created?.id) setSelectedCompanyId(created.id)
         toast.success("Empresa criada com sucesso.")
@@ -417,10 +436,74 @@ export default function CompaniesPage() {
                 </div>
               </div>
 
-              <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">
-                Empresa ativa
-                <input type="checkbox" checked={companyForm.active} onChange={(event) => setCompanyForm({ ...companyForm, active: event.target.checked })} className="h-5 w-5 accent-[#2563EB]" />
-              </label>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-[#2563EB]" />
+                  <h3 className="text-sm font-black text-slate-800">Plano e cobrança</h3>
+                </div>
+
+                <div className="grid gap-3">
+                  <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <span>
+                      <span className="block text-xs font-black uppercase tracking-widest text-slate-700">Treinamentos Premium</span>
+                      <span className="mt-1 block text-[11px] font-medium text-slate-500">Libera menu de treinamentos, certificados e recursos premium.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={companyForm.training_enabled}
+                      onChange={(event) => setCompanyForm({ ...companyForm, training_enabled: event.target.checked })}
+                      className="h-5 w-5 shrink-0 accent-[#2563EB]"
+                    />
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
+                    <label>
+                      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Status financeiro</span>
+                      <select
+                        value={companyForm.subscription_status}
+                        onChange={(event) => {
+                          const status = event.target.value as CompanyForm["subscription_status"]
+                          setCompanyForm({
+                            ...companyForm,
+                            subscription_status: status,
+                            active: status !== "SUSPENDED",
+                          })
+                        }}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#2563EB]"
+                        title="Status financeiro"
+                      >
+                        <option value="ACTIVE">Em dia</option>
+                        <option value="PAST_DUE">Em atraso</option>
+                        <option value="SUSPENDED">Bloqueada</option>
+                      </select>
+                    </label>
+
+                    <label className="flex items-center justify-between gap-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                      <span>
+                        <span className="block text-xs font-black uppercase tracking-widest text-red-700">Desativar acesso</span>
+                        <span className="mt-1 block text-[11px] font-medium text-red-600">Use quando a empresa nao pagar.</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={!companyForm.active || companyForm.subscription_status === "SUSPENDED"}
+                        onChange={(event) => setCompanyForm({
+                          ...companyForm,
+                          active: !event.target.checked,
+                          subscription_status: event.target.checked ? "SUSPENDED" : "ACTIVE",
+                        })}
+                        className="h-5 w-5 shrink-0 accent-red-600"
+                      />
+                    </label>
+                  </div>
+
+                  <input
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
+                    placeholder="Motivo do bloqueio ou observacao comercial"
+                    value={companyForm.suspended_reason}
+                    onChange={(event) => setCompanyForm({ ...companyForm, suspended_reason: event.target.value })}
+                  />
+                </div>
+              </div>
             </div>
 
             <button disabled={submittingCompany} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60">
@@ -557,6 +640,18 @@ function CompanyCard({
               }`}>
                 {company.active ? "Ativa" : "Inativa"}
               </span>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${
+                company.training_enabled ? "bg-blue-50 text-[#2563EB]" : "bg-slate-100 text-slate-500"
+              }`}>
+                <GraduationCap className="h-3 w-3" />
+                {company.training_enabled ? "Premium" : "Sem treino"}
+              </span>
+              {company.subscription_status === "SUSPENDED" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-red-700">
+                  <ShieldOff className="h-3 w-3" />
+                  Bloqueada
+                </span>
+              )}
             </div>
             <p className="mt-1 truncate text-xs font-bold uppercase tracking-widest text-slate-400">{company.name}</p>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">

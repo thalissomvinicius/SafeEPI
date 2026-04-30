@@ -31,7 +31,8 @@ export function Sidebar() {
   const brandName = user?.company?.trade_name || user?.company?.name || "SafeEPI"
   
   const filteredMenuItems = menuItems.filter(item => 
-    item.roles.includes(user?.role || 'ADMIN')
+    item.roles.includes(user?.role || 'ADMIN') &&
+    (item.href !== "/training" || user?.company?.training_enabled !== false)
   )
 
   return (

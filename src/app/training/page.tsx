@@ -13,6 +13,8 @@ import { generateTrainingCertificate } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
+import { useAuth } from "@/contexts/AuthContext"
+import { useRouter } from "next/navigation"
 
 type RemoteSignatureEvidence = {
   signatureBase64: string
@@ -47,6 +49,8 @@ const TRAINING_OPTIONS = [
 ]
 
 export default function TrainingPage() {
+  const router = useRouter()
+  const { user } = useAuth()
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [trainings, setTrainings] = useState<TrainingWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -256,11 +260,17 @@ export default function TrainingPage() {
   }
 
   useEffect(() => {
+    if (user?.company?.training_enabled === false) {
+      toast.error("Modulo de treinamentos nao liberado para esta empresa.")
+      router.replace("/")
+      return
+    }
+
     const fetchInitialData = async () => {
         await loadData()
     }
     fetchInitialData()
-  }, [])
+  }, [router, user])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

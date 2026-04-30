@@ -161,6 +161,9 @@ export type Company = {
   phone: string | null;
   email: string | null;
   active: boolean;
+  training_enabled?: boolean;
+  subscription_status?: 'ACTIVE' | 'PAST_DUE' | 'SUSPENDED';
+  suspended_reason?: string | null;
   created_at?: string;
   updated_at?: string;
 };

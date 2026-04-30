@@ -79,6 +79,28 @@ export async function requireAuthorizedUser(
   ) as AppRole
   const companyId = role === "MASTER" ? null : (membership?.company_id || profile?.company_id || null) as string | null
 
+  if (companyId) {
+    const { data: company, error: companyError } = await supabaseAdmin
+      .from("companies")
+      .select("active")
+      .eq("id", companyId)
+      .maybeSingle()
+
+    if (companyError) {
+      return {
+        authorized: false,
+        response: NextResponse.json({ error: companyError.message }, { status: 400 }),
+      }
+    }
+
+    if (!company?.active) {
+      return {
+        authorized: false,
+        response: NextResponse.json({ error: "Acesso da empresa desativado. Entre em contato com o suporte SafeEPI." }, { status: 403 }),
+      }
+    }
+  }
+
   if (allowedRoles && !allowedRoles.includes(role)) {
     return {
       authorized: false,

@@ -13,6 +13,9 @@ type CompanyPayload = {
   logo_url?: string | null
   primary_color?: string | null
   active?: boolean
+  training_enabled?: boolean
+  subscription_status?: "ACTIVE" | "PAST_DUE" | "SUSPENDED"
+  suspended_reason?: string | null
 }
 
 const countTables = [
@@ -48,6 +51,9 @@ function sanitizeCompanyPayload(payload: CompanyPayload) {
     logo_url: payload.logo_url?.trim() || null,
     primary_color: payload.primary_color || "#2563EB",
     active: payload.active ?? true,
+    training_enabled: payload.training_enabled ?? false,
+    subscription_status: payload.subscription_status || (payload.active === false ? "SUSPENDED" : "ACTIVE"),
+    suspended_reason: payload.suspended_reason?.trim() || null,
   }
 }
 

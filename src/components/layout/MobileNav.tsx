@@ -31,7 +31,8 @@ export function MobileNav() {
   const brandName = user?.company?.trade_name || user?.company?.name || "SafeEPI"
 
   const filteredItems = allItems.filter(item => 
-    item.roles.includes(user?.role || 'ADMIN')
+    item.roles.includes(user?.role || 'ADMIN') &&
+    (item.href !== "/training" || user?.company?.training_enabled !== false)
   )
 
   // Top 4 items for the main bar

@@ -128,6 +128,10 @@ export async function GET(request: Request) {
   const email = profile?.email || user.email || null
   const companyContext = await ensureUserCompany({ id: user.id, email }, role)
 
+  if (companyContext.company && (!companyContext.company.active || companyContext.company.subscription_status === "SUSPENDED")) {
+    return NextResponse.json({ error: "Acesso da empresa desativado. Entre em contato com o suporte SafeEPI." }, { status: 403 })
+  }
+
   if (!profile) {
     await supabaseAdmin
       .from("profiles")
