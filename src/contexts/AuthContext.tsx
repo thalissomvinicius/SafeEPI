@@ -7,14 +7,16 @@ import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Company } from "@/types/database"
 
+type AppRole = "MASTER" | "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
+
 export type User = {
   id: string
   email?: string
   user_metadata?: {
     full_name?: string
-    role?: "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
+    role?: AppRole
   }
-  role?: "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
+  role?: AppRole
   company_id?: string | null
   company?: Company | null
 }
@@ -64,9 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       }
 
-      // Bypass temporario para garantir seu acesso administrativo
       if (session.user.email === "thalissomvinicius7@gmail.com" || session.user.email === "thalissom.cruz@VALLE.br") {
-        userData.role = "ADMIN"
+        userData.role = "MASTER"
       }
 
       setUser(userData as User)

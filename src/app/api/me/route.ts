@@ -4,7 +4,7 @@ import type { Company, Profile } from "@/types/database"
 
 type AppRole = Profile["role"]
 
-const VALID_ROLES = new Set<AppRole>(["ADMIN", "ALMOXARIFE", "DIRETORIA"])
+const VALID_ROLES = new Set<AppRole>(["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
 const ADMIN_BYPASS_EMAILS = new Set([
   "thalissomvinicius7@gmail.com",
   "thalissom.cruz@VALLE.br",
@@ -15,6 +15,14 @@ function normalizeRole(role: unknown): AppRole {
 }
 
 async function ensureUserCompany(user: { id: string; email?: string | null }, role: AppRole) {
+  if (role === "MASTER") {
+    return {
+      companyId: null,
+      company: null,
+      role,
+    }
+  }
+
   const { data: existingMembership, error: membershipError } = await supabaseAdmin
     .from("company_users")
     .select("company_id, role, company:companies(*)")
@@ -113,7 +121,7 @@ export async function GET(request: Request) {
 
   const metadataRole = normalizeRole(user.user_metadata?.role)
   const role = ADMIN_BYPASS_EMAILS.has(user.email ?? "")
-    ? "ADMIN"
+    ? "MASTER"
     : normalizeRole(profile?.role || metadataRole)
 
   const fullName = profile?.full_name || user.user_metadata?.full_name || user.email || ""
@@ -130,7 +138,7 @@ export async function GET(request: Request) {
         role: companyContext.role,
         company_id: companyContext.companyId,
       })
-  } else if (!profile.company_id || profile.company_id !== companyContext.companyId || profile.role !== companyContext.role) {
+  } else if (profile.company_id !== companyContext.companyId || profile.role !== companyContext.role) {
     await supabaseAdmin
       .from("profiles")
       .update({

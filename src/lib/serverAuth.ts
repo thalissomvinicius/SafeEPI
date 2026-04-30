@@ -24,7 +24,7 @@ const ADMIN_BYPASS_EMAILS = new Set([
   "thalissom.cruz@VALLE.br",
 ])
 
-const VALID_ROLES = new Set<AppRole>(["ADMIN", "ALMOXARIFE", "DIRETORIA"])
+const VALID_ROLES = new Set<AppRole>(["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
 
 function normalizeRole(role: unknown): AppRole {
   return VALID_ROLES.has(role as AppRole) ? role as AppRole : "ALMOXARIFE"
@@ -74,10 +74,10 @@ export async function requireAuthorizedUser(
   const fallbackRole = normalizeRole(user.user_metadata?.role)
   const role = (
     ADMIN_BYPASS_EMAILS.has(user.email ?? "")
-      ? "ADMIN"
+      ? "MASTER"
       : normalizeRole(membership?.role || profile?.role || fallbackRole)
   ) as AppRole
-  const companyId = (membership?.company_id || profile?.company_id || null) as string | null
+  const companyId = role === "MASTER" ? null : (membership?.company_id || profile?.company_id || null) as string | null
 
   if (allowedRoles && !allowedRoles.includes(role)) {
     return {

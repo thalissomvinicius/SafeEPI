@@ -5,19 +5,37 @@ import type { Profile } from "@/types/database"
 
 type AppRole = Profile["role"]
 
-const VALID_ROLES = new Set<AppRole>(["ADMIN", "ALMOXARIFE", "DIRETORIA"])
+const VALID_ROLES = new Set<AppRole>(["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
+const COMPANY_ROLES = new Set<AppRole>(["ADMIN", "ALMOXARIFE", "DIRETORIA"])
 
 function normalizeRole(role: unknown): AppRole {
   return VALID_ROLES.has(role as AppRole) ? role as AppRole : "ALMOXARIFE"
 }
 
+function normalizeCompanyRole(role: unknown): AppRole {
+  const normalized = normalizeRole(role)
+  return COMPANY_ROLES.has(normalized) ? normalized : "ALMOXARIFE"
+}
+
+function resolveTargetCompanyId(authUser: { role: AppRole; company_id: string | null }, requestedCompanyId: string | null) {
+  if (authUser.role === "MASTER") return requestedCompanyId
+  return authUser.company_id
+}
+
 export async function GET(request: Request) {
-  const auth = await requireAuthorizedUser(request, ["ADMIN"])
+  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
   if (!auth.authorized) {
     return auth.response
   }
 
   try {
+    const { searchParams } = new URL(request.url)
+    const targetCompanyId = resolveTargetCompanyId(auth.user, searchParams.get("company_id"))
+
+    if (!targetCompanyId) {
+      return NextResponse.json({ error: "Empresa nao informada." }, { status: 400 })
+    }
+
     const { data: users, error } = await supabaseAdmin.auth.admin.listUsers()
 
     if (error) {
@@ -27,14 +45,16 @@ export async function GET(request: Request) {
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from("profiles")
       .select("*")
-      .eq("company_id", auth.user.company_id)
+      .eq("company_id", targetCompanyId)
 
     if (profilesError) {
       return NextResponse.json({ error: profilesError.message }, { status: 400 })
     }
 
-    const mergedUsers = users.users.map((user) => {
+    const mergedUsers = users.users.flatMap((user) => {
       const profile = profiles?.find((item) => item.id === user.id)
+      if (!profile) return []
+
       return {
         id: user.id,
         email: user.email,
@@ -53,17 +73,18 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAuthorizedUser(request, ["ADMIN"])
+  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
   if (!auth.authorized) {
     return auth.response
   }
 
   try {
-    const { email, password, full_name, role } = await request.json()
-    const normalizedRole = normalizeRole(role)
+    const { email, password, full_name, role, company_id } = await request.json()
+    const normalizedRole = normalizeCompanyRole(role)
+    const targetCompanyId = resolveTargetCompanyId(auth.user, company_id || null)
 
-    if (!auth.user.company_id) {
-      return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
+    if (!targetCompanyId) {
+      return NextResponse.json({ error: "Empresa nao informada para este usuario." }, { status: 400 })
     }
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -85,7 +106,7 @@ export async function POST(request: Request) {
           email,
           full_name,
           role: normalizedRole,
-          company_id: auth.user.company_id,
+          company_id: targetCompanyId,
         })
 
       if (profileError) {
@@ -96,7 +117,7 @@ export async function POST(request: Request) {
       const { error: companyUserError } = await supabaseAdmin
         .from("company_users")
         .upsert({
-          company_id: auth.user.company_id,
+          company_id: targetCompanyId,
           user_id: authData.user.id,
           role: normalizedRole,
           active: true,
@@ -116,20 +137,25 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const auth = await requireAuthorizedUser(request, ["ADMIN"])
+  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
   if (!auth.authorized) {
     return auth.response
   }
 
   try {
-    const { id, password, role, full_name } = await request.json()
+    const { id, password, role, full_name, company_id } = await request.json()
+    const targetCompanyId = resolveTargetCompanyId(auth.user, company_id || null)
+
+    if (!targetCompanyId) {
+      return NextResponse.json({ error: "Empresa nao informada para este usuario." }, { status: 400 })
+    }
 
     const { data: existingUserData, error: existingUserError } = await supabaseAdmin.auth.admin.getUserById(id)
     if (existingUserError || !existingUserData.user) {
       return NextResponse.json({ error: existingUserError?.message || "Usuario nao encontrado." }, { status: 404 })
     }
 
-    const normalizedRole = role ? normalizeRole(role) : undefined
+    const normalizedRole = role ? normalizeCompanyRole(role) : undefined
     const updates: { password?: string; user_metadata?: Record<string, unknown> } = {}
     if (password) updates.password = password
     if (full_name || normalizedRole) {
@@ -158,8 +184,8 @@ export async function PUT(request: Request) {
           id,
           email: existingUserData.user.email ?? null,
           full_name: existingUserData.user.user_metadata?.full_name || null,
-          role: normalizeRole(existingUserData.user.user_metadata?.role),
-          company_id: auth.user.company_id,
+          role: normalizeCompanyRole(existingUserData.user.user_metadata?.role),
+          company_id: targetCompanyId,
           ...profileUpdates,
         })
 
@@ -168,11 +194,11 @@ export async function PUT(request: Request) {
       }
     }
 
-    if (auth.user.company_id && normalizedRole) {
+    if (targetCompanyId && normalizedRole) {
       const { error: companyUserError } = await supabaseAdmin
         .from("company_users")
         .upsert({
-          company_id: auth.user.company_id,
+          company_id: targetCompanyId,
           user_id: id,
           role: normalizedRole,
           active: true,

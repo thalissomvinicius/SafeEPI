@@ -146,7 +146,7 @@ export type Profile = {
   company_id?: string | null;
   email: string | null;
   full_name: string | null;
-  role: 'ADMIN' | 'ALMOXARIFE' | 'DIRETORIA';
+  role: 'MASTER' | 'ADMIN' | 'ALMOXARIFE' | 'DIRETORIA';
   created_at?: string;
 };
 

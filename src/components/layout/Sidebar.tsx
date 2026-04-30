@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness } from "lucide-react"
+import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const menuItems = [
+  { href: "/companies", label: "Empresas", icon: Building2, roles: ['MASTER'] },
   { href: "/", label: "Dashboard", icon: Home, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/delivery", label: "Nova Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },

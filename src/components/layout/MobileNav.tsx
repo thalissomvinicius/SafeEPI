@@ -3,10 +3,11 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness } from "lucide-react"
+import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const allItems = [
+  { href: "/companies", label: "Empresas", icon: Building2, roles: ['MASTER'] },
   { href: "/", label: "Dashboard", icon: Home, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/delivery", label: "Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },

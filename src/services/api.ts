@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, CurrentUser } from "@/types/database";
+import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, CurrentUser, Company } from "@/types/database";
 import { Session } from "@supabase/supabase-js";
 
 type AddTrainingResult = {
@@ -24,6 +24,13 @@ type SignedDocumentArchivePayload = {
   geoLocation?: string | null;
   metadata?: Record<string, unknown>;
   linkToken?: string | null;
+};
+
+export type CompanyWithCounts = Company & {
+  employees_count?: number;
+  ppes_count?: number;
+  deliveries_count?: number;
+  users_count?: number;
 };
 
 const SESSION_REFRESH_BUFFER_SECONDS = 60;
@@ -449,8 +456,40 @@ export const api = {
     return data.user;
   },
 
-  async getUsers() {
-    const res = await fetch('/api/users', {
+  async getCompanies() {
+    const res = await fetch('/api/companies', {
+      headers: await this.getAuthHeaders(),
+    });
+    const data = await readResponseJson<{ error?: string; companies?: CompanyWithCounts[] }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel carregar empresas.");
+    return data.companies || [];
+  },
+
+  async createCompany(payload: Partial<Company>) {
+    const res = await fetch('/api/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
+      body: JSON.stringify(payload)
+    });
+    const data = await readResponseJson<{ error?: string; company?: Company }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel criar empresa.");
+    return data.company;
+  },
+
+  async updateCompany(payload: Partial<Company> & { id: string }) {
+    const res = await fetch('/api/companies', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
+      body: JSON.stringify(payload)
+    });
+    const data = await readResponseJson<{ error?: string; company?: Company }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel atualizar empresa.");
+    return data.company;
+  },
+
+  async getUsers(companyId?: string) {
+    const query = companyId ? `?company_id=${encodeURIComponent(companyId)}` : "";
+    const res = await fetch(`/api/users${query}`, {
       headers: await this.getAuthHeaders(),
     });
     const data = await readResponseJson<{ error?: string; users?: (Profile & { email: string, created_at: string, last_sign_in_at: string })[] }>(res);
@@ -458,7 +497,7 @@ export const api = {
     return data.users as (Profile & { email: string, created_at: string, last_sign_in_at: string })[];
   },
 
-  async createUser(payload: { email: string, password?: string, full_name: string, role: string }) {
+  async createUser(payload: { email: string, password?: string, full_name: string, role: string, company_id?: string }) {
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
@@ -469,7 +508,7 @@ export const api = {
     return data;
   },
 
-  async updateUser(payload: { id: string, password?: string, full_name?: string, role?: string }) {
+  async updateUser(payload: { id: string, password?: string, full_name?: string, role?: string, company_id?: string }) {
     const res = await fetch('/api/users', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
@@ -480,8 +519,10 @@ export const api = {
     return data;
   },
 
-  async deleteUser(id: string) {
-    const res = await fetch(`/api/users?id=${id}`, {
+  async deleteUser(id: string, companyId?: string) {
+    const query = new URLSearchParams({ id });
+    if (companyId) query.set("company_id", companyId);
+    const res = await fetch(`/api/users?${query.toString()}`, {
       method: 'DELETE',
       headers: await this.getAuthHeaders(),
     });
