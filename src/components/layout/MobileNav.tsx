@@ -27,6 +27,8 @@ export function MobileNav() {
   const pathname = usePathname()
   const { logout, user } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const brandColor = user?.company?.primary_color || "#2563EB"
+  const brandName = user?.company?.trade_name || user?.company?.name || "SafeEPI"
 
   const filteredItems = allItems.filter(item => 
     item.roles.includes(user?.role || 'ADMIN')
@@ -45,6 +47,7 @@ export function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
+              style={isActive ? { color: brandColor } : undefined}
               className={`flex min-h-14 flex-col items-center justify-center rounded-xl px-1.5 py-2 transition-colors ${
                 isActive ? "text-[#2563EB]" : "text-slate-400"
               }`}
@@ -78,7 +81,7 @@ export function MobileNav() {
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-3xl">
               <div className="flex flex-col">
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Menu Geral</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SafeEPI Digital</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{brandName} Digital</p>
               </div>
               <button 
                 onClick={() => setIsMenuOpen(false)}
@@ -100,13 +103,14 @@ export function MobileNav() {
                       key={item.href}
                       href={item.href}
                       onClick={() => setIsMenuOpen(false)}
+                      style={isActive ? { color: brandColor, borderColor: `${brandColor}33`, backgroundColor: `${brandColor}0D` } : undefined}
                       className={`flex min-h-24 flex-col items-center justify-center rounded-2xl border p-4 transition-all ${
                         isActive 
                           ? "bg-[#2563EB]/5 border-[#2563EB]/20 text-[#2563EB]" 
                           : "bg-white border-slate-50 text-slate-600 hover:border-slate-200"
                       }`}
                     >
-                      <Icon className={`w-7 h-7 mb-3 ${isActive ? "text-[#2563EB]" : "text-slate-400"}`} />
+                      <Icon className={`w-7 h-7 mb-3 ${isActive ? "text-[#2563EB]" : "text-slate-400"}`} style={isActive ? { color: brandColor } : undefined} />
                       <span className="max-w-full text-center text-[10px] font-black uppercase leading-tight tracking-wide break-words">{item.label}</span>
                     </Link>
                   )

@@ -26,6 +26,9 @@ const menuItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const { logout, user } = useAuth()
+  const brandColor = user?.company?.primary_color || "#2563EB"
+  const brandLogo = user?.company?.logo_url || "/logo.png"
+  const brandName = user?.company?.trade_name || user?.company?.name || "SafeEPI"
   
   const filteredMenuItems = menuItems.filter(item => 
     item.roles.includes(user?.role || 'ADMIN')
@@ -35,8 +38,8 @@ export function Sidebar() {
     <aside className="w-64 bg-white border-r border-slate-200 text-slate-600 hidden md:flex flex-col h-screen sticky top-0 shadow-sm">
       <div className="h-32 flex flex-col items-center justify-center border-b border-slate-100 bg-white p-4">
         <img
-          src="/logo.png"
-          alt="SafeEPI"
+          src={brandLogo}
+          alt={brandName}
           className="h-20 w-auto max-w-[190px] object-contain"
         />
       </div>
@@ -49,13 +52,14 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              style={isActive ? { borderLeftColor: brandColor, color: brandColor, backgroundColor: `${brandColor}0D` } : undefined}
               className={`flex items-center px-3 py-2.5 rounded-lg transition-colors group ${
                 isActive 
-                  ? "bg-[#2563EB]/5 text-[#2563EB] font-medium border-l-4 border-[#2563EB]" 
+                  ? "font-medium border-l-4"
                   : "hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
-              <Icon className={`w-5 h-5 mr-3 ${isActive ? "text-[#2563EB]" : "text-slate-400 group-hover:text-[#2563EB]"}`} />
+              <Icon className="w-5 h-5 mr-3 text-slate-400 group-hover:text-[#2563EB]" style={isActive ? { color: brandColor } : undefined} />
               {item.label}
             </Link>
           )
@@ -72,7 +76,7 @@ export function Sidebar() {
         </button>
         <div className="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
           <p>Sistema SESMT Digital</p>
-          <p className="mt-1 text-[#2563EB]">SafeEPI v1.0</p>
+          <p className="mt-1" style={{ color: brandColor }}>{brandName} v1.0</p>
         </div>
       </div>
     </aside>

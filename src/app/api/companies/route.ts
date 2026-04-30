@@ -10,6 +10,7 @@ type CompanyPayload = {
   email?: string | null
   phone?: string | null
   address?: string | null
+  logo_url?: string | null
   primary_color?: string | null
   active?: boolean
 }
@@ -44,6 +45,7 @@ function sanitizeCompanyPayload(payload: CompanyPayload) {
     email: payload.email?.trim() || null,
     phone: payload.phone?.trim() || null,
     address: payload.address?.trim() || null,
+    logo_url: payload.logo_url?.trim() || null,
     primary_color: payload.primary_color || "#2563EB",
     active: payload.active ?? true,
   }

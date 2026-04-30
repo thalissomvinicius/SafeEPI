@@ -487,6 +487,21 @@ export const api = {
     return data.company;
   },
 
+  async uploadCompanyLogo(companyId: string, logoFile: File) {
+    const formData = new FormData();
+    formData.append("company_id", companyId);
+    formData.append("logo", logoFile);
+
+    const res = await fetch('/api/companies/logo', {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: formData
+    });
+    const data = await readResponseJson<{ error?: string; company?: Company; logo_url?: string }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel enviar a logo.");
+    return data.company;
+  },
+
   async getUsers(companyId?: string) {
     const query = companyId ? `?company_id=${encodeURIComponent(companyId)}` : "";
     const res = await fetch(`/api/users${query}`, {

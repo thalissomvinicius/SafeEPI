@@ -3,7 +3,26 @@
 import { useEffect, useMemo, useState } from "react"
 import type React from "react"
 import { useRouter } from "next/navigation"
-import { Building2, CheckCircle2, Loader2, Mail, Pencil, Phone, Plus, Shield, UserCog, Users, XCircle } from "lucide-react"
+import {
+  Building2,
+  CheckCircle2,
+  FileBadge2,
+  ImageIcon,
+  Loader2,
+  Mail,
+  Package,
+  Palette,
+  Pencil,
+  Phone,
+  Plus,
+  Search,
+  Shield,
+  UploadCloud,
+  UserCog,
+  Users,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 import { api, type CompanyWithCounts } from "@/services/api"
 import type { Profile } from "@/types/database"
@@ -17,6 +36,7 @@ type CompanyForm = {
   email: string
   phone: string
   address: string
+  logo_url: string
   primary_color: string
   active: boolean
 }
@@ -28,6 +48,9 @@ type UserForm = {
   role: "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
 }
 
+const LOGO_WIDTH = 800
+const LOGO_HEIGHT = 320
+
 const emptyCompanyForm: CompanyForm = {
   name: "",
   trade_name: "",
@@ -35,6 +58,7 @@ const emptyCompanyForm: CompanyForm = {
   email: "",
   phone: "",
   address: "",
+  logo_url: "",
   primary_color: "#2563EB",
   active: true,
 }
@@ -50,10 +74,13 @@ export default function CompaniesPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const [companies, setCompanies] = useState<CompanyWithCounts[]>([])
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("")
+  const [selectedCompanyId, setSelectedCompanyId] = useState("")
   const [companyForm, setCompanyForm] = useState<CompanyForm>(emptyCompanyForm)
   const [userForm, setUserForm] = useState<UserForm>(emptyUserForm)
   const [companyUsers, setCompanyUsers] = useState<(Profile & { email: string; created_at: string; last_sign_in_at: string })[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState("")
   const [loading, setLoading] = useState(true)
   const [usersLoading, setUsersLoading] = useState(false)
   const [submittingCompany, setSubmittingCompany] = useState(false)
@@ -63,6 +90,24 @@ export default function CompaniesPage() {
     () => companies.find((company) => company.id === selectedCompanyId) || null,
     [companies, selectedCompanyId]
   )
+
+  const filteredCompanies = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    if (!term) return companies
+
+    return companies.filter((company) =>
+      [company.name, company.trade_name, company.cnpj, company.email].some((value) =>
+        value?.toLowerCase().includes(term)
+      )
+    )
+  }, [companies, searchTerm])
+
+  const totals = useMemo(() => ({
+    companies: companies.length,
+    activeCompanies: companies.filter((company) => company.active).length,
+    employees: companies.reduce((sum, company) => sum + (company.employees_count || 0), 0),
+    documents: companies.reduce((sum, company) => sum + (company.deliveries_count || 0), 0),
+  }), [companies])
 
   useEffect(() => {
     if (!authLoading && user && user.role !== "MASTER") {
@@ -100,12 +145,13 @@ export default function CompaniesPage() {
   }
 
   useEffect(() => {
-    if (user?.role === "MASTER") {
-      const timer = window.setTimeout(() => {
-        void loadCompanies()
-      }, 0)
-      return () => window.clearTimeout(timer)
-    }
+    if (user?.role !== "MASTER") return
+
+    const timer = window.setTimeout(() => {
+      void loadCompanies()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
   }, [user])
 
   useEffect(() => {
@@ -120,6 +166,12 @@ export default function CompaniesPage() {
     return () => window.clearTimeout(timer)
   }, [selectedCompanyId])
 
+  const clearCompanyForm = () => {
+    setCompanyForm(emptyCompanyForm)
+    setLogoFile(null)
+    setLogoPreview("")
+  }
+
   const editCompany = (company: CompanyWithCounts) => {
     setCompanyForm({
       id: company.id,
@@ -129,13 +181,43 @@ export default function CompaniesPage() {
       email: company.email || "",
       phone: company.phone || "",
       address: company.address || "",
+      logo_url: company.logo_url || "",
       primary_color: company.primary_color || "#2563EB",
       active: company.active,
     })
+    setLogoFile(null)
+    setLogoPreview(company.logo_url || "")
   }
 
-  const clearCompanyForm = () => {
-    setCompanyForm(emptyCompanyForm)
+  const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const imageUrl = URL.createObjectURL(file)
+    const image = new Image()
+
+    image.onload = () => {
+      const isExpectedSize = image.width === LOGO_WIDTH && image.height === LOGO_HEIGHT
+      URL.revokeObjectURL(imageUrl)
+
+      if (!isExpectedSize) {
+        toast.error(`Logo fora do padrao. Envie ${LOGO_WIDTH} x ${LOGO_HEIGHT} px. Este arquivo tem ${image.width} x ${image.height} px.`)
+        event.target.value = ""
+        return
+      }
+
+      setLogoFile(file)
+      setLogoPreview(URL.createObjectURL(file))
+      setCompanyForm((current) => ({ ...current, logo_url: "" }))
+    }
+
+    image.onerror = () => {
+      URL.revokeObjectURL(imageUrl)
+      toast.error("Nao foi possivel ler a imagem enviada.")
+      event.target.value = ""
+    }
+
+    image.src = imageUrl
   }
 
   const handleCompanySubmit = async (event: React.FormEvent) => {
@@ -143,13 +225,22 @@ export default function CompaniesPage() {
     setSubmittingCompany(true)
 
     try {
+      let savedCompanyId = companyForm.id || ""
+
       if (companyForm.id) {
-        await api.updateCompany({ ...companyForm, id: companyForm.id })
+        const updated = await api.updateCompany({ ...companyForm, id: companyForm.id })
+        savedCompanyId = updated?.id || companyForm.id
         toast.success("Empresa atualizada com sucesso.")
       } else {
         const created = await api.createCompany(companyForm)
-        toast.success("Empresa criada com sucesso.")
+        savedCompanyId = created?.id || ""
         if (created?.id) setSelectedCompanyId(created.id)
+        toast.success("Empresa criada com sucesso.")
+      }
+
+      if (logoFile && savedCompanyId) {
+        await api.uploadCompanyLogo(savedCompanyId, logoFile)
+        toast.success("Logo da empresa enviada.")
       }
 
       clearCompanyForm()
@@ -196,98 +287,86 @@ export default function CompaniesPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-4 border-b border-slate-100 pb-6 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Painel Master</p>
-          <h1 className="mt-1 flex items-center gap-3 text-2xl md:text-4xl font-black tracking-tighter text-slate-800 uppercase">
-            <Building2 className="h-8 w-8 text-[#2563EB]" />
-            Empresas Clientes
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-slate-500">
-            Controle central de clientes, acessos administrativos e separacao de dados por empresa.
-          </p>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Painel Master</p>
+            <h1 className="mt-1 flex items-center gap-3 text-2xl md:text-4xl font-black tracking-tighter text-slate-800 uppercase">
+              <Building2 className="h-8 w-8 text-[#2563EB]" />
+              Empresas Clientes
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-slate-500">
+              Controle central de clientes, acessos, marca visual e separacao de dados por empresa.
+            </p>
+          </div>
+
+          <button
+            onClick={clearCompanyForm}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[#1D4ED8]"
+          >
+            <Plus className="h-4 w-4" />
+            Nova Empresa
+          </button>
         </div>
 
-        <button
-          onClick={clearCompanyForm}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[#1D4ED8]"
-        >
-          <Plus className="h-4 w-4" />
-          Nova Empresa
-        </button>
-      </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-4">
+          <Metric icon={Building2} label="Empresas" value={totals.companies} />
+          <Metric icon={CheckCircle2} label="Ativas" value={totals.activeCompanies} />
+          <Metric icon={Users} label="Colaboradores" value={totals.employees} />
+          <Metric icon={FileBadge2} label="Evidencias" value={totals.documents} />
+        </div>
+      </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.9fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
         <section className="space-y-4">
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">Carteira de clientes</h2>
+              <p className="text-xs font-medium text-slate-500">Selecione uma empresa para gerenciar marca e acessos.</p>
+            </div>
+            <label className="relative block md:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-bold outline-none focus:border-[#2563EB]"
+                placeholder="Buscar empresa..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+            </label>
+          </div>
+
           {loading ? (
             <div className="flex min-h-72 items-center justify-center rounded-2xl border border-slate-100 bg-white">
               <Loader2 className="h-8 w-8 animate-spin text-[#2563EB]" />
             </div>
-          ) : companies.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-10 text-center">
+          ) : filteredCompanies.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
               <Building2 className="mx-auto h-10 w-10 text-slate-300" />
-              <h3 className="mt-4 text-sm font-black uppercase tracking-widest text-slate-700">Nenhuma empresa cadastrada</h3>
-              <p className="mt-2 text-sm font-medium text-slate-500">Crie o primeiro cliente para iniciar a separacao dos ambientes.</p>
+              <h3 className="mt-4 text-sm font-black uppercase tracking-widest text-slate-700">Nenhuma empresa encontrada</h3>
+              <p className="mt-2 text-sm font-medium text-slate-500">Cadastre ou ajuste a busca para localizar o cliente.</p>
             </div>
           ) : (
-            companies.map((company) => {
-              const active = selectedCompanyId === company.id
-              return (
-                <button
-                  key={company.id}
-                  onClick={() => setSelectedCompanyId(company.id)}
-                  className={`w-full rounded-2xl border p-5 text-left shadow-sm transition-all ${
-                    active ? "border-[#2563EB]/30 bg-blue-50/40" : "border-slate-200 bg-white hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate text-lg font-black tracking-tight text-slate-800">{company.trade_name || company.name}</h2>
-                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${
-                          company.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
-                        }`}>
-                          {company.active ? "Ativa" : "Inativa"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs font-bold uppercase tracking-widest text-slate-400">{company.name}</p>
-                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
-                        {company.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" />{company.email}</span>}
-                        {company.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{company.phone}</span>}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-xl bg-white px-3 py-2 text-center text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
-                        {company.employees_count || 0} colab.
-                      </span>
-                      <span className="rounded-xl bg-white px-3 py-2 text-center text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
-                        {company.users_count || 0} users
-                      </span>
-                      <span
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          editCompany(company)
-                        }}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-[#2563EB]"
-                        title="Editar empresa"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              )
-            })
+            filteredCompanies.map((company) => (
+              <CompanyCard
+                key={company.id}
+                company={company}
+                active={selectedCompanyId === company.id}
+                onSelect={() => setSelectedCompanyId(company.id)}
+                onEdit={() => editCompany(company)}
+              />
+            ))
           )}
         </section>
 
-        <aside className="space-y-6">
+        <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
           <form onSubmit={handleCompanySubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">
-                {companyForm.id ? "Editar Empresa" : "Cadastrar Empresa"}
-              </h2>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Dados do cliente</p>
+                <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">
+                  {companyForm.id ? "Editar Empresa" : "Cadastrar Empresa"}
+                </h2>
+              </div>
               {companyForm.id && (
                 <button type="button" onClick={clearCompanyForm} className="text-slate-400 hover:text-slate-700" title="Cancelar edicao">
                   <XCircle className="h-5 w-5" />
@@ -304,6 +383,40 @@ export default function CompaniesPage() {
               </div>
               <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" type="email" placeholder="E-mail comercial" value={companyForm.email} onChange={(event) => setCompanyForm({ ...companyForm, email: event.target.value })} />
               <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" placeholder="Endereco" value={companyForm.address} onChange={(event) => setCompanyForm({ ...companyForm, address: event.target.value })} />
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Identidade visual</p>
+                    <h3 className="text-sm font-black text-slate-800">Logo e cor da empresa</h3>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    {LOGO_WIDTH} x {LOGO_HEIGHT} px
+                  </span>
+                </div>
+
+                <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white p-4 text-center transition-colors hover:border-[#2563EB]">
+                  {logoPreview || companyForm.logo_url ? (
+                    <img src={logoPreview || companyForm.logo_url} alt="Logo da empresa" className="max-h-24 max-w-full object-contain" />
+                  ) : (
+                    <>
+                      <UploadCloud className="h-8 w-8 text-[#2563EB]" />
+                      <span className="mt-2 text-xs font-black uppercase tracking-widest text-slate-700">Enviar logo</span>
+                      <span className="mt-1 text-[11px] font-medium text-slate-500">PNG, JPG ou WEBP exatamente em {LOGO_WIDTH} x {LOGO_HEIGHT} px</span>
+                    </>
+                  )}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoChange} className="sr-only" />
+                </label>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
+                  <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <input type="color" value={companyForm.primary_color} onChange={(event) => setCompanyForm({ ...companyForm, primary_color: event.target.value })} className="h-10 w-12 cursor-pointer rounded-lg border-0 bg-transparent p-0" title="Cor principal da empresa" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cor principal</span>
+                  </label>
+                  <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-widest outline-none focus:border-[#2563EB]" value={companyForm.primary_color} onChange={(event) => setCompanyForm({ ...companyForm, primary_color: event.target.value })} placeholder="#2563EB" />
+                </div>
+              </div>
+
               <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">
                 Empresa ativa
                 <input type="checkbox" checked={companyForm.active} onChange={(event) => setCompanyForm({ ...companyForm, active: event.target.checked })} className="h-5 w-5 accent-[#2563EB]" />
@@ -316,10 +429,23 @@ export default function CompaniesPage() {
             </button>
           </form>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Empresa selecionada</p>
-              <h2 className="mt-1 truncate text-lg font-black tracking-tight text-slate-800">{selectedCompany?.trade_name || selectedCompany?.name || "Selecione uma empresa"}</h2>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Empresa selecionada</p>
+                <h2 className="mt-1 truncate text-lg font-black tracking-tight text-slate-800">{selectedCompany?.trade_name || selectedCompany?.name || "Selecione uma empresa"}</h2>
+              </div>
+              {selectedCompany?.logo_url && (
+                <div className="flex h-12 w-24 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-2">
+                  <img src={selectedCompany.logo_url} alt={selectedCompany.trade_name || selectedCompany.name} className="max-h-full max-w-full object-contain" />
+                </div>
+              )}
+            </div>
+
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              <MiniMetric icon={Users} label="Colab." value={selectedCompany?.employees_count || 0} />
+              <MiniMetric icon={Package} label="EPIs" value={selectedCompany?.ppes_count || 0} />
+              <MiniMetric icon={UserCog} label="Users" value={selectedCompany?.users_count || 0} />
             </div>
 
             <form onSubmit={handleUserSubmit} className="grid gap-3">
@@ -369,9 +495,104 @@ export default function CompaniesPage() {
                 )}
               </div>
             </div>
-          </div>
+          </section>
         </aside>
       </div>
     </div>
+  )
+}
+
+function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+      <Icon className="h-5 w-5 text-[#2563EB]" />
+      <p className="mt-3 text-2xl font-black text-slate-900">{value}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+    </div>
+  )
+}
+
+function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-3">
+      <Icon className="h-4 w-4 text-[#2563EB]" />
+      <p className="mt-2 text-lg font-black text-slate-900">{value}</p>
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+    </div>
+  )
+}
+
+function CompanyCard({
+  company,
+  active,
+  onSelect,
+  onEdit,
+}: {
+  company: CompanyWithCounts
+  active: boolean
+  onSelect: () => void
+  onEdit: () => void
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-all ${
+        active ? "border-[#2563EB]/30 bg-white ring-4 ring-[#2563EB]/10" : "border-slate-200 bg-white hover:border-slate-300"
+      }`}
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-20 w-36 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-3">
+            {company.logo_url ? (
+              <img src={company.logo_url} alt={company.trade_name || company.name} className="max-h-full max-w-full object-contain" />
+            ) : (
+              <ImageIcon className="h-7 w-7 text-slate-300" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-black tracking-tight text-slate-800">{company.trade_name || company.name}</h2>
+              <span className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${
+                company.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+              }`}>
+                {company.active ? "Ativa" : "Inativa"}
+              </span>
+            </div>
+            <p className="mt-1 truncate text-xs font-bold uppercase tracking-widest text-slate-400">{company.name}</p>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
+              {company.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" />{company.email}</span>}
+              {company.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{company.phone}</span>}
+              <span className="flex items-center gap-1">
+                <Palette className="h-3.5 w-3.5" />
+                <span className="inline-block h-3 w-3 rounded-full border border-slate-200" style={{ backgroundColor: company.primary_color }} />
+                {company.primary_color}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <span className="rounded-xl bg-slate-50 px-3 py-2 text-center text-[10px] font-black uppercase tracking-widest text-slate-500">
+            {company.employees_count || 0} colab.
+          </span>
+          <span className="rounded-xl bg-slate-50 px-3 py-2 text-center text-[10px] font-black uppercase tracking-widest text-slate-500">
+            {company.users_count || 0} users
+          </span>
+          <span className="rounded-xl bg-slate-50 px-3 py-2 text-center text-[10px] font-black uppercase tracking-widest text-slate-500">
+            {company.ppes_count || 0} epis
+          </span>
+          <span
+            onClick={(event) => {
+              event.stopPropagation()
+              onEdit()
+            }}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-[#2563EB]"
+            title="Editar empresa"
+          >
+            <Pencil className="h-4 w-4" />
+          </span>
+        </div>
+      </div>
+    </button>
   )
 }
