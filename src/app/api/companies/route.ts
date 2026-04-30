@@ -57,6 +57,25 @@ function sanitizeCompanyPayload(payload: CompanyPayload) {
   }
 }
 
+function isMissingCommercialColumns(error: { message?: string; details?: string | null; code?: string } | null) {
+  const text = `${error?.message || ""} ${error?.details || ""}`.toLowerCase()
+  return (
+    error?.code === "PGRST204" ||
+    text.includes("schema cache") ||
+    text.includes("subscription_status") ||
+    text.includes("training_enabled") ||
+    text.includes("suspended_reason")
+  )
+}
+
+function withoutCommercialColumns(payload: ReturnType<typeof sanitizeCompanyPayload>) {
+  const basicPayload: Partial<ReturnType<typeof sanitizeCompanyPayload>> = { ...payload }
+  delete basicPayload.training_enabled
+  delete basicPayload.subscription_status
+  delete basicPayload.suspended_reason
+  return basicPayload
+}
+
 export async function GET(request: Request) {
   const auth = await requireAuthorizedUser(request, ["MASTER"])
   if (!auth.authorized) return auth.response
@@ -96,17 +115,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nome da empresa e obrigatorio." }, { status: 400 })
     }
 
-    const { data, error } = await supabaseAdmin
+    let result = await supabaseAdmin
       .from("companies")
       .insert(payload)
       .select("*")
       .single()
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+    if (result.error && isMissingCommercialColumns(result.error)) {
+      result = await supabaseAdmin
+        .from("companies")
+        .insert(withoutCommercialColumns(payload))
+        .select("*")
+        .single()
     }
 
-    return NextResponse.json({ company: data })
+    if (result.error) {
+      return NextResponse.json({ error: result.error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ company: result.data })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erro interno do servidor"
     return NextResponse.json({ error: message }, { status: 500 })
@@ -129,18 +156,27 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Nome da empresa e obrigatorio." }, { status: 400 })
     }
 
-    const { data, error } = await supabaseAdmin
+    let result = await supabaseAdmin
       .from("companies")
       .update(payload)
       .eq("id", body.id)
       .select("*")
       .single()
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+    if (result.error && isMissingCommercialColumns(result.error)) {
+      result = await supabaseAdmin
+        .from("companies")
+        .update(withoutCommercialColumns(payload))
+        .eq("id", body.id)
+        .select("*")
+        .single()
     }
 
-    return NextResponse.json({ company: data })
+    if (result.error) {
+      return NextResponse.json({ error: result.error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ company: result.data })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erro interno do servidor"
     return NextResponse.json({ error: message }, { status: 500 })
