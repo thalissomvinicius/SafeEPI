@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2 } from "lucide-react"
+import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const allItems = [
@@ -20,6 +20,7 @@ const allItems = [
   { href: "/reports", label: "Relatórios", icon: TrendingDown, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/training", label: "Treinamentos", icon: CheckCircle2, roles: ['ADMIN', 'DIRETORIA'] },
   { href: "/users", label: "Usuários", icon: Settings, roles: ['ADMIN'] },
+  { href: "/account", label: "Conta", icon: UserRoundCog, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/support", label: "Suporte", icon: HelpCircle, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
 ]
 

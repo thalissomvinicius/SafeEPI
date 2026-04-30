@@ -12,6 +12,7 @@ export function Header() {
   // Mapeamento de rotas para títulos amigáveis
   const getPageTitle = (path: string) => {
     if (path === '/') return 'Visão Geral'
+    if (path.startsWith('/account')) return 'Minha Conta'
     if (path.startsWith('/companies')) return 'Empresas Clientes'
     if (path.startsWith('/employees')) return 'Colaboradores'
     if (path.startsWith('/inventory')) return 'Gestão de Estoque'

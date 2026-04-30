@@ -375,6 +375,30 @@ export const api = {
     if (error) throw error;
   },
 
+  async changePassword(currentPassword: string, newPassword: string) {
+    const session = await ensureActiveSession();
+    const email = session?.user.email;
+
+    if (!email) {
+      throw new Error("Sessao invalida. Faca login novamente.");
+    }
+
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+
+    if (reauthError) {
+      throw new Error("Senha atual incorreta.");
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) throw error;
+  },
+
   async getSession() {
     return await ensureActiveSession();
   },
