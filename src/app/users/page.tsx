@@ -25,17 +25,19 @@ export default function UsersPage() {
     password: "",
     role: "ALMOXARIFE"
   })
+  const canManageUsers = currentUser ? ['ADMIN', 'MASTER'].includes(currentUser.role || '') : false
+  const masterCompanyId = currentUser?.role === 'MASTER' ? api.getMasterCompanyContext() || undefined : undefined
 
   useEffect(() => {
-    if (!authLoading && currentUser && currentUser.role !== 'ADMIN') {
+    if (!authLoading && currentUser && !canManageUsers) {
       router.push('/')
     }
-  }, [currentUser, authLoading, router])
+  }, [authLoading, canManageUsers, currentUser, router])
 
   const loadUsers = async () => {
     try {
       setLoading(true)
-      const data = await api.getUsers()
+      const data = await api.getUsers(masterCompanyId)
       setUsers(data)
     } catch (error) {
       console.error("Erro ao carregar usuários:", error)
@@ -46,18 +48,18 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    if (currentUser?.role === 'ADMIN') {
+    if (canManageUsers) {
       const timer = setTimeout(() => {
         loadUsers()
       }, 0)
       return () => clearTimeout(timer)
     }
-  }, [currentUser])
+  }, [canManageUsers, currentUser])
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     try {
       setUpdatingId(userId)
-      await api.updateUser({ id: userId, role: newRole })
+      await api.updateUser({ id: userId, role: newRole, company_id: masterCompanyId })
       toast.success("Permissão atualizada com sucesso.")
       await loadUsers()
     } catch (error) {
@@ -72,7 +74,7 @@ export default function UsersPage() {
     if (!confirm("Tem certeza que deseja excluir este usuário definitivamente?")) return;
     try {
       setUpdatingId(userId)
-      await api.deleteUser(userId)
+      await api.deleteUser(userId, masterCompanyId)
       toast.success("Usuário excluído com sucesso.")
       await loadUsers()
     } catch (error) {
@@ -94,7 +96,7 @@ export default function UsersPage() {
             setIsSubmitting(false)
             return
         }
-        await api.updateUser({ id: formData.id, password: formData.password })
+        await api.updateUser({ id: formData.id, password: formData.password, company_id: masterCompanyId })
         toast.success("Senha atualizada com sucesso.")
       } else {
         // Create user
@@ -103,7 +105,7 @@ export default function UsersPage() {
           setIsSubmitting(false)
           return
         }
-        await api.createUser(formData)
+        await api.createUser({ ...formData, company_id: masterCompanyId })
         toast.success("Usuário criado com sucesso!")
       }
       setIsModalOpen(false)
@@ -127,7 +129,7 @@ export default function UsersPage() {
     setIsModalOpen(true)
   }
 
-  if (authLoading || (currentUser && currentUser.role !== 'ADMIN')) {
+  if (authLoading || (currentUser && !canManageUsers)) {
     return (
       <div className="flex flex-col items-center justify-center py-40">
         <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />

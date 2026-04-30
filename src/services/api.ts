@@ -238,6 +238,22 @@ async function readResponseJson<T = unknown>(res: Response): Promise<T> {
 }
 
 let cachedCompanyId: string | null = null;
+const MASTER_COMPANY_CONTEXT_KEY = "safeepi_master_company_id";
+
+function getStoredMasterCompanyId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(MASTER_COMPANY_CONTEXT_KEY);
+}
+
+function setStoredMasterCompanyId(companyId: string | null) {
+  if (typeof window === "undefined") return;
+  if (companyId) {
+    window.localStorage.setItem(MASTER_COMPANY_CONTEXT_KEY, companyId);
+  } else {
+    window.localStorage.removeItem(MASTER_COMPANY_CONTEXT_KEY);
+  }
+  cachedCompanyId = null;
+}
 
 async function getCurrentCompanyId(): Promise<string | null> {
   if (cachedCompanyId) return cachedCompanyId;
@@ -255,7 +271,9 @@ async function getCurrentCompanyId(): Promise<string | null> {
     throw new Error(data.error || "Nao foi possivel identificar a empresa atual.");
   }
 
-  cachedCompanyId = data.user?.company_id || null;
+  cachedCompanyId = data.user?.role === "MASTER"
+    ? getStoredMasterCompanyId()
+    : data.user?.company_id || null;
   return cachedCompanyId;
 }
 
@@ -403,6 +421,14 @@ export const api = {
     return await ensureActiveSession();
   },
 
+  getMasterCompanyContext() {
+    return getStoredMasterCompanyId();
+  },
+
+  setMasterCompanyContext(companyId: string | null) {
+    setStoredMasterCompanyId(companyId);
+  },
+
   async archiveSignedDocument(payload: SignedDocumentArchivePayload) {
     const formData = new FormData();
     const sha256Hash = payload.sha256Hash || await sha256Hex(payload.pdfBlob);
@@ -441,11 +467,16 @@ export const api = {
   },
 
   async getSignedDocuments() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from("signed_documents")
         .select("*")
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false });
+        if (companyId) query = query.eq("company_id", companyId);
+        return query;
+      }
     );
 
     if (error) {
@@ -588,11 +619,16 @@ export const api = {
 
   // --- Canteiros (Workplaces) ---
   async getWorkplaces() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('workplaces')
         .select('*')
-        .order('name', { ascending: true })
+        .order('name', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
     
     if (error) throw error;
@@ -638,12 +674,17 @@ export const api = {
 
   // --- Cargos e Setores ---
   async getJobTitles() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('job_titles')
         .select('*')
         .eq('active', true)
-        .order('name', { ascending: true })
+        .order('name', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
 
     if (error) {
@@ -696,12 +737,17 @@ export const api = {
   },
 
   async getDepartments() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('departments')
         .select('*')
         .eq('active', true)
-        .order('name', { ascending: true })
+        .order('name', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
 
     if (error) {
@@ -755,11 +801,16 @@ export const api = {
 
   // --- Colaboradores ---
   async getEmployees() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('employees')
         .select('*')
-        .order('full_name', { ascending: true })
+        .order('full_name', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
     
     if (error) throw error;
@@ -869,11 +920,16 @@ export const api = {
 
   // --- EPIs ---
   async getPpes() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('ppes')
         .select('*')
-        .order('name', { ascending: true })
+        .order('name', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
     
     if (error) throw error;
@@ -908,14 +964,19 @@ export const api = {
 
   // --- Estoque (Stock Movements) ---
   async getStockMovements() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('stock_movements')
         .select(`
           *,
           ppe:ppes(name)
         `)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
     
     if (error) throw error;
@@ -938,8 +999,10 @@ export const api = {
 
   // --- Entregas ---
   async getDeliveries() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('deliveries')
         .select(`
           *,
@@ -947,7 +1010,10 @@ export const api = {
           ppe:ppes(name, ca_number, ca_expiry_date, cost, lifespan_days),
           workplace:workplaces(name)
         `)
-        .order('delivery_date', { ascending: false })
+        .order('delivery_date', { ascending: false });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
     
     if (error) throw error;
@@ -1171,14 +1237,19 @@ export const api = {
 
   // --- Treinamentos ---
   async getTrainings() {
+    const companyId = await getCurrentCompanyId();
     const { data, error } = await withSessionRetry(() =>
-      supabase
+      {
+        let query = supabase
         .from('trainings')
         .select(`
           *,
           employee:employees!trainings_employee_id_fkey(full_name, cpf)
         `)
-        .order('completion_date', { ascending: false })
+        .order('completion_date', { ascending: false });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query;
+      }
     );
     
     if (error) throw error;

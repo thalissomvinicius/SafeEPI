@@ -8,18 +8,18 @@ import { useAuth } from "@/contexts/AuthContext"
 
 const allItems = [
   { href: "/companies", label: "Empresas", icon: Building2, roles: ['MASTER'] },
-  { href: "/", label: "Dashboard", icon: Home, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
-  { href: "/delivery", label: "Entrega", icon: PenTool, roles: ['ADMIN', 'ALMOXARIFE'] },
-  { href: "/inventory", label: "Estoque", icon: Package, roles: ['ADMIN', 'ALMOXARIFE'] },
-  { href: "/employees", label: "Equipe", icon: Users, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/workplaces", label: "Obras", icon: HardDrive, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/job-sectors", label: "Cargos", icon: BriefcaseBusiness, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/history", label: "Histórico", icon: History, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
-  { href: "/movements", label: "Movimentações", icon: ArrowRightLeft, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/reports", label: "Relatórios", icon: TrendingDown, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/training", label: "Treinamentos", icon: CheckCircle2, roles: ['ADMIN', 'DIRETORIA'] },
-  { href: "/users", label: "Usuários", icon: Settings, roles: ['ADMIN'] },
+  { href: "/", label: "Dashboard", icon: Home, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
+  { href: "/delivery", label: "Entrega", icon: PenTool, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE'] },
+  { href: "/inventory", label: "Estoque", icon: Package, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE'] },
+  { href: "/employees", label: "Equipe", icon: Users, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/workplaces", label: "Obras", icon: HardDrive, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/job-sectors", label: "Cargos", icon: BriefcaseBusiness, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/history", label: "Histórico", icon: History, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
+  { href: "/movements", label: "Movimentações", icon: ArrowRightLeft, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/reports", label: "Relatórios", icon: TrendingDown, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/training", label: "Treinamentos", icon: CheckCircle2, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/users", label: "Usuários", icon: Settings, roles: ['MASTER', 'ADMIN'] },
   { href: "/account", label: "Conta", icon: UserRoundCog, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/support", label: "Suporte", icon: HelpCircle, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
 ]
@@ -33,7 +33,7 @@ export function MobileNav() {
 
   const filteredItems = allItems.filter(item => 
     item.roles.includes(user?.role || 'ADMIN') &&
-    (item.href !== "/training" || user?.company?.training_enabled !== false)
+    (item.href !== "/training" || user?.role === "MASTER" || user?.company?.training_enabled !== false)
   )
 
   // Top 4 items for the main bar

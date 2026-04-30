@@ -1,13 +1,44 @@
 ﻿"use client"
 
+import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { NotificationBell } from "./NotificationBell"
 import { GlobalSearch } from "./GlobalSearch"
 import { useAuth } from "@/contexts/AuthContext"
+import { api, type CompanyWithCounts } from "@/services/api"
 
 export function Header() {
   const pathname = usePathname()
   const { user } = useAuth()
+  const [companies, setCompanies] = useState<CompanyWithCounts[]>([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState("")
+
+  useEffect(() => {
+    if (user?.role !== "MASTER") return
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const data = await api.getCompanies()
+        setCompanies(data)
+        const storedCompanyId = api.getMasterCompanyContext()
+        const nextCompanyId = storedCompanyId || data[0]?.id || ""
+        setSelectedCompanyId(nextCompanyId)
+        if (!storedCompanyId && nextCompanyId) {
+          api.setMasterCompanyContext(nextCompanyId)
+        }
+      } catch (error) {
+        console.error("Erro ao carregar empresas para contexto master:", error)
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [user])
+
+  const handleMasterCompanyChange = (companyId: string) => {
+    setSelectedCompanyId(companyId)
+    api.setMasterCompanyContext(companyId)
+    window.location.reload()
+  }
 
   // Mapeamento de rotas para títulos amigáveis
   const getPageTitle = (path: string) => {
@@ -39,6 +70,21 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
+        {user?.role === "MASTER" && (
+          <select
+            value={selectedCompanyId}
+            onChange={(event) => handleMasterCompanyChange(event.target.value)}
+            className="hidden max-w-56 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none focus:border-[#2563EB] md:block"
+            title="Empresa em contexto master"
+          >
+            <option value="">Selecione a empresa</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.trade_name || company.name}
+              </option>
+            ))}
+          </select>
+        )}
         <div className="hidden md:flex flex-col items-end mr-2">
             <span className="text-xs font-black text-slate-800 uppercase tracking-tighter">{user?.user_metadata?.full_name || user?.email}</span>
             <span className="text-[9px] font-black text-[#2563EB] uppercase tracking-widest italic">{user?.role}</span>
