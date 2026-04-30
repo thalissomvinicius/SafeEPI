@@ -49,6 +49,8 @@
 }
 
 :root {
+  --brand-color: #2563EB;
+  --brand-color-strong: #1D4ED8;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -81,6 +83,56 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+}
+
+body.company-theme [class*="text-[#2563EB]"],
+body.company-theme [class*="text-blue-600"],
+body.company-theme [class*="text-blue-700"],
+body.company-theme [class*="group-hover:text-[#2563EB]"]:hover {
+  color: var(--brand-color) !important;
+}
+
+body.company-theme [class*="bg-[#2563EB]"],
+body.company-theme [class*="bg-blue-600"],
+body.company-theme [class*="accent-[#2563EB]"] {
+  background-color: var(--brand-color) !important;
+  accent-color: var(--brand-color) !important;
+}
+
+body.company-theme [class*="hover:bg-[#1D4ED8]"]:hover,
+body.company-theme [class*="hover:bg-blue-700"]:hover {
+  background-color: var(--brand-color-strong) !important;
+}
+
+body.company-theme [class*="bg-[#2563EB]/5"],
+body.company-theme [class*="bg-[#2563EB]/10"],
+body.company-theme [class*="bg-blue-50"],
+body.company-theme [class*="bg-blue-100"] {
+  background-color: color-mix(in srgb, var(--brand-color) 10%, white) !important;
+}
+
+body.company-theme [class*="border-[#2563EB]"],
+body.company-theme [class*="border-[#2563EB]/20"],
+body.company-theme [class*="border-[#2563EB]/30"],
+body.company-theme [class*="border-blue-100"],
+body.company-theme [class*="border-blue-200"] {
+  border-color: color-mix(in srgb, var(--brand-color) 35%, white) !important;
+}
+
+body.company-theme [class*="ring-[#2563EB]"],
+body.company-theme [class*="ring-[#2563EB]/10"] {
+  --tw-ring-color: color-mix(in srgb, var(--brand-color) 18%, transparent) !important;
+}
+
+body.company-theme [class*="focus:border-[#2563EB]"]:focus,
+body.company-theme [class*="focus:border-blue-600"]:focus {
+  border-color: var(--brand-color) !important;
+}
+
+body.company-theme svg.text-\[\#2563EB\],
+body.company-theme svg.text-blue-600,
+body.company-theme .text-\[\#2563EB\] svg {
+  color: var(--brand-color) !important;
 }
 
 .dark {
