@@ -76,7 +76,7 @@ export default function ReturnsPage() {
     setIsSaved(false)
     try {
       const history = await api.getEmployeeHistory(emp.id)
-      setActiveDeliveries(history.filter(d => !d.returned_at))
+      setActiveDeliveries(history.filter(d => !d.returned_at && Math.max(0, Number(d.quantity || 0) - Number(d.returned_quantity || 0)) > 0))
     } catch (err) {
       console.error(err)
     } finally {

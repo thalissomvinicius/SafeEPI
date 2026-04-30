@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink, FileUp, Download } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
+import * as XLSX from "xlsx"
 import { api } from "@/services/api"
 import { Employee, Workplace, DeliveryWithRelations, CatalogItem } from "@/types/database"
 import { format, addDays, isPast } from "date-fns"
@@ -12,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { COMPANY_CONFIG } from "@/config/company"
-import { generateNR06PDF } from "@/utils/pdfGenerator"
+import { generateEmployeesReportPDF, generateNR06PDF } from "@/utils/pdfGenerator"
 import { formatCpf, isValidCpf } from "@/utils/cpf"
 import { copyTextToClipboard } from "@/utils/clipboard"
 import { toast } from "sonner"
@@ -73,12 +74,19 @@ export default function EmployeesPage() {
   const [catalogWarning, setCatalogWarning] = useState("")
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
+  const [departmentFilter, setDepartmentFilter] = useState("all")
+  const [workplaceFilter, setWorkplaceFilter] = useState("all")
+  const [biometryFilter, setBiometryFilter] = useState<"all" | "registered" | "pending">("all")
+  const [admissionStartFilter, setAdmissionStartFilter] = useState("")
+  const [admissionEndFilter, setAdmissionEndFilter] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isFaceCameraOpen, setIsFaceCameraOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"employees" | "pending">("employees")
   const [pendingCaptureDrafts, setPendingCaptureDrafts] = useState<PendingCaptureDraft[]>([])
   const [captureWaitHours, setCaptureWaitHours] = useState(24)
   const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   
   // Prontuario State
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
@@ -94,6 +102,8 @@ export default function EmployeesPage() {
     department: string;
     cpf: string;
     workplace_id: string;
+    admission_date: string;
+    termination_date: string;
     photo_url?: string | null;
     face_descriptor?: number[] | null;
   }>({ 
@@ -102,6 +112,8 @@ export default function EmployeesPage() {
     department: "", 
     cpf: "",
     workplace_id: "",
+    admission_date: "",
+    termination_date: "",
     photo_url: null,
     face_descriptor: null
   })
@@ -213,10 +225,33 @@ export default function EmployeesPage() {
     return () => clearTimeout(timer)
   }, [loadPendingCaptureDrafts])
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    emp.cpf.includes(searchTerm)
-  )
+  const resetFormData = () => setFormData({
+    id: undefined,
+    name: "",
+    role: "",
+    department: "",
+    cpf: "",
+    workplace_id: "",
+    admission_date: "",
+    termination_date: "",
+    photo_url: null,
+    face_descriptor: null
+  })
+
+  const filteredEmployees = employees.filter(emp => {
+    const search = searchTerm.toLowerCase()
+    const matchesSearch = emp.full_name.toLowerCase().includes(search) || emp.cpf.includes(searchTerm)
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? emp.active : !emp.active)
+    const matchesDepartment = departmentFilter === "all" || emp.department === departmentFilter
+    const matchesWorkplace = workplaceFilter === "all" || (workplaceFilter === "none" ? !emp.workplace_id : emp.workplace_id === workplaceFilter)
+    const hasBiometry = Boolean(emp.photo_url && emp.face_descriptor?.length)
+    const matchesBiometry = biometryFilter === "all" || (biometryFilter === "registered" ? hasBiometry : !hasBiometry)
+    const admission = emp.admission_date ? new Date(`${emp.admission_date}T12:00:00`) : null
+    const matchesAdmissionStart = !admissionStartFilter || (admission && admission >= new Date(`${admissionStartFilter}T00:00:00`))
+    const matchesAdmissionEnd = !admissionEndFilter || (admission && admission <= new Date(`${admissionEndFilter}T23:59:59`))
+
+    return matchesSearch && matchesStatus && matchesDepartment && matchesWorkplace && matchesBiometry && matchesAdmissionStart && matchesAdmissionEnd
+  })
 
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -258,6 +293,9 @@ export default function EmployeesPage() {
           department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
           workplace_id: formData.workplace_id || null,
+          admission_date: formData.admission_date || null,
+          termination_date: formData.termination_date || null,
+          active: !formData.termination_date,
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
         }
 
@@ -279,7 +317,7 @@ export default function EmployeesPage() {
         await loadData()
 
         toast.success("Cadastro atualizado com sucesso!")
-        setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
+        resetFormData()
         setIsModalOpen(false)
       } else {
         await api.addEmployee({
@@ -287,8 +325,9 @@ export default function EmployeesPage() {
           job_title: normalizedRole,
           department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
-          admission_date: new Date().toISOString(),
-          active: true,
+          admission_date: formData.admission_date || null,
+          termination_date: formData.termination_date || null,
+          active: !formData.termination_date,
           workplace_id: formData.workplace_id || null,
           photo_url: null,
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
@@ -298,7 +337,7 @@ export default function EmployeesPage() {
         // Novo cadastro: recarrega a lista completa para incluir o novo
         setLoading(true)
         await loadData()
-        setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
+        resetFormData()
         setIsModalOpen(false)
       }
     } catch (error: unknown) {
@@ -319,6 +358,8 @@ export default function EmployeesPage() {
       department: getDepartmentName(emp.department),
       cpf: emp.cpf,
       workplace_id: emp.workplace_id || "",
+      admission_date: emp.admission_date ? String(emp.admission_date).slice(0, 10) : "",
+      termination_date: emp.termination_date ? String(emp.termination_date).slice(0, 10) : "",
       photo_url: emp.photo_url || null,
       face_descriptor: emp.face_descriptor ? Array.from(emp.face_descriptor) : null
     })
@@ -326,7 +367,7 @@ export default function EmployeesPage() {
   }
 
   const closeEditModal = () => {
-    setFormData({ id: undefined, name: "", role: "", department: "", cpf: "", workplace_id: "", photo_url: null, face_descriptor: null })
+    resetFormData()
     setIsModalOpen(false)
   }
 
@@ -360,6 +401,86 @@ export default function EmployeesPage() {
       console.error("Erro ao dar baixa:", err)
       toast.error("Erro ao registrar devolução.")
     }
+  }
+
+  const downloadImportTemplate = () => {
+    const rows = [
+      {
+        nome: "JOAO DA SILVA",
+        cpf: "000.000.000-00",
+        cargo: jobTitles[0]?.name || "AUXILIAR",
+        setor: departments[0]?.name || "OPERACIONAL",
+        obra: workplaces[0]?.name || "",
+        admissao: "2026-01-01",
+        demissao: "",
+        status: "ATIVO",
+      },
+    ]
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Colaboradores")
+    XLSX.writeFile(workbook, "modelo_importacao_colaboradores_safeepi.xlsx")
+  }
+
+  const handleImportEmployees = async (file: File) => {
+    try {
+      setIsSaving(true)
+      const buffer = await file.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: "array" })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" })
+
+      let imported = 0
+      for (const row of rows) {
+        const name = normalizeName(String(row.nome || row.Nome || row.NOME || ""))
+        const cpf = formatCpf(String(row.cpf || row.CPF || ""))
+        const role = normalizeName(String(row.cargo || row.Cargo || row.CARGO || ""))
+        const department = normalizeName(String(row.setor || row.Setor || row.SETOR || ""))
+        const workplaceName = normalizeName(String(row.obra || row.Obra || row.OBRA || ""))
+        const admission = String(row.admissao || row.Admissao || row.ADMISSAO || "")
+        const termination = String(row.demissao || row.Demissao || row.DEMISSAO || "")
+        const status = String(row.status || row.Status || "ATIVO").toUpperCase()
+
+        if (!name || !cpf || !isValidCpf(cpf) || !role || !department) continue
+        if (employees.some(emp => emp.cpf === cpf)) continue
+
+        const workplace = workplaces.find(w => normalizeName(w.name) === workplaceName)
+        await api.addEmployee({
+          full_name: name,
+          cpf,
+          job_title: role,
+          department,
+          admission_date: admission || null,
+          termination_date: termination || null,
+          active: status !== "INATIVO" && !termination,
+          workplace_id: workplace?.id || null,
+          photo_url: null,
+          face_descriptor: null,
+        })
+        imported += 1
+      }
+
+      await loadData()
+      toast.success(`${imported} colaborador(es) importado(s).`)
+    } catch (error) {
+      console.error("Erro ao importar colaboradores:", error)
+      toast.error("Falha ao importar planilha. Confira o modelo e tente novamente.")
+    } finally {
+      setIsSaving(false)
+      if (importInputRef.current) importInputRef.current.value = ""
+    }
+  }
+
+  const exportEmployeesReport = () => {
+    const blob = generateEmployeesReportPDF({
+      employees: filteredEmployees,
+      workplaces,
+      periodLabel: `${filteredEmployees.length} colaborador(es) filtrado(s)`,
+    })
+    openPdfDialog(blob, `Relatorio_Colaboradores_${new Date().toISOString().slice(0, 10)}.pdf`, {
+      title: "Relatório de Colaboradores",
+      description: "PDF organizado com filtros, status, datas e biometria dos colaboradores.",
+    })
   }
 
   const handleTerminateEmployee = async () => {
@@ -457,7 +578,7 @@ export default function EmployeesPage() {
         employeeRole: getJobTitleName(emp.job_title),
         employeeDepartment: getDepartmentName(emp.department),
         workplaceName: getWorkplaceName(emp.workplace_id),
-        admissionDate: format(new Date(emp.admission_date), "dd/MM/yyyy"),
+        admissionDate: emp.admission_date ? format(new Date(`${emp.admission_date}T12:00:00`), "dd/MM/yyyy") : "Nao informado",
         items: employeeHistory.map(d => {
           const signedDocument = getSignedDocumentForDelivery(d.id)
           const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | null
@@ -622,13 +743,47 @@ export default function EmployeesPage() {
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de prontuários de EPI sincronizada com o {COMPANY_CONFIG.systemName}.</p>
         </div>
         {canEdit ? (
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Colaborador
-          </button>
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void handleImportEmployees(file)
+              }}
+            />
+            <button
+              onClick={downloadImportTemplate}
+              className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Modelo
+            </button>
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={isSaving}
+              className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-60"
+            >
+              <FileUp className="w-4 h-4 mr-2" />
+              Importar
+            </button>
+            <button
+              onClick={exportEmployeesReport}
+              className="bg-white border border-blue-100 text-[#2563EB] hover:bg-blue-50 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              PDF
+            </button>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Novo
+            </button>
+          </div>
         ) : (
           <div className="bg-slate-100 text-slate-400 px-6 py-3 rounded-xl text-sm font-bold flex items-center italic cursor-not-allowed select-none whitespace-nowrap">
              <Lock className="w-4 h-4 mr-2 opacity-50" />
@@ -798,7 +953,7 @@ export default function EmployeesPage() {
       ) : (
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-        <div className="p-5 border-b border-slate-200 bg-slate-50/30">
+        <div className="p-5 border-b border-slate-200 bg-slate-50/30 space-y-4">
           <div className="relative max-w-md w-full">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
@@ -810,6 +965,29 @@ export default function EmployeesPage() {
               aria-label="Buscar colaborador por nome ou CPF"
               className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+              <option value="all">Todos status</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+            <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+              <option value="all">Todos setores</option>
+              {departments.map(dept => <option key={dept.id} value={dept.name}>{dept.name}</option>)}
+            </select>
+            <select value={workplaceFilter} onChange={(e) => setWorkplaceFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+              <option value="all">Todas obras</option>
+              <option value="none">Sem obra</option>
+              {workplaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            <select value={biometryFilter} onChange={(e) => setBiometryFilter(e.target.value as typeof biometryFilter)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+              <option value="all">Biometria geral</option>
+              <option value="registered">Cadastrada</option>
+              <option value="pending">Pendente</option>
+            </select>
+            <input type="date" value={admissionStartFilter} onChange={(e) => setAdmissionStartFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]" title="Admissão inicial" />
+            <input type="date" value={admissionEndFilter} onChange={(e) => setAdmissionEndFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]" title="Admissão final" />
           </div>
         </div>
 
@@ -1170,6 +1348,27 @@ export default function EmployeesPage() {
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Data de Admissão</label>
+                  <input
+                    type="date"
+                    value={formData.admission_date}
+                    onChange={(e) => setFormData({ ...formData, admission_date: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Data de Demissão</label>
+                  <input
+                    type="date"
+                    value={formData.termination_date}
+                    onChange={(e) => setFormData({ ...formData, termination_date: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
+                  />
+                </div>
               </div>
 
               <div className="pt-6 flex gap-3">

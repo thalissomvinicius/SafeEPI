@@ -5,7 +5,7 @@ export type Employee = {
   cpf: string;
   job_title: string;
   department: string | null;
-  admission_date: string;
+  admission_date?: string | null;
   active: boolean;
   workplace_id: string | null;
   termination_date?: string | null;
@@ -73,6 +73,7 @@ export type Delivery = {
   workplace_id: string | null;
   returned_at?: string | null;
   return_motive?: string | null;
+  returned_quantity?: number | null;
   created_at?: string;
 };
 

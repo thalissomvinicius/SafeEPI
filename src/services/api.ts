@@ -322,6 +322,29 @@ async function insertStockOutMovement(ppeId: string, quantity: number, motive: s
   if (fallbackTry.error) throw fallbackTry.error;
 }
 
+async function insertStockInMovement(ppeId: string, quantity: number, motive: string): Promise<void> {
+  if (quantity <= 0) return;
+
+  const companyId = await getCurrentCompanyId();
+  const payload = {
+    ppe_id: ppeId,
+    quantity,
+    type: "ENTRADA",
+    motive,
+    ...(companyId ? { company_id: companyId } : {}),
+  };
+
+  const { error } = await withSessionRetry(() =>
+    supabase
+      .from("stock_movements")
+      .insert([payload])
+  );
+
+  if (error) {
+    console.warn("Nao foi possivel registrar entrada automatica de devolucao:", error);
+  }
+}
+
 export const api = {
   async getAuthHeaders(): Promise<Record<string, string>> {
     const session = await ensureActiveSession();
@@ -967,14 +990,31 @@ export const api = {
   },
 
   async returnDelivery(deliveryId: string, motive: string) {
+    const { data: deliveryBefore } = await withSessionRetry(() =>
+      supabase
+        .from('deliveries')
+        .select('ppe_id, quantity, returned_quantity, returned_at')
+        .eq('id', deliveryId)
+        .maybeSingle()
+    );
+
+    const alreadyReturned = Number(deliveryBefore?.returned_quantity || 0);
+    const totalQuantity = Number(deliveryBefore?.quantity || 0);
+    const quantityToReturn = deliveryBefore?.returned_at ? 0 : Math.max(0, totalQuantity - alreadyReturned);
+
     const { error } = await withSessionRetry(() =>
       supabase
         .from('deliveries')
-        .update({ returned_at: new Date().toISOString(), return_motive: motive })
+        .update({ returned_at: new Date().toISOString(), return_motive: motive, returned_quantity: totalQuantity })
         .eq('id', deliveryId)
     );
 
-    if (!error) return;
+    if (!error) {
+      if (deliveryBefore?.ppe_id && quantityToReturn > 0) {
+        await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`);
+      }
+      return;
+    }
 
     if (isMissingDeliveryReturnMotiveIssue(error)) {
       const { error: fallbackError } = await withSessionRetry(() =>
@@ -984,12 +1024,58 @@ export const api = {
           .eq('id', deliveryId)
       );
 
-      if (!fallbackError) return;
+      if (!fallbackError) {
+        if (deliveryBefore?.ppe_id && quantityToReturn > 0) {
+          await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`);
+        }
+        return;
+      }
 
       throw fallbackError;
     }
 
     throw error;
+  },
+
+  async returnDeliveryQuantity(deliveryId: string, motive: string, quantity: number) {
+    if (quantity <= 0) return;
+
+    const { data: delivery, error: fetchError } = await withSessionRetry(() =>
+      supabase
+        .from('deliveries')
+        .select('id, ppe_id, quantity, returned_quantity, returned_at')
+        .eq('id', deliveryId)
+        .maybeSingle()
+    );
+
+    if (fetchError) throw fetchError;
+    if (!delivery) throw new Error("Entrega anterior nao encontrada para baixa parcial.");
+
+    const totalQuantity = Number(delivery.quantity || 0);
+    const alreadyReturned = Number(delivery.returned_quantity || 0);
+    const remaining = Math.max(0, totalQuantity - alreadyReturned);
+    const quantityToReturn = Math.min(quantity, remaining);
+
+    if (quantityToReturn <= 0) return;
+
+    const nextReturnedQuantity = alreadyReturned + quantityToReturn;
+    const shouldClose = nextReturnedQuantity >= totalQuantity;
+    const updatePayload = {
+      returned_quantity: nextReturnedQuantity,
+      return_motive: motive,
+      ...(shouldClose ? { returned_at: new Date().toISOString() } : {}),
+    };
+
+    const { error } = await withSessionRetry(() =>
+      supabase
+        .from('deliveries')
+        .update(updatePayload)
+        .eq('id', deliveryId)
+    );
+
+    if (error) throw error;
+
+    await insertStockInMovement(delivery.ppe_id, quantityToReturn, `Baixa parcial por substituicao (${motive})`);
   },
 
   async returnMultipleDeliveries(deliveryIds: string[], motive: string) {

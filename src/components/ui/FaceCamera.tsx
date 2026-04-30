@@ -19,6 +19,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
   const countdownActiveRef = useRef(false) // Prevents detection loop from resetting countdown
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const matchedDescriptorRef = useRef<Float32Array | null>(null)
+  const mismatchRef = useRef(0)
   
   const [isModelsLoaded, setIsModelsLoaded] = useState(false)
   const [isCameraActive, setIsCameraActive] = useState(false)
@@ -232,7 +233,12 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
               setStatusText("Identidade confirmada! Prepare-se...")
               setCountdown(COUNTDOWN_SECONDS)
             } else {
-              setStatusText("Rosto não coincide. Ajuste posição.")
+              mismatchRef.current += 1
+              setWarning("Rosto não reconhecido. Use o mesmo colaborador cadastrado.")
+              setStatusText("Identidade não confirmada.")
+              if (mismatchRef.current >= 3) {
+                setError("Rosto não reconhecido. A verificação facial não corresponde à biometria cadastrada para este colaborador.")
+              }
               stabilityRef.current = Math.max(stabilityRef.current - 4, 0)
               setStability(stabilityRef.current)
             }
@@ -286,7 +292,12 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
               setIsVerified(false)
               stabilityRef.current = 0
               setStability(0)
-              setStatusText("Rosto mudou durante a captura. Tente novamente.")
+              mismatchRef.current += 1
+              setWarning("Rosto não reconhecido. Verifique se é o colaborador correto.")
+              setStatusText("Identidade não confirmada.")
+              if (mismatchRef.current >= 2) {
+                setError("Rosto não reconhecido. A captura foi interrompida porque o rosto não corresponde à biometria cadastrada.")
+              }
             }
           } else {
             captureSuccess(d.descriptor)
@@ -359,9 +370,9 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
   // â”€â”€ CAPTURED IMAGE PREVIEW â”€â”€
   if (capturedImage) {
     return (
-      <div className="bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden relative flex items-center justify-center border-4 border-green-600 face-camera-preview">
+      <div className="bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden relative flex items-center justify-center border-4 border-green-600 min-h-[360px] sm:min-h-[420px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={capturedImage} alt="Foto capturada" className="w-full h-full object-cover face-camera-preview-img" />
+        <img src={capturedImage} alt="Foto capturada" className="max-h-[70dvh] w-auto max-w-full object-contain" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 bg-green-900/90 backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center gap-3 border border-green-600/50">
           <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-green-400 flex-shrink-0" />
@@ -382,7 +393,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
           <ShieldAlert className="w-10 h-10 sm:w-12 sm:h-12 text-red-500 mx-auto" />
           <p className="text-blue-300 font-bold text-[11px] sm:text-xs leading-relaxed max-w-[280px] mx-auto">{error}</p>
           <div className="flex flex-col gap-2">
-            <button onClick={() => { setError(null); startCamera(); }} className="bg-slate-800 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 active:bg-slate-600">Tentar Novamente</button>
+            <button onClick={() => { mismatchRef.current = 0; setWarning(null); setError(null); startCamera(); }} className="bg-slate-800 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 active:bg-slate-600">Tentar Novamente</button>
             <button onClick={onCancel} className="text-slate-500 text-[10px] font-bold uppercase hover:text-slate-400">Cancelar</button>
           </div>
         </div>

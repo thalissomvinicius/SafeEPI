@@ -23,6 +23,7 @@ interface CartItem {
   quantity: number
   reason: string
   autoReturnDeliveryIds?: string[]
+  autoReturnAllocations?: { deliveryId: string; quantity: number; deliveryDate: string }[]
   autoReturnNote?: string
 }
 
@@ -54,6 +55,9 @@ const getAutoReturnMotive = (reason: string) => {
   if (normalized.includes("dano")) return "Baixa automatica por dano/quebra"
   return "Baixa automatica por substituicao"
 }
+
+const getRemainingDeliveryQuantity = (delivery: DeliveryWithRelations) =>
+  Math.max(0, Number(delivery.quantity || 0) - Number(delivery.returned_quantity || 0))
 
 export default function DeliveryPage() {
   const [step, setStep] = useState(1)
@@ -167,7 +171,7 @@ export default function DeliveryPage() {
         try {
           setLoadingActiveDeliveries(true)
           const history = await api.getEmployeeHistory(selectedEmployeeId)
-          setActiveDeliveries(history.filter(delivery => !delivery.returned_at))
+          setActiveDeliveries(history.filter(delivery => !delivery.returned_at && getRemainingDeliveryQuantity(delivery) > 0))
         } catch (err) {
           console.error("Erro ao carregar EPIs ativos do colaborador:", err)
           setActiveDeliveries([])
@@ -305,10 +309,25 @@ export default function DeliveryPage() {
     }
 
     const selectedReason = effectiveCurrentReason
-    const autoReturnDeliveryIds = shouldAutoReturn(selectedReason)
-      ? currentActiveSamePpeDeliveries.map(delivery => delivery.id)
-      : []
-    const firstAutoReturnDelivery = currentActiveSamePpeDeliveries[0]
+    const autoReturnAllocations: { deliveryId: string; quantity: number; deliveryDate: string }[] = []
+    if (shouldAutoReturn(selectedReason)) {
+      let pendingReturnQuantity = currentQuantity
+      for (const delivery of currentActiveSamePpeDeliveries) {
+        if (pendingReturnQuantity <= 0) break
+        const available = getRemainingDeliveryQuantity(delivery)
+        if (available <= 0) continue
+        const quantityToReturn = Math.min(available, pendingReturnQuantity)
+        autoReturnAllocations.push({
+          deliveryId: delivery.id,
+          quantity: quantityToReturn,
+          deliveryDate: delivery.delivery_date,
+        })
+        pendingReturnQuantity -= quantityToReturn
+      }
+    }
+    const autoReturnDeliveryIds = autoReturnAllocations.map(item => item.deliveryId)
+    const autoReturnQuantity = autoReturnAllocations.reduce((acc, item) => acc + item.quantity, 0)
+    const firstAutoReturnDelivery = autoReturnAllocations[0]
 
     setCart(prev => [...prev, {
       ppeId: currentPpeId,
@@ -318,14 +337,15 @@ export default function DeliveryPage() {
       quantity: currentQuantity,
       reason: selectedReason,
       autoReturnDeliveryIds,
-      autoReturnNote: autoReturnDeliveryIds.length > 0
-        ? `Baixa automatica do registro anterior${autoReturnDeliveryIds.length > 1 ? ` (${autoReturnDeliveryIds.length})` : ""}${firstAutoReturnDelivery ? ` entregue em ${format(new Date(firstAutoReturnDelivery.delivery_date), "dd/MM/yyyy")}` : ""}.`
+      autoReturnAllocations,
+      autoReturnNote: autoReturnQuantity > 0
+        ? `Baixa automatica de ${autoReturnQuantity} un.${autoReturnAllocations.length > 1 ? ` em ${autoReturnAllocations.length} registros` : ""}${firstAutoReturnDelivery ? ` da entrega de ${format(new Date(firstAutoReturnDelivery.deliveryDate), "dd/MM/yyyy")}` : ""}.`
         : undefined
     }])
     setCurrentQuantity(1)
     setPpeSearchTerm("")
-    toast.success(autoReturnDeliveryIds.length > 0
-      ? `${currentPpe.name} adicionado com baixa automatica da posse anterior.`
+    toast.success(autoReturnQuantity > 0
+      ? `${currentPpe.name} adicionado com baixa automatica de ${autoReturnQuantity} unidade(s).`
       : `${currentPpe.name} adicionado Ã  entrega.`
     )
   }
@@ -399,11 +419,15 @@ export default function DeliveryPage() {
         }, signatureFile)
         savedDeliveries.push(savedDelivery as Delivery)
 
-        const previousDeliveryIds = item.autoReturnDeliveryIds || []
-        for (const previousDeliveryId of previousDeliveryIds) {
-          if (previousDeliveryId === (savedDelivery as Delivery).id) continue
-          await api.returnDelivery(previousDeliveryId, getAutoReturnMotive(item.reason))
-          autoReturnedDeliveryIds.push(previousDeliveryId)
+        const previousAllocations = item.autoReturnAllocations || (item.autoReturnDeliveryIds || []).map(deliveryId => ({
+          deliveryId,
+          quantity: item.quantity,
+          deliveryDate: "",
+        }))
+        for (const allocation of previousAllocations) {
+          if (allocation.deliveryId === (savedDelivery as Delivery).id) continue
+          await api.returnDeliveryQuantity(allocation.deliveryId, getAutoReturnMotive(item.reason), allocation.quantity)
+          autoReturnedDeliveryIds.push(allocation.deliveryId)
         }
       }
 
@@ -483,7 +507,21 @@ export default function DeliveryPage() {
       setLastPdfFileName(fileName)
       setIsSaved(true)
       if (autoReturnedDeliveryIds.length > 0) {
-        setActiveDeliveries(prev => prev.filter(delivery => !autoReturnedDeliveryIds.includes(delivery.id)))
+        setActiveDeliveries(prev => prev
+          .map(delivery => {
+            const returnedForDelivery = cart
+              .flatMap(item => item.autoReturnAllocations || [])
+              .filter(allocation => allocation.deliveryId === delivery.id)
+              .reduce((acc, allocation) => acc + allocation.quantity, 0)
+
+            if (returnedForDelivery <= 0) return delivery
+            return {
+              ...delivery,
+              returned_quantity: Number(delivery.returned_quantity || 0) + returnedForDelivery,
+            }
+          })
+          .filter(delivery => getRemainingDeliveryQuantity(delivery) > 0)
+        )
       }
 
       toast.success(autoReturnedDeliveryIds.length > 0
@@ -1044,7 +1082,7 @@ export default function DeliveryPage() {
                           <div className="min-w-0">
                             <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Baixa automática na nova entrega</p>
                             <p className="text-xs text-amber-700 font-semibold mt-1 leading-relaxed">
-                              {selectedEmployee?.full_name || "Colaborador"} já possui {currentPpe.name} em posse. Ao confirmar esta entrega como {effectiveCurrentReason}, o registro anterior será baixado no histórico.
+                              {selectedEmployee?.full_name || "Colaborador"} possui {currentActiveSamePpeDeliveries.reduce((acc, delivery) => acc + getRemainingDeliveryQuantity(delivery), 0)} un. de {currentPpe.name}. Ao substituir {currentQuantity} un., a baixa será parcial e somente nessa quantidade.
                             </p>
                           </div>
                         </div>

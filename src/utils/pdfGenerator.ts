@@ -4,7 +4,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { COMPANY_CONFIG } from "@/config/company"
 import QRCode from "qrcode"
-import { DeliveryWithRelations } from "@/types/database"
+import { DeliveryWithRelations, Employee } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
 
 /**
@@ -1277,6 +1277,98 @@ export interface MovementsReportData {
   movements: DeliveryWithRelations[]
   stats: MovementsStats
   period: string
+  technicianName?: string
+  technicianRole?: string
+  technicianSignatureBase64?: string
+}
+
+export interface EmployeesReportData {
+  employees: Employee[]
+  workplaces?: { id: string; name: string }[]
+  periodLabel?: string
+}
+
+export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
+  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const pw = doc.internal.pageSize.getWidth()
+  const ph = doc.internal.pageSize.getHeight()
+  const mx = 14
+  const workplaceName = (id?: string | null) => data.workplaces?.find(w => w.id === id)?.name || "Administrativo"
+
+  doc.setFillColor(r, g, b)
+  doc.rect(0, 0, pw, 34, "F")
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255)
+  doc.text(COMPANY_CONFIG.name.toUpperCase(), mx, 12)
+  doc.setFontSize(20)
+  doc.text("RELATÓRIO DE COLABORADORES", mx, 25)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}${data.periodLabel ? ` · ${data.periodLabel}` : ""}`, pw - mx, 22, { align: "right" })
+
+  const activeCount = data.employees.filter(e => e.active).length
+  const inactiveCount = data.employees.length - activeCount
+  const biometricCount = data.employees.filter(e => e.photo_url && e.face_descriptor?.length).length
+  const kpis = [
+    { label: "Total", value: data.employees.length, color: [r, g, b] as [number, number, number] },
+    { label: "Ativos", value: activeCount, color: [5, 150, 105] as [number, number, number] },
+    { label: "Inativos", value: inactiveCount, color: [217, 119, 6] as [number, number, number] },
+    { label: "Biometria", value: biometricCount, color: [37, 99, 235] as [number, number, number] },
+  ]
+  const cardY = 42
+  const cardW = (pw - mx * 2 - 12) / 4
+  kpis.forEach((kpi, index) => {
+    const x = mx + index * (cardW + 4)
+    drawCard(doc, x, cardY, cardW, 24, kpi.color)
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(16)
+    doc.setTextColor(...kpi.color)
+    doc.text(String(kpi.value), x + cardW / 2, cardY + 13, { align: "center" })
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7)
+    doc.setTextColor(100, 116, 139)
+    doc.text(kpi.label.toUpperCase(), x + cardW / 2, cardY + 20, { align: "center" })
+  })
+
+  autoTable(doc, {
+    startY: cardY + 32,
+    head: [["Nome", "CPF", "Cargo", "Setor", "Obra", "Admissão", "Demissão", "Status", "Biometria"]],
+    body: data.employees.map(emp => [
+      emp.full_name,
+      emp.cpf,
+      emp.job_title || "-",
+      emp.department || "-",
+      workplaceName(emp.workplace_id),
+      emp.admission_date ? format(new Date(`${emp.admission_date}T12:00:00`), "dd/MM/yyyy") : "-",
+      emp.termination_date ? format(new Date(`${emp.termination_date}T12:00:00`), "dd/MM/yyyy") : "-",
+      emp.active ? "ATIVO" : "INATIVO",
+      emp.photo_url && emp.face_descriptor?.length ? "CADASTRADA" : "PENDENTE",
+    ]),
+    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7, cellPadding: 3 },
+    bodyStyles: { fontSize: 6.5, cellPadding: 2.5 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 44 },
+      1: { cellWidth: 24 },
+      5: { cellWidth: 20, halign: "center" },
+      6: { cellWidth: 20, halign: "center" },
+      7: { cellWidth: 18, halign: "center" },
+      8: { cellWidth: 24, halign: "center" },
+    },
+    margin: { left: mx, right: mx },
+    theme: "grid",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
+  })
+
+  doc.setFillColor(r, g, b)
+  doc.rect(0, ph - 12, pw, 12, "F")
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(7)
+  doc.setTextColor(255, 255, 255)
+  doc.text(`${COMPANY_CONFIG.name} · ${COMPANY_CONFIG.systemName} · Relatório confidencial`, pw / 2, ph - 4, { align: "center" })
+
+  return doc.output("blob")
 }
 
 function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, accentColor?: [number, number, number]) {
@@ -1289,6 +1381,25 @@ function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, accent
     doc.roundedRect(x, y, w, 3, 3, 3, "F")
     doc.setFillColor(255, 255, 255)
     doc.rect(x, y + 2, w, 2, "F")
+  }
+}
+
+async function imageUrlToBase64(url?: string | null): Promise<string | null> {
+  if (!url) return null
+  if (url.startsWith("data:image/")) return url
+
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
   }
 }
 
@@ -1389,10 +1500,16 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
   return doc.output("blob")
 }
 
-export function generateMovementsPresentationPDF(data: MovementsReportData): Blob {
+export async function generateMovementsPresentationPDF(data: MovementsReportData): Promise<Blob> {
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
+  const signatureImages = new Map<string, string>()
+
+  await Promise.all(data.movements.map(async (movement) => {
+    const image = await imageUrlToBase64(movement.signature_url)
+    if (image) signatureImages.set(movement.id, image)
+  }))
 
   doc.setFillColor(r, g, b)
   doc.rect(0, 0, pw, 50, "F")
@@ -1600,7 +1717,7 @@ export function generateMovementsPresentationPDF(data: MovementsReportData): Blo
 
   autoTable(doc, {
     startY: 36,
-    head: [["#", "Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade"]],
+    head: [["#", "Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade", "Assinatura"]],
     body: data.movements.map((m, idx) => [
       String(idx + 1),
       format(new Date(m.delivery_date), "dd/MM/yyyy HH:mm"),
@@ -1609,7 +1726,8 @@ export function generateMovementsPresentationPDF(data: MovementsReportData): Blo
       `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
       String(m.quantity),
       m.returned_at ? "DEVOLUÇÃƒO" : "ENTREGA",
-      m.workplace?.name || "Geral"
+      m.workplace?.name || "Geral",
+      signatureImages.has(m.id) ? "" : "Sem imagem"
     ]),
     headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7.5, cellPadding: 4 },
     bodyStyles: { fontSize: 7, cellPadding: 3 },
@@ -1620,6 +1738,7 @@ export function generateMovementsPresentationPDF(data: MovementsReportData): Blo
       3: { cellWidth: 26 },
       5: { cellWidth: 12, halign: "center" },
       6: { cellWidth: 22, halign: "center" },
+      8: { cellWidth: 26, halign: "center" },
     },
     margin: { left: 14, right: 14 },
     theme: "grid",
@@ -1636,8 +1755,53 @@ export function generateMovementsPresentationPDF(data: MovementsReportData): Blo
           hookData.cell.styles.fontStyle = "bold"
         }
       }
+    },
+    didDrawCell: (hookData) => {
+      if (hookData.section !== "body" || hookData.column.index !== 8) return
+      const movement = data.movements[hookData.row.index]
+      const image = movement ? signatureImages.get(movement.id) : null
+      if (!image) return
+
+      try {
+        const props = doc.getImageProperties(image)
+        const maxW = hookData.cell.width - 4
+        const maxH = hookData.cell.height - 2
+        const ratio = Math.min(maxW / props.width, maxH / props.height)
+        const drawW = props.width * ratio
+        const drawH = props.height * ratio
+        const x = hookData.cell.x + (hookData.cell.width - drawW) / 2
+        const y = hookData.cell.y + (hookData.cell.height - drawH) / 2
+        const fmt = image.startsWith("data:image/png") ? "PNG" : "JPEG"
+        doc.addImage(image, fmt, x, y, drawW, drawH)
+      } catch {}
     }
   })
+
+  const finalY = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY || 150
+  const signY = Math.min(ph - 32, finalY + 16)
+  const signX = pw / 2 - 42
+
+  if (data.technicianSignatureBase64) {
+    try {
+      const props = doc.getImageProperties(data.technicianSignatureBase64)
+      const ratio = Math.min(62 / props.width, 18 / props.height)
+      const drawW = props.width * ratio
+      const drawH = props.height * ratio
+      const fmt = data.technicianSignatureBase64.startsWith("data:image/png") ? "PNG" : "JPEG"
+      doc.addImage(data.technicianSignatureBase64, fmt, pw / 2 - drawW / 2, signY - drawH - 2, drawW, drawH)
+    } catch {}
+  }
+
+  doc.setDrawColor(148, 163, 184)
+  doc.line(signX, signY, signX + 84, signY)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8)
+  doc.setTextColor(30, 41, 59)
+  doc.text((data.technicianName || "Responsável técnico").toUpperCase(), pw / 2, signY + 5, { align: "center" })
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(7)
+  doc.setTextColor(100, 116, 139)
+  doc.text(data.technicianRole || "Responsável técnico pelo relatório", pw / 2, signY + 10, { align: "center" })
 
   doc.setFillColor(r, g, b)
   doc.rect(0, ph - 14, pw, 14, "F")

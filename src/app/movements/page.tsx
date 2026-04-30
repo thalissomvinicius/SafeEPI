@@ -1,7 +1,8 @@
 ﻿"use client"
 
-import { useState, useEffect } from "react"
-import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, Shield, Users, FileDown, Presentation, X } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import SignatureCanvas from "react-signature-canvas"
+import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, Shield, Users, FileDown, Presentation, X, PenTool, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
@@ -21,6 +22,10 @@ export default function MovementsPage() {
   const [loading, setLoading] = useState(true)
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
   const [showPdfModal, setShowPdfModal] = useState(false)
+  const [technicianName, setTechnicianName] = useState("")
+  const [technicianRole, setTechnicianRole] = useState("Técnico de Segurança do Trabalho")
+  const [generatingPresentationPdf, setGeneratingPresentationPdf] = useState(false)
+  const movementSigCanvas = useRef<SignatureCanvas | null>(null)
 
   // Filter State
   const [dateFilter, setDateFilter] = useState<DateFilter>('month')
@@ -130,13 +135,29 @@ export default function MovementsPage() {
     setShowPdfModal(false)
   }
 
-  const handlePresentationPDF = () => {
-    const blob = generateMovementsPresentationPDF({ movements: filteredMovements, stats, period: getPeriodLabel() })
+  const handlePresentationPDF = async () => {
+    if (!movementSigCanvas.current || movementSigCanvas.current.isEmpty()) {
+      alert("Assine como responsável técnico antes de gerar o PDF de apresentação.")
+      return
+    }
+    try {
+      setGeneratingPresentationPdf(true)
+      const blob = await generateMovementsPresentationPDF({
+        movements: filteredMovements,
+        stats,
+        period: getPeriodLabel(),
+        technicianName: technicianName || user?.user_metadata?.full_name || user?.email || "Responsável técnico",
+        technicianRole,
+        technicianSignatureBase64: movementSigCanvas.current.toDataURL("image/png"),
+      })
     openPdfDialog(blob, `Movimentacoes_Apresentacao_${new Date().toISOString().slice(0,10)}.pdf`, {
       title: "PDF Apresentação - Movimentações",
       description: `Período: ${getPeriodLabel()} Â· ${filteredMovements.length} registros`
     })
     setShowPdfModal(false)
+    } finally {
+      setGeneratingPresentationPdf(false)
+    }
   }
 
   return (
@@ -428,7 +449,8 @@ export default function MovementsPage() {
               </button>
             </div>
 
-            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Simple PDF */}
               <button
                 onClick={handleSimplePDF}
@@ -447,10 +469,7 @@ export default function MovementsPage() {
               </button>
 
               {/* Presentation PDF */}
-              <button
-                onClick={handlePresentationPDF}
-                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50 transition-all"
-              >
+              <div className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 bg-blue-50/30">
                 <div className="w-14 h-14 rounded-2xl bg-[#2563EB]/10 group-hover:bg-[#2563EB]/20 flex items-center justify-center mb-4 transition-all">
                   <Presentation className="w-7 h-7 text-[#2563EB]" />
                 </div>
@@ -461,6 +480,51 @@ export default function MovementsPage() {
                 <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#2563EB] bg-red-50 border border-blue-100 px-3 py-1.5 rounded-lg">
                   Paisagem Â· 2 páginas
                 </span>
+              </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <PenTool className="w-4 h-4 text-[#2563EB]" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assinatura do responsável técnico</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    value={technicianName}
+                    onChange={(e) => setTechnicianName(e.target.value)}
+                    placeholder="Nome do técnico responsável"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
+                  />
+                  <input
+                    value={technicianRole}
+                    onChange={(e) => setTechnicianRole(e.target.value)}
+                    placeholder="Cargo"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
+                  />
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                  <SignatureCanvas
+                    ref={movementSigCanvas}
+                    canvasProps={{ className: "w-full h-36 bg-white" }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => movementSigCanvas.current?.clear()}
+                  className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Limpar assinatura
+                </button>
+              </div>
+
+              <button
+                onClick={handlePresentationPDF}
+                disabled={generatingPresentationPdf}
+                className="w-full rounded-2xl bg-[#2563EB] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/20 disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {generatingPresentationPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Presentation className="w-4 h-4" />}
+                Gerar apresentação assinada
               </button>
             </div>
 
