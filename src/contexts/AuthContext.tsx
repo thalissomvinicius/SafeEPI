@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Company } from "@/types/database"
+import { applyCompanyBrand, clearCompanyTheme } from "@/lib/brandTheme"
 
 type AppRole = "MASTER" | "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
 
@@ -32,25 +33,6 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   logout: async () => {},
 })
-
-function normalizeHexColor(color?: string | null) {
-  if (!color) return "#2563EB"
-  const trimmed = color.trim()
-  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed
-  if (/^#[0-9A-Fa-f]{3}$/.test(trimmed)) {
-    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`
-  }
-  return "#2563EB"
-}
-
-function darkenHexColor(color: string) {
-  const hex = normalizeHexColor(color).slice(1)
-  const value = Number.parseInt(hex, 16)
-  const r = Math.max(0, Math.floor(((value >> 16) & 255) * 0.82))
-  const g = Math.max(0, Math.floor(((value >> 8) & 255) * 0.82))
-  const b = Math.max(0, Math.floor((value & 255) * 0.82))
-  return `#${[r, g, b].map((part) => part.toString(16).padStart(2, "0")).join("")}`
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -124,21 +106,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [isPublicPath, loading, pathname, router, user])
 
   useEffect(() => {
-    const body = document.body
     const isLogin = pathname === "/login"
-    const companyColor = user?.company?.primary_color
 
-    if (!user || isLogin || !companyColor) {
-      body.classList.remove("company-theme")
-      body.style.removeProperty("--brand-color")
-      body.style.removeProperty("--brand-color-strong")
+    if (!user || isLogin) {
+      clearCompanyTheme()
       return
     }
 
-    const brandColor = normalizeHexColor(companyColor)
-    body.classList.add("company-theme")
-    body.style.setProperty("--brand-color", brandColor)
-    body.style.setProperty("--brand-color-strong", darkenHexColor(brandColor))
+    if (user.role === "MASTER") return
+    void applyCompanyBrand(user.company, { enableTheme: true })
   }, [pathname, user])
 
   const logout = async () => {

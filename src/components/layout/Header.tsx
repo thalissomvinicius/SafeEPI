@@ -6,33 +6,7 @@ import { NotificationBell } from "./NotificationBell"
 import { GlobalSearch } from "./GlobalSearch"
 import { useAuth } from "@/contexts/AuthContext"
 import { api, type CompanyWithCounts } from "@/services/api"
-
-function normalizeHexColor(color?: string | null) {
-  if (!color) return "#2563EB"
-  const trimmed = color.trim()
-  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed
-  if (/^#[0-9A-Fa-f]{3}$/.test(trimmed)) {
-    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`
-  }
-  return "#2563EB"
-}
-
-function darkenHexColor(color: string) {
-  const hex = normalizeHexColor(color).slice(1)
-  const value = Number.parseInt(hex, 16)
-  const r = Math.max(0, Math.floor(((value >> 16) & 255) * 0.82))
-  const g = Math.max(0, Math.floor(((value >> 8) & 255) * 0.82))
-  const b = Math.max(0, Math.floor((value & 255) * 0.82))
-  return `#${[r, g, b].map((part) => part.toString(16).padStart(2, "0")).join("")}`
-}
-
-function applyCompanyTheme(company?: CompanyWithCounts | null) {
-  if (!company?.primary_color) return
-  const brandColor = normalizeHexColor(company.primary_color)
-  document.body.classList.add("company-theme")
-  document.body.style.setProperty("--brand-color", brandColor)
-  document.body.style.setProperty("--brand-color-strong", darkenHexColor(brandColor))
-}
+import { applyCompanyBrand } from "@/lib/brandTheme"
 
 export function Header() {
   const pathname = usePathname()
@@ -50,7 +24,7 @@ export function Header() {
         const storedCompanyId = api.getMasterCompanyContext()
         const nextCompanyId = storedCompanyId || data[0]?.id || ""
         setSelectedCompanyId(nextCompanyId)
-        applyCompanyTheme(data.find((company) => company.id === nextCompanyId))
+        void applyCompanyBrand(data.find((company) => company.id === nextCompanyId), { enableTheme: true })
         if (!storedCompanyId && nextCompanyId) {
           api.setMasterCompanyContext(nextCompanyId)
         }
@@ -62,10 +36,10 @@ export function Header() {
     return () => window.clearTimeout(timer)
   }, [user])
 
-  const handleMasterCompanyChange = (companyId: string) => {
+  const handleMasterCompanyChange = async (companyId: string) => {
     setSelectedCompanyId(companyId)
     api.setMasterCompanyContext(companyId)
-    applyCompanyTheme(companies.find((company) => company.id === companyId))
+    await applyCompanyBrand(companies.find((company) => company.id === companyId), { enableTheme: true })
     window.location.reload()
   }
 

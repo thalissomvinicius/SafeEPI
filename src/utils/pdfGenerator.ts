@@ -6,14 +6,41 @@ import { COMPANY_CONFIG } from "@/config/company"
 import QRCode from "qrcode"
 import { DeliveryWithRelations, Employee } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
+import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
 
 /**
  * PDF Generator Utility for SafeEPI
  * Version: 1.1.2 - Fixes layout and colors
  */
 
-const [r, g, b] = COMPANY_CONFIG.primaryColorRgb
+let [r, g, b] = COMPANY_CONFIG.primaryColorRgb
 type AuthMethod = 'manual' | 'facial' | 'manual_facial'
+
+function refreshPdfBrand() {
+  const brand = getStoredBrand()
+  ;[r, g, b] = hexToRgb(brand.primaryColor)
+  return brand
+}
+
+function getPdfLogoDataUrl() {
+  return getStoredBrand().logoDataUrl
+}
+
+function getPdfCompanyName() {
+  return getStoredBrand().name || COMPANY_CONFIG.name
+}
+
+function addPdfLogo(doc: jsPDF, x: number, y: number, maxW: number, maxH: number) {
+  const logo = getPdfLogoDataUrl()
+  if (!logo) return false
+
+  try {
+    doc.addImage(logo, logo.includes("image/jpeg") ? "JPEG" : "PNG", x, y, maxW, maxH)
+    return true
+  } catch {
+    return false
+  }
+}
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SHARED HELPERS
@@ -33,7 +60,9 @@ function addPageHeader(doc: jsPDF, title: string, subtitle: string) {
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(8)
   doc.setFont("helvetica", "bold")
-  doc.text(COMPANY_CONFIG.name.toUpperCase(), 14, 13)
+  if (!addPdfLogo(doc, 14, 7, 24, 14)) {
+    doc.text(getPdfCompanyName().toUpperCase(), 14, 13)
+  }
 
   doc.setFontSize(14)
   doc.setFont("helvetica", "bold")
@@ -107,6 +136,7 @@ export interface DeliveryPDFData {
 }
 
 export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> {
+  refreshPdfBrand()
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const hash = data.validationHash || generateAuditCode()
@@ -121,7 +151,9 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setTextColor(255, 255, 255)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
-  doc.text(COMPANY_CONFIG.name.toUpperCase(), 14, 15)
+  if (!addPdfLogo(doc, 14, 8, 26, 14)) {
+    doc.text(getPdfCompanyName().toUpperCase(), 14, 15)
+  }
   
   doc.setFontSize(18)
   doc.text("FICHA DE ENTREGA DE EPI", pageWidth / 2, 22, { align: "center" })
@@ -418,6 +450,7 @@ export interface ReturnPDFData {
 }
 
 export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
+  refreshPdfBrand()
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const hash = data.validationHash || "PENDENTE"
@@ -544,6 +577,7 @@ export interface NR06PDFData {
 }
 
 export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
+  refreshPdfBrand()
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -786,6 +820,7 @@ export interface ReportPDFData {
 }
 
 export function generateGeneralReportPDF(data: ReportPDFData): Blob {
+  refreshPdfBrand()
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
 
@@ -884,6 +919,7 @@ export interface TrainingCertificateData {
 }
 
 export async function generateTrainingCertificate(data: TrainingCertificateData): Promise<Blob> {
+  refreshPdfBrand()
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth() // 297
   const pageHeight = doc.internal.pageSize.getHeight() // 210
@@ -891,7 +927,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   const drawBorders = () => {
     // Outer border: 6px solid #8B0000 -> 6px is ~2.1mm
-    doc.setDrawColor(139, 0, 0)
+    doc.setDrawColor(r, g, b)
     doc.setLineWidth(2.1)
     doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
     // Inner border: 1.5px solid #8B0000 -> 1.5px is ~0.5mm
@@ -907,18 +943,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   drawBorders()
   
   // Header: Logo on left, title in center, photo on right
-  let logoBase64: string | null = null;
-  try {
-    const logoRes = await fetch('/logo.png');
-    const logoBlob = await logoRes.blob();
-    logoBase64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(logoBlob);
-    });
-  } catch (e) {
-    console.error("Could not load logo.png", e);
-  }
+  const logoBase64 = getPdfLogoDataUrl()
 
   const marginX = 25; // 30px padding from border ~ 10mm + 13.5mm = ~23.5mm
 
@@ -936,7 +961,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.text("CERTIFICADO DE CONCLUSÃƒO", centerX, 40, { align: "center" })
 
   // Decorative line below title (220px ~ 77mm)
-  doc.setDrawColor(139, 0, 0)
+  doc.setDrawColor(r, g, b)
   doc.setLineWidth(0.7)
   const lineW = 77
   doc.line(centerX - lineW/2, 45, centerX + lineW/2, 45)
@@ -947,7 +972,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   const photoX = pageWidth - marginX - photoW;
   const photoY = 20;
   
-  doc.setDrawColor(139, 0, 0)
+  doc.setDrawColor(r, g, b)
   doc.setLineWidth(0.7)
   const instructorPhoto = data.instructorPhotoBase64 || data.photoBase64
   if (instructorPhoto) {
@@ -983,7 +1008,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   doc.setFont("times", "bold")
   doc.setFontSize(24)
-  doc.setTextColor(139, 0, 0) // #8B0000
+  doc.setTextColor(r, g, b) // #8B0000
   doc.text(data.employeeName.toUpperCase(), centerX, 85, { align: "center" })
 
   doc.setFont("helvetica", "normal")
@@ -992,10 +1017,10 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.text(`Portador(a) do CPF: ${data.employeeCpf}`, centerX, 95, { align: "center" })
 
   // Divisor ornamental (drawn with lines instead of text to avoid weird spacing)
-  doc.setDrawColor(139, 0, 0)
+  doc.setDrawColor(r, g, b)
   doc.setLineWidth(0.5)
   doc.line(centerX - 12, 103, centerX - 3, 103)
-  doc.setFillColor(139, 0, 0)
+  doc.setFillColor(r, g, b)
   doc.circle(centerX, 103, 1, "F")
   doc.line(centerX + 3, 103, centerX + 12, 103)
 
@@ -1059,7 +1084,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     const hasPhoto = Boolean(participantPhoto)
     const signatureCenterX = hasSignature && hasPhoto ? centerX - 22 : centerX
 
-    doc.setDrawColor(139, 0, 0)
+    doc.setDrawColor(r, g, b)
     doc.setLineWidth(0.5)
     if (hasSignature) {
       const lineWForEvidence = hasPhoto ? 72 : sigLineW
@@ -1141,7 +1166,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   doc.setFont("helvetica", "italic")
   doc.setFontSize(14)
-  doc.setTextColor(139, 0, 0)
+  doc.setTextColor(r, g, b)
   doc.text(data.trainingName.toUpperCase(), centerX, 38, { align: "center" })
 
   // Tabela de Conteúdo Programático
@@ -1187,7 +1212,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     didDrawCell: (hookData) => {
       if (hookData.section === 'body' && hookData.cell.raw && typeof hookData.cell.raw === 'string' && hookData.cell.raw.trim().length > 0) {
         // Draw small red bullet points
-        hookData.doc.setFillColor(139, 0, 0);
+        hookData.doc.setFillColor(r, g, b);
         hookData.doc.circle(hookData.cell.x + 4, hookData.cell.y + hookData.cell.height/2, 1.2, "F");
       }
     }
@@ -1199,7 +1224,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     const signCenterX = centerX
     const signLineW = 90
 
-    doc.setDrawColor(139, 0, 0)
+    doc.setDrawColor(r, g, b)
     doc.setLineWidth(0.5)
     doc.line(signCenterX - signLineW / 2, signY, signCenterX + signLineW / 2, signY)
 
@@ -1235,7 +1260,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.rect(marginX, versoFooterY, pageWidth - 2 * marginX - 40, 20, "F")
   
   // Left border of the box
-  doc.setDrawColor(139, 0, 0)
+  doc.setDrawColor(r, g, b)
   doc.setLineWidth(1.4) // 4px
   doc.line(marginX, versoFooterY, marginX, versoFooterY + 20)
 
@@ -1289,6 +1314,7 @@ export interface EmployeesReportData {
 }
 
 export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
+  refreshPdfBrand()
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
@@ -1300,7 +1326,9 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
-  doc.text(COMPANY_CONFIG.name.toUpperCase(), mx, 12)
+  if (!addPdfLogo(doc, mx, 6, 24, 12)) {
+    doc.text(getPdfCompanyName().toUpperCase(), mx, 12)
+  }
   doc.setFontSize(20)
   doc.text("RELATÓRIO DE COLABORADORES", mx, 25)
   doc.setFont("helvetica", "normal")
@@ -1404,6 +1432,7 @@ async function imageUrlToBase64(url?: string | null): Promise<string | null> {
 }
 
 export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
+  refreshPdfBrand()
   const doc = new jsPDF({ orientation: "portrait", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
@@ -1415,7 +1444,9 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
-  doc.text(COMPANY_CONFIG.name.toUpperCase(), mx, 12)
+  if (!addPdfLogo(doc, mx, 7, 24, 13)) {
+    doc.text(getPdfCompanyName().toUpperCase(), mx, 12)
+  }
 
   doc.setFont("helvetica", "bold")
   doc.setFontSize(18)
@@ -1501,6 +1532,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
 }
 
 export async function generateMovementsPresentationPDF(data: MovementsReportData): Promise<Blob> {
+  refreshPdfBrand()
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
@@ -1517,7 +1549,9 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
-  doc.text(COMPANY_CONFIG.name.toUpperCase(), 18, 14)
+  if (!addPdfLogo(doc, 18, 8, 28, 14)) {
+    doc.text(getPdfCompanyName().toUpperCase(), 18, 14)
+  }
 
   doc.setFont("helvetica", "bold")
   doc.setFontSize(26)
@@ -1813,3 +1847,4 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
 
   return doc.output("blob")
 }
+
