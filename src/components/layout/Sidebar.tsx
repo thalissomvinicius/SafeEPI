@@ -13,7 +13,7 @@ const menuItems = [
   { href: "/workplaces", label: "Obras / Canteiros", icon: HardDrive, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/job-sectors", label: "Cargos / Setores", icon: BriefcaseBusiness, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/employees", label: "Colaboradores", icon: Users, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
-  { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/history", label: "Histórico", icon: History, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/movements", label: "Movimentações", icon: ArrowRightLeft, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/reports", label: "Relatórios", icon: TrendingDown, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },

@@ -253,7 +253,7 @@ export default function UsersPage() {
           <h4 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-1">Políticas de Acesso da Plataforma</h4>
           <p className="text-xs text-slate-500 leading-relaxed font-medium">
             <strong className="text-slate-700">ADMIN:</strong> Acesso total. 
-            <strong className="text-slate-700 ml-2">ALMOXARIFE:</strong> Opera entregas, baixas e estoque (Sem acesso a relatórios e usuários). 
+            <strong className="text-slate-700 ml-2">ALMOXARIFE:</strong> Opera entregas, baixas, estoque e cadastro de EPIs/CAs (Sem acesso a relatórios e usuários). 
             <strong className="text-slate-700 ml-2">DIRETORIA:</strong> Apenas visualiza relatórios e histórico (Não faz entregas).
           </p>
         </div>

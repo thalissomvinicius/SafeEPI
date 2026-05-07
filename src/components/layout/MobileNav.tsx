@@ -14,7 +14,7 @@ const allItems = [
   { href: "/employees", label: "Equipe", icon: Users, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/workplaces", label: "Obras", icon: HardDrive, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/job-sectors", label: "Cargos", icon: BriefcaseBusiness, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
-  { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/history", label: "Histórico", icon: History, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/movements", label: "Movimentações", icon: ArrowRightLeft, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/reports", label: "Relatórios", icon: TrendingDown, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
