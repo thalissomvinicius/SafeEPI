@@ -303,16 +303,16 @@ export default function TrainingPage() {
     return () => window.clearTimeout(timer)
   }, [loadPendingDrafts])
 
-  const handleAddTraining = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleAddTraining = async (e?: React.FormEvent, instructorBlankSignature = false) => {
+    e?.preventDefault()
     if (!formData.employee_id) return
     if (!tstSignatureBase64 || !tstSelectedEmployee || (tstAuthMethod === 'manual_facial' && !tstPhotoBase64)) {
       toast.error("É necessário colher a evidência do colaborador treinado.")
       return
     }
 
-    if (!instructorSignatureBase64) {
-      toast.error("A assinatura do instrutor tambem e obrigatoria.")
+    if (!instructorSignatureBase64 && !instructorBlankSignature) {
+      toast.error("O instrutor precisa assinar ou gerar com linha em branco para assinatura presencial.")
       return
     }
 
@@ -354,7 +354,8 @@ export default function TrainingPage() {
         instructorName: tstSelectedEmployee.full_name,
         instructorRole: tstRole,
         instructorPhotoBase64: instructorPhotoBase64 || undefined,
-        instructorSignatureBase64,
+        instructorSignatureBase64: instructorBlankSignature ? undefined : instructorSignatureBase64 || undefined,
+        instructorBlankSignature,
         participantSignatureBase64: tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial' ? tstSignatureBase64 : undefined,
         participantPhotoBase64: tstAuthMethod === 'manual_facial' ? tstPhotoBase64 || undefined : tstAuthMethod === 'facial' ? tstSignatureBase64 : undefined,
         participantAuthMethod: tstAuthMethod,
@@ -390,6 +391,7 @@ export default function TrainingPage() {
             instructorId: tstSelectedEmployee.id,
             instructorName: tstSelectedEmployee.full_name,
             instructorRole: tstRole,
+            instructorSignatureMode: instructorBlankSignature ? "blank_line" : "digital",
           },
         })
       } catch (archiveError) {
@@ -1471,6 +1473,16 @@ export default function TrainingPage() {
                           {isCheckingRemoteSignatures ? "Consultando assinaturas..." : "Atualizar assinaturas remotas"}
                         </button>
                       )}
+                      {!instructorSignatureBase64 && (
+                        <button
+                          onClick={() => void handleAddTraining(undefined, true)}
+                          disabled={isSaving}
+                          className="w-full py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenTool className="w-4 h-4 text-slate-500" />}
+                          Gerar com linha em branco para assinatura presencial
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex gap-3 pt-4">
@@ -1481,7 +1493,7 @@ export default function TrainingPage() {
                         Voltar
                       </button>
                       <button
-                        onClick={handleAddTraining}
+                        onClick={() => void handleAddTraining()}
                         disabled={!instructorSignatureBase64 || isSaving}
                         className="flex-1 py-4 text-[10px] font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
                       >

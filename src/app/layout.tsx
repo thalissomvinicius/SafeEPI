@@ -29,6 +29,7 @@ export const metadata: Metadata = {
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ClientShell } from "@/components/layout/ClientShell";
 import { Toaster } from "sonner";
+import { Analytics } from "@vercel/analytics/next";
 
 export default function RootLayout({
   children,
@@ -47,6 +48,7 @@ export default function RootLayout({
           </ClientShell>
         </AuthProvider>
         <Toaster position="top-center" richColors closeButton />
+        <Analytics />
       </body>
     </html>
   );

@@ -932,6 +932,7 @@ export interface TrainingCertificateData {
   photoBase64?: string
   instructorPhotoBase64?: string
   instructorSignatureBase64?: string
+  instructorBlankSignature?: boolean
   participantSignatureBase64?: string
   participantPhotoBase64?: string
   participantAuthMethod?: AuthMethod
@@ -1195,7 +1196,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   })
 
   // Informações Legais (Footer Verso)
-  if (data.instructorSignatureBase64) {
+  if (data.instructorSignatureBase64 || data.instructorBlankSignature) {
     const signY = 138
     const signCenterX = centerX
     const signLineW = 90
@@ -1204,18 +1205,20 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     doc.setLineWidth(0.5)
     doc.line(signCenterX - signLineW / 2, signY, signCenterX + signLineW / 2, signY)
 
-    try {
-      const imgProps = doc.getImageProperties(data.instructorSignatureBase64)
-      const ratio = imgProps.width / imgProps.height
-      let drawH = 16
-      let drawW = drawH * ratio
-      if (drawW > signLineW) {
-        drawW = signLineW
-        drawH = drawW / ratio
-      }
-      const fmt = data.instructorSignatureBase64.startsWith("data:image/png") ? "PNG" : "JPEG"
-      doc.addImage(data.instructorSignatureBase64, fmt, signCenterX - drawW / 2, signY - drawH - 1, drawW, drawH)
-    } catch {}
+    if (data.instructorSignatureBase64) {
+      try {
+        const imgProps = doc.getImageProperties(data.instructorSignatureBase64)
+        const ratio = imgProps.width / imgProps.height
+        let drawH = 16
+        let drawW = drawH * ratio
+        if (drawW > signLineW) {
+          drawW = signLineW
+          drawH = drawW / ratio
+        }
+        const fmt = data.instructorSignatureBase64.startsWith("data:image/png") ? "PNG" : "JPEG"
+        doc.addImage(data.instructorSignatureBase64, fmt, signCenterX - drawW / 2, signY - drawH - 1, drawW, drawH)
+      } catch {}
+    }
 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(10)
