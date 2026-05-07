@@ -1196,7 +1196,8 @@ export default function EmployeesPage() {
                 />
               </div>
             ) : (
-            <form onSubmit={handleSaveEmployee} className="min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
+            <form onSubmit={handleSaveEmployee} className="min-h-0 flex flex-col">
+              <div className="min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
               <div className="flex flex-col items-center mb-4">
                 {formData.photo_url ? (
                   <div className="relative">
@@ -1371,7 +1372,9 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
-              <div className="sticky bottom-0 -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 mt-2 flex gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:px-6">
+              </div>
+
+              <div className="shrink-0 flex gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:px-6">
                 <button 
                   type="button" 
                   disabled={isSaving}
