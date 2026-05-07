@@ -1280,6 +1280,24 @@ export const api = {
     return { training: result.training as Training, warning: result.warning };
   },
 
+  async deleteTraining(id: string) {
+    const companyId = await getCurrentCompanyId();
+    const params = new URLSearchParams({ id });
+    if (companyId) params.set("company_id", companyId);
+    const storedMasterCompanyId = getStoredMasterCompanyId();
+    if (!companyId && storedMasterCompanyId) params.set("company_id", storedMasterCompanyId);
+
+    const response = await fetch(`/api/trainings?${params.toString()}`, {
+      method: "DELETE",
+      headers: await this.getAuthHeaders(),
+    });
+
+    const result = await readResponseJson<{ error?: string }>(response);
+    if (!response.ok) {
+      throw new Error(result.error || "Erro ao excluir certificado.");
+    }
+  },
+
   // --- Perfis de Usuário (RBAC) ---
   async getProfiles() {
     const { data, error } = await withSessionRetry(() =>

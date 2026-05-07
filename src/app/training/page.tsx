@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Camera, PenTool, ShieldAlert, Users, Link2, ArrowLeft } from "lucide-react"
+import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Camera, PenTool, ShieldAlert, Users, Link2, ArrowLeft, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, TrainingWithRelations } from "@/types/database"
 import { format, addYears } from "date-fns"
@@ -51,6 +51,7 @@ const TRAINING_OPTIONS = [
 export default function TrainingPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const canDeleteCertificate = user?.role === "MASTER"
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [trainings, setTrainings] = useState<TrainingWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -708,6 +709,34 @@ export default function TrainingPage() {
     })
   }
 
+  const getTrainingStatusLabel = (status?: string | null) => {
+    const normalized = (status || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+
+    if (normalized.includes("vencido")) return "Vencido"
+    if (normalized.includes("vencendo")) return "Vencendo"
+    return "Válido"
+  }
+
+  const isTrainingValid = (status?: string | null) => getTrainingStatusLabel(status) === "Válido"
+
+  const deleteCertificate = async (rec: TrainingWithRelations) => {
+    if (!canDeleteCertificate) return
+    const employeeName = rec.employee?.full_name || "este colaborador"
+    if (!confirm(`Excluir o certificado de ${employeeName}? Esta acao nao pode ser desfeita.`)) return
+
+    try {
+      await api.deleteTraining(rec.id)
+      setTrainings((current) => current.filter((item) => item.id !== rec.id))
+      toast.success("Certificado excluido com sucesso.")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Nao foi possivel excluir o certificado."
+      toast.error(message)
+    }
+  }
+
   const filteredTrainings = trainings.filter(t => 
     t.training_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     t.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -815,7 +844,9 @@ export default function TrainingPage() {
                     </tr>
                   )
                 })}
-                {filteredTrainings.map((rec, i) => (
+                {filteredTrainings.map((rec, i) => {
+                  const statusLabel = getTrainingStatusLabel(rec.status)
+                  return (
                   <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-5 font-bold text-slate-800">{rec.employee?.full_name}</td>
                     <td className="px-6 py-4 text-slate-600 italic">{rec.training_name}</td>
@@ -826,25 +857,37 @@ export default function TrainingPage() {
                     </td>
                     <td className="px-6 py-4 text-slate-400">{new Date(rec.expiry_date).toLocaleDateString()}</td>
                      <td className="px-6 py-4 text-center">
-                       <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-full border ${
-                         rec.status === 'Válido' 
-                           ? 'bg-green-50 text-green-700 border-green-200' 
-                           : 'bg-amber-50 text-amber-700 border-amber-200'
-                       }`}>
-                         {rec.status}
-                       </span>
-                     </td>
-                     <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => downloadCertificate(rec)}
-                          title="Baixar Certificado"
-                          className="p-2 bg-slate-100 hover:bg-[#2563EB] hover:text-white text-slate-600 rounded-lg transition-all"
-                        >
-                          <FileDown className="w-4 h-4" />
-                        </button>
-                     </td>
+                        <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-full border ${
+                          isTrainingValid(rec.status)
+                            ? 'bg-green-50 text-green-700 border-green-200' 
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {statusLabel}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-2">
+                         <button
+                           onClick={() => downloadCertificate(rec)}
+                           title="Baixar Certificado"
+                           className="p-2 bg-blue-50 hover:bg-[#2563EB] hover:text-white text-[#2563EB] rounded-lg transition-all border border-blue-100"
+                         >
+                           <FileDown className="w-4 h-4" />
+                         </button>
+                         {canDeleteCertificate && (
+                           <button
+                             onClick={() => void deleteCertificate(rec)}
+                             title="Excluir certificado"
+                             className="p-2 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 rounded-lg transition-all border border-red-100"
+                           >
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                         )}
+                        </div>
+                      </td>
                   </tr>
-                ))}
+                  )
+                })}
                 {filteredTrainings.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-6 py-10 text-center text-slate-400 italic font-medium">

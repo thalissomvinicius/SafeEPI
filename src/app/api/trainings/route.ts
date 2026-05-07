@@ -141,3 +141,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAuthorizedUser(request, ["MASTER"])
+  if (!auth.authorized) {
+    return auth.response
+  }
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+    const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
+
+    if (!id) {
+      return NextResponse.json({ error: "ID do treinamento e obrigatorio." }, { status: 400 })
+    }
+
+    if (!companyId) {
+      return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
+    }
+
+    const { error } = await supabaseAdmin
+      .from("trainings")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", companyId)
+
+    if (error) {
+      console.error("[API trainings] Delete error:", error)
+      return NextResponse.json({ error: error.message, code: error.code, details: error.details }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error("[API trainings] Unexpected delete error:", err)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  }
+}
