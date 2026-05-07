@@ -117,9 +117,9 @@ export default function MovementsPage() {
 
   const getPeriodLabel = () => {
     if (dateFilter === 'month') return `Mês de ${format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}`
-    if (dateFilter === 'last30') return 'Ãšltimos 30 dias'
-    if (dateFilter === 'last60') return 'Ãšltimos 60 dias'
-    if (dateFilter === 'last90') return 'Ãšltimos 90 dias'
+    if (dateFilter === 'last30') return 'Últimos 30 dias'
+    if (dateFilter === 'last60') return 'Últimos 60 dias'
+    if (dateFilter === 'last90') return 'Últimos 90 dias'
     if (dateFilter === 'all') return 'Todo o período'
     if (dateFilter === 'specific_month' && specificMonth) return `Mês ${specificMonth}`
     if (dateFilter === 'custom' && customStartDate && customEndDate) return `${customStartDate} a ${customEndDate}`
@@ -130,7 +130,7 @@ export default function MovementsPage() {
     const blob = generateMovementsSimplePDF({ movements: filteredMovements, stats, period: getPeriodLabel() })
     openPdfDialog(blob, `Movimentacoes_Simples_${new Date().toISOString().slice(0,10)}.pdf`, {
       title: "PDF Simples - Movimentações",
-      description: `Período: ${getPeriodLabel()} Â· ${filteredMovements.length} registros`
+      description: `Período: ${getPeriodLabel()} · ${filteredMovements.length} registros`
     })
     setShowPdfModal(false)
   }
@@ -152,7 +152,7 @@ export default function MovementsPage() {
       })
     openPdfDialog(blob, `Movimentacoes_Apresentacao_${new Date().toISOString().slice(0,10)}.pdf`, {
       title: "PDF Apresentação - Movimentações",
-      description: `Período: ${getPeriodLabel()} Â· ${filteredMovements.length} registros`
+      description: `Período: ${getPeriodLabel()} · ${filteredMovements.length} registros`
     })
     setShowPdfModal(false)
     } finally {
@@ -464,7 +464,7 @@ export default function MovementsPage() {
                   Relatório operacional com tabela completa e resumo de indicadores. Ideal para arquivo e controle interno.
                 </p>
                 <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg">
-                  Retrato Â· 1 página+
+                  Retrato · 1 página+
                 </span>
               </button>
 
@@ -478,7 +478,7 @@ export default function MovementsPage() {
                   Relatório executivo com gráficos visuais e layout premium. Ideal para reuniões com gestores e diretoria.
                 </p>
                 <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#2563EB] bg-red-50 border border-blue-100 px-3 py-1.5 rounded-lg">
-                  Paisagem Â· 2 páginas
+                  Paisagem · 2 páginas
                 </span>
               </div>
               </div>
@@ -530,7 +530,7 @@ export default function MovementsPage() {
 
             <div className="px-6 pb-6">
               <p className="text-[10px] text-center text-slate-400 italic">
-                Período: <strong>{getPeriodLabel()}</strong> Â· {filteredMovements.length} movimentações
+                Período: <strong>{getPeriodLabel()}</strong> · {filteredMovements.length} movimentações
               </p>
             </div>
           </div>

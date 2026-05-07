@@ -1052,7 +1052,7 @@ export default function TrainingPage() {
                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{emp.job_title} • CPF: {emp.cpf}</p>
                             </div>
                             {emp.photo_url && (
-                              <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 uppercase tracking-widest flex-shrink-0">âœ“ Foto</span>
+                              <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 uppercase tracking-widest flex-shrink-0">✓ Foto</span>
                             )}
                           </button>
                         ))
@@ -1063,7 +1063,7 @@ export default function TrainingPage() {
                       onClick={() => setStep(1)}
                       className="w-full py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
                     >
-                      â† Voltar para Dados do Curso
+                      ← Voltar para Dados do Curso
                     </button>
                   </div>
                 )}
@@ -1266,7 +1266,7 @@ export default function TrainingPage() {
                             >
                               <X className="w-3 h-3" />
                             </button>
-                            <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-400 uppercase tracking-widest bg-green-900/80 px-2 py-1 rounded">âœ“ Biometria Capturada</div>
+                            <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-400 uppercase tracking-widest bg-green-900/80 px-2 py-1 rounded">✓ Biometria Capturada</div>
                           </div>
                         ) : (
                           <FaceCamera

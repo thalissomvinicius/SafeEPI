@@ -155,9 +155,9 @@ export default function ReportsPage() {
     const labelMap: Record<DateFilter, string> = {
       'all': 'Todo o Período',
       'month': 'Neste Mês',
-      'last30': 'Ãšltimos 30 Dias',
-      'last60': 'Ãšltimos 60 Dias',
-      'last90': 'Ãšltimos 90 Dias',
+      'last30': 'Últimos 30 Dias',
+      'last60': 'Últimos 60 Dias',
+      'last90': 'Últimos 90 Dias',
       'custom': 'Período Específico',
       'specific_month': 'Mês Selecionado'
     }
@@ -203,9 +203,9 @@ export default function ReportsPage() {
   const handleExportPDF = () => {
     let periodTitle = 'Todo o Histórico'
     if (dateFilter === 'month') periodTitle = 'Neste Mês'
-    if (dateFilter === 'last30') periodTitle = 'Ãšltimos 30 Dias'
-    if (dateFilter === 'last60') periodTitle = 'Ãšltimos 60 Dias'
-    if (dateFilter === 'last90') periodTitle = 'Ãšltimos 90 Dias'
+    if (dateFilter === 'last30') periodTitle = 'Últimos 30 Dias'
+    if (dateFilter === 'last60') periodTitle = 'Últimos 60 Dias'
+    if (dateFilter === 'last90') periodTitle = 'Últimos 90 Dias'
     if (dateFilter === 'custom') periodTitle = `Período: ${customStartDate} a ${customEndDate}`
     if (dateFilter === 'specific_month') periodTitle = `Mês Específico: ${specificMonth}`
 
@@ -252,9 +252,9 @@ export default function ReportsPage() {
               className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 pl-10 pr-8 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB] appearance-none"
             >
               <option value="month">Neste Mês</option>
-              <option value="last30">Ãšltimos 30 Dias</option>
-              <option value="last60">Ãšltimos 60 Dias</option>
-              <option value="last90">Ãšltimos 90 Dias</option>
+              <option value="last30">Últimos 30 Dias</option>
+              <option value="last60">Últimos 60 Dias</option>
+              <option value="last90">Últimos 90 Dias</option>
               <option value="specific_month">Mês Específico</option>
               <option value="custom">Período Personalizado</option>
               <option value="all">Todo o Período</option>

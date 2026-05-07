@@ -102,7 +102,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     const base64 = takeSnapshot()
     if (!base64) return
     
-    setStatusText("âœ“ Captura realizada com sucesso!")
+    setStatusText("✓ Captura realizada com sucesso!")
     setCapturedImage(base64)
     stopCamera()
     
@@ -111,7 +111,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     }, 600)
   }, [onCapture, stopCamera, takeSnapshot])
 
-  // â”€â”€ Load AI Models â”€â”€
+  // -- Load AI Models --
   useEffect(() => {
     const loadModels = async () => {
       try {
@@ -132,7 +132,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     return () => { stopCamera() }
   }, [stopCamera])
 
-  // â”€â”€ Start camera when ready â”€â”€
+  // -- Start camera when ready --
   useEffect(() => {
     if (isModelsLoaded && !showInstructions) {
       const timer = setTimeout(() => {
@@ -142,7 +142,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     }
   }, [isModelsLoaded, showInstructions, startCamera])
 
-  // â”€â”€ Face detection loop â”€â”€
+  // -- Face detection loop --
   const handleVideoPlay = () => {
     if (intervalRef.current) clearInterval(intervalRef.current)
 
@@ -268,7 +268,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     }
   }
 
-  // â”€â”€ Countdown timer â”€â”€
+  // -- Countdown timer --
   useEffect(() => {
     if (countdown !== null && countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
@@ -315,7 +315,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     }
   }, [countdown, captureSuccess, targetDescriptor])
 
-  // â”€â”€ INSTRUCTIONS SCREEN â”€â”€
+  // -- INSTRUCTIONS SCREEN --
   if (showInstructions) {
     return (
       <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center space-y-4 sm:space-y-6 border border-slate-200 shadow-xl shadow-slate-200/50">
@@ -330,19 +330,19 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
         </div>
         <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full">
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">ðŸ’¡ Iluminação</p>
+            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Iluminação</p>
             <p className="text-[9px] text-slate-500 leading-tight">Fique de frente para a luz. Evite contraluz.</p>
           </div>
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">ðŸ§¢ Acessórios</p>
+            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Acessórios</p>
             <p className="text-[9px] text-slate-500 leading-tight">Remova óculos, chapéus, bonés e protetores.</p>
           </div>
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">ðŸ“ Posição</p>
+            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Posição</p>
             <p className="text-[9px] text-slate-500 leading-tight">Olhe para a câmera e centralize o rosto.</p>
           </div>
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">â± Tempo</p>
+            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Tempo</p>
             <p className="text-[9px] text-slate-500 leading-tight">Fique parado ~4s. Haverá contagem regressiva.</p>
           </div>
         </div>
@@ -367,7 +367,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     )
   }
 
-  // â”€â”€ CAPTURED IMAGE PREVIEW â”€â”€
+  // -- CAPTURED IMAGE PREVIEW --
   if (capturedImage) {
     return (
       <div className="bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden relative flex items-center justify-center border-4 border-green-600 min-h-[360px] sm:min-h-[420px]">
@@ -385,7 +385,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
     )
   }
 
-  // â”€â”€ CAMERA VIEW â”€â”€
+  // -- CAMERA VIEW --
   return (
     <div className="bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden relative shadow-inner flex items-center justify-center border-2 sm:border-4 border-slate-800 face-camera-container">
       {error ? (
@@ -444,7 +444,7 @@ export function FaceCamera({ onCapture, targetDescriptor, onCancel, cancelLabel 
               </div>
               {isVerified && (
                 <div className="bg-green-900/80 px-3 sm:px-4 py-1.5 rounded-full border border-green-600/50">
-                  <p className="text-green-400 text-[8px] font-black uppercase tracking-widest">âœ“ Identidade Verificada</p>
+                  <p className="text-green-400 text-[8px] font-black uppercase tracking-widest">✓ Identidade Verificada</p>
                 </div>
               )}
             </div>

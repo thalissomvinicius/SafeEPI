@@ -25,34 +25,34 @@ function RemoteDeliveryContent() {
   const searchParams = useSearchParams()
   const sigCanvas = useRef<SignatureCanvas | null>(null)
   
-  // â”€â”€ Page states â”€â”€
+  // -- Page states --
   const [phase, setPhase] = useState<'loading' | 'error' | 'verify' | 'sign' | 'done'>('loading')
   const [errorMsg, setErrorMsg] = useState("")
 
-  // â”€â”€ Verification form â”€â”€
+  // -- Verification form --
   const [inputCpf, setInputCpf] = useState("")
   const [verifyError, setVerifyError] = useState("")
   const [verifyAttempts, setVerifyAttempts] = useState(0)
 
-  // â”€â”€ Delivery data â”€â”€
+  // -- Delivery data --
   const [deliveryData, setDeliveryData] = useState<DeliveryData | null>(null)
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [ppe, setPpe] = useState<PPE | null>(null)
   const [workplace, setWorkplace] = useState<Workplace | null>(null)
 
-  // â”€â”€ Signing â”€â”€
+  // -- Signing --
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null)
   const [lastPdfFileName, setLastPdfFileName] = useState<string | null>(null)
 
-  // â”€â”€ Metadata â”€â”€
+  // -- Metadata --
   const [ipAddress, setIpAddress] = useState("")
   const [location, setLocation] = useState("")
   const [linkToken, setLinkToken] = useState<string>("")
 
-  // â”€â”€ Auto-scroll to top on phase/method change â”€â”€
+  // -- Auto-scroll to top on phase/method change --
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [phase, authMethod])
@@ -65,7 +65,7 @@ function RemoteDeliveryContent() {
     }
   }, [lastPdfUrl])
 
-  // â”€â”€ Load delivery data on mount â”€â”€
+  // -- Load delivery data on mount --
   useEffect(() => {
     const s = searchParams.get('s') // Legacy support
     const t = searchParams.get('t')
@@ -153,7 +153,7 @@ function RemoteDeliveryContent() {
     setVerifyError("")
   }
 
-  // â”€â”€ Identity verification â”€â”€
+  // -- Identity verification --
   const handleVerify = () => {
     if (!employee) return
     
@@ -182,7 +182,7 @@ function RemoteDeliveryContent() {
     setPhase('sign')
   }
 
-  // â”€â”€ Save delivery â”€â”€
+  // -- Save delivery --
   const saveDelivery = useCallback(async (signatureDataUrl: string) => {
     if (!employee || !ppe) return
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
@@ -310,9 +310,9 @@ function RemoteDeliveryContent() {
     }
   }, [employee, ppe, workplace, deliveryData, authMethod, capturedPhotoBase64, ipAddress, location, linkToken])
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   // RENDER: Loading
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   if (phase === 'loading') return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
       <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
@@ -320,9 +320,9 @@ function RemoteDeliveryContent() {
     </div>
   )
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   // RENDER: Error
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   if (phase === 'error') return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center">
       <ShieldAlert className="w-16 h-16 text-red-500 mb-4" />
@@ -331,9 +331,9 @@ function RemoteDeliveryContent() {
     </div>
   )
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   // RENDER: Done
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   if (phase === 'done') return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center animate-in zoom-in">
       <div className="bg-green-100 p-4 rounded-full mb-6 text-green-600">
@@ -358,9 +358,9 @@ function RemoteDeliveryContent() {
     </div>
   )
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   // RENDER: Identity Verification (CPF)
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   if (phase === 'verify') return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -437,14 +437,14 @@ function RemoteDeliveryContent() {
     </div>
   )
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   // RENDER: Signing Area (after CPF verified)
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ---------------------------------------
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pt-8 sm:pt-12">
       <div className="w-full max-w-lg space-y-4 sm:space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-block bg-green-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">âœ“ Identidade Verificada</div>
+          <div className="inline-block bg-green-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">✓ Identidade Verificada</div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirmação de Recebimento</h1>
           <p className="text-slate-500 text-xs sm:text-sm font-medium">{employee?.full_name} - {COMPANY_CONFIG.name}</p>
         </div>

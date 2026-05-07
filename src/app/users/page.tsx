@@ -271,7 +271,7 @@ export default function UsersPage() {
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 font-bold p-2"
               >
-                âœ•
+                ×
               </button>
             </div>
             

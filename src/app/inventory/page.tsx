@@ -207,7 +207,7 @@ export default function InventoryPage() {
                                 {format(new Date(m.created_at || ""), "dd/MM/yyyy • HH:mm", { locale: ptBR })}
                               </p>
                               {m.created_by_name && (
-                                <span className="text-[8px] text-slate-500 italic">Â· {m.created_by_name}</span>
+                                <span className="text-[8px] text-slate-500 italic">· {m.created_by_name}</span>
                               )}
                             </div>
                         </div>
@@ -220,7 +220,7 @@ export default function InventoryPage() {
 
               <div className="mt-8 pt-6 border-t border-slate-800">
                  <button className="w-full py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-colors">
-                     Ver histórico completo â†’
+                     Ver histórico completo →
                  </button>
               </div>
            </div>

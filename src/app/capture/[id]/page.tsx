@@ -49,7 +49,7 @@ function CaptureContent() {
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
   const [capturedDescriptor, setCapturedDescriptor] = useState<Float32Array | null>(null)
 
-  // â”€â”€ Auto-scroll to top on state change â”€â”€
+  // -- Auto-scroll to top on state change --
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [cpfVerified, isCapturing, isSuccess, capturedPhoto])
@@ -150,7 +150,7 @@ function CaptureContent() {
     }
   }
 
-  // â”€â”€ LOADING â”€â”€
+  // -- LOADING --
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -159,7 +159,7 @@ function CaptureContent() {
     )
   }
 
-  // â”€â”€ ERRO / LINK EXPIRADO / LINK JÁ USADO â”€â”€
+  // -- ERRO / LINK EXPIRADO / LINK JÁ USADO --
   if (pageError || !employee) {
     const isExpired = linkStatus === 'expired'
     const isCompleted = linkStatus === 'completed'
@@ -185,7 +185,7 @@ function CaptureContent() {
     )
   }
 
-  // â”€â”€ SUCESSO â”€â”€
+  // -- SUCESSO --
   if (isSuccess) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 animate-in fade-in zoom-in duration-500">
@@ -198,7 +198,7 @@ function CaptureContent() {
     )
   }
 
-  // â”€â”€ CÃ‚MERA FULLSCREEN â”€â”€
+  // -- CÂMERA FULLSCREEN --
   if (isCapturing) {
     return (
       <div className="fixed inset-0 bg-black flex flex-col z-50">
@@ -217,7 +217,7 @@ function CaptureContent() {
     )
   }
 
-  // â”€â”€ PREVIEW DA FOTO CAPTURADA â”€â”€
+  // -- PREVIEW DA FOTO CAPTURADA --
   if (capturedPhoto) {
     return (
       <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center">
@@ -263,7 +263,7 @@ function CaptureContent() {
     )
   }
 
-  // â”€â”€ VERIFICAÇÃƒO DE CPF â”€â”€
+  // -- VERIFICAÇÃO DE CPF --
   if (!cpfVerified) {
     return (
       <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center">
@@ -310,7 +310,7 @@ function CaptureContent() {
     )
   }
 
-  // â”€â”€ TELA PRINCIPAL (CPF verificado) â”€â”€
+  // -- TELA PRINCIPAL (CPF verificado) --
   return (
     <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center">
       <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5">

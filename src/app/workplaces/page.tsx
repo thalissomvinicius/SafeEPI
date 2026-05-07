@@ -196,7 +196,7 @@ export default function WorkplacesPage() {
                       </button>
                       <button onClick={() => openDetailsWorkplace(w)}
                         className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest hover:underline flex items-center gap-1">
-                        <Eye className="w-3 h-3" /> Ver detalhes â†’
+                        <Eye className="w-3 h-3" /> Ver detalhes →
                       </button>
                     </div>
                   </div>
@@ -219,7 +219,7 @@ export default function WorkplacesPage() {
         <p className="text-sm text-slate-400 max-w-md mt-2 leading-relaxed">O cadastro correto da obra ou canteiro permite a auditoria por geolocalização e o rateio preciso dos custos operacionais no Balanço BI.</p>
       </div>
 
-      {/* â”€â”€â”€ MODAL: Ver Detalhes â”€â”€â”€ */}
+      {/* --- MODAL: Ver Detalhes --- */}
       {detailsWorkplace && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
@@ -310,7 +310,7 @@ export default function WorkplacesPage() {
         </div>
       )}
 
-      {/* â”€â”€â”€ MODAL: Editar / Adicionar â”€â”€â”€ */}
+      {/* --- MODAL: Editar / Adicionar --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
@@ -372,7 +372,7 @@ export default function WorkplacesPage() {
         </div>
       )}
 
-      {/* â”€â”€â”€ MODAL: Confirmação de Exclusão â”€â”€â”€ */}
+      {/* --- MODAL: Confirmação de Exclusão --- */}
       {deleteModal.open && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-2 border-blue-200">

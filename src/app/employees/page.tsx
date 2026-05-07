@@ -1269,7 +1269,7 @@ export default function EmployeesPage() {
                       <span className="text-red-500 text-[8px] font-bold">CPF Inválido</span>
                     )}
                     {formData.cpf && isValidCpf(formData.cpf) && (
-                      <span className="text-green-500 text-[8px] font-bold">âœ“ Válido</span>
+                      <span className="text-green-500 text-[8px] font-bold">✓ Válido</span>
                     )}
                   </label>
                   <input 
@@ -1538,7 +1538,7 @@ export default function EmployeesPage() {
               <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
                   <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest">
-                    ðŸ“‹ Selecione o Técnico de Segurança do Trabalho cadastrado no sistema.
+                    Selecione o Técnico de Segurança do Trabalho cadastrado no sistema.
                   </p>
                 </div>
 
@@ -1577,7 +1577,7 @@ export default function EmployeesPage() {
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{getJobTitleName(emp.job_title)} • CPF: {emp.cpf}</p>
                         </div>
                         {emp.photo_url && (
-                          <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 uppercase tracking-widest flex-shrink-0">âœ“ Foto</span>
+                          <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 uppercase tracking-widest flex-shrink-0">✓ Foto</span>
                         )}
                       </button>
                     ))
@@ -1659,7 +1659,7 @@ export default function EmployeesPage() {
                         >
                           <X className="w-3 h-3" />
                         </button>
-                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-600 uppercase tracking-widest bg-green-50 px-2 py-0.5 rounded">âœ“ Assinatura Capturada</div>
+                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-600 uppercase tracking-widest bg-green-50 px-2 py-0.5 rounded">✓ Assinatura Capturada</div>
                       </div>
                     ) : (
                       <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
@@ -1709,7 +1709,7 @@ export default function EmployeesPage() {
                         >
                           <X className="w-3 h-3" />
                         </button>
-                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-400 uppercase tracking-widest bg-green-900/80 px-2 py-0.5 rounded">âœ“ Foto Capturada</div>
+                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-400 uppercase tracking-widest bg-green-900/80 px-2 py-0.5 rounded">✓ Foto Capturada</div>
                       </div>
                     ) : (
                       <FaceCamera
@@ -1727,7 +1727,7 @@ export default function EmployeesPage() {
                     onClick={() => setTstStep(1)}
                     className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50"
                   >
-                    â† Voltar
+                    ← Voltar
                   </button>
                   <button
                     onClick={exportNR06PDF}

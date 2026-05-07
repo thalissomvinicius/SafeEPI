@@ -154,7 +154,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Atividade de Entregas</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Ãšltimos 7 dias em tempo real</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Últimos 7 dias em tempo real</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-[#2563EB] rounded-full animate-pulse"></div>

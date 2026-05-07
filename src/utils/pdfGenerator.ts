@@ -62,9 +62,9 @@ function addPdfLogo(doc: jsPDF, x: number, y: number, maxW: number, maxH: number
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 // SHARED HELPERS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 
 function addPageHeader(doc: jsPDF, title: string, subtitle: string) {
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -131,9 +131,9 @@ function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number)
   doc.text(value || "-", x, y + 5)
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 // 1. FICHA DE ENTREGA (NR-06) - MODERN LAYOUT
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 
 export interface DeliveryPDFData {
   employeeName: string
@@ -207,7 +207,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   
   doc.setTextColor(100, 116, 139)
   doc.setFont("helvetica", "normal")
-  doc.text("CARGO / FUNÇÃƒO", pageWidth / 2, currentY + 18)
+  doc.text("CARGO / FUNÇÃO", pageWidth / 2, currentY + 18)
   doc.setTextColor(30, 41, 59)
   doc.setFont("helvetica", "bold")
   doc.text(data.employeeRole || "Não Informado", pageWidth / 2, currentY + 23)
@@ -328,7 +328,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
-    doc.text("AUTENTICAÇÃƒO BIOMÉTRICA", pageWidth / 2, currentY, { align: "center" })
+    doc.text("AUTENTICAÇÃO BIOMÉTRICA", pageWidth / 2, currentY, { align: "center" })
     
     const containerSize = 50
     const containerX = pageWidth / 2 - containerSize / 2
@@ -410,7 +410,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFontSize(7)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(148, 163, 184)
-  doc.text("HASH DE VALIDAÇÃƒO", metaX, currentY + 10)
+  doc.text("HASH DE VALIDAÇÃO", metaX, currentY + 10)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(71, 85, 105)
   doc.text(hash, metaX, currentY + 14)
@@ -424,7 +424,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   
   doc.setFont("helvetica", "normal")
   doc.setTextColor(148, 163, 184)
-  doc.text("GEOLOCALIZAÇÃƒO", metaX, currentY + 31)
+  doc.text("GEOLOCALIZAÇÃO", metaX, currentY + 31)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(71, 85, 105)
   doc.text(data.location || "Coordenadas não capturadas", metaX, currentY + 35)
@@ -451,9 +451,9 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   return doc.output("blob")
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 2. RECIBO DE BAIXA / SUBSTITUIÇÃƒO
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
+// 2. RECIBO DE BAIXA / SUBSTITUIÇÃO
+// ---------------------------------------------
 
 export interface ReturnPDFData {
   employeeName: string
@@ -475,7 +475,7 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   const pageWidth = doc.internal.pageSize.getWidth()
   const hash = data.validationHash || "PENDENTE"
 
-  addPageHeader(doc, "RECIBO DE BAIXA / SUBSTITUIÇÃƒO E.P.I.", "Registro de Devolução e Troca - NR-06")
+  addPageHeader(doc, "RECIBO DE BAIXA / SUBSTITUIÇÃO E.P.I.", "Registro de Devolução e Troca - NR-06")
 
   const boxY = 46
   infoRow(doc, "Colaborador", data.employeeName, 14, boxY)
@@ -562,9 +562,9 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   return doc.output("blob")
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 // 3. FICHA NR-06 (Prontuário do Colaborador)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 
 export interface NR06PDFData {
   employeeName: string
@@ -668,7 +668,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       item.caNr,
       item.quantity,
       item.reason,
-      item.returnedAt ? "Devolvido" : item.isExpired ? "âš  Troca Pendente" : "Em uso",
+      item.returnedAt ? "Devolvido" : item.isExpired ? "Troca Pendente" : "Em uso",
       item.returnedAt ? format(new Date(item.returnedAt), "dd/MM/yyyy") : "-",
       "",
     ]),
@@ -829,9 +829,9 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   return doc.output("blob")
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 // 4. RELATÓRIO GERAL (ANALYTICS)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 
 export interface ReportPDFData {
   stats: { label: string; value: string; change: string }[]
@@ -882,7 +882,7 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   doc.setFontSize(10)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(r, g, b)
-  doc.text("HISTÓRICO RECENTE DE TRANSAÇÃ•ES", 14, currentY)
+  doc.text("HISTÓRICO RECENTE DE TRANSAÇÕES", 14, currentY)
   currentY += 5
 
   const recentDeliveries = data.deliveries.slice(0, 50)
@@ -905,7 +905,7 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   })
 
   const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 200
-  const emitDate = format(new Date(), "dd 'de' MMMM 'de' yyyy 'Ã s' HH:mm", { locale: ptBR })
+  const emitDate = format(new Date(), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
   doc.setFontSize(7)
   doc.setFont("helvetica", "italic")
   doc.setTextColor(100, 116, 139)
@@ -915,9 +915,9 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   return doc.output("blob")
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 // 5. CERTIFICADO DE TREINAMENTO
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 
 export interface TrainingCertificateData {
   employeeName: string
@@ -976,7 +976,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setFont("times", "bold")
   doc.setFontSize(28)
   doc.setTextColor(26, 26, 46) // #1a1a2e
-  doc.text("CERTIFICADO DE CONCLUSÃƒO", centerX, 40, { align: "center" })
+  doc.text("CERTIFICADO DE CONCLUSÃO", centerX, 40, { align: "center" })
 
   // Decorative line below title (220px ~ 77mm)
   doc.setDrawColor(r, g, b)
@@ -1122,7 +1122,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setTextColor(136, 136, 136) // #888888
   const emitDate = format(new Date(), "dd/MM/yyyy")
   const emitTime = format(new Date(), "HH:mm")
-  doc.text(`Documento emitido digitalmente em ${emitDate} Ã s ${emitTime}`, rightX, footerY + 18, { align: "right" })
+  doc.text(`Documento emitido digitalmente em ${emitDate} às ${emitTime}`, rightX, footerY + 18, { align: "right" })
   
   doc.setFont("helvetica", "normal")
   doc.text("via Sistema SESMT Digital", rightX, footerY + 22, { align: "right" })
@@ -1144,7 +1144,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(18)
   doc.setTextColor(26, 26, 46)
-  doc.text("CONTEÃšDO PROGRAMÁTICO", centerX, 30, { align: "center" })
+  doc.text("CONTEÚDO PROGRAMÁTICO", centerX, 30, { align: "center" })
 
   doc.setFont("helvetica", "italic")
   doc.setFontSize(14)
@@ -1155,7 +1155,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   const content = data.programContent && data.programContent.length > 0 
     ? data.programContent 
     : [
-        "1. Normas e regulamentos de segurança aplicáveis Ã  atividade.",
+        "1. Normas e regulamentos de segurança aplicáveis à atividade.",
         "2. Identificação, avaliação e controle de riscos e perigos.",
         "3. Procedimentos operacionais padrão (POP) e Permissão de Trabalho.",
         "4. Seleção, inspeção, uso correto e guarda de EPIs e EPCs.",
@@ -1269,9 +1269,9 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   return doc.output("blob")
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 // 6. MOVEMENTS REPORT - SIMPLE & PRESENTATION PDF
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---------------------------------------------
 
 export interface MovementsStats {
   deliveries: number
@@ -1438,7 +1438,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
   doc.setTextColor(255, 255, 255)
-  doc.text(`${data.period}  Â·  Gerado em ${format(new Date(), "dd/MM/yyyy 'Ã s' HH:mm")}`, mx, 35)
+  doc.text(`${data.period}  ·  Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, mx, 35)
 
   const cardY = 48
   const cardW = (pw - mx * 2 - 9) / 4
@@ -1471,7 +1471,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
       m.employee?.full_name || "-",
       `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
       String(m.quantity),
-      m.returned_at ? "DEVOLUÇÃƒO" : "ENTREGA",
+      m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
       m.workplace?.name || "Geral"
     ]),
     headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 8, cellPadding: 4 },
@@ -1492,7 +1492,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
           hookData.cell.styles.textColor = [5, 150, 105]
           hookData.cell.styles.fontStyle = "bold"
         }
-        if (val === "DEVOLUÇÃƒO") {
+        if (val === "DEVOLUÇÃO") {
           hookData.cell.styles.textColor = [217, 119, 6]
           hookData.cell.styles.fontStyle = "bold"
         }
@@ -1538,12 +1538,12 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "bold")
   doc.setFontSize(26)
   doc.setTextColor(255, 255, 255)
-  doc.text("RELATÓRIO DE MOVIMENTAÇÃ•ES DE EPI", 18, 32)
+  doc.text("RELATÓRIO DE MOVIMENTAÇÕES DE EPI", 18, 32)
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(10)
   doc.setTextColor(255, 255, 255)
-  doc.text(`Período: ${data.period}  Â·  Emitido em ${format(new Date(), "dd/MM/yyyy 'Ã s' HH:mm")}`, 18, 44)
+  doc.text(`Período: ${data.period}  ·  Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, 18, 44)
 
   doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
@@ -1605,7 +1605,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(71, 85, 105)
-    const truncName = name.length > 20 ? name.slice(0, 20) + "â€¦" : name
+    const truncName = name.length > 20 ? name.slice(0, 20) + "..." : name
     doc.text(truncName, 24, y + singleBarH / 2)
     const barX = 24 + 50
     doc.setFillColor(241, 245, 249)
@@ -1629,7 +1629,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
   doc.setTextColor(30, 41, 59)
-  doc.text("DISTRIBUIÇÃƒO: ENTREGAS vs DEVOLUÇÃ•ES", rightX + 6, chartsY + 11)
+  doc.text("DISTRIBUIÇÃO: ENTREGAS vs DEVOLUÇÕES", rightX + 6, chartsY + 11)
   doc.setDrawColor(241, 245, 249)
   doc.setLineWidth(0.3)
   doc.line(rightX + 6, chartsY + 14, rightX + rightW - 6, chartsY + 14)
@@ -1675,7 +1675,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
   doc.setTextColor(30, 41, 59)
-  doc.text("MOVIMENTAÇÃ•ES POR UNIDADE", rightX + 6, botY + 11)
+  doc.text("MOVIMENTAÇÕES POR UNIDADE", rightX + 6, botY + 11)
   doc.setDrawColor(241, 245, 249)
   doc.setLineWidth(0.3)
   doc.line(rightX + 6, botY + 14, rightX + rightW - 6, botY + 14)
@@ -1697,7 +1697,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(71, 85, 105)
-    const wpLabel = wp.length > 14 ? wp.slice(0, 14) + "â€¦" : wp
+    const wpLabel = wp.length > 14 ? wp.slice(0, 14) + "..." : wp
     doc.text(wpLabel, rightX + 8, rowY + 5.5)
     doc.setFillColor(241, 245, 249)
     doc.roundedRect(rightX + 8 + labelW, rowY, wpBarW, 8, 2, 2, "F")
@@ -1716,7 +1716,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
   doc.setTextColor(255, 255, 255)
-  doc.text(`${COMPANY_CONFIG.name}  Â·  Documento Confidencial  Â·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
+  doc.text(`${COMPANY_CONFIG.name}  ·  Documento Confidencial  ·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
   doc.text("Página 1 de 2", pw - 18, ph - 5, { align: "right" })
 
   doc.addPage()
@@ -1725,11 +1725,11 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "bold")
   doc.setFontSize(14)
   doc.setTextColor(255, 255, 255)
-  doc.text("DETALHAMENTO COMPLETO DE MOVIMENTAÇÃ•ES", 18, 18)
+  doc.text("DETALHAMENTO COMPLETO DE MOVIMENTAÇÕES", 18, 18)
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
   doc.setTextColor(255, 255, 255)
-  doc.text(`${data.period}  Â·  ${data.movements.length} registros`, pw - 18, 18, { align: "right" })
+  doc.text(`${data.period}  ·  ${data.movements.length} registros`, pw - 18, 18, { align: "right" })
 
   autoTable(doc, {
     startY: 36,
@@ -1741,7 +1741,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       m.employee?.cpf || "-",
       `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
       String(m.quantity),
-      m.returned_at ? "DEVOLUÇÃƒO" : "ENTREGA",
+      m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
       m.workplace?.name || "Geral",
       signatureImages.has(m.id) ? "" : "Sem imagem"
     ]),
@@ -1766,7 +1766,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
           hookData.cell.styles.textColor = [5, 150, 105]
           hookData.cell.styles.fontStyle = "bold"
         }
-        if (val === "DEVOLUÇÃƒO") {
+        if (val === "DEVOLUÇÃO") {
           hookData.cell.styles.textColor = [217, 119, 6]
           hookData.cell.styles.fontStyle = "bold"
         }
@@ -1824,7 +1824,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7)
   doc.setTextColor(255, 255, 255)
-  doc.text(`${COMPANY_CONFIG.name}  Â·  Documento Confidencial  Â·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
+  doc.text(`${COMPANY_CONFIG.name}  ·  Documento Confidencial  ·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
   doc.text("Página 2 de 2", pw - 18, ph - 5, { align: "right" })
 
   return doc.output("blob")

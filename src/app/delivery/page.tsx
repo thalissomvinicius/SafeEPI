@@ -91,7 +91,7 @@ export default function DeliveryPage() {
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
   const [deliveryDate, setDeliveryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
 
-  // â”€â”€ CART: Multi-EPI â”€â”€
+  // -- CART: Multi-EPI --
   const [cart, setCart] = useState<CartItem[]>([])
   const [currentPpeId, setCurrentPpeId] = useState("")
   const [currentQuantity, setCurrentQuantity] = useState(1)
@@ -280,7 +280,7 @@ export default function DeliveryPage() {
     }
   }
 
-  // â”€â”€ Cart operations â”€â”€
+  // -- Cart operations --
   useEffect(() => {
     const timer = window.setTimeout(() => {
       loadPendingDrafts()
@@ -346,7 +346,7 @@ export default function DeliveryPage() {
     setPpeSearchTerm("")
     toast.success(autoReturnQuantity > 0
       ? `${currentPpe.name} adicionado com baixa automatica de ${autoReturnQuantity} unidade(s).`
-      : `${currentPpe.name} adicionado Ã  entrega.`
+      : `${currentPpe.name} adicionado à entrega.`
     )
   }
 
@@ -385,7 +385,7 @@ export default function DeliveryPage() {
 
   const saveDelivery = useCallback(async (signatureDataUrl: string) => {
     if (cart.length === 0) {
-      toast.error("Adicione pelo menos um EPI Ã  lista de entrega.")
+      toast.error("Adicione pelo menos um EPI à lista de entrega.")
       return
     }
     if (!validateCartForDelivery()) return
@@ -556,7 +556,7 @@ export default function DeliveryPage() {
 
   const generateRemoteLink = async () => {
       if (cart.length === 0) {
-        toast.error("Adicione pelo menos um EPI Ã  lista antes de gerar o link.")
+        toast.error("Adicione pelo menos um EPI à lista antes de gerar o link.")
 	        return
 	      }
       if (cart.length > 1) {
@@ -1091,7 +1091,7 @@ export default function DeliveryPage() {
                       {currentPpe && currentPpe.lifespan_days > 0 && (
                         <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Ãštil (NR-06)</span>
+                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Útil (NR-06)</span>
                             <span className="text-xs font-bold text-orange-800">{currentPpe.lifespan_days} dias</span>
                           </div>
                           <div className="flex items-center justify-between mt-1 pt-3 border-t border-orange-200/50">
@@ -1110,7 +1110,7 @@ export default function DeliveryPage() {
                         disabled={!currentPpe || isCurrentPpeExpired}
                         className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 mt-2"
                       >
-                        <Plus className="w-4 h-4" /> Adicionar Ã  Entrega
+                        <Plus className="w-4 h-4" /> Adicionar à Entrega
                       </button>
                     </div>
                   </div>
@@ -1332,7 +1332,7 @@ export default function DeliveryPage() {
 
               <div className="pt-6 flex justify-center border-t border-slate-100">
                 <button onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-800 transition-colors bg-slate-50 px-6 py-3 rounded-xl">
-                  â† Voltar e Alterar EPIs
+                  ← Voltar e Alterar EPIs
                 </button>
               </div>
             </div>
