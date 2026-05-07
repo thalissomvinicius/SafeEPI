@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Camera, PenTool, ShieldAlert, Users, Link2, ArrowLeft, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, TrainingWithRelations } from "@/types/database"
-import { format, addYears } from "date-fns"
+import { format } from "date-fns"
 import { toast } from "sonner"
 import { useRef } from "react"
 import SignatureCanvas from "react-signature-canvas"
@@ -15,6 +15,7 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
+import { calculateTrainingValidity, getTrainingStatusFromValidity } from "@/utils/trainingValidity"
 
 type RemoteSignatureEvidence = {
   signatureBase64: string
@@ -46,6 +47,12 @@ const TRAINING_OPTIONS = [
   "Integração de Segurança (NR-01)",
   "Trabalho em Altura (NR-35)",
   "Segurança Elétrica (NR-10)",
+  "Espaço Confinado (NR-33)",
+  "Inflamáveis e Combustíveis (NR-20)",
+  "CIPA (NR-05)",
+  "Operador de Empilhadeira / Ponte Rolante (NR-11)",
+  "Máquinas e Equipamentos (NR-12)",
+  "Indústria Naval / Trabalho a Quente (NR-34)",
 ]
 
 export default function TrainingPage() {
@@ -92,6 +99,15 @@ export default function TrainingPage() {
   const instructorSigCanvas = useRef<SignatureCanvas | null>(null)
 
   const getTrainedEmployee = () => employees.find(item => item.id === formData.employee_id) || null
+
+  const getFinalTrainingName = useCallback(() => (
+    formData.training_name === "Outro" ? customTrainingName.trim() : formData.training_name
+  ), [customTrainingName, formData.training_name])
+
+  const getCurrentTrainingValidity = () => calculateTrainingValidity(
+    getFinalTrainingName() || formData.training_name,
+    formData.completion_date
+  )
 
   const getTrainedEmployeeDescriptor = () => {
     const descriptor = getTrainedEmployee()?.face_descriptor
@@ -146,7 +162,7 @@ export default function TrainingPage() {
           instructorName: parsed.instructorName || instructor?.full_name || "Instrutor",
           trainingName: parsed.trainingName || trainingName || "Treinamento",
           completionDate: draftCompletionDate,
-          expiryDate: parsed.expiryDate || format(addYears(new Date(draftCompletionDate), 1), "yyyy-MM-dd"),
+          expiryDate: parsed.expiryDate || calculateTrainingValidity(parsed.trainingName || trainingName || "Treinamento", draftCompletionDate).expiryDate,
           participantToken: parsed.participantToken || null,
           participantStatus: parsed.participantStatus || "idle",
           participantExpiresAt: parsed.participantExpiresAt || null,
@@ -180,9 +196,9 @@ export default function TrainingPage() {
     const current = window.localStorage.getItem(key)
     const parsed = current ? JSON.parse(current) as Record<string, unknown> : {}
     const trainedEmployee = employees.find(item => item.id === formData.employee_id)
-    const trainingName = formData.training_name === "Outro" ? customTrainingName.trim() : formData.training_name
+    const trainingName = getFinalTrainingName()
     const completionDate = formData.completion_date
-    const expiryDate = format(addYears(new Date(completionDate), 1), "yyyy-MM-dd")
+    const expiryDate = calculateTrainingValidity(trainingName || formData.training_name, completionDate).expiryDate
     window.localStorage.setItem(key, JSON.stringify({
       ...parsed,
       employeeId: formData.employee_id,
@@ -195,7 +211,7 @@ export default function TrainingPage() {
       ...draft,
     }))
     loadPendingDrafts()
-  }, [customTrainingName, employees, formData.completion_date, formData.employee_id, formData.training_name, getRemoteDraftKey, loadPendingDrafts, tstSelectedEmployee?.full_name, tstSelectedEmployee?.id])
+  }, [employees, formData.completion_date, formData.employee_id, formData.training_name, getFinalTrainingName, getRemoteDraftKey, loadPendingDrafts, tstSelectedEmployee?.full_name, tstSelectedEmployee?.id])
 
   const restoreRemoteDraft = useCallback((instructorId: string) => {
     if (typeof window === "undefined") return
@@ -306,14 +322,14 @@ export default function TrainingPage() {
     try {
       setIsSaving(true)
       const completionDate = new Date(formData.completion_date)
-      const expiryDate = addYears(completionDate, 1) // Validade padrão de 1 ano
+      const validity = calculateTrainingValidity(finalTrainingName, formData.completion_date)
 
       const result = await api.addTraining({
         employee_id: formData.employee_id,
         training_name: finalTrainingName,
         completion_date: formData.completion_date,
-        expiry_date: format(expiryDate, "yyyy-MM-dd"),
-        status: "Válido",
+        expiry_date: validity.expiryDate,
+        status: getTrainingStatusFromValidity(finalTrainingName, validity.expiryDate),
         instructor_id: tstSelectedEmployee.id,
         instructor_name: tstSelectedEmployee.full_name,
         instructor_role: tstRole,
@@ -328,7 +344,7 @@ export default function TrainingPage() {
         employeeCpf: trainedEmployee?.cpf || "N/A",
         trainingName: finalTrainingName,
         completionDate: formData.completion_date,
-        expiryDate: format(expiryDate, "yyyy-MM-dd"),
+        expiryDate: validity.expiryDate,
         instructorName: tstSelectedEmployee.full_name,
         instructorRole: tstRole,
         instructorPhotoBase64: instructorPhotoBase64 || undefined,
@@ -364,7 +380,7 @@ export default function TrainingPage() {
             validationCode,
             trainingName: finalTrainingName,
             completionDate: formData.completion_date,
-            expiryDate: format(expiryDate, "yyyy-MM-dd"),
+            expiryDate: validity.expiryDate,
             instructorId: tstSelectedEmployee.id,
             instructorName: tstSelectedEmployee.full_name,
             instructorRole: tstRole,
@@ -507,10 +523,9 @@ export default function TrainingPage() {
     }
 
     try {
-      const completionDate = new Date(formData.completion_date)
-      const expiryDate = addYears(completionDate, 1)
       const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
       const finalTrainingName = formData.training_name === "Outro" ? customTrainingName.trim() : formData.training_name
+      const validity = calculateTrainingValidity(finalTrainingName || formData.training_name, formData.completion_date)
 
       const data = await api.createRemoteLink({
         employee_id: trainedEmployee.id,
@@ -519,7 +534,7 @@ export default function TrainingPage() {
         data: {
           trainingName: finalTrainingName || formData.training_name,
           completionDate: formData.completion_date,
-          expiryDate: format(expiryDate, "yyyy-MM-dd"),
+          expiryDate: validity.expiryDate,
         },
       })
 
@@ -709,7 +724,13 @@ export default function TrainingPage() {
     })
   }
 
-  const getTrainingStatusLabel = (status?: string | null) => {
+  const getTrainingStatusLabel = (trainingName: string, expiryDate: string, status?: string | null) => {
+    const validity = calculateTrainingValidity(trainingName, new Date())
+    if (!validity.hasFixedExpiry) return "Válido"
+
+    const calculatedStatus = getTrainingStatusFromValidity(trainingName, expiryDate)
+    if (calculatedStatus !== "Válido") return calculatedStatus
+
     const normalized = (status || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -717,10 +738,17 @@ export default function TrainingPage() {
 
     if (normalized.includes("vencido")) return "Vencido"
     if (normalized.includes("vencendo")) return "Vencendo"
-    return "Válido"
+    return calculatedStatus
   }
 
-  const isTrainingValid = (status?: string | null) => getTrainingStatusLabel(status) === "Válido"
+  const isTrainingValid = (trainingName: string, expiryDate: string, status?: string | null) => (
+    getTrainingStatusLabel(trainingName, expiryDate, status) === "Válido"
+  )
+
+  const getTrainingExpiryDisplay = (trainingName: string, expiryDate: string) => {
+    const validity = calculateTrainingValidity(trainingName, new Date())
+    return validity.hasFixedExpiry ? new Date(expiryDate).toLocaleDateString() : "Sem validade fixa"
+  }
 
   const deleteCertificate = async (rec: TrainingWithRelations) => {
     if (!canDeleteCertificate) return
@@ -820,7 +848,7 @@ export default function TrainingPage() {
                           <Calendar className="w-3 h-3 mr-2" /> {new Date(draft.completionDate).toLocaleDateString()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-400">{new Date(draft.expiryDate).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-slate-400">{getTrainingExpiryDisplay(draft.trainingName, draft.expiryDate)}</td>
                       <td className="px-6 py-4 text-center">
                         <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-full border ${
                           status === "completed"
@@ -845,7 +873,7 @@ export default function TrainingPage() {
                   )
                 })}
                 {filteredTrainings.map((rec, i) => {
-                  const statusLabel = getTrainingStatusLabel(rec.status)
+                  const statusLabel = getTrainingStatusLabel(rec.training_name, rec.expiry_date, rec.status)
                   return (
                   <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-5 font-bold text-slate-800">{rec.employee?.full_name}</td>
@@ -855,10 +883,10 @@ export default function TrainingPage() {
                         <Calendar className="w-3 h-3 mr-2" /> {new Date(rec.completion_date).toLocaleDateString()}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-400">{new Date(rec.expiry_date).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-slate-400">{getTrainingExpiryDisplay(rec.training_name, rec.expiry_date)}</td>
                      <td className="px-6 py-4 text-center">
                         <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-full border ${
-                          isTrainingValid(rec.status)
+                          isTrainingValid(rec.training_name, rec.expiry_date, rec.status)
                             ? 'bg-green-50 text-green-700 border-green-200' 
                             : 'bg-amber-50 text-amber-700 border-amber-200'
                         }`}>
@@ -989,6 +1017,15 @@ export default function TrainingPage() {
                         onChange={(e) => setFormData({...formData, completion_date: e.target.value})}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                       />
+                    </div>
+
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                      <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">
+                        Vencimento aplicado: {getCurrentTrainingValidity().displayText}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold text-blue-500 leading-relaxed">
+                        {getCurrentTrainingValidity().rule.note}
+                      </p>
                     </div>
 
                     <div className="pt-6">

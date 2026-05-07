@@ -7,6 +7,7 @@ import QRCode from "qrcode"
 import { DeliveryWithRelations, Employee } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
 import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
+import { calculateTrainingValidity } from "@/utils/trainingValidity"
 
 /**
  * PDF Generator Utility for SafeEPI
@@ -1032,12 +1033,16 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   const workload = getTrainingWorkload(data.trainingName);
 
   const completionText = format(new Date(data.completionDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-  const validUntilText = format(new Date(data.expiryDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  const validity = calculateTrainingValidity(data.trainingName, data.completionDate)
+  const validUntilText = validity.hasFixedExpiry
+    ? format(new Date(data.expiryDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+    : "sem validade fixa geral"
+  const validityLabel = validity.hasFixedExpiry ? `Válido até: ${validUntilText}` : `Validade: ${validUntilText}`
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(11)
   doc.setTextColor(68, 68, 68)
-  doc.text(`Realizado em: ${completionText}  |  Carga Horária: ${workload}h  |  Válido até: ${validUntilText}`, centerX, 137, { align: "center" })
+  doc.text(`Realizado em: ${completionText}  |  Carga Horária: ${workload}h  |  ${validityLabel}`, centerX, 137, { align: "center" })
 
   // Rodapé (3 cols)
   const footerY = 160
