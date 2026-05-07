@@ -134,6 +134,32 @@ function isDeliverySchemaCompatibilityIssue(error: unknown): boolean {
   );
 }
 
+function isMissingColumnIssue(error: unknown, columns: string[]): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError & { status?: number };
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    maybeError.status === 400 ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && columns.some(column => text.includes(column.toLowerCase()));
+}
+
+function isTrainingSchemaCompatibilityIssue(error: unknown): boolean {
+  return isMissingColumnIssue(error, [
+    "company_id",
+    "instructor_id",
+    "instructor_name",
+    "instructor_role",
+    "signature_url",
+    "auth_method",
+  ]);
+}
+
 function isDeliveryReasonConstraintIssue(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as SupabaseLikeError;
@@ -1269,16 +1295,7 @@ export const api = {
       return { training: data[0] as Training };
     }
 
-    const message = error.message || "";
-    const isTrainingSchemaIssue =
-      message.includes("schema cache") ||
-      message.includes("instructor_id") ||
-      message.includes("instructor_name") ||
-      message.includes("instructor_role") ||
-      message.includes("signature_url") ||
-      message.includes("auth_method");
-
-    if (!isTrainingSchemaIssue) {
+    if (!isTrainingSchemaCompatibilityIssue(error)) {
       throw error;
     }
 
@@ -1298,17 +1315,42 @@ export const api = {
         .select()
     );
 
-    if (fallbackError) {
-      throw new Error(
-        "A tabela 'trainings' do Supabase ainda não está pronta para instrutor/assinatura. Rode o script add_training_instructor.sql e recarregue o schema do PostgREST."
-      );
+    if (!fallbackError) {
+      return {
+        training: fallbackData[0] as Training,
+        warning:
+          "Treinamento salvo sem dados de instrutor/assinatura. Rode o script add_training_instructor.sql no Supabase para habilitar certificado completo.",
+      };
     }
 
-    return {
-      training: fallbackData[0] as Training,
-      warning:
-        "Treinamento salvo sem dados de instrutor/assinatura. Rode o script add_training_instructor.sql no Supabase para habilitar certificado completo.",
-    };
+    if (isMissingColumnIssue(fallbackError, ["company_id"])) {
+      const legacyTraining = {
+        employee_id: training.employee_id,
+        training_name: training.training_name,
+        completion_date: training.completion_date,
+        expiry_date: training.expiry_date,
+        status: training.status,
+      };
+
+      const { data: legacyData, error: legacyError } = await withSessionRetry(() =>
+        supabase
+          .from('trainings')
+          .insert([legacyTraining])
+          .select()
+      );
+
+      if (!legacyError) {
+        return {
+          training: legacyData[0] as Training,
+          warning:
+            "Treinamento salvo no formato legado, sem empresa/instrutor/assinatura. Rode safeepi_multi_company.sql e add_training_instructor.sql no Supabase, depois recarregue o schema do PostgREST.",
+        };
+      }
+    }
+
+    throw new Error(
+      "A tabela 'trainings' do Supabase ainda nao esta pronta para empresa/instrutor/assinatura. Rode safeepi_multi_company.sql e add_training_instructor.sql no Supabase, depois recarregue o schema do PostgREST."
+    );
   },
 
   // --- Perfis de Usuário (RBAC) ---

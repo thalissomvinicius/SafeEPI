@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Camera, PenTool, ShieldAlert, Users, Link2 } from "lucide-react"
+import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Camera, PenTool, ShieldAlert, Users, Link2, ArrowLeft } from "lucide-react"
 import { api } from "@/services/api"
 import { Employee, TrainingWithRelations } from "@/types/database"
 import { format, addYears } from "date-fns"
@@ -1235,20 +1235,21 @@ export default function TrainingPage() {
                       </div>
                     )}
 
-                    <div className="flex gap-3 pt-4">
+                    <div className="grid grid-cols-[118px_minmax(0,1fr)] gap-3 pt-4">
                       <button
                         onClick={() => setStep(2)}
-                        className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
+                        className="h-16 px-4 text-[10px] font-black text-slate-500 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                       >
-                        â† Voltar
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Voltar</span>
                       </button>
                       <button
                         onClick={() => setStep(4)}
                         disabled={isSaving}
-                        className="flex-1 py-4 text-[10px] font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="min-w-0 h-16 px-4 text-[10px] font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2 text-center leading-tight"
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Proxima: Assinatura do Instrutor
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span className="max-w-[190px]">Proxima: assinatura do instrutor</span>
                       </button>
                     </div>
                   </div>
