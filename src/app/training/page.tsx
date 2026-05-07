@@ -88,6 +88,7 @@ export default function TrainingPage() {
   const [tstAuthMethod, setTstAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
   const [tstSignatureBase64, setTstSignatureBase64] = useState<string | null>(null)
   const [tstPhotoBase64, setTstPhotoBase64] = useState<string | null>(null)
+  const [participantBlankSignature, setParticipantBlankSignature] = useState(false)
   const [instructorSignatureBase64, setInstructorSignatureBase64] = useState<string | null>(null)
   const [instructorPhotoBase64, setInstructorPhotoBase64] = useState<string | null>(null)
   const [participantRemoteToken, setParticipantRemoteToken] = useState<string | null>(null)
@@ -306,7 +307,14 @@ export default function TrainingPage() {
   const handleAddTraining = async (e?: React.FormEvent, instructorBlankSignature = false) => {
     e?.preventDefault()
     if (!formData.employee_id) return
-    if (!tstSignatureBase64 || !tstSelectedEmployee || (tstAuthMethod === 'manual_facial' && !tstPhotoBase64)) {
+    if (!tstSelectedEmployee) return
+
+    if (!tstSignatureBase64 && !participantBlankSignature) {
+      toast.error("O colaborador precisa assinar ou usar linha em branco para assinatura presencial.")
+      return
+    }
+
+    if (!participantBlankSignature && tstAuthMethod === 'manual_facial' && !tstPhotoBase64) {
       toast.error("É necessário colher a evidência do colaborador treinado.")
       return
     }
@@ -339,8 +347,8 @@ export default function TrainingPage() {
         instructor_id: tstSelectedEmployee.id,
         instructor_name: tstSelectedEmployee.full_name,
         instructor_role: tstRole,
-        signature_url: tstSignatureBase64,
-        auth_method: tstAuthMethod === 'manual_facial' ? 'manual' : tstAuthMethod
+        signature_url: tstSignatureBase64 || null,
+        auth_method: participantBlankSignature ? 'manual' : tstAuthMethod === 'manual_facial' ? 'manual' : tstAuthMethod
       })
 
       const trainedEmployee = employees.find(emp => emp.id === formData.employee_id)
@@ -356,9 +364,10 @@ export default function TrainingPage() {
         instructorPhotoBase64: instructorPhotoBase64 || undefined,
         instructorSignatureBase64: instructorBlankSignature ? undefined : instructorSignatureBase64 || undefined,
         instructorBlankSignature,
-        participantSignatureBase64: tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial' ? tstSignatureBase64 : undefined,
-        participantPhotoBase64: tstAuthMethod === 'manual_facial' ? tstPhotoBase64 || undefined : tstAuthMethod === 'facial' ? tstSignatureBase64 : undefined,
-        participantAuthMethod: tstAuthMethod,
+        participantSignatureBase64: !participantBlankSignature && (tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') ? tstSignatureBase64 || undefined : undefined,
+        participantPhotoBase64: !participantBlankSignature && tstAuthMethod === 'manual_facial' ? tstPhotoBase64 || undefined : !participantBlankSignature && tstAuthMethod === 'facial' ? tstSignatureBase64 || undefined : undefined,
+        participantBlankSignature,
+        participantAuthMethod: participantBlankSignature ? 'manual' : tstAuthMethod,
         validationCode,
       })
 
@@ -392,6 +401,7 @@ export default function TrainingPage() {
             instructorName: tstSelectedEmployee.full_name,
             instructorRole: tstRole,
             instructorSignatureMode: instructorBlankSignature ? "blank_line" : "digital",
+            participantSignatureMode: participantBlankSignature ? "blank_line" : "digital",
           },
         })
       } catch (archiveError) {
@@ -431,6 +441,7 @@ export default function TrainingPage() {
     setTstSearchTerm("")
     setTstSignatureBase64(null)
     setTstPhotoBase64(null)
+    setParticipantBlankSignature(false)
     setInstructorSignatureBase64(null)
     setInstructorPhotoBase64(null)
     setParticipantRemoteToken(null)
@@ -448,6 +459,7 @@ export default function TrainingPage() {
     setTstSelectedEmployee(emp)
     setTstSignatureBase64(null)
     setTstPhotoBase64(null)
+    setParticipantBlankSignature(false)
     setInstructorSignatureBase64(null)
     setInstructorPhotoBase64(null)
     setParticipantRemoteToken(null)
@@ -492,6 +504,7 @@ export default function TrainingPage() {
     setTstSearchTerm("")
     setTstSignatureBase64(null)
     setTstPhotoBase64(null)
+    setParticipantBlankSignature(false)
     setInstructorSignatureBase64(null)
     setParticipantRemoteToken(draft.participantToken || null)
     setParticipantRemoteStatus(draft.participantStatus || "idle")
@@ -614,6 +627,7 @@ export default function TrainingPage() {
       setTstAuthMethod(method)
       setTstSignatureBase64(evidence.signatureBase64)
       setTstPhotoBase64(evidence.photoBase64 || null)
+      setParticipantBlankSignature(false)
       setIsFaceCameraTstOpen(false)
       return
     }
@@ -1145,7 +1159,7 @@ export default function TrainingPage() {
                 {step === 3 && tstSelectedEmployee && (
                   <div className="p-8 space-y-5">
                     {/* Notice for Missing Facial Descriptor */}
-                    {!getTrainedEmployee()?.face_descriptor && !tstSignatureBase64 && (
+                    {!getTrainedEmployee()?.face_descriptor && !tstSignatureBase64 && !participantBlankSignature && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
                         <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                         <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest leading-relaxed">
@@ -1156,19 +1170,19 @@ export default function TrainingPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-1 rounded-xl">
                       <button
-                        onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setTstPhotoBase64(null); setIsFaceCameraTstOpen(false); }}
+                        onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setTstPhotoBase64(null); setParticipantBlankSignature(false); setIsFaceCameraTstOpen(false); }}
                         className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
                       >
                         <PenTool className="w-3.5 h-3.5 inline mr-1" /> Assinatura Manual
                       </button>
                       <button
-                        onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); setTstPhotoBase64(null); setIsFaceCameraTstOpen(true); }}
+                        onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); setTstPhotoBase64(null); setParticipantBlankSignature(false); setIsFaceCameraTstOpen(true); }}
                         className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual_facial' ? 'bg-white shadow text-emerald-700' : 'text-slate-400'}`}
                       >
                         <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto + Assinatura
                       </button>
                       <button
-                        onClick={() => { setTstAuthMethod('facial'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(true); }}
+                        onClick={() => { setTstAuthMethod('facial'); setTstSignatureBase64(null); setTstPhotoBase64(null); setParticipantBlankSignature(false); setIsFaceCameraTstOpen(true); }}
                         className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'facial' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
                       >
                         <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto Biométrica
@@ -1199,13 +1213,29 @@ export default function TrainingPage() {
                       <div className="space-y-3">
                         <FaceCamera
                           targetDescriptor={getTrainedEmployeeDescriptor()}
-                          onCapture={(_, img) => { setTstPhotoBase64(img); setIsFaceCameraTstOpen(false); }}
+                          onCapture={(_, img) => { setParticipantBlankSignature(false); setTstPhotoBase64(img); setIsFaceCameraTstOpen(false); }}
                           onCancel={() => { setIsFaceCameraTstOpen(false); setTstAuthMethod('manual'); setTstPhotoBase64(null); }}
                         />
                       </div>
                     )}
 
-                    {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && !isFaceCameraTstOpen && (
+                    {participantBlankSignature && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Assinatura presencial do colaborador</p>
+                          <p className="text-[10px] text-slate-400 font-bold">O certificado será gerado com linha em branco para assinatura manual.</p>
+                        </div>
+                        <button
+                          onClick={() => setParticipantBlankSignature(false)}
+                          title="Remover linha em branco"
+                          className="p-2 text-slate-400 hover:text-red-600 rounded-lg transition-all"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && !isFaceCameraTstOpen && !participantBlankSignature && (
                       <div className="space-y-3">
                         {tstAuthMethod === 'manual_facial' && (
                           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
@@ -1221,7 +1251,7 @@ export default function TrainingPage() {
                               Foto capturada agora para evidenciar a assinatura. A foto cadastrada fica apenas como base de comparacao biometrica.
                             </p>
                             <button
-                              onClick={() => { setTstPhotoBase64(null); setIsFaceCameraTstOpen(true); }}
+                              onClick={() => { setTstPhotoBase64(null); setParticipantBlankSignature(false); setIsFaceCameraTstOpen(true); }}
                               title="Refazer foto"
                               className="ml-auto p-2 text-emerald-800 hover:bg-emerald-100 rounded-lg transition-all"
                             >
@@ -1235,7 +1265,7 @@ export default function TrainingPage() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={tstSignatureBase64} alt="Assinatura" className="w-full h-32 object-contain bg-slate-50" />
                             <button
-                              onClick={() => setTstSignatureBase64(null)}
+                              onClick={() => { setTstSignatureBase64(null); setParticipantBlankSignature(false); }}
                               title="Remover assinatura"
                               className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow-lg"
                             >
@@ -1265,6 +1295,7 @@ export default function TrainingPage() {
                                   toast.error("Assine antes de confirmar.")
                                   return
                                 }
+                                setParticipantBlankSignature(false)
                                 setTstSignatureBase64(tstSigCanvas.current?.toDataURL('image/png') || null)
                               }}
                               className="flex-1 py-3 text-[10px] font-black text-white bg-[#2563EB] uppercase tracking-widest rounded-xl hover:bg-[#1D4ED8] transition-all"
@@ -1280,6 +1311,16 @@ export default function TrainingPage() {
                           <Link2 className="w-4 h-4 text-blue-500" />
                           Gerar link para assinatura do colaborador
                         </button>
+                        {!tstSignatureBase64 && (
+                          <button
+                            onClick={() => { setTstSignatureBase64(null); setTstPhotoBase64(null); setParticipantBlankSignature(true); setIsFaceCameraTstOpen(false); }}
+                            disabled={isSaving}
+                            className="w-full py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            <PenTool className="w-4 h-4 text-slate-500" />
+                            Usar linha em branco para assinatura presencial
+                          </button>
+                        )}
                         {participantRemoteToken && (
                           <div className={`rounded-xl border p-3 text-[10px] font-black uppercase tracking-widest ${
                             participantRemoteStatus === "completed" || tstSignatureBase64
@@ -1327,14 +1368,14 @@ export default function TrainingPage() {
                       </div>
                     )}
 
-                    {tstAuthMethod === 'facial' && (
+                    {tstAuthMethod === 'facial' && !participantBlankSignature && (
                       <div className="space-y-3">
                         {tstSignatureBase64 ? (
                           <div className="relative border-2 border-green-500 rounded-xl overflow-hidden">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={tstSignatureBase64} alt="Foto" className="w-full h-48 object-cover bg-slate-900" />
                             <button
-                              onClick={() => { setTstSignatureBase64(null); setIsFaceCameraTstOpen(true); }}
+                              onClick={() => { setTstSignatureBase64(null); setParticipantBlankSignature(false); setIsFaceCameraTstOpen(true); }}
                               title="Refazer foto"
                               className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow-lg"
                             >
@@ -1345,9 +1386,19 @@ export default function TrainingPage() {
                         ) : (
                           <FaceCamera
                             targetDescriptor={getTrainedEmployeeDescriptor()}
-                            onCapture={(_, img) => { setTstSignatureBase64(img); setIsFaceCameraTstOpen(false); }}
+                            onCapture={(_, img) => { setParticipantBlankSignature(false); setTstSignatureBase64(img); setIsFaceCameraTstOpen(false); }}
                             onCancel={() => { setIsFaceCameraTstOpen(false); setTstAuthMethod('manual'); }}
                           />
+                        )}
+                        {!tstSignatureBase64 && (
+                          <button
+                            onClick={() => { setTstSignatureBase64(null); setTstPhotoBase64(null); setParticipantBlankSignature(true); setIsFaceCameraTstOpen(false); }}
+                            disabled={isSaving}
+                            className="w-full py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            <PenTool className="w-4 h-4 text-slate-500" />
+                            Usar linha em branco para assinatura presencial
+                          </button>
                         )}
                       </div>
                     )}

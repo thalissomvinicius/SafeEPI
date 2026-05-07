@@ -935,6 +935,7 @@ export interface TrainingCertificateData {
   instructorBlankSignature?: boolean
   participantSignatureBase64?: string
   participantPhotoBase64?: string
+  participantBlankSignature?: boolean
   participantAuthMethod?: AuthMethod
   programContent?: string[]
   validationCode?: string
@@ -1056,7 +1057,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   // Center: participant evidence
   const participantSignature = data.participantSignatureBase64 || data.signatureBase64
   const participantPhoto = data.participantPhotoBase64
-  if (participantSignature || participantPhoto) {
+  if (participantSignature || participantPhoto || data.participantBlankSignature) {
     const sigLineW = 100 // ~280px
     const sigY = footerY + 15
     const hasSignature = Boolean(participantSignature)
@@ -1065,10 +1066,8 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
     doc.setDrawColor(r, g, b)
     doc.setLineWidth(0.5)
-    if (hasSignature) {
-      const lineWForEvidence = hasPhoto ? 72 : sigLineW
-      doc.line(signatureCenterX - lineWForEvidence/2, sigY, signatureCenterX + lineWForEvidence/2, sigY)
-    }
+    const lineWForEvidence = hasPhoto ? 72 : sigLineW
+    doc.line(signatureCenterX - lineWForEvidence/2, sigY, signatureCenterX + lineWForEvidence/2, sigY)
 
     if (participantSignature && hasSignature) {
       try {
