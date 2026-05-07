@@ -487,6 +487,30 @@ export const api = {
     return data as SignedDocument[];
   },
 
+  async getTrainingCertificateDocument(trainingId: string) {
+    const companyId = await getCurrentCompanyId();
+    const { data, error } = await withSessionRetry(() =>
+      {
+        let query = supabase
+          .from("signed_documents")
+          .select("*")
+          .eq("document_type", "training_certificate")
+          .eq("training_id", trainingId)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (companyId) query = query.eq("company_id", companyId);
+        return query;
+      }
+    );
+
+    if (error) {
+      if (isMissingSignedDocumentsTableIssue(error)) return null;
+      throw error;
+    }
+
+    return (data?.[0] || null) as SignedDocument | null;
+  },
+
   async getProfileRole(userId: string) {
     const { data, error } = await withSessionRetry(() =>
       supabase

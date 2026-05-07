@@ -698,6 +698,23 @@ export default function TrainingPage() {
   }, [isModalOpen, participantRemoteToken, instructorRemoteToken, tstSignatureBase64, instructorSignatureBase64, syncRemoteSignatures])
 
   const downloadCertificate = async (rec: TrainingWithRelations) => {
+    try {
+      const signedDocument = await api.getTrainingCertificateDocument(rec.id)
+      if (signedDocument?.document_url) {
+        const response = await fetch(signedDocument.document_url)
+        if (!response.ok) throw new Error("PDF arquivado indisponivel.")
+        const archivedPdfBlob = await response.blob()
+        openPdfDialog(archivedPdfBlob, signedDocument.file_name || "Certificado.pdf", {
+          title: "Certificado arquivado",
+          description: "Este é o PDF original arquivado no momento da emissão, com as evidências de assinatura disponíveis.",
+        })
+        return
+      }
+    } catch (error) {
+      console.warn("Nao foi possivel carregar o certificado arquivado:", error)
+      toast.warning("PDF arquivado nao encontrado. Gerando uma copia reconstruida pelo cadastro.")
+    }
+
     const pdfBlob = await generateTrainingCertificate({
       employeeName: rec.employee?.full_name || "N/A",
       employeeCpf: rec.employee?.cpf || "N/A",
