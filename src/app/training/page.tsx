@@ -68,6 +68,8 @@ export default function TrainingPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeletingCertificate, setIsDeletingCertificate] = useState(false)
+  const [certificateToDelete, setCertificateToDelete] = useState<TrainingWithRelations | null>(null)
   const [pendingDrafts, setPendingDrafts] = useState<PendingTrainingDraft[]>([])
 
   // Form State
@@ -771,18 +773,24 @@ export default function TrainingPage() {
     return validity.hasFixedExpiry ? new Date(expiryDate).toLocaleDateString() : "Sem validade fixa"
   }
 
-  const deleteCertificate = async (rec: TrainingWithRelations) => {
+  const requestDeleteCertificate = (rec: TrainingWithRelations) => {
     if (!canDeleteCertificate) return
-    const employeeName = rec.employee?.full_name || "este colaborador"
-    if (!confirm(`Excluir o certificado de ${employeeName}? Esta acao nao pode ser desfeita.`)) return
+    setCertificateToDelete(rec)
+  }
 
+  const deleteCertificate = async () => {
+    if (!canDeleteCertificate || !certificateToDelete) return
     try {
-      await api.deleteTraining(rec.id)
-      setTrainings((current) => current.filter((item) => item.id !== rec.id))
+      setIsDeletingCertificate(true)
+      await api.deleteTraining(certificateToDelete.id)
+      setTrainings((current) => current.filter((item) => item.id !== certificateToDelete.id))
+      setCertificateToDelete(null)
       toast.success("Certificado excluido com sucesso.")
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nao foi possivel excluir o certificado."
       toast.error(message)
+    } finally {
+      setIsDeletingCertificate(false)
     }
   }
 
@@ -925,7 +933,7 @@ export default function TrainingPage() {
                          </button>
                          {canDeleteCertificate && (
                            <button
-                             onClick={() => void deleteCertificate(rec)}
+                             onClick={() => requestDeleteCertificate(rec)}
                              title="Excluir certificado"
                              className="p-2 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 rounded-lg transition-all border border-red-100"
                            >
@@ -1483,6 +1491,60 @@ export default function TrainingPage() {
                     </div>
                   </div>
                 )}
+            </div>
+          </div>
+        </div>
+      )}
+      {certificateToDelete && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-red-100">
+            <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
+              <div className="p-3 bg-red-100 rounded-2xl shrink-0">
+                <ShieldAlert className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Excluir Certificado</h2>
+                <p className="text-xs text-red-600 font-bold uppercase tracking-widest mt-1">Confirmação exigida - MASTER</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Você está prestes a excluir o certificado de <strong className="text-slate-900">{certificateToDelete.employee?.full_name || "este colaborador"}</strong>.
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Treinamento</p>
+                <p className="mt-1 text-sm font-black text-slate-800">{certificateToDelete.training_name}</p>
+                <p className="mt-2 text-xs font-bold text-slate-400">
+                  Realizado em {new Date(certificateToDelete.completion_date).toLocaleDateString()}
+                </p>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                <p className="text-xs font-black text-amber-700 uppercase tracking-widest">Ação permanente</p>
+                <p className="mt-1 text-sm text-amber-700 leading-relaxed">
+                  Esta ação remove o registro do certificado e não pode ser desfeita.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setCertificateToDelete(null)}
+                  disabled={isDeletingCertificate}
+                  className="flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => void deleteCertificate()}
+                  disabled={isDeletingCertificate}
+                  className="flex-[2] px-4 py-3 text-xs font-black text-white bg-red-600 hover:bg-red-700 rounded-2xl uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60"
+                >
+                  {isDeletingCertificate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Excluir Certificado
+                </button>
+              </div>
             </div>
           </div>
         </div>
