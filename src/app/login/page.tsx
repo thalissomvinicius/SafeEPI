@@ -1,91 +1,127 @@
 ﻿"use client"
 
 import { useEffect, useState } from "react"
-import { AlertTriangle, CheckCircle2, Clock3, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Clock3, Eye, EyeOff, Loader2 } from "lucide-react"
 import { api } from "@/services/api"
 import { useRouter } from "next/navigation"
 
 type MascotMode = "idle" | "email" | "password" | "peek" | "loading" | "success" | "error"
 
 function LoginMascot({ mode, gaze }: { mode: MascotMode; gaze: number }) {
-  const isPassword = mode === "password"
+  const isEmail = mode === "email"
   const isPeek = mode === "peek"
   const isError = mode === "error"
   const isSuccess = mode === "success"
   const isLoading = mode === "loading"
-  const eyeOffset = mode === "email" ? Math.max(-5, Math.min(5, gaze)) : 0
-  const eyeY = isError ? 1.5 : isSuccess ? -1 : 0
+  const isLocked = mode === "password"
+  const scanOffset = isEmail ? Math.max(-18, Math.min(18, gaze * 3)) : 0
 
   return (
-    <div className="relative mx-auto mb-5 flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
-      <div className={`absolute inset-5 rounded-full bg-blue-500/10 blur-xl transition-all duration-300 ${isError ? "bg-red-500/20" : isSuccess ? "bg-emerald-400/20" : ""}`} />
-      <svg viewBox="0 0 160 160" className={`relative h-full w-full drop-shadow-2xl transition-transform duration-300 ${isLoading ? "animate-pulse" : isError ? "animate-[wiggle_0.35s_ease-in-out_2]" : ""}`} aria-hidden="true">
+    <div className="relative mx-auto mb-6 flex h-32 w-44 items-center justify-center sm:h-36 sm:w-52">
+      <div className={`absolute inset-x-7 top-5 h-24 rounded-full blur-2xl transition-all duration-500 ${isError ? "bg-red-500/20" : isSuccess ? "bg-emerald-400/20" : "bg-blue-500/20"}`} />
+      <div className="absolute inset-0 rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-2xl shadow-blue-950/30" />
+      <svg
+        viewBox="0 0 220 170"
+        className={`relative h-full w-full transition-transform duration-300 ${isLoading ? "animate-[premiumFloat_1.8s_ease-in-out_infinite]" : isError ? "animate-[premiumShake_0.35s_ease-in-out_2]" : ""}`}
+        aria-hidden="true"
+      >
         <defs>
-          <linearGradient id="helmetGradient" x1="34" x2="126" y1="24" y2="92">
-            <stop offset="0%" stopColor="#60A5FA" />
-            <stop offset="100%" stopColor="#2563EB" />
+          <linearGradient id="premiumPanel" x1="38" x2="182" y1="16" y2="154">
+            <stop offset="0%" stopColor="#172554" />
+            <stop offset="54%" stopColor="#08111F" />
+            <stop offset="100%" stopColor="#020617" />
           </linearGradient>
-          <linearGradient id="vestGradient" x1="47" x2="113" y1="104" y2="154">
-            <stop offset="0%" stopColor="#1E293B" />
+          <linearGradient id="premiumHelmet" x1="59" x2="161" y1="40" y2="96">
+            <stop offset="0%" stopColor="#93C5FD" />
+            <stop offset="42%" stopColor="#2563EB" />
+            <stop offset="100%" stopColor="#1D4ED8" />
+          </linearGradient>
+          <linearGradient id="premiumVisor" x1="76" x2="144" y1="83" y2="118">
+            <stop offset="0%" stopColor="#BAE6FD" />
+            <stop offset="40%" stopColor="#38BDF8" />
             <stop offset="100%" stopColor="#0F172A" />
           </linearGradient>
+          <linearGradient id="premiumGold" x1="76" x2="144" y1="126" y2="154">
+            <stop offset="0%" stopColor="#FDBA74" />
+            <stop offset="100%" stopColor="#F97316" />
+          </linearGradient>
+          <filter id="premiumGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
 
-        <path d="M44 151c4-29 19-44 36-44s32 15 36 44H44Z" fill="url(#vestGradient)" />
-        <path d="M62 112h36l-18 21-18-21Z" fill="#EAF2FF" />
-        <path d="M69 112h22l-11 13-11-13Z" fill="#BFDBFE" />
-        <path d="M51 151c2-16 7-27 14-34l15 17 15-17c7 7 12 18 14 34H51Z" fill="#2563EB" />
-        <path d="M73 132h14l4 19H69l4-19Z" fill="#F97316" />
+        <rect x="28" y="18" width="164" height="134" rx="34" fill="url(#premiumPanel)" stroke="#1E3A8A" strokeOpacity=".5" />
+        <path d="M110 24l56 21v36c0 35-22 61-56 73-34-12-56-38-56-73V45l56-21Z" fill="#020617" opacity=".55" stroke="#60A5FA" strokeOpacity=".3" />
+        <path d="M110 36l43 16v29c0 27-16 48-43 59-27-11-43-32-43-59V52l43-16Z" fill="#0B1220" stroke="#2563EB" strokeOpacity=".5" />
 
-        <circle cx="80" cy="76" r="36" fill="#F1C9A5" />
-        <path d="M44 75c0 24 15 41 36 41s36-17 36-41c-6 7-18 10-36 10s-30-3-36-10Z" fill="#E9B98F" opacity=".35" />
-        <path d="M45 68c2-27 17-43 35-43s33 16 35 43H45Z" fill="url(#helmetGradient)" />
-        <path d="M39 69h82c4 0 7 3 7 7v1H32v-1c0-4 3-7 7-7Z" fill="#1D4ED8" />
-        <path d="M75 26h10v42H75z" fill="#DBEAFE" opacity=".8" />
-        <path d="M56 48c6-13 14-20 24-20S98 35 104 48" fill="none" stroke="#DBEAFE" strokeWidth="5" strokeLinecap="round" opacity=".65" />
-
-        <g className="transition-transform duration-300" style={{ transform: `translate(${eyeOffset}px, ${eyeY}px)` }}>
-          <ellipse cx="67" cy="78" rx={isError ? 3.5 : 4.5} ry={isSuccess ? 2.2 : 5} fill="#0F172A" />
-          <ellipse cx="93" cy="78" rx={isError ? 3.5 : 4.5} ry={isSuccess ? 2.2 : 5} fill="#0F172A" />
-          {!isPassword && (
-            <>
-              <circle cx="68.5" cy="76" r="1.2" fill="#FFFFFF" />
-              <circle cx="94.5" cy="76" r="1.2" fill="#FFFFFF" />
-            </>
-          )}
+        <g opacity=".35">
+          <circle cx="110" cy="88" r="58" fill="none" stroke="#60A5FA" strokeDasharray="4 8" />
+          <circle cx="110" cy="88" r="42" fill="none" stroke="#F97316" strokeDasharray="2 10" />
         </g>
 
-        <path d={isError ? "M68 99c7-5 17-5 24 0" : isSuccess ? "M66 96c7 8 21 8 28 0" : "M70 98c6 4 14 4 20 0"} fill="none" stroke="#8B4E2F" strokeWidth="4" strokeLinecap="round" />
-        <path d="M56 67c6-4 13-4 18-1M86 66c6-3 13-2 18 1" stroke="#7C3F23" strokeWidth="3" strokeLinecap="round" fill="none" opacity=".65" />
+        <path d="M69 78c2-29 19-45 41-45s39 16 41 45H69Z" fill="url(#premiumHelmet)" />
+        <path d="M62 76h96c5 0 9 4 9 9v2H53v-2c0-5 4-9 9-9Z" fill="#1D4ED8" />
+        <path d="M104 35h12v40h-12z" fill="#DBEAFE" opacity=".85" />
+        <path d="M82 57c7-13 16-20 28-20s21 7 28 20" fill="none" stroke="#DBEAFE" strokeWidth="5" strokeLinecap="round" opacity=".65" />
 
-        {(isPassword || isPeek) && (
-          <g className="transition-all duration-300">
-            <g style={{ transform: isPeek ? "translate(-7px, -3px) rotate(-7deg)" : "translate(0, 0)" }}>
-              <path d="M22 104c13-17 28-25 45-25 6 0 9 7 5 12-8 9-18 16-31 23-9 5-17-2-19-10Z" fill="#F1C9A5" />
-              <path d="M44 83c8-4 16-5 24-3" stroke="#DCA77F" strokeWidth="4" strokeLinecap="round" />
-              <path d="M46 94c7-3 14-4 21-3" stroke="#DCA77F" strokeWidth="4" strokeLinecap="round" />
-            </g>
-            <g style={{ transform: isPeek ? "translate(7px, -3px) rotate(7deg)" : "translate(0, 0)" }}>
-              <path d="M138 104c-13-17-28-25-45-25-6 0-9 7-5 12 8 9 18 16 31 23 9 5 17-2 19-10Z" fill="#F1C9A5" />
-              <path d="M116 83c-8-4-16-5-24-3" stroke="#DCA77F" strokeWidth="4" strokeLinecap="round" />
-              <path d="M114 94c-7-3-14-4-21-3" stroke="#DCA77F" strokeWidth="4" strokeLinecap="round" />
-            </g>
+        <path d="M73 95c4-18 18-29 37-29s33 11 37 29v18c0 16-14 28-37 28s-37-12-37-28V95Z" fill="#E2E8F0" />
+        <path d="M82 94c4-12 14-19 28-19s24 7 28 19v12c0 11-11 19-28 19s-28-8-28-19V94Z" fill="url(#premiumVisor)" stroke="#7DD3FC" strokeOpacity=".7" />
+        <path d="M88 97h44" stroke="#E0F2FE" strokeWidth="4" strokeLinecap="round" opacity=".65" />
+
+        {(isLocked || isPeek) && (
+          <g>
+            {isLocked ? (
+              <path d="M80 91h60v27c-7 7-17 11-30 11s-23-4-30-11V91Z" fill="#020617" opacity=".92" />
+            ) : (
+              <>
+                <path d="M80 91h23v30c-9-1-17-5-23-10V91Z" fill="#020617" opacity=".9" />
+                <path d="M117 91h23v20c-6 5-14 9-23 10V91Z" fill="#020617" opacity=".9" />
+                <path d="M106 101h8" stroke="#7DD3FC" strokeWidth="3" strokeLinecap="round" filter="url(#premiumGlow)" />
+              </>
+            )}
+            <path d="M102 104v-6c0-5 3-8 8-8s8 3 8 8v6" fill="none" stroke="#60A5FA" strokeWidth="3" strokeLinecap="round" />
+            <rect x="98" y="103" width="24" height="18" rx="6" fill="#2563EB" stroke="#93C5FD" strokeOpacity=".55" />
           </g>
         )}
 
-        <g transform="translate(108 106)">
-          <rect x="0" y="0" width="30" height="36" rx="8" fill="#FFFFFF" opacity=".95" />
-          <path d="M8 12h14M8 19h14M8 26h10" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" />
-          <path d="M15 4l6 4-6 4-6-4 6-4Z" fill="#F97316" />
+        {isEmail && (
+          <g style={{ transform: `translateX(${scanOffset}px)` }} className="transition-transform duration-300">
+            <path d="M110 72v58" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" filter="url(#premiumGlow)" />
+            <circle cx="110" cy="96" r="4" fill="#E0F2FE" filter="url(#premiumGlow)" />
+          </g>
+        )}
+
+        <path d="M76 143c7-15 19-23 34-23s27 8 34 23H76Z" fill="url(#premiumGold)" opacity=".92" />
+        <path d="M96 128h28l-14 13-14-13Z" fill="#EAF2FF" opacity=".95" />
+
+        <g transform="translate(150 113)">
+          <rect x="0" y="0" width="29" height="35" rx="9" fill="#F8FAFC" opacity=".96" />
+          <path d="M8 12h13M8 19h13M8 26h9" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" />
+          <path d="M14.5 4l6 4-6 4-6-4 6-4Z" fill="#F97316" />
         </g>
 
+        {isError && (
+          <g transform="translate(150 27)">
+            <circle cx="16" cy="16" r="15" fill="#DC2626" />
+            <path d="M16 8v10M16 24h.1" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+          </g>
+        )}
+
         {isSuccess && (
-          <g transform="translate(103 28)">
+          <g transform="translate(150 27)">
             <circle cx="16" cy="16" r="15" fill="#10B981" />
             <path d="M9 16l5 5 10-12" stroke="#FFFFFF" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </g>
         )}
       </svg>
+      <div className="absolute bottom-2 flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/80 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-blue-100/80 shadow-lg shadow-slate-950/40">
+        <span className={`h-1.5 w-1.5 rounded-full ${isError ? "bg-red-400" : isSuccess ? "bg-emerald-300" : "bg-blue-300"}`} />
+        SESMT ID
+      </div>
     </div>
   )
 }
@@ -164,19 +200,21 @@ export default function LoginPage() {
     <div className="min-h-[100dvh] flex items-center justify-center bg-slate-950 overflow-y-auto relative px-4 py-8 sm:py-12">
       <div className="absolute inset-x-0 top-0 h-px bg-blue-300/30 pointer-events-none" />
       <style jsx global>{`
-        @keyframes wiggle {
-          0%, 100% { transform: rotate(0deg); }
-          25% { transform: rotate(-2deg); }
-          75% { transform: rotate(2deg); }
+        @keyframes premiumShake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-3px); }
+          75% { transform: translateX(3px); }
+        }
+
+        @keyframes premiumFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
         }
       `}</style>
 
       <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-700">
         <div className="text-center mb-6 sm:mb-8">
           <LoginMascot mode={mascotMode} gaze={emailGaze} />
-          <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 bg-[#2563EB] p-3 rounded-2xl shadow-xl shadow-blue-950/40 mb-5 sm:mb-6 flex items-center justify-center">
-            <ShieldCheck className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
-          </div>
           <h1 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight">
             SafeEPI <span className="text-blue-300">SESMT</span>
           </h1>
