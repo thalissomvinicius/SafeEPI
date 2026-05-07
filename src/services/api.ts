@@ -955,6 +955,7 @@ export const api = {
         let query = supabase
         .from('ppes')
         .select('*')
+        .eq('active', true)
         .order('name', { ascending: true });
         if (companyId) query = query.eq('company_id', companyId);
         return query;
@@ -989,6 +990,24 @@ export const api = {
     
     if (error) throw error;
     return data[0] as PPE;
+  },
+
+  async deletePpe(id: string) {
+    const companyId = await getCurrentCompanyId();
+    const params = new URLSearchParams({ id });
+    if (companyId) params.set("company_id", companyId);
+    const storedMasterCompanyId = getStoredMasterCompanyId();
+    if (!companyId && storedMasterCompanyId) params.set("company_id", storedMasterCompanyId);
+
+    const response = await fetch(`/api/ppes?${params.toString()}`, {
+      method: "DELETE",
+      headers: await this.getAuthHeaders(),
+    });
+
+    const result = await readResponseJson<{ error?: string }>(response);
+    if (!response.ok) {
+      throw new Error(result.error || "Erro ao excluir EPI/CA.");
+    }
   },
 
   // --- Estoque (Stock Movements) ---

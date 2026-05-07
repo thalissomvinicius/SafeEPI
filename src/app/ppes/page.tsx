@@ -1,20 +1,26 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { Shield, Plus, Search, X, Loader2, Package } from "lucide-react"
+import { Shield, Plus, Search, X, Loader2, Package, Trash2, ShieldAlert } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
 import Link from "next/link"
 import { COMPANY_CONFIG } from "@/config/company"
+import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
 
 export default function PpesPage() {
+  const { user } = useAuth()
+  const canDeletePpe = user?.role === "MASTER"
   const [ppes, setPpes] = useState<PPE[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState<{id?: string, name: string, ca: string, valCa: string, cost: string, stock: string}>({ name: "", ca: "", valCa: "", cost: "", stock: "" })
   const [isSaving, setIsSaving] = useState(false)
+  const [ppeToDelete, setPpeToDelete] = useState<PPE | null>(null)
+  const [isDeletingPpe, setIsDeletingPpe] = useState(false)
 
   const loadPpes = async () => {
     try {
@@ -105,6 +111,29 @@ export default function PpesPage() {
   const closeEditModal = () => {
     setFormData({ id: undefined, name: "", ca: "", valCa: "", cost: "", stock: "" })
     setIsModalOpen(false)
+  }
+
+  const requestDeletePpe = (ppe: PPE) => {
+    if (!canDeletePpe) return
+    setPpeToDelete(ppe)
+  }
+
+  const deletePpe = async () => {
+    if (!canDeletePpe || !ppeToDelete) return
+
+    try {
+      setIsDeletingPpe(true)
+      await api.deletePpe(ppeToDelete.id)
+      setPpes((current) => current.filter((item) => item.id !== ppeToDelete.id))
+      setPpeToDelete(null)
+      toast.success("EPI/CA excluído do catálogo com sucesso.")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível excluir o EPI/CA."
+      console.error("Erro ao excluir EPI:", error)
+      toast.error(message)
+    } finally {
+      setIsDeletingPpe(false)
+    }
   }
 
   return (
@@ -218,13 +247,24 @@ export default function PpesPage() {
                         </div>
                     </td>
                     <td className="px-6 py-5 text-slate-600 font-bold italic">R$ {ppe.cost.toFixed(2)}</td>
-                    <td className="px-6 py-5 text-right space-x-3">
+                    <td className="px-6 py-5">
+                      <div className="flex items-center justify-end gap-2">
                         <button 
                             onClick={() => openEditPpe(ppe)}
                             className="text-slate-500 hover:bg-slate-100 font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
                         >
                             Editar
                         </button>
+                        {canDeletePpe && (
+                          <button
+                            onClick={() => requestDeletePpe(ppe)}
+                            title="Excluir EPI/CA"
+                            aria-label={`Excluir ${ppe.name}`}
+                            className="p-2 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 rounded-lg transition-all border border-red-100"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                         <Link 
                             href="/inventory"
                             title="Gerenciar estoque deste item"
@@ -232,6 +272,7 @@ export default function PpesPage() {
                         >
                         Estoque
                         </Link>
+                      </div>
                     </td>
                     </tr>
                 ))}
@@ -349,6 +390,60 @@ export default function PpesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {ppeToDelete && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-red-100">
+            <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
+              <div className="p-3 bg-red-100 rounded-2xl shrink-0">
+                <ShieldAlert className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Excluir EPI/CA</h2>
+                <p className="text-xs text-red-600 font-bold uppercase tracking-widest mt-1">Confirmação exigida - MASTER</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Você está prestes a remover <strong className="text-slate-900">{ppeToDelete.name}</strong> do catálogo de EPIs e CAs.
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identificação</p>
+                <p className="mt-1 text-sm font-black text-slate-800">CA {ppeToDelete.ca_number}</p>
+                <p className="mt-2 text-xs font-bold text-slate-400">
+                  Saldo atual: {ppeToDelete.current_stock || 0} unidade(s)
+                </p>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                <p className="text-xs font-black text-amber-700 uppercase tracking-widest">Histórico preservado</p>
+                <p className="mt-1 text-sm text-amber-700 leading-relaxed">
+                  O item sai do catálogo ativo, mas entregas e movimentações antigas continuam registradas.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setPpeToDelete(null)}
+                  disabled={isDeletingPpe}
+                  className="flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => void deletePpe()}
+                  disabled={isDeletingPpe}
+                  className="flex-[2] px-4 py-3 text-xs font-black text-white bg-red-600 hover:bg-red-700 rounded-2xl uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60"
+                >
+                  {isDeletingPpe ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Excluir EPI/CA
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
