@@ -863,20 +863,25 @@ export const api = {
     }
 
     const employeePayload = await withCompanyId({ ...employee, photo_url: photoUrl } as Record<string, unknown>);
-    const { data, error } = await withSessionRetry(() =>
-      supabase
-        .from('employees')
-        .insert([employeePayload])
-        .select()
-    );
+    const response = await fetch('/api/employees/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
+      body: JSON.stringify({
+        employee: employeePayload,
+        company_id: employeePayload.company_id || getStoredMasterCompanyId(),
+      }),
+    });
+
+    const result = await readResponseJson<{ error?: string; employee?: Employee; code?: string; details?: string | null }>(response);
     
-    if (error) {
-      if (isDuplicateCpfIssue(error)) {
-        throw new Error("Este CPF já está cadastrado. Abra o cadastro existente para editar os dados do colaborador.");
+    if (!response.ok) {
+      if (isDuplicateCpfIssue(result)) {
+        throw new Error("Este CPF ja esta cadastrado. Abra o cadastro existente para editar os dados do colaborador.");
       }
-      throw error;
+      throw new Error(result.error || "Erro ao cadastrar colaborador");
     }
-    return data[0] as Employee;
+
+    return result.employee as Employee;
   },
 
   async updateEmployee(id: string, updates: Partial<Employee>, photoFile?: File) {
@@ -903,7 +908,7 @@ export const api = {
     const response = await fetch('/api/employees/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
-      body: JSON.stringify({ id, updates: finalUpdates })
+      body: JSON.stringify({ id, updates: finalUpdates, company_id: getStoredMasterCompanyId() })
     });
 
     const result = await readResponseJson<{ error?: string; employee?: Employee }>(response);
@@ -923,7 +928,7 @@ export const api = {
     const response = await fetch('/api/employees/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
-      body: JSON.stringify({ id, removePhoto: true })
+      body: JSON.stringify({ id, removePhoto: true, company_id: getStoredMasterCompanyId() })
     });
 
     const result = await readResponseJson<{ error?: string; employee?: Employee }>(response);

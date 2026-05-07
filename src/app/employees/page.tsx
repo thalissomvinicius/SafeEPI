@@ -131,7 +131,7 @@ export default function EmployeesPage() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const { user } = useAuth()
-  const canEdit = user?.role === 'ADMIN'
+  const canEdit = user?.role === 'MASTER' || user?.role === 'ADMIN'
 
   const formatRemoteExpiry = (value: string | null) => {
     if (!value) return "sem prazo"
