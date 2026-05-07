@@ -15,7 +15,7 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
-import { calculateTrainingValidity, getTrainingStatusFromValidity } from "@/utils/trainingValidity"
+import { calculateTrainingValidity, getTrainingStatusFromValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
 
 type RemoteSignatureEvidence = {
   signatureBase64: string
@@ -52,6 +52,8 @@ const TRAINING_OPTIONS = [
   "CIPA (NR-05)",
   "Operador de Empilhadeira / Ponte Rolante (NR-11)",
   "Máquinas e Equipamentos (NR-12)",
+  "Construção Civil (NR-18)",
+  "Rural / Agro (NR-31)",
   "Indústria Naval / Trabalho a Quente (NR-34)",
 ]
 
@@ -108,6 +110,8 @@ export default function TrainingPage() {
     getFinalTrainingName() || formData.training_name,
     formData.completion_date
   )
+
+  const getCurrentTrainingWorkload = () => getTrainingWorkloadRule(getFinalTrainingName() || formData.training_name)
 
   const getTrainedEmployeeDescriptor = () => {
     const descriptor = getTrainedEmployee()?.face_descriptor
@@ -1021,6 +1025,12 @@ export default function TrainingPage() {
 
                     <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
                       <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">
+                        Carga horária padrão: {getCurrentTrainingWorkload().label}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold text-blue-500 leading-relaxed">
+                        {getCurrentTrainingWorkload().note}
+                      </p>
+                      <p className="mt-3 text-[10px] font-black text-blue-700 uppercase tracking-widest">
                         Vencimento aplicado: {getCurrentTrainingValidity().displayText}
                       </p>
                       <p className="mt-1 text-[10px] font-bold text-blue-500 leading-relaxed">

@@ -7,7 +7,7 @@ import QRCode from "qrcode"
 import { DeliveryWithRelations, Employee } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
 import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
-import { calculateTrainingValidity } from "@/utils/trainingValidity"
+import { calculateTrainingValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
 
 /**
  * PDF Generator Utility for SafeEPI
@@ -1019,18 +1019,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setTextColor(26, 26, 46)
   doc.text(data.trainingName.toUpperCase(), centerX, 127, { align: "center" })
 
-  const getTrainingWorkload = (name: string): number => {
-    const n = name.toLowerCase();
-    if (n.includes('nr-10') || n.includes('nr 10')) return 40;
-    if (n.includes('nr-33') && n.includes('supervisor')) return 40;
-    if (n.includes('nr-33') || n.includes('nr 33')) return 16;
-    if (n.includes('nr-35') || n.includes('nr 35')) return 8;
-    if (n.includes('nr-12') || n.includes('nr 12')) return 16;
-    if (n.includes('nr-20') || n.includes('nr 20')) return 16;
-    if (n.includes('nr-05') || n.includes('nr 05') || n.includes('cipa')) return 20;
-    return 4;
-  };
-  const workload = getTrainingWorkload(data.trainingName);
+  const workload = getTrainingWorkloadRule(data.trainingName)
 
   const completionText = format(new Date(data.completionDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
   const validity = calculateTrainingValidity(data.trainingName, data.completionDate)
@@ -1042,7 +1031,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setFont("helvetica", "normal")
   doc.setFontSize(11)
   doc.setTextColor(68, 68, 68)
-  doc.text(`Realizado em: ${completionText}  |  Carga Horária: ${workload}h  |  ${validityLabel}`, centerX, 137, { align: "center" })
+  doc.text(`Realizado em: ${completionText}  |  Carga Horária: ${workload.label}  |  ${validityLabel}`, centerX, 137, { align: "center" })
 
   // Rodapé (3 cols)
   const footerY = 160
