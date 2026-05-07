@@ -46,8 +46,13 @@ function getBaseTraining(training: Record<string, unknown>) {
     training_name: training.training_name,
     completion_date: training.completion_date,
     expiry_date: training.expiry_date,
-    status: training.status,
   }
+}
+
+function getFullTraining(training: Record<string, unknown>) {
+  const payload = { ...training }
+  delete payload.status
+  return payload
 }
 
 export async function POST(request: NextRequest) {
@@ -69,7 +74,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
     }
 
-    const fullPayload = { ...training, company_id: companyId }
+    const fullPayload = { ...getFullTraining(training), company_id: companyId }
     const fullResult = await supabaseAdmin
       .from("trainings")
       .insert([fullPayload])
