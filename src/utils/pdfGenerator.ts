@@ -30,12 +30,32 @@ function getPdfCompanyName() {
   return getStoredBrand().name || COMPANY_CONFIG.name
 }
 
+function getImageFormat(dataUrl: string) {
+  return dataUrl.includes("image/jpeg") || dataUrl.includes("image/jpg") ? "JPEG" : "PNG"
+}
+
+function addImageContained(doc: jsPDF, image: string, x: number, y: number, maxW: number, maxH: number, align: "left" | "center" = "center") {
+  const props = doc.getImageProperties(image)
+  const ratio = props.width / props.height
+  let drawW = maxW
+  let drawH = drawW / ratio
+
+  if (drawH > maxH) {
+    drawH = maxH
+    drawW = drawH * ratio
+  }
+
+  const drawX = align === "center" ? x + (maxW - drawW) / 2 : x
+  const drawY = y + (maxH - drawH) / 2
+  doc.addImage(image, getImageFormat(image), drawX, drawY, drawW, drawH)
+}
+
 function addPdfLogo(doc: jsPDF, x: number, y: number, maxW: number, maxH: number) {
   const logo = getPdfLogoDataUrl()
   if (!logo) return false
 
   try {
-    doc.addImage(logo, logo.includes("image/jpeg") ? "JPEG" : "PNG", x, y, maxW, maxH)
+    addImageContained(doc, logo, x, y, maxW, maxH, "left")
     return true
   } catch {
     return false
@@ -942,16 +962,14 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   
   drawBorders()
   
-  // Header: Logo on left, title in center, photo on right
+  // Header: Logo on left, title in center
   const logoBase64 = getPdfLogoDataUrl()
 
   const marginX = 25; // 30px padding from border ~ 10mm + 13.5mm = ~23.5mm
 
   if (logoBase64) {
     try {
-      const imgHeight = 36;
-      const imgWidth = 48; // approx 4:3
-      doc.addImage(logoBase64, "PNG", marginX, 20, imgWidth, imgHeight);
+      addImageContained(doc, logoBase64, marginX, 20, 48, 36, "left")
     } catch { }
   }
 
@@ -965,40 +983,6 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setLineWidth(0.7)
   const lineW = 77
   doc.line(centerX - lineW/2, 45, centerX + lineW/2, 45)
-
-  // Photo on right (60x75px ~ 21x26mm oval)
-  const photoW = 21;
-  const photoH = 26;
-  const photoX = pageWidth - marginX - photoW;
-  const photoY = 20;
-  
-  doc.setDrawColor(r, g, b)
-  doc.setLineWidth(0.7)
-  const instructorPhoto = data.instructorPhotoBase64 || data.photoBase64
-  if (instructorPhoto) {
-    doc.roundedRect(photoX, photoY, photoW, photoH, 3, 3, "S")
-    try {
-      const imgProps = doc.getImageProperties(instructorPhoto);
-      const ratio = imgProps.width / imgProps.height;
-      let drawW = photoW - 2;
-      let drawH = drawW / ratio;
-      if (drawH > photoH - 2) {
-        drawH = photoH - 2;
-        drawW = drawH * ratio;
-      }
-      const xOff = (photoW - 2 - drawW) / 2;
-      const yOff = (photoH - 2 - drawH) / 2;
-      doc.addImage(instructorPhoto, "JPEG", photoX + 1 + xOff, photoY + 1 + yOff, drawW, drawH);
-    } catch {
-      doc.addImage(instructorPhoto, "JPEG", photoX+1, photoY+1, photoW-2, photoH-2)
-    }
-  } else {
-    doc.ellipse(photoX + photoW/2, photoY + photoH/2, photoW/2, photoH/2, "S")
-  }
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(9)
-  doc.setTextColor(150, 150, 150)
-  doc.text("Instrutor", photoX + photoW/2, photoY + photoH + 5, { align: "center" })
 
   // Corpo Central
   doc.setFont("helvetica", "italic")
@@ -1153,9 +1137,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   // Cabeçalho Simplificado
   if (logoBase64) {
     try {
-      const imgHeight = 26;
-      const imgWidth = 35;
-      doc.addImage(logoBase64, "PNG", marginX, 20, imgWidth, imgHeight);
+      addImageContained(doc, logoBase64, marginX, 20, 35, 26, "left")
     } catch { }
   }
 
