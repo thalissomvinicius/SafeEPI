@@ -1171,9 +1171,9 @@ export default function EmployeesPage() {
 
       {/* Modal Adicionar Colaborador */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="flex justify-between items-center p-5 sm:p-6 border-b border-slate-100">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-4 animate-in fade-in duration-300">
+          <div className="my-3 sm:my-4 bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 flex flex-col">
+            <div className="shrink-0 flex justify-between items-center p-5 sm:p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">{formData.id ? 'Editar Colaborador' : `Novo Cadastro ${COMPANY_CONFIG.shortName}`}</h2>
               <button 
                 onClick={closeEditModal} 
@@ -1185,7 +1185,7 @@ export default function EmployeesPage() {
             </div>
             
             {isFaceCameraOpen ? (
-              <div className="p-6">
+              <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
                 <FaceCamera 
                   onCapture={(desc, img) => {
                     setFormData({ ...formData, face_descriptor: Array.from(desc), photo_url: img });
@@ -1196,7 +1196,7 @@ export default function EmployeesPage() {
                 />
               </div>
             ) : (
-            <form onSubmit={handleSaveEmployee} className="p-5 sm:p-8 space-y-5">
+            <form onSubmit={handleSaveEmployee} className="min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
               <div className="flex flex-col items-center mb-4">
                 {formData.photo_url ? (
                   <div className="relative">
@@ -1371,7 +1371,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
-              <div className="pt-6 flex gap-3">
+              <div className="sticky bottom-0 -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 mt-2 flex gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:px-6">
                 <button 
                   type="button" 
                   disabled={isSaving}
