@@ -1237,11 +1237,20 @@ export default function DeliveryPage() {
                         </button>
                       </div>
                     ) : (
-                      <FaceCamera
-                        targetDescriptor={new Float32Array(selectedEmployee.face_descriptor)}
-                        onCapture={(_, img) => setCapturedPhotoBase64(img)}
-                        onCancel={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
-                      />
+                      <>
+                        <FaceCamera
+                          targetDescriptor={new Float32Array(selectedEmployee.face_descriptor)}
+                          onCapture={(_, img) => setCapturedPhotoBase64(img)}
+                          onCancel={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
+                        />
+                        <button
+                          onClick={generateRemoteLink}
+                          disabled={cart.length === 0 || isSaving}
+                          className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
+                        >
+                          <Link2 className="w-4 h-4 text-blue-500" /> Enviar link para assinatura
+                        </button>
+                      </>
                     )
                   )}
                   {authMethod === 'manual_facial' && capturedPhotoBase64 && (
