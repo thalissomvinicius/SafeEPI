@@ -631,10 +631,17 @@ export const api = {
     data?: Record<string, unknown> | null;
     expires_hours?: number;
   }) {
+    const companyId = await getCurrentCompanyId();
+    const storedMasterCompanyId = getStoredMasterCompanyId();
+    const targetCompanyId = companyId || storedMasterCompanyId;
+
     const res = await fetch('/api/remote-links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        ...payload,
+        ...(targetCompanyId ? { company_id: targetCompanyId } : {}),
+      })
     });
     const data = await readResponseJson<{ error?: string; link?: { token: string; status: string; expires_at: string } }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel criar link remoto.");

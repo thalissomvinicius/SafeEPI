@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
+function resolveCompanyId(authUser: { role: string; company_id: string | null }, requestedCompanyId: unknown) {
+  if (authUser.role === "MASTER") return typeof requestedCompanyId === "string" && requestedCompanyId ? requestedCompanyId : null
+  return authUser.company_id
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthorizedUser(request)
   if (!auth.authorized) {
@@ -11,13 +16,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { employee_id, type, data, expires_hours = 24 } = body
+    const { employee_id, type, data, expires_hours = 24, company_id } = body
+    const companyId = resolveCompanyId(auth.user, company_id)
 
     if (!employee_id || !type) {
       return NextResponse.json({ error: "employee_id e type são obrigatórios" }, { status: 400 })
     }
 
-    if (!auth.user.company_id) {
+    if (!companyId) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
     }
 
@@ -31,7 +37,7 @@ export async function POST(request: NextRequest) {
         .from("remote_links")
         .update({ status: "expired" })
         .eq("employee_id", employee_id)
-        .eq("company_id", auth.user.company_id)
+        .eq("company_id", companyId)
         .eq("type", dbType)
         .eq("status", "pending")
     }
@@ -43,7 +49,7 @@ export async function POST(request: NextRequest) {
       .from("remote_links")
       .insert({
         employee_id,
-        company_id: auth.user.company_id,
+        company_id: companyId,
         type: dbType,
         token,
         status: "pending",

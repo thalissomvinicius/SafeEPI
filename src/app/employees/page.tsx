@@ -685,7 +685,7 @@ export default function EmployeesPage() {
       }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Erro desconhecido"
-      toast.error(`Erro ao gerar link: ${errorMsg}. Verifique a tabela 'remote_links'.`)
+      toast.error(`Erro ao gerar link: ${errorMsg}`)
     }
   }
 
