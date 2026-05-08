@@ -103,6 +103,36 @@ async function withSessionRetry<T>(operation: () => PromiseLike<T>): Promise<T> 
   }
 }
 
+async function getSessionAuthHeaders(): Promise<Record<string, string>> {
+  const session = await ensureActiveSession();
+  const token = session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchWithAuthRetry(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const authHeaders = await getSessionAuthHeaders();
+
+  for (const [key, value] of Object.entries(authHeaders)) {
+    headers.set(key, value);
+  }
+
+  let response = await fetch(input, { ...init, headers });
+  if (response.status !== 401) return response;
+
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error || !data.session) {
+    cachedCompanyId = null;
+    await supabase.auth.signOut();
+    return response;
+  }
+
+  const retryHeaders = new Headers(init.headers);
+  retryHeaders.set("Authorization", `Bearer ${data.session.access_token}`);
+  response = await fetch(input, { ...init, headers: retryHeaders });
+  return response;
+}
+
 function normalizeDeliveryReason(reason: Delivery["reason"] | string): Delivery["reason"] {
   const normalized = reason
     .normalize("NFD")
@@ -258,13 +288,7 @@ function setStoredMasterCompanyId(companyId: string | null) {
 async function getCurrentCompanyId(): Promise<string | null> {
   if (cachedCompanyId) return cachedCompanyId;
 
-  const session = await ensureActiveSession();
-  const token = session?.access_token;
-  if (!token) return null;
-
-  const res = await fetch("/api/me", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetchWithAuthRetry("/api/me");
   const data = await readResponseJson<{ user?: CurrentUser; error?: string }>(res);
 
   if (!res.ok) {
@@ -426,9 +450,7 @@ async function insertStockInMovement(ppeId: string, quantity: number, motive: st
 
 export const api = {
   async getAuthHeaders(): Promise<Record<string, string>> {
-    const session = await ensureActiveSession();
-    const token = session?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return getSessionAuthHeaders();
   },
 
   // --- Autenticação ---
@@ -580,9 +602,7 @@ export const api = {
 
   // --- Gestão de Usuários (Apenas Admin) ---
   async getCurrentUser() {
-    const res = await fetch('/api/me', {
-      headers: await this.getAuthHeaders(),
-    });
+    const res = await fetchWithAuthRetry('/api/me');
     const data = await readResponseJson<{ error?: string; user?: CurrentUser }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel validar o perfil.");
     if (!data.user) throw new Error("Perfil nao encontrado na resposta do servidor.");
@@ -1093,14 +1113,12 @@ export const api = {
   },
 
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
-    const payload = await withCompanyId(movement as Record<string, unknown>);
-    const response = await fetch('/api/stock-movements', {
+    const response = await fetchWithAuthRetry('/api/stock-movements', {
       method: 'POST',
       headers: {
-        ...(await this.getAuthHeaders()),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(movement),
     });
 
     const result = await readResponseJson<{ data?: StockMovement; error?: string; code?: string; details?: string }>(response);
