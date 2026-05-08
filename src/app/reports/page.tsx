@@ -11,6 +11,7 @@ import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
 import { DeliveryWithRelations, PPE, Training, Workplace } from "@/types/database"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
+import { getDaysUntilDateOnly } from "@/lib/dateOnly"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 
@@ -89,8 +90,6 @@ export default function ReportsPage() {
 
     let filteredDeliveries = rawDeliveries
     let filteredTrainings = rawTrainings
-    const now = new Date()
-
     if (dateFilter !== 'all') {
       if (dateFilter === 'custom' && customStartDate && customEndDate) {
         filteredDeliveries = rawDeliveries.filter(d => d.delivery_date >= customStartDate && d.delivery_date <= customEndDate + 'T23:59:59')
@@ -124,8 +123,7 @@ export default function ReportsPage() {
 
     // 2. CAs Críticos (Vencendo nos próximos 90 dias) - Geral
     const criticalCount = rawPpes.filter(p => {
-      const expiry = new Date(p.ca_expiry_date)
-      const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      const diffDays = getDaysUntilDateOnly(p.ca_expiry_date)
       return diffDays < 90
     }).length
 

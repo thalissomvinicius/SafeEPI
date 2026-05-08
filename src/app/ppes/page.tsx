@@ -9,6 +9,7 @@ import Link from "next/link"
 import { COMPANY_CONFIG } from "@/config/company"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
+import { formatDateOnly, getDateOnlyValue, getDaysUntilDateOnly } from "@/lib/dateOnly"
 
 export default function PpesPage() {
   const { user } = useAuth()
@@ -102,7 +103,7 @@ export default function PpesPage() {
       id: ppe.id,
       name: ppe.name,
       ca: ppe.ca_number,
-      valCa: ppe.ca_expiry_date ? ppe.ca_expiry_date.split('T')[0] : "",
+      valCa: getDateOnlyValue(ppe.ca_expiry_date),
       cost: ppe.cost.toString(),
       stock: ppe.current_stock.toString()
     })
@@ -218,7 +219,7 @@ export default function PpesPage() {
                     <tr key={ppe.id} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-6 py-5">
                         <p className="font-bold text-slate-800 uppercase tracking-tighter truncate max-w-[200px]">{ppe.name}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Validade: {new Date(ppe.ca_expiry_date).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Validade: {formatDateOnly(ppe.ca_expiry_date)}</p>
                     </td>
                     <td className="px-6 py-5">
                         <span className="text-slate-500 font-mono font-black tracking-tighter bg-slate-100 px-2 py-1 rounded text-xs">
@@ -227,7 +228,7 @@ export default function PpesPage() {
                     </td>
                     <td className="px-6 py-5">
                       {(() => {
-                        const diffDays = Math.ceil((new Date(ppe.ca_expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                        const diffDays = getDaysUntilDateOnly(ppe.ca_expiry_date)
                         if (diffDays < 0) {
                           return <span className="text-[9px] font-black text-red-700 bg-red-50 border border-blue-200 px-2 py-1 rounded uppercase tracking-widest">CA vencido</span>
                         }

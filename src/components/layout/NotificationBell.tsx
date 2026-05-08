@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Bell, AlertTriangle, Calendar, Package, Loader2, RefreshCw } from "lucide-react"
 import { addDays, isPast } from "date-fns"
 import { api } from "@/services/api"
+import { getDaysUntilDateOnly } from "@/lib/dateOnly"
 
 type NotificationItem = {
   id: string;
@@ -28,8 +29,6 @@ export function NotificationBell() {
         ])
         
         const alerts: NotificationItem[] = []
-        const now = new Date()
-
         // Check PPE Lifespan Alerts (Items in use that need replacement)
         deliveryData.forEach(delivery => {
           if (!delivery.returned_at && delivery.ppe?.lifespan_days) {
@@ -50,8 +49,7 @@ export function NotificationBell() {
 
         ppeData.forEach(ppe => {
           // Check CA Expiry
-          const expiry = new Date(ppe.ca_expiry_date)
-          const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          const diffDays = getDaysUntilDateOnly(ppe.ca_expiry_date)
           
           if (diffDays < 30) {
             alerts.push({

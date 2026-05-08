@@ -13,6 +13,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
+import { isDateOnlyPast } from "@/lib/dateOnly"
 import { toast } from "sonner"
 
 interface CartItem {
@@ -257,7 +258,7 @@ export default function DeliveryPage() {
     loadPendingDrafts()
   }, [loadPendingDrafts])
 
-  const isCurrentPpeExpired = currentPpe ? new Date(currentPpe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0) : false
+  const isCurrentPpeExpired = currentPpe ? isDateOnlyPast(currentPpe.ca_expiry_date) : false
 
   const filteredPpes = ppes.filter(ppe => 
     ppe.name.toLowerCase().includes(ppeSearchTerm.toLowerCase()) || 
@@ -362,7 +363,7 @@ export default function DeliveryPage() {
         return false
       }
 
-      const caExpired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
+      const caExpired = isDateOnlyPast(ppe.ca_expiry_date)
       if (caExpired) {
         toast.error(`CA vencido: ${ppe.name}. Atualize o CA antes da entrega.`)
         return false
@@ -1014,7 +1015,7 @@ export default function DeliveryPage() {
                             <div className="p-6 text-center text-xs text-slate-400 font-bold uppercase tracking-widest">Nenhum EPI encontrado</div>
                           ) : (
                             filteredPpes.map(ppe => {
-                              const expired = new Date(ppe.ca_expiry_date).getTime() < new Date().setHours(0, 0, 0, 0)
+                              const expired = isDateOnlyPast(ppe.ca_expiry_date)
                               const isSelected = currentPpeId === ppe.id
                               const inCart = cart.some(item => item.ppeId === ppe.id)
                               return (

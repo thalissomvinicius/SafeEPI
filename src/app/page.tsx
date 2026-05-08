@@ -7,6 +7,7 @@ import { api } from "@/services/api"
 import { DeliveryWithRelations } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts"
+import { getDaysUntilDateOnly } from "@/lib/dateOnly"
 
 function DashboardSkeleton() {
   return (
@@ -67,10 +68,8 @@ export default function Dashboard() {
           api.getSignedDocuments()
         ])
 
-        const now = new Date()
         const criticalCount = ppeData.filter(p => {
-          const expiry = new Date(p.ca_expiry_date)
-          const diffDays = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          const diffDays = getDaysUntilDateOnly(p.ca_expiry_date)
           return diffDays < 90
         }).length
 
