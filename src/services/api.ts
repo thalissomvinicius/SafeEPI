@@ -301,8 +301,50 @@ async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
   return null;
 }
 
+function getExpectedStockAfterMovement(
+  currentStock: number,
+  movementType: StockMovement["type"],
+  quantity: number
+): number {
+  if (movementType === "AJUSTE") return Math.max(0, quantity);
+  if (movementType === "SAIDA") return Math.max(0, currentStock - quantity);
+  return currentStock + quantity;
+}
+
+async function updatePpeCurrentStock(ppeId: string, currentStock: number): Promise<void> {
+  const companyId = await getCurrentCompanyId();
+  const { error } = await withSessionRetry(() => {
+    let query = supabase
+      .from("ppes")
+      .update({ current_stock: currentStock })
+      .eq("id", ppeId);
+
+    if (companyId) query = query.eq("company_id", companyId);
+    return query;
+  });
+
+  if (error) throw error;
+}
+
+async function syncPpeStockAfterMovement(
+  ppeId: string,
+  movementType: StockMovement["type"],
+  quantity: number,
+  stockBefore: number | null
+): Promise<void> {
+  if (stockBefore === null) return;
+
+  const expectedStock = getExpectedStockAfterMovement(stockBefore, movementType, quantity);
+  const stockAfter = await getPpeCurrentStock(ppeId);
+
+  if (stockAfter !== expectedStock) {
+    await updatePpeCurrentStock(ppeId, expectedStock);
+  }
+}
+
 async function insertStockOutMovement(ppeId: string, quantity: number, motive: string): Promise<void> {
   if (quantity <= 0) return;
+  const stockBefore = await getPpeCurrentStock(ppeId);
   const payload = await withCompanyId({
     ppe_id: ppeId,
     quantity,
@@ -318,7 +360,10 @@ async function insertStockOutMovement(ppeId: string, quantity: number, motive: s
       .select()
   );
 
-  if (!firstTry.error) return;
+  if (!firstTry.error) {
+    await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
+    return;
+  }
 
   const text = `${firstTry.error.message || ""} ${firstTry.error.details || ""}`.toLowerCase();
   const missingCreatedByColumns =
@@ -345,10 +390,12 @@ async function insertStockOutMovement(ppeId: string, quantity: number, motive: s
   );
 
   if (fallbackTry.error) throw fallbackTry.error;
+  await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
 }
 
 async function insertStockInMovement(ppeId: string, quantity: number, motive: string): Promise<void> {
   if (quantity <= 0) return;
+  const stockBefore = await getPpeCurrentStock(ppeId);
 
   const companyId = await getCurrentCompanyId();
   const payload = {
@@ -367,6 +414,13 @@ async function insertStockInMovement(ppeId: string, quantity: number, motive: st
 
   if (error) {
     console.warn("Nao foi possivel registrar entrada automatica de devolucao:", error);
+    return;
+  }
+
+  try {
+    await syncPpeStockAfterMovement(ppeId, "ENTRADA", quantity, stockBefore);
+  } catch (stockError) {
+    console.warn("Nao foi possivel atualizar saldo automatico de devolucao:", stockError);
   }
 }
 
@@ -1039,8 +1093,7 @@ export const api = {
   },
 
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
-    // Insert the movement — the Supabase trigger fn_update_ppe_stock
-    // automatically updates ppes.current_stock with SECURITY DEFINER (bypasses RLS)
+    const stockBefore = await getPpeCurrentStock(movement.ppe_id);
     const payload = await withCompanyId(movement as Record<string, unknown>);
     const { data, error } = await withSessionRetry(() =>
       supabase
@@ -1049,6 +1102,9 @@ export const api = {
         .select()
     )
     if (error) throw error
+
+    await syncPpeStockAfterMovement(movement.ppe_id, movement.type, movement.quantity, stockBefore);
+
     return data[0] as StockMovement
   },
 
