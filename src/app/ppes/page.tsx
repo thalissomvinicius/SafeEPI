@@ -54,6 +54,7 @@ export default function PpesPage() {
 
     try {
       setIsSaving(true)
+      const initialStock = Math.max(0, parseInt(formData.stock, 10) || 0)
       
       if (formData.id) {
         await api.updatePpe(formData.id, {
@@ -71,13 +72,13 @@ export default function PpesPage() {
           manufacturer: "Genérico",
           lifespan_days: 180,
           active: true,
-          current_stock: parseInt(formData.stock) || 0
+          current_stock: 0
         })
 
-        if (parseInt(formData.stock) > 0) {
+        if (initialStock > 0) {
           await api.addStockMovement({
             ppe_id: newPpe.id,
-            quantity: parseInt(formData.stock),
+            quantity: initialStock,
             type: 'ENTRADA',
             motive: 'Saldo Inicial (Cadastro)'
           })
