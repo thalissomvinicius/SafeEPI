@@ -1093,19 +1093,26 @@ export const api = {
   },
 
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
-    const stockBefore = await getPpeCurrentStock(movement.ppe_id);
     const payload = await withCompanyId(movement as Record<string, unknown>);
-    const { data, error } = await withSessionRetry(() =>
-      supabase
-        .from('stock_movements')
-        .insert([payload])
-        .select()
-    )
-    if (error) throw error
+    const response = await fetch('/api/stock-movements', {
+      method: 'POST',
+      headers: {
+        ...(await this.getAuthHeaders()),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-    await syncPpeStockAfterMovement(movement.ppe_id, movement.type, movement.quantity, stockBefore);
+    const result = await readResponseJson<{ data?: StockMovement; error?: string; code?: string; details?: string }>(response);
+    if (!response.ok) {
+      throw new Error(result.error || "Erro ao aplicar ajuste de estoque.");
+    }
 
-    return data[0] as StockMovement
+    if (!result.data) {
+      throw new Error("Movimentacao de estoque nao retornou registro salvo.");
+    }
+
+    return result.data
   },
 
   // --- Entregas ---
