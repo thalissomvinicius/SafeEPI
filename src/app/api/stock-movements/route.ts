@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Tipo de movimentacao de estoque invalido." }, { status: 400 })
     }
 
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      return NextResponse.json({ error: "Quantidade de estoque deve ser maior que zero." }, { status: 400 })
+    if (!Number.isFinite(quantity) || quantity < 0 || (type !== "AJUSTE" && quantity <= 0)) {
+      return NextResponse.json({ error: "Quantidade de estoque invalida para esta movimentacao." }, { status: 400 })
     }
 
     if (auth.user.role !== "MASTER" && !requestedCompanyId) {

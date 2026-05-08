@@ -14,6 +14,7 @@ import { formatDateOnly, getDateOnlyValue, getDaysUntilDateOnly } from "@/lib/da
 export default function PpesPage() {
   const { user } = useAuth()
   const canDeletePpe = user?.role === "MASTER"
+  const canAdjustPpeStock = user?.role === "MASTER" || user?.role === "ADMIN"
   const [ppes, setPpes] = useState<PPE[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -48,6 +49,7 @@ export default function PpesPage() {
     ppe.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     ppe.ca_number.includes(searchTerm)
   )
+  const isStockFieldLocked = Boolean(formData.id && !canAdjustPpeStock)
 
   const handleSavePpe = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -58,12 +60,22 @@ export default function PpesPage() {
       const initialStock = Math.max(0, parseInt(formData.stock, 10) || 0)
       
       if (formData.id) {
+        const currentPpe = ppes.find((ppe) => ppe.id === formData.id)
         await api.updatePpe(formData.id, {
           name: formData.name,
           ca_number: formData.ca || "N/A",
           ca_expiry_date: formData.valCa || new Date().toISOString(),
           cost: parseFloat(formData.cost) || 0,
         })
+
+        if (canAdjustPpeStock && currentPpe && initialStock !== currentPpe.current_stock) {
+          await api.addStockMovement({
+            ppe_id: currentPpe.id,
+            quantity: initialStock,
+            type: "AJUSTE",
+            motive: "Ajuste de saldo via edição do EPI/CA"
+          })
+        }
       } else {
         const newPpe = await api.addPpe({
           name: formData.name,
@@ -349,7 +361,7 @@ export default function PpesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label htmlFor="ppe-stock" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo Inicial (Qtd)</label>
+                  <label htmlFor="ppe-stock" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">{formData.id ? "Saldo Atual (Qtd)" : "Saldo Inicial (Qtd)"}</label>
                   <input 
                     id="ppe-stock"
                     type="number" 
@@ -358,8 +370,8 @@ export default function PpesPage() {
                     onChange={(e) => setFormData({...formData, stock: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold disabled:opacity-50" 
                     placeholder="0"
-                    disabled={!!formData.id}
-                    title={formData.id ? "O estoque deve ser gerenciado na tela de Estoque" : ""}
+                    disabled={isStockFieldLocked}
+                    title={isStockFieldLocked ? "Somente Master e Admin podem ajustar o saldo pela edição do EPI/CA" : ""}
                   />
                 </div>
                 <div className="space-y-2">
