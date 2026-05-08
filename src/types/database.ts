@@ -56,7 +56,7 @@ export type StockMovement = {
   created_by_id?: string | null;
   created_by_name?: string | null;
   created_at?: string;
-  ppe?: { name: string };
+  ppe?: { name: string; active?: boolean | null };
 };
 
 export type Delivery = {

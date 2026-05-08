@@ -1019,7 +1019,7 @@ export const api = {
         .from('stock_movements')
         .select(`
           *,
-          ppe:ppes(name)
+          ppe:ppes(name, active)
         `)
         .order('created_at', { ascending: false });
         if (companyId) query = query.eq('company_id', companyId);
@@ -1028,7 +1028,7 @@ export const api = {
     );
     
     if (error) throw error;
-    return data as StockMovement[];
+    return (data || []).filter((movement) => movement.ppe && movement.ppe.active !== false) as StockMovement[];
   },
 
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {

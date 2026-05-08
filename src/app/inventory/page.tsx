@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { Package, Plus, History, Search, ArrowUpCircle, ArrowDownCircle, Settings2, Loader2 } from "lucide-react"
+import { Package, Plus, History, Search, ArrowUpCircle, ArrowDownCircle, Settings2, Loader2, X } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE, StockMovement } from "@/types/database"
 import { format } from "date-fns"
@@ -16,6 +16,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
   // Form State
@@ -80,6 +81,32 @@ export default function InventoryPage() {
   }
 
   const filteredPpes = ppes.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const recentMovements = movements.slice(0, 5)
+
+  const renderMovementItem = (movement: StockMovement) => (
+    <div key={movement.id} className="flex gap-4 items-start group">
+      <div className={`p-2 rounded-xl shrink-0 ${movement.type === 'ENTRADA' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-blue-300'}`}>
+        {movement.type === 'ENTRADA' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
+      </div>
+      <div className="flex-1 space-y-1">
+        <div className="flex justify-between items-start gap-3">
+          <p className="text-[11px] font-black text-white uppercase tracking-tighter truncate max-w-[150px]">{movement.ppe?.name}</p>
+          <span className={`text-xs font-black italic ${movement.type === 'ENTRADA' ? 'text-green-400' : 'text-blue-300'}`}>
+            {movement.type === 'ENTRADA' ? '+' : '-'}{Math.abs(movement.quantity)}
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-500 italic leading-tight">{movement.motive}</p>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">
+            {format(new Date(movement.created_at || ""), "dd/MM/yyyy • HH:mm", { locale: ptBR })}
+          </p>
+          {movement.created_by_name && (
+            <span className="text-[8px] text-slate-500 italic">· {movement.created_by_name}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24">
@@ -189,43 +216,58 @@ export default function InventoryPage() {
               </h3>
 
               <div className="space-y-6 relative z-10 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                {movements.map(m => (
-                    <div key={m.id} className="flex gap-4 items-start group">
-                        <div className={`p-2 rounded-xl shrink-0 ${m.type === 'ENTRADA' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-blue-300'}`}>
-                            {m.type === 'ENTRADA' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                            <div className="flex justify-between items-start">
-                                <p className="text-[11px] font-black text-white uppercase tracking-tighter truncate max-w-[150px]">{m.ppe?.name}</p>
-                                <span className={`text-xs font-black italic ${m.type === 'ENTRADA' ? 'text-green-400' : 'text-blue-300'}`}>
-                                    {m.type === 'ENTRADA' ? '+' : '-'}{Math.abs(m.quantity)}
-                                </span>
-                            </div>
-                            <p className="text-[10px] text-slate-500 italic leading-tight">{m.motive}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">
-                                {format(new Date(m.created_at || ""), "dd/MM/yyyy • HH:mm", { locale: ptBR })}
-                              </p>
-                              {m.created_by_name && (
-                                <span className="text-[8px] text-slate-500 italic">· {m.created_by_name}</span>
-                              )}
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                {recentMovements.map(renderMovementItem)}
                 {movements.length === 0 && (
                     <p className="text-slate-600 text-xs text-center py-20 italic">Sem histórico registrado.</p>
                 )}
               </div>
 
               <div className="mt-8 pt-6 border-t border-slate-800">
-                 <button className="w-full py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-colors">
+                 <button
+                   type="button"
+                   onClick={() => setIsHistoryModalOpen(true)}
+                   disabled={movements.length === 0}
+                   className="w-full py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                 >
                      Ver histórico completo →
                  </button>
               </div>
            </div>
         </div>
       </div>
+
+      {isHistoryModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 sm:p-7 border-b border-slate-800 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Auditoria de Estoque</p>
+                <h2 className="mt-1 text-xl font-black text-white uppercase tracking-tighter">Histórico completo</h2>
+                <p className="mt-1 text-xs text-slate-500 font-bold">
+                  {movements.length} movimentação(ões) de EPIs ativos.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHistoryModalOpen(false)}
+                aria-label="Fechar histórico completo"
+                className="p-2 rounded-xl border border-slate-800 text-slate-500 hover:text-white hover:border-slate-600 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-7 max-h-[70dvh] overflow-y-auto custom-scrollbar">
+              <div className="space-y-6">
+                {movements.map(renderMovementItem)}
+                {movements.length === 0 && (
+                  <p className="text-slate-600 text-xs text-center py-20 italic">Sem histórico registrado.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Adicionar Movimento */}
       {isModalOpen && (
