@@ -22,6 +22,61 @@ import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
 
+type EmployeeImportRow = Record<string, unknown>
+
+const normalizeImportHeader = (value: string) =>
+  normalizeName(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]/g, "")
+    .toLowerCase()
+
+const getImportValue = (row: EmployeeImportRow, aliases: string[]) => {
+  const normalizedEntries = new Map(
+    Object.entries(row).map(([key, value]) => [normalizeImportHeader(key), value])
+  )
+
+  for (const alias of aliases) {
+    const value = normalizedEntries.get(normalizeImportHeader(alias))
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value
+  }
+
+  return ""
+}
+
+const getImportCpf = (value: unknown) => {
+  const digits = String(value ?? "").replace(/\D/g, "")
+  const normalizedDigits = digits.length > 0 && digits.length < 11 ? digits.padStart(11, "0") : digits
+  return formatCpf(normalizedDigits)
+}
+
+const getImportDate = (value: unknown) => {
+  if (value === null || value === undefined || String(value).trim() === "") return ""
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return format(value, "yyyy-MM-dd")
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = XLSX.SSF.parse_date_code(value)
+    if (parsed) {
+      return `${String(parsed.y).padStart(4, "0")}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`
+    }
+  }
+
+  const raw = String(value).trim()
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+
+  const brMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (brMatch) {
+    return `${brMatch[3]}-${brMatch[2].padStart(2, "0")}-${brMatch[1].padStart(2, "0")}`
+  }
+
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? "" : format(parsed, "yyyy-MM-dd")
+}
+
 type RemoteLinkStatus = "pending" | "completed" | "expired"
 
 type PendingCaptureDraft = {
@@ -428,40 +483,76 @@ export default function EmployeesPage() {
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: "array" })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" })
+      const rows = XLSX.utils.sheet_to_json<EmployeeImportRow>(sheet, { defval: "" })
 
       let imported = 0
+      let skipped = 0
+      let duplicated = 0
+      const existingCpfs = new Set(employees.map(emp => emp.cpf.replace(/\D/g, "")))
+      const importedCpfs = new Set<string>()
+      const fallbackDepartment = normalizeName(departments[0]?.name || "")
+
       for (const row of rows) {
-        const name = normalizeName(String(row.nome || row.Nome || row.NOME || ""))
-        const cpf = formatCpf(String(row.cpf || row.CPF || ""))
-        const role = normalizeName(String(row.cargo || row.Cargo || row.CARGO || ""))
-        const department = normalizeName(String(row.setor || row.Setor || row.SETOR || ""))
-        const workplaceName = normalizeName(String(row.obra || row.Obra || row.OBRA || ""))
-        const admission = String(row.admissao || row.Admissao || row.ADMISSAO || "")
-        const termination = String(row.demissao || row.Demissao || row.DEMISSAO || "")
-        const status = String(row.status || row.Status || "ATIVO").toUpperCase()
+        const name = normalizeName(String(getImportValue(row, ["nome", "nome completo", "colaborador"])))
+        const cpf = getImportCpf(getImportValue(row, ["cpf", "documento"]))
+        const cpfDigits = cpf.replace(/\D/g, "")
+        const role = normalizeName(String(getImportValue(row, ["cargo", "funcao", "função", "funcao/cargo", "função/cargo"])))
+        const importDepartment = normalizeName(String(getImportValue(row, ["setor", "departamento", "area", "área"])))
+        const department = importDepartment || fallbackDepartment || null
+        const workplaceName = normalizeName(String(getImportValue(row, ["obra", "canteiro", "obra/canteiro", "unidade", "local"])))
+        const admission = getImportDate(getImportValue(row, ["admissao", "admissão", "data de admissao", "data de admissão"]))
+        const termination = getImportDate(getImportValue(row, ["demissao", "demissão", "data de demissao", "data de demissão"]))
+        const status = normalizeName(String(getImportValue(row, ["status", "situacao", "situação"]) || "ATIVO"))
 
-        if (!name || !cpf || !isValidCpf(cpf) || !role || !department) continue
-        if (employees.some(emp => emp.cpf === cpf)) continue
+        if (!name || !cpf || !isValidCpf(cpf) || !role) {
+          skipped += 1
+          continue
+        }
 
-        const workplace = workplaces.find(w => normalizeName(w.name) === workplaceName)
-        await api.addEmployee({
-          full_name: name,
-          cpf,
-          job_title: role,
-          department,
-          admission_date: admission || null,
-          termination_date: termination || null,
-          active: status !== "INATIVO" && !termination,
-          workplace_id: workplace?.id || null,
-          photo_url: null,
-          face_descriptor: null,
-        })
-        imported += 1
+        if (existingCpfs.has(cpfDigits) || importedCpfs.has(cpfDigits)) {
+          duplicated += 1
+          continue
+        }
+
+        try {
+          const workplace = workplaces.find(w => normalizeName(w.name) === workplaceName)
+          await api.addEmployee({
+            full_name: name,
+            cpf,
+            job_title: role,
+            department,
+            admission_date: admission || null,
+            termination_date: termination || null,
+            active: status !== "INATIVO" && !termination,
+            workplace_id: workplace?.id || null,
+            photo_url: null,
+            face_descriptor: null,
+          })
+          importedCpfs.add(cpfDigits)
+          imported += 1
+        } catch (rowError) {
+          const message = rowError instanceof Error ? rowError.message.toLowerCase() : ""
+          if (message.includes("cpf") && message.includes("cadastrado")) {
+            duplicated += 1
+            existingCpfs.add(cpfDigits)
+          } else {
+            skipped += 1
+            console.error("Linha ignorada na importacao de colaboradores:", { name, cpf, rowError })
+          }
+        }
       }
 
       await loadData()
-      toast.success(`${imported} colaborador(es) importado(s).`)
+      const details = [
+        skipped > 0 ? `${skipped} linha(s) ignorada(s) por dados obrigatorios invalidos` : "",
+        duplicated > 0 ? `${duplicated} CPF(s) duplicado(s) ignorado(s)` : "",
+      ].filter(Boolean).join(". ")
+
+      if (imported === 0) {
+        toast.error(details || "Nenhum colaborador importado. Confira se a planilha tem nome, CPF valido e cargo.")
+      } else {
+        toast.success(`${imported} colaborador(es) importado(s).${details ? ` ${details}.` : ""}`)
+      }
     } catch (error) {
       console.error("Erro ao importar colaboradores:", error)
       toast.error("Falha ao importar planilha. Confira o modelo e tente novamente.")
