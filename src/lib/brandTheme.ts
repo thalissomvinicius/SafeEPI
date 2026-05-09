@@ -8,6 +8,7 @@ export type ActiveBrand = {
 }
 
 const BRAND_KEY = "safeepi_active_brand"
+export const BRAND_CHANGED_EVENT = "safeepi:brand-changed"
 const DEFAULT_COLOR = "#2563EB"
 
 export function normalizeHexColor(color?: string | null) {
@@ -40,6 +41,11 @@ function getFallbackBrand(): ActiveBrand {
   }
 }
 
+function emitBrandChanged(brand: ActiveBrand) {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent<ActiveBrand>(BRAND_CHANGED_EVENT, { detail: brand }))
+}
+
 export function getStoredBrand(): ActiveBrand {
   if (typeof window === "undefined") return getFallbackBrand()
 
@@ -62,6 +68,7 @@ export function clearCompanyTheme() {
   document.body.classList.remove("company-theme")
   document.body.style.removeProperty("--brand-color")
   document.body.style.removeProperty("--brand-color-strong")
+  emitBrandChanged(getFallbackBrand())
 }
 
 async function imageUrlToDataUrl(url: string): Promise<string | null> {
@@ -92,6 +99,7 @@ export async function applyCompanyBrand(company?: Company | null, options: { ena
   }
 
   window.localStorage.setItem(BRAND_KEY, JSON.stringify(brand))
+  emitBrandChanged(brand)
 
   if (options.enableTheme !== false) {
     document.body.classList.add("company-theme")
@@ -101,6 +109,8 @@ export async function applyCompanyBrand(company?: Company | null, options: { ena
 
   const dataUrl = await imageUrlToDataUrl(logoUrl)
   if (dataUrl) {
-    window.localStorage.setItem(BRAND_KEY, JSON.stringify({ ...brand, logoDataUrl: dataUrl }))
+    const brandWithLogoData = { ...brand, logoDataUrl: dataUrl }
+    window.localStorage.setItem(BRAND_KEY, JSON.stringify(brandWithLogoData))
+    emitBrandChanged(brandWithLogoData)
   }
 }

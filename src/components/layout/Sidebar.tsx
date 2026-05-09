@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { useActiveBrand } from "@/hooks/useActiveBrand"
 
 const menuItems = [
   { href: "/companies", label: "Empresas", icon: Building2, roles: ['MASTER'] },
@@ -27,9 +28,10 @@ const menuItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const { logout, user } = useAuth()
-  const brandColor = user?.company?.primary_color || "#2563EB"
-  const brandLogo = user?.company?.logo_url || "/logo.png"
-  const brandName = user?.company?.trade_name || user?.company?.name || "SafeEPI"
+  const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
+  const brandColor = activeBrand.primaryColor
+  const brandLogo = activeBrand.logoUrl || "/logo.png"
+  const brandName = activeBrand.name
   
   const filteredMenuItems = menuItems.filter(item => 
     item.roles.includes(user?.role || 'ADMIN') &&

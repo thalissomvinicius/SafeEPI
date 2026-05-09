@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { useActiveBrand } from "@/hooks/useActiveBrand"
 
 const allItems = [
   { href: "/companies", label: "Empresas", icon: Building2, roles: ['MASTER'] },
@@ -28,8 +29,9 @@ export function MobileNav() {
   const pathname = usePathname()
   const { logout, user } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const brandColor = user?.company?.primary_color || "#2563EB"
-  const brandName = user?.company?.trade_name || user?.company?.name || "SafeEPI"
+  const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
+  const brandColor = activeBrand.primaryColor
+  const brandName = activeBrand.name
 
   const filteredItems = allItems.filter(item => 
     item.roles.includes(user?.role || 'ADMIN') &&
