@@ -24,6 +24,16 @@ const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
 
 type EmployeeImportRow = Record<string, unknown>
 
+type ImportProgress = {
+  fileName: string
+  total: number
+  processed: number
+  imported: number
+  skipped: number
+  duplicated: number
+  phase: string
+}
+
 const normalizeImportHeader = (value: string) =>
   normalizeName(value)
     .normalize("NFD")
@@ -142,6 +152,7 @@ export default function EmployeesPage() {
   const [captureWaitHours, setCaptureWaitHours] = useState(24)
   const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const importProgressTimerRef = useRef<number | null>(null)
   
   // Prontuario State
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
@@ -185,8 +196,17 @@ export default function EmployeesPage() {
   const tstSigCanvas = useRef<SignatureCanvas | null>(null)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
   const { user } = useAuth()
   const canEdit = user?.role === 'MASTER' || user?.role === 'ADMIN'
+
+  useEffect(() => {
+    return () => {
+      if (importProgressTimerRef.current) {
+        window.clearTimeout(importProgressTimerRef.current)
+      }
+    }
+  }, [])
 
   const formatRemoteExpiry = (value: string | null) => {
     if (!value) return "sem prazo"
@@ -480,6 +500,19 @@ export default function EmployeesPage() {
   const handleImportEmployees = async (file: File) => {
     try {
       setIsSaving(true)
+      if (importProgressTimerRef.current) {
+        window.clearTimeout(importProgressTimerRef.current)
+        importProgressTimerRef.current = null
+      }
+      setImportProgress({
+        fileName: file.name,
+        total: 0,
+        processed: 0,
+        imported: 0,
+        skipped: 0,
+        duplicated: 0,
+        phase: "Lendo planilha...",
+      })
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: "array" })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
@@ -491,8 +524,22 @@ export default function EmployeesPage() {
       const existingCpfs = new Set(employees.map(emp => emp.cpf.replace(/\D/g, "")))
       const importedCpfs = new Set<string>()
       const fallbackDepartment = normalizeName(departments[0]?.name || "")
+      const updateProgress = (processed: number, phase: string) => {
+        setImportProgress({
+          fileName: file.name,
+          total: rows.length,
+          processed,
+          imported,
+          skipped,
+          duplicated,
+          phase,
+        })
+      }
 
-      for (const row of rows) {
+      updateProgress(0, `${rows.length} colaborador(es) encontrado(s) na planilha.`)
+
+      for (const [index, row] of rows.entries()) {
+        const processed = index + 1
         const name = normalizeName(String(getImportValue(row, ["nome", "nome completo", "colaborador"])))
         const cpf = getImportCpf(getImportValue(row, ["cpf", "documento"]))
         const cpfDigits = cpf.replace(/\D/g, "")
@@ -506,15 +553,18 @@ export default function EmployeesPage() {
 
         if (!name || !cpf || !isValidCpf(cpf) || !role) {
           skipped += 1
+          updateProgress(processed, "Linha ignorada por dados obrigatorios invalidos.")
           continue
         }
 
         if (existingCpfs.has(cpfDigits) || importedCpfs.has(cpfDigits)) {
           duplicated += 1
+          updateProgress(processed, `CPF duplicado ignorado: ${name}.`)
           continue
         }
 
         try {
+          updateProgress(index, `Cadastrando ${name}...`)
           const workplace = workplaces.find(w => normalizeName(w.name) === workplaceName)
           await api.addEmployee({
             full_name: name,
@@ -530,18 +580,22 @@ export default function EmployeesPage() {
           })
           importedCpfs.add(cpfDigits)
           imported += 1
+          updateProgress(processed, `Importado: ${name}.`)
         } catch (rowError) {
           const message = rowError instanceof Error ? rowError.message.toLowerCase() : ""
           if (message.includes("cpf") && message.includes("cadastrado")) {
             duplicated += 1
             existingCpfs.add(cpfDigits)
+            updateProgress(processed, `CPF ja cadastrado ignorado: ${name}.`)
           } else {
             skipped += 1
+            updateProgress(processed, `Falha ao importar ${name || "linha"}; seguindo para a proxima.`)
             console.error("Linha ignorada na importacao de colaboradores:", { name, cpf, rowError })
           }
         }
       }
 
+      updateProgress(rows.length, "Atualizando a lista de colaboradores...")
       await loadData()
       const details = [
         skipped > 0 ? `${skipped} linha(s) ignorada(s) por dados obrigatorios invalidos` : "",
@@ -558,6 +612,10 @@ export default function EmployeesPage() {
       toast.error("Falha ao importar planilha. Confira o modelo e tente novamente.")
     } finally {
       setIsSaving(false)
+      importProgressTimerRef.current = window.setTimeout(() => {
+        setImportProgress(null)
+        importProgressTimerRef.current = null
+      }, 1500)
       if (importInputRef.current) importInputRef.current.value = ""
     }
   }
@@ -823,6 +881,10 @@ export default function EmployeesPage() {
     }
   }, [updatePendingCaptureDraft])
 
+  const importPercent = importProgress?.total
+    ? Math.min(100, Math.round((importProgress.processed / importProgress.total) * 100))
+    : 0
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in relative">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -857,8 +919,8 @@ export default function EmployeesPage() {
               disabled={isSaving}
               className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-60"
             >
-              <FileUp className="w-4 h-4 mr-2" />
-              Importar
+              {importProgress ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileUp className="w-4 h-4 mr-2" />}
+              {importProgress ? "Importando" : "Importar"}
             </button>
             <button
               onClick={exportEmployeesReport}
@@ -882,6 +944,54 @@ export default function EmployeesPage() {
           </div>
         )}
       </div>
+
+      {importProgress && (
+        <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm shadow-blue-900/5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#2563EB]/10 text-[#2563EB]">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black uppercase tracking-tight text-slate-800">Importando colaboradores</p>
+                <p className="mt-1 truncate text-xs font-bold text-slate-500">{importProgress.fileName}</p>
+                <p className="mt-1 text-[11px] font-bold text-slate-400">{importProgress.phase}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 text-center md:min-w-[420px]">
+              <div className="rounded-xl bg-slate-50 px-3 py-2">
+                <p className="text-base font-black text-slate-800">{importProgress.total}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 px-3 py-2">
+                <p className="text-base font-black text-emerald-700">{importProgress.imported}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Importados</p>
+              </div>
+              <div className="rounded-xl bg-amber-50 px-3 py-2">
+                <p className="text-base font-black text-amber-700">{importProgress.duplicated}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Duplicados</p>
+              </div>
+              <div className="rounded-xl bg-red-50 px-3 py-2">
+                <p className="text-base font-black text-red-700">{importProgress.skipped}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-red-600">Ignorados</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-[#2563EB] transition-all duration-300"
+                style={{ width: `${importPercent}%` }}
+              />
+            </div>
+            <span className="w-28 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">
+              {importProgress.processed}/{importProgress.total || "..."} linhas
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
