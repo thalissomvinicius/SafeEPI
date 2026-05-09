@@ -843,77 +843,139 @@ export interface ReportPDFData {
 
 export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   refreshPdfBrand()
-  const doc = new jsPDF({ format: "a4" })
-  const pageWidth = doc.internal.pageSize.getWidth()
+  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const pw = doc.internal.pageSize.getWidth()
+  const ph = doc.internal.pageSize.getHeight()
+  const mx = 14
+  const brandColor = [r, g, b] as [number, number, number]
+  const ink = [15, 23, 42] as [number, number, number]
+  const muted = [100, 116, 139] as [number, number, number]
+  const border = [226, 232, 240] as [number, number, number]
 
-  const subtitle = data.periodTitle ? `Métricas Globais e Rastreabilidade • ${data.periodTitle}` : "Métricas Globais e Rastreabilidade (NR-06)"
-  addPageHeader(doc, "RELATÓRIO DE CONFORMIDADE E CUSTOS", subtitle)
-
-  let currentY = 50
-  
-  doc.setFontSize(10)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(r, g, b)
-  doc.text("MÉTRICAS GLOBAIS", 14, currentY)
-  currentY += 8
-
-  const cardWidth = (pageWidth - 28 - (3 * 5)) / 4
-  
-  data.stats.forEach((stat, i) => {
-    const x = 14 + (i * (cardWidth + 5))
-    doc.setDrawColor(226, 232, 240)
-    doc.setFillColor(250, 250, 250)
-    doc.roundedRect(x, currentY, cardWidth, 22, 2, 2, "FD")
-    
-    doc.setFont("helvetica", "bold")
+  const drawFooter = () => {
+    doc.setDrawColor(...border)
+    doc.setLineWidth(0.2)
+    doc.line(mx, ph - 14, pw - mx, ph - 14)
+    doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
-    doc.setTextColor(100, 116, 139)
-    doc.text(stat.label.substring(0, 20), x + 3, currentY + 7)
-    
-    doc.setFontSize(10)
-    doc.setTextColor(30, 41, 59)
-    doc.text(stat.value, x + 3, currentY + 14)
-    
-    doc.setFontSize(6)
-    doc.setTextColor(r, g, b)
-    doc.text(stat.change, x + 3, currentY + 19)
+    doc.setTextColor(...muted)
+    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio gerencial de conformidade`, mx, ph - 8)
+    doc.text(`Pagina ${doc.getCurrentPageInfo().pageNumber}`, pw - mx, ph - 8, { align: "right" })
+  }
+
+  doc.setFillColor(248, 250, 252)
+  doc.rect(0, 0, pw, ph, "F")
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
+  doc.setDrawColor(...border)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
+  doc.setFillColor(...brandColor)
+  doc.rect(mx, 12, 4, 36, "F")
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8)
+  doc.setTextColor(...muted)
+  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
+    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
+  }
+  doc.setFontSize(18)
+  doc.setTextColor(...ink)
+  doc.text("Relatorio gerencial de conformidade e custos", mx + 46, 27)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8.5)
+  doc.setTextColor(...muted)
+  doc.text("Indicadores operacionais, rastreabilidade de entregas e leitura executiva do periodo.", mx + 46, 35)
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(7.5)
+  doc.setTextColor(...brandColor)
+  doc.text("BUSINESS INTELLIGENCE", pw - mx - 6, 23, { align: "right" })
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(...muted)
+  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
+  doc.text(data.periodTitle || "Periodo geral", pw - mx - 6, 38, { align: "right" })
+
+  const cardY = 58
+  const cardW = (pw - mx * 2 - 12) / 4
+  const cardColors: [number, number, number][] = [
+    brandColor,
+    [5, 150, 105],
+    [217, 119, 6],
+    [37, 99, 235],
+  ]
+  data.stats.slice(0, 4).forEach((stat, i) => {
+    const x = mx + i * (cardW + 4)
+    const color = cardColors[i] || brandColor
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(x, cardY, cardW, 24, 3, 3, "F")
+    doc.setDrawColor(...border)
+    doc.roundedRect(x, cardY, cardW, 24, 3, 3, "S")
+    doc.setFillColor(...color)
+    doc.rect(x, cardY, 3, 24, "F")
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(14)
+    doc.setTextColor(...ink)
+    doc.text(stat.value, x + 8, cardY + 12)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7.2)
+    doc.setTextColor(...muted)
+    doc.text(stat.label.substring(0, 26).toUpperCase(), x + 8, cardY + 18)
+    doc.setFontSize(6.7)
+    doc.setTextColor(...color)
+    doc.text(stat.change.substring(0, 24), x + cardW - 5, cardY + 12, { align: "right" })
   })
 
-  currentY += 35
-
-  doc.setFontSize(10)
+  const summaryY = 90
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(mx, summaryY, pw - mx * 2, 17, 3, 3, "F")
+  doc.setDrawColor(...border)
+  doc.roundedRect(mx, summaryY, pw - mx * 2, 17, 3, 3, "S")
   doc.setFont("helvetica", "bold")
-  doc.setTextColor(r, g, b)
-  doc.text("HISTÓRICO RECENTE DE TRANSAÇÕES", 14, currentY)
-  currentY += 5
+  doc.setFontSize(8.5)
+  doc.setTextColor(...ink)
+  doc.text("Resumo operacional", mx + 7, summaryY + 7)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.setTextColor(...muted)
+  doc.text(`${data.deliveries.length} entrega(s) no conjunto analisado`, mx + 7, summaryY + 13)
+  doc.text("Tabela limitada aos 50 registros mais recentes para leitura gerencial.", pw - mx - 7, summaryY + 13, { align: "right" })
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(...ink)
+  doc.text("Historico recente de transacoes", mx, 119)
 
   const recentDeliveries = data.deliveries.slice(0, 50)
 
   autoTable(doc, {
-    startY: currentY,
+    startY: 123,
     head: [["Data", "Colaborador", "EPI (C.A.)", "Qtd", "Local"]],
-    body: recentDeliveries.map(d => [
+    body: recentDeliveries.length > 0 ? recentDeliveries.map(d => [
       format(new Date(d.delivery_date), "dd/MM/yyyy HH:mm"),
       d.employee?.full_name || 'N/A',
       `${d.ppe?.name || 'N/A'} (${d.ppe?.ca_number || 'N/A'})`,
       String(d.quantity),
       d.workplace?.name || 'Sede'
-    ]),
-    styles: { fontSize: 7, cellPadding: 3, font: "helvetica" },
-    headStyles: { fillColor: [r, g, b], textColor: 255, fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: 14, right: 14 },
-    theme: 'grid'
+    ]) : [["-", "Nenhuma transacao encontrada", "-", "-", "-"]],
+    headStyles: { fillColor: [15, 23, 42], fontStyle: "bold", fontSize: 7.4, cellPadding: 3.2, textColor: 255, halign: "center" },
+    bodyStyles: { fontSize: 7, cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 }, textColor: ink },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    columnStyles: {
+      0: { cellWidth: 32, halign: "center" },
+      1: { cellWidth: 70, fontStyle: "bold" },
+      2: { cellWidth: 82 },
+      3: { cellWidth: 18, halign: "center", fontStyle: "bold" },
+      4: { cellWidth: 67 },
+    },
+    margin: { left: mx, right: mx, bottom: 18 },
+    theme: "grid",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
+    didDrawPage: () => {
+      drawFooter()
+    },
   })
 
-  const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 200
-  const emitDate = format(new Date(), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
-  doc.setFontSize(7)
-  doc.setFont("helvetica", "italic")
-  doc.setTextColor(100, 116, 139)
-  doc.text(`Relatório gerado em ${emitDate} pelo sistema.`, 14, finalY + 10)
-
-  addPageFooter(doc)
   return doc.output("blob")
 }
 
@@ -1298,49 +1360,111 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
   const mx = 14
+  const brandColor = [r, g, b] as [number, number, number]
+  const ink = [15, 23, 42] as [number, number, number]
+  const muted = [100, 116, 139] as [number, number, number]
+  const border = [226, 232, 240] as [number, number, number]
   const workplaceName = (id?: string | null) => data.workplaces?.find(w => w.id === id)?.name || "Administrativo"
 
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pw, 34, "F")
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  if (!addPdfLogo(doc, mx, 6, 24, 12)) {
-    doc.text(getPdfCompanyName().toUpperCase(), mx, 12)
+  const drawFooter = () => {
+    doc.setDrawColor(...border)
+    doc.setLineWidth(0.2)
+    doc.line(mx, ph - 14, pw - mx, ph - 14)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7)
+    doc.setTextColor(...muted)
+    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio de colaboradores`, mx, ph - 8)
+    doc.text(`Pagina ${doc.getCurrentPageInfo().pageNumber}`, pw - mx, ph - 8, { align: "right" })
   }
-  doc.setFontSize(20)
-  doc.text("RELATÓRIO DE COLABORADORES", mx, 25)
-  doc.setFont("helvetica", "normal")
+
+  doc.setFillColor(248, 250, 252)
+  doc.rect(0, 0, pw, ph, "F")
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
+  doc.setDrawColor(...border)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
+  doc.setFillColor(...brandColor)
+  doc.rect(mx, 12, 4, 36, "F")
+
+  doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
-  doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}${data.periodLabel ? ` · ${data.periodLabel}` : ""}`, pw - mx, 22, { align: "right" })
+  doc.setTextColor(...muted)
+  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
+    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
+  }
+  doc.setFontSize(18)
+  doc.setTextColor(...ink)
+  doc.text("Relatorio executivo de colaboradores", mx + 46, 27)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8.5)
+  doc.setTextColor(...muted)
+  doc.text("Quadro funcional, lotacao, status de vinculo e situacao de biometria facial.", mx + 46, 35)
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(7.5)
+  doc.setTextColor(...brandColor)
+  doc.text("DOCUMENTO GERENCIAL", pw - mx - 6, 23, { align: "right" })
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(...muted)
+  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
+  doc.text(data.periodLabel || "Equipe completa", pw - mx - 6, 38, { align: "right" })
 
   const activeCount = data.employees.filter(e => e.active).length
   const inactiveCount = data.employees.length - activeCount
   const biometricCount = data.employees.filter(e => e.photo_url && e.face_descriptor?.length).length
+  const biometricPendingCount = data.employees.length - biometricCount
   const kpis = [
-    { label: "Total", value: data.employees.length, color: [r, g, b] as [number, number, number] },
+    { label: "Total", value: data.employees.length, color: brandColor },
     { label: "Ativos", value: activeCount, color: [5, 150, 105] as [number, number, number] },
     { label: "Inativos", value: inactiveCount, color: [217, 119, 6] as [number, number, number] },
     { label: "Biometria", value: biometricCount, color: [37, 99, 235] as [number, number, number] },
+    { label: "Pend. biometria", value: biometricPendingCount, color: [220, 38, 38] as [number, number, number] },
   ]
-  const cardY = 42
-  const cardW = (pw - mx * 2 - 12) / 4
+  const cardY = 58
+  const cardW = (pw - mx * 2 - 16) / 5
   kpis.forEach((kpi, index) => {
     const x = mx + index * (cardW + 4)
-    drawCard(doc, x, cardY, cardW, 24, kpi.color)
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(x, cardY, cardW, 23, 3, 3, "F")
+    doc.setDrawColor(...border)
+    doc.roundedRect(x, cardY, cardW, 23, 3, 3, "S")
+    doc.setFillColor(...kpi.color)
+    doc.rect(x, cardY, 3, 23, "F")
     doc.setFont("helvetica", "bold")
-    doc.setFontSize(16)
+    doc.setFontSize(15.5)
     doc.setTextColor(...kpi.color)
-    doc.text(String(kpi.value), x + cardW / 2, cardY + 13, { align: "center" })
+    doc.text(String(kpi.value), x + 8, cardY + 13)
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.setTextColor(100, 116, 139)
-    doc.text(kpi.label.toUpperCase(), x + cardW / 2, cardY + 20, { align: "center" })
+    doc.setFontSize(7.2)
+    doc.setTextColor(...muted)
+    doc.text(kpi.label.toUpperCase(), x + 8, cardY + 19)
   })
 
+  const summaryY = 88
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(mx, summaryY, pw - mx * 2, 19, 3, 3, "F")
+  doc.setDrawColor(...border)
+  doc.roundedRect(mx, summaryY, pw - mx * 2, 19, 3, 3, "S")
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8.5)
+  doc.setTextColor(...ink)
+  doc.text("Resumo operacional", mx + 7, summaryY + 8)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.setTextColor(...muted)
+  doc.text(`${activeCount} ativo(s) e ${inactiveCount} inativo(s) no conjunto filtrado`, mx + 7, summaryY + 15)
+  doc.text(`${biometricPendingCount} pendencia(s) de biometria facial`, mx + 90, summaryY + 15)
+  doc.text("Uso recomendado: conferencia gerencial, TST e auditoria interna.", pw - mx - 7, summaryY + 15, { align: "right" })
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(...ink)
+  doc.text("Prontuario de colaboradores", mx, 119)
+
   autoTable(doc, {
-    startY: cardY + 32,
-    head: [["Nome", "CPF", "Cargo", "Setor", "Obra", "Admissão", "Demissão", "Status", "Biometria"]],
+    startY: 123,
+    head: [["Nome", "CPF", "Cargo", "Setor", "Obra", "Admissao", "Demissao", "Status", "Biometria"]],
     body: data.employees.map(emp => [
       emp.full_name,
       emp.cpf,
@@ -1352,28 +1476,40 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
       emp.active ? "ATIVO" : "INATIVO",
       emp.photo_url && emp.face_descriptor?.length ? "CADASTRADA" : "PENDENTE",
     ]),
-    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7, cellPadding: 3 },
-    bodyStyles: { fontSize: 6.5, cellPadding: 2.5 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    headStyles: { fillColor: [15, 23, 42], fontStyle: "bold", fontSize: 7.2, cellPadding: 3.1, textColor: 255, halign: "center" },
+    bodyStyles: { fontSize: 6.8, cellPadding: { top: 2.6, right: 2.6, bottom: 2.6, left: 2.6 }, textColor: ink },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
-      0: { cellWidth: 44 },
-      1: { cellWidth: 24 },
-      5: { cellWidth: 20, halign: "center" },
-      6: { cellWidth: 20, halign: "center" },
-      7: { cellWidth: 18, halign: "center" },
-      8: { cellWidth: 24, halign: "center" },
+      0: { cellWidth: 42, fontStyle: "bold" },
+      1: { cellWidth: 25, halign: "center" },
+      2: { cellWidth: 42 },
+      3: { cellWidth: 29 },
+      4: { cellWidth: 34 },
+      5: { cellWidth: 21, halign: "center" },
+      6: { cellWidth: 21, halign: "center" },
+      7: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+      8: { cellWidth: 25, halign: "center", fontStyle: "bold" },
     },
-    margin: { left: mx, right: mx },
+    margin: { left: mx, right: mx, bottom: 18 },
     theme: "grid",
     styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
+    didParseCell: (hookData) => {
+      if (hookData.section !== "body") return
+      if (hookData.column.index === 7) {
+        const active = String(hookData.cell.raw || "") === "ATIVO"
+        hookData.cell.styles.textColor = active ? [4, 120, 87] : [180, 83, 9]
+        hookData.cell.styles.fillColor = active ? [236, 253, 245] : [255, 251, 235]
+      }
+      if (hookData.column.index === 8) {
+        const ok = String(hookData.cell.raw || "") === "CADASTRADA"
+        hookData.cell.styles.textColor = ok ? [37, 99, 235] : [185, 28, 28]
+        hookData.cell.styles.fillColor = ok ? [239, 246, 255] : [254, 242, 242]
+      }
+    },
+    didDrawPage: () => {
+      drawFooter()
+    },
   })
-
-  doc.setFillColor(r, g, b)
-  doc.rect(0, ph - 12, pw, 12, "F")
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.setTextColor(255, 255, 255)
-  doc.text(`${COMPANY_CONFIG.name} · ${COMPANY_CONFIG.systemName} · Relatório confidencial`, pw / 2, ph - 4, { align: "center" })
 
   return doc.output("blob")
 }
