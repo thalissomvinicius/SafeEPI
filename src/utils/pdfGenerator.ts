@@ -1389,65 +1389,131 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
   const mx = 14
-  const ppes = data.ppes
+  const brandColor = [r, g, b] as [number, number, number]
+  const ink = [15, 23, 42] as [number, number, number]
+  const muted = [100, 116, 139] as [number, number, number]
+  const border = [226, 232, 240] as [number, number, number]
+  const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+  const getStatus = (ppe: PPE) => {
+    const days = getDaysUntilDateOnly(ppe.ca_expiry_date)
+    if (days < 0) return { label: "CA VENCIDO", rank: 0, color: [185, 28, 28] as [number, number, number], fill: [254, 242, 242] as [number, number, number] }
+    if (days <= 90) return { label: `VENCE EM ${days}D`, rank: 1, color: [180, 83, 9] as [number, number, number], fill: [255, 251, 235] as [number, number, number] }
+    return { label: "REGULAR", rank: 2, color: [4, 120, 87] as [number, number, number], fill: [236, 253, 245] as [number, number, number] }
+  }
+  const ppes = [...data.ppes].sort((a, b) => {
+    const statusA = getStatus(a)
+    const statusB = getStatus(b)
+    if (statusA.rank !== statusB.rank) return statusA.rank - statusB.rank
+    const stockA = Number(a.current_stock || 0) <= 5 ? 0 : 1
+    const stockB = Number(b.current_stock || 0) <= 5 ? 0 : 1
+    if (stockA !== stockB) return stockA - stockB
+    return a.name.localeCompare(b.name, "pt-BR")
+  })
   const totalStock = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0), 0)
   const totalValue = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0) * Number(ppe.cost || 0), 0)
-  const expiredCount = ppes.filter((ppe) => getDaysUntilDateOnly(ppe.ca_expiry_date) < 0).length
-  const expiringCount = ppes.filter((ppe) => {
-    const days = getDaysUntilDateOnly(ppe.ca_expiry_date)
-    return days >= 0 && days <= 90
-  }).length
+  const expiredCount = ppes.filter((ppe) => getStatus(ppe).rank === 0).length
+  const expiringCount = ppes.filter((ppe) => getStatus(ppe).rank === 1).length
   const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length
   const regularCount = Math.max(0, ppes.length - expiredCount - expiringCount)
 
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pw, 34, "F")
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  if (!addPdfLogo(doc, mx, 6, 24, 12)) {
-    doc.text(getPdfCompanyName().toUpperCase(), mx, 12)
+  const drawFooter = () => {
+    const pageLabel = `Pagina ${doc.getCurrentPageInfo().pageNumber}`
+    doc.setDrawColor(...border)
+    doc.setLineWidth(0.2)
+    doc.line(mx, ph - 14, pw - mx, ph - 14)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7)
+    doc.setTextColor(...muted)
+    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio tecnico de EPIs e CAs`, mx, ph - 8)
+    doc.text(pageLabel, pw - mx, ph - 8, { align: "right" })
   }
-  doc.setFontSize(19)
-  doc.text("RELATÓRIO TÉCNICO DE EPIs E CAs", mx, 25)
-  doc.setFont("helvetica", "normal")
+
+  doc.setFillColor(248, 250, 252)
+  doc.rect(0, 0, pw, ph, "F")
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
+  doc.setDrawColor(...border)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
+  doc.setFillColor(...brandColor)
+  doc.rect(mx, 12, 4, 36, "F")
+
+  doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
-  doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}${data.filterLabel ? ` · ${data.filterLabel}` : ""}`, pw - mx, 22, { align: "right" })
+  doc.setTextColor(...muted)
+  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
+    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
+  }
+  doc.setFontSize(18)
+  doc.setTextColor(...ink)
+  doc.text("Relatorio tecnico de EPIs e CAs", mx + 46, 27)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8.5)
+  doc.setTextColor(...muted)
+  doc.text("Conformidade, validade legal, estoque e custo estimado para gestao operacional.", mx + 46, 35)
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(7.5)
+  doc.setTextColor(...brandColor)
+  doc.text("DOCUMENTO GERENCIAL", pw - mx - 6, 23, { align: "right" })
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(...muted)
+  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
+  doc.text(data.filterLabel || "Catalogo ativo completo", pw - mx - 6, 38, { align: "right" })
 
   const kpis = [
-    { label: "Itens catalogados", value: ppes.length, color: [r, g, b] as [number, number, number] },
+    { label: "Itens catalogados", value: ppes.length, color: brandColor },
     { label: "CAs regulares", value: regularCount, color: [5, 150, 105] as [number, number, number] },
     { label: "CAs vencendo", value: expiringCount, color: [217, 119, 6] as [number, number, number] },
     { label: "CAs vencidos", value: expiredCount, color: [220, 38, 38] as [number, number, number] },
-    { label: "Estoque baixo", value: lowStockCount, color: [37, 99, 235] as [number, number, number] },
+    { label: "Estoque baixo", value: lowStockCount, color: [37, 99, 235] as [number, number, number] }
   ]
-  const cardY = 42
+  const cardY = 58
   const cardW = (pw - mx * 2 - 16) / 5
   kpis.forEach((kpi, index) => {
     const x = mx + index * (cardW + 4)
-    drawCard(doc, x, cardY, cardW, 24, kpi.color)
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(x, cardY, cardW, 23, 3, 3, "F")
+    doc.setDrawColor(...border)
+    doc.roundedRect(x, cardY, cardW, 23, 3, 3, "S")
+    doc.setFillColor(...kpi.color)
+    doc.rect(x, cardY, 3, 23, "F")
     doc.setFont("helvetica", "bold")
-    doc.setFontSize(15)
+    doc.setFontSize(15.5)
     doc.setTextColor(...kpi.color)
-    doc.text(String(kpi.value), x + cardW / 2, cardY + 13, { align: "center" })
+    doc.text(String(kpi.value), x + 8, cardY + 13)
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.setTextColor(100, 116, 139)
-    doc.text(kpi.label.toUpperCase(), x + cardW / 2, cardY + 20, { align: "center" })
+    doc.setFontSize(7.2)
+    doc.setTextColor(...muted)
+    doc.text(kpi.label.toUpperCase(), x + 8, cardY + 19)
   })
+
+  const summaryY = 88
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(mx, summaryY, pw - mx * 2, 19, 3, 3, "F")
+  doc.setDrawColor(...border)
+  doc.roundedRect(mx, summaryY, pw - mx * 2, 19, 3, 3, "S")
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8.5)
+  doc.setTextColor(...ink)
+  doc.text("Resumo operacional", mx + 7, summaryY + 8)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.setTextColor(...muted)
+  doc.text(`Saldo total: ${totalStock} unidade(s)`, mx + 7, summaryY + 15)
+  doc.text(`Valor estimado em estoque: ${currency.format(totalValue)}`, mx + 70, summaryY + 15)
+  doc.text(`Ordenacao: vencidos, vencendo, estoque baixo e ordem alfabetica`, pw - mx - 7, summaryY + 15, { align: "right" })
 
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
-  doc.setTextColor(30, 41, 59)
-  doc.text(`Saldo total: ${totalStock} unidade(s)`, mx, cardY + 37)
-  doc.text(`Valor estimado em estoque: R$ ${totalValue.toFixed(2)}`, pw - mx, cardY + 37, { align: "right" })
+  doc.setTextColor(...ink)
+  doc.text("Inventario tecnico", mx, 119)
 
   autoTable(doc, {
-    startY: cardY + 44,
+    startY: 123,
     head: [["Equipamento", "C.A.", "Validade", "Conformidade", "Saldo", "Custo Unit.", "Valor Estoque"]],
     body: ppes.map((ppe) => {
-      const days = getDaysUntilDateOnly(ppe.ca_expiry_date)
-      const status = days < 0 ? "CA VENCIDO" : days <= 90 ? `VENCE EM ${days}D` : "REGULAR"
+      const status = getStatus(ppe)
       const stock = Number(ppe.current_stock || 0)
       const cost = Number(ppe.cost || 0)
 
@@ -1455,49 +1521,45 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
         ppe.name,
         ppe.ca_number || "N/A",
         formatDateOnly(ppe.ca_expiry_date),
-        status,
+        status.label,
         String(stock),
-        `R$ ${cost.toFixed(2)}`,
-        `R$ ${(stock * cost).toFixed(2)}`,
+        currency.format(cost),
+        currency.format(stock * cost),
       ]
     }),
-    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7, cellPadding: 3 },
-    bodyStyles: { fontSize: 6.7, cellPadding: 2.5 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    headStyles: { fillColor: [15, 23, 42], fontStyle: "bold", fontSize: 7.4, cellPadding: 3.2, textColor: 255, halign: "center" },
+    bodyStyles: { fontSize: 7, cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 }, textColor: ink },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
-      0: { cellWidth: 64 },
+      0: { cellWidth: 82, fontStyle: "bold" },
       1: { cellWidth: 24, halign: "center" },
-      2: { cellWidth: 24, halign: "center" },
-      3: { cellWidth: 30, halign: "center" },
-      4: { cellWidth: 18, halign: "center" },
-      5: { cellWidth: 24, halign: "right" },
-      6: { cellWidth: 28, halign: "right" },
+      2: { cellWidth: 27, halign: "center" },
+      3: { cellWidth: 36, halign: "center" },
+      4: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+      5: { cellWidth: 34, halign: "right" },
+      6: { cellWidth: 46, halign: "right", fontStyle: "bold" },
     },
-    margin: { left: mx, right: mx },
+    margin: { left: mx, right: mx, bottom: 18 },
     theme: "grid",
     styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
     didParseCell: (hookData) => {
-      if (hookData.section !== "body" || hookData.column.index !== 3) return
-      const value = String(hookData.cell.raw || "")
-      if (value.includes("VENCIDO")) {
-        hookData.cell.styles.textColor = [185, 28, 28]
-        hookData.cell.styles.fontStyle = "bold"
-      } else if (value.includes("VENCE")) {
-        hookData.cell.styles.textColor = [180, 83, 9]
-        hookData.cell.styles.fontStyle = "bold"
-      } else {
-        hookData.cell.styles.textColor = [4, 120, 87]
+      if (hookData.section !== "body") return
+      if (hookData.column.index === 3) {
+        const rowPpe = ppes[hookData.row.index]
+        const status = getStatus(rowPpe)
+        hookData.cell.styles.textColor = status.color
+        hookData.cell.styles.fillColor = status.fill
         hookData.cell.styles.fontStyle = "bold"
       }
+      if (hookData.column.index === 4 && Number(hookData.cell.raw || 0) <= 5) {
+        hookData.cell.styles.textColor = [37, 99, 235]
+        hookData.cell.styles.fillColor = [239, 246, 255]
+      }
+    },
+    didDrawPage: () => {
+      drawFooter()
     },
   })
-
-  doc.setFillColor(r, g, b)
-  doc.rect(0, ph - 12, pw, 12, "F")
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.setTextColor(255, 255, 255)
-  doc.text(`${COMPANY_CONFIG.name} · ${COMPANY_CONFIG.systemName} · Relatório técnico para gerência e TST`, pw / 2, ph - 4, { align: "center" })
 
   return doc.output("blob")
 }
