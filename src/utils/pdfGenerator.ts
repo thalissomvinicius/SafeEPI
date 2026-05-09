@@ -4,9 +4,10 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { COMPANY_CONFIG } from "@/config/company"
 import QRCode from "qrcode"
-import { DeliveryWithRelations, Employee } from "@/types/database"
+import { DeliveryWithRelations, Employee, PPE } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
 import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
+import { formatDateOnly, getDaysUntilDateOnly } from "@/lib/dateOnly"
 import { calculateTrainingValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
 
 /**
@@ -1373,6 +1374,130 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
   doc.setFontSize(7)
   doc.setTextColor(255, 255, 255)
   doc.text(`${COMPANY_CONFIG.name} · ${COMPANY_CONFIG.systemName} · Relatório confidencial`, pw / 2, ph - 4, { align: "center" })
+
+  return doc.output("blob")
+}
+
+export interface PpeCatalogReportData {
+  ppes: PPE[]
+  filterLabel?: string
+}
+
+export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
+  refreshPdfBrand()
+  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const pw = doc.internal.pageSize.getWidth()
+  const ph = doc.internal.pageSize.getHeight()
+  const mx = 14
+  const ppes = data.ppes
+  const totalStock = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0), 0)
+  const totalValue = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0) * Number(ppe.cost || 0), 0)
+  const expiredCount = ppes.filter((ppe) => getDaysUntilDateOnly(ppe.ca_expiry_date) < 0).length
+  const expiringCount = ppes.filter((ppe) => {
+    const days = getDaysUntilDateOnly(ppe.ca_expiry_date)
+    return days >= 0 && days <= 90
+  }).length
+  const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length
+  const regularCount = Math.max(0, ppes.length - expiredCount - expiringCount)
+
+  doc.setFillColor(r, g, b)
+  doc.rect(0, 0, pw, 34, "F")
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255)
+  if (!addPdfLogo(doc, mx, 6, 24, 12)) {
+    doc.text(getPdfCompanyName().toUpperCase(), mx, 12)
+  }
+  doc.setFontSize(19)
+  doc.text("RELATÓRIO TÉCNICO DE EPIs E CAs", mx, 25)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}${data.filterLabel ? ` · ${data.filterLabel}` : ""}`, pw - mx, 22, { align: "right" })
+
+  const kpis = [
+    { label: "Itens catalogados", value: ppes.length, color: [r, g, b] as [number, number, number] },
+    { label: "CAs regulares", value: regularCount, color: [5, 150, 105] as [number, number, number] },
+    { label: "CAs vencendo", value: expiringCount, color: [217, 119, 6] as [number, number, number] },
+    { label: "CAs vencidos", value: expiredCount, color: [220, 38, 38] as [number, number, number] },
+    { label: "Estoque baixo", value: lowStockCount, color: [37, 99, 235] as [number, number, number] },
+  ]
+  const cardY = 42
+  const cardW = (pw - mx * 2 - 16) / 5
+  kpis.forEach((kpi, index) => {
+    const x = mx + index * (cardW + 4)
+    drawCard(doc, x, cardY, cardW, 24, kpi.color)
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(15)
+    doc.setTextColor(...kpi.color)
+    doc.text(String(kpi.value), x + cardW / 2, cardY + 13, { align: "center" })
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7)
+    doc.setTextColor(100, 116, 139)
+    doc.text(kpi.label.toUpperCase(), x + cardW / 2, cardY + 20, { align: "center" })
+  })
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(9)
+  doc.setTextColor(30, 41, 59)
+  doc.text(`Saldo total: ${totalStock} unidade(s)`, mx, cardY + 37)
+  doc.text(`Valor estimado em estoque: R$ ${totalValue.toFixed(2)}`, pw - mx, cardY + 37, { align: "right" })
+
+  autoTable(doc, {
+    startY: cardY + 44,
+    head: [["Equipamento", "C.A.", "Validade", "Conformidade", "Saldo", "Custo Unit.", "Valor Estoque"]],
+    body: ppes.map((ppe) => {
+      const days = getDaysUntilDateOnly(ppe.ca_expiry_date)
+      const status = days < 0 ? "CA VENCIDO" : days <= 90 ? `VENCE EM ${days}D` : "REGULAR"
+      const stock = Number(ppe.current_stock || 0)
+      const cost = Number(ppe.cost || 0)
+
+      return [
+        ppe.name,
+        ppe.ca_number || "N/A",
+        formatDateOnly(ppe.ca_expiry_date),
+        status,
+        String(stock),
+        `R$ ${cost.toFixed(2)}`,
+        `R$ ${(stock * cost).toFixed(2)}`,
+      ]
+    }),
+    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7, cellPadding: 3 },
+    bodyStyles: { fontSize: 6.7, cellPadding: 2.5 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 64 },
+      1: { cellWidth: 24, halign: "center" },
+      2: { cellWidth: 24, halign: "center" },
+      3: { cellWidth: 30, halign: "center" },
+      4: { cellWidth: 18, halign: "center" },
+      5: { cellWidth: 24, halign: "right" },
+      6: { cellWidth: 28, halign: "right" },
+    },
+    margin: { left: mx, right: mx },
+    theme: "grid",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
+    didParseCell: (hookData) => {
+      if (hookData.section !== "body" || hookData.column.index !== 3) return
+      const value = String(hookData.cell.raw || "")
+      if (value.includes("VENCIDO")) {
+        hookData.cell.styles.textColor = [185, 28, 28]
+        hookData.cell.styles.fontStyle = "bold"
+      } else if (value.includes("VENCE")) {
+        hookData.cell.styles.textColor = [180, 83, 9]
+        hookData.cell.styles.fontStyle = "bold"
+      } else {
+        hookData.cell.styles.textColor = [4, 120, 87]
+        hookData.cell.styles.fontStyle = "bold"
+      }
+    },
+  })
+
+  doc.setFillColor(r, g, b)
+  doc.rect(0, ph - 12, pw, 12, "F")
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(7)
+  doc.setTextColor(255, 255, 255)
+  doc.text(`${COMPANY_CONFIG.name} · ${COMPANY_CONFIG.systemName} · Relatório técnico para gerência e TST`, pw / 2, ph - 4, { align: "center" })
 
   return doc.output("blob")
 }

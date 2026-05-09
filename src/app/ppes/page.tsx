@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { Shield, Plus, Search, X, Loader2, Package, Trash2, ShieldAlert } from "lucide-react"
+import { Shield, Plus, Search, X, Loader2, Package, Trash2, ShieldAlert, FileText } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -10,17 +10,22 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
 import { formatDateOnly, getDateOnlyValue, getDaysUntilDateOnly } from "@/lib/dateOnly"
+import { generatePpeCatalogReportPDF } from "@/utils/pdfGenerator"
+import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
 export default function PpesPage() {
   const { user } = useAuth()
+  const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const canDeletePpe = user?.role === "MASTER"
   const canAdjustPpeStock = user?.role === "MASTER" || user?.role === "ADMIN"
+  const canGeneratePpeReport = user?.role === "MASTER" || user?.role === "ADMIN" || user?.role === "DIRETORIA"
   const [ppes, setPpes] = useState<PPE[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState<{id?: string, name: string, ca: string, valCa: string, cost: string, stock: string}>({ name: "", ca: "", valCa: "", cost: "", stock: "" })
   const [isSaving, setIsSaving] = useState(false)
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [ppeToDelete, setPpeToDelete] = useState<PPE | null>(null)
   const [isDeletingPpe, setIsDeletingPpe] = useState(false)
 
@@ -127,6 +132,34 @@ export default function PpesPage() {
     setIsModalOpen(false)
   }
 
+  const generatePpeReport = () => {
+    if (filteredPpes.length === 0) {
+      toast.error("Nenhum EPI/CA encontrado para emitir relatório.")
+      return
+    }
+
+    try {
+      setIsGeneratingReport(true)
+      const filterLabel = searchTerm.trim()
+        ? `${filteredPpes.length} item(ns) filtrado(s) por "${searchTerm.trim()}"`
+        : `${filteredPpes.length} item(ns) ativos no catálogo`
+      const blob = generatePpeCatalogReportPDF({
+        ppes: filteredPpes,
+        filterLabel,
+      })
+
+      openPdfDialog(blob, `Relatorio_EPIs_CAs_${new Date().toISOString().slice(0, 10)}.pdf`, {
+        title: "Relatório de EPIs e CAs",
+        description: "PDF técnico com conformidade de CAs, saldos, custos e alertas para gerência e TST.",
+      })
+    } catch (error) {
+      console.error("Erro ao gerar relatório de EPIs/CAs:", error)
+      toast.error("Não foi possível gerar o relatório de EPIs/CAs.")
+    } finally {
+      setIsGeneratingReport(false)
+    }
+  }
+
   const requestDeletePpe = (ppe: PPE) => {
     if (!canDeletePpe) return
     setPpeToDelete(ppe)
@@ -164,6 +197,16 @@ export default function PpesPage() {
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão técnica de conformidade no {COMPANY_CONFIG.systemName}.</p>
         </div>
         <div className="flex gap-3 w-full sm:w-auto">
+            {canGeneratePpeReport && (
+              <button
+                onClick={generatePpeReport}
+                disabled={loading || isGeneratingReport}
+                className="flex-1 sm:flex-none border border-slate-200 bg-white text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center hover:bg-slate-50 disabled:opacity-60"
+              >
+                {isGeneratingReport ? <Loader2 className="w-4 h-4 mr-2 animate-spin text-[#2563EB]" /> : <FileText className="w-4 h-4 mr-2 text-[#2563EB]" />}
+                Relatório PDF
+              </button>
+            )}
             <Link 
                 href="/inventory"
                 className="flex-1 sm:flex-none border border-slate-200 bg-white text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center hover:bg-slate-50"
@@ -461,6 +504,7 @@ export default function PpesPage() {
           </div>
         </div>
       )}
+      {pdfActionDialog}
     </div>
   )
 }
