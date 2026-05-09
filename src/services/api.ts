@@ -1017,6 +1017,22 @@ export const api = {
     return result.employee as Employee;
   },
 
+  async deleteEmployee(id: string) {
+    const response = await fetch('/api/employees/update', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
+      body: JSON.stringify({ id, company_id: getStoredMasterCompanyId() })
+    });
+
+    const result = await readResponseJson<{ error?: string; employee?: Pick<Employee, 'id' | 'full_name'>; linkedRecords?: number }>(response);
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Erro ao excluir colaborador');
+    }
+
+    return result.employee;
+  },
+
   async terminateEmployee(employeeId: string) {
     const { error } = await withSessionRetry(() =>
       supabase

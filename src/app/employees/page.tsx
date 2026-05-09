@@ -197,6 +197,8 @@ export default function EmployeesPage() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
+  const [isDeletingEmployee, setIsDeletingEmployee] = useState(false)
   const { user } = useAuth()
   const canEdit = user?.role === 'MASTER' || user?.role === 'ADMIN'
 
@@ -659,6 +661,29 @@ export default function EmployeesPage() {
       toast.error("Erro ao processar desligamento.")
     } finally {
       setLoadingHistory(false)
+    }
+  }
+
+  const handleDeleteEmployee = async () => {
+    if (!employeeToDelete) return
+
+    try {
+      setIsDeletingEmployee(true)
+      await api.deleteEmployee(employeeToDelete.id)
+      setEmployees(prev => prev.filter(emp => emp.id !== employeeToDelete.id))
+      if (selectedEmployeeId === employeeToDelete.id) {
+        setSelectedEmployeeId(null)
+        setIsProfileOpen(false)
+        setEmployeeHistory([])
+      }
+      toast.success("Colaborador excluido com sucesso.")
+      setEmployeeToDelete(null)
+      await loadData()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao excluir colaborador."
+      toast.error(message)
+    } finally {
+      setIsDeletingEmployee(false)
     }
   }
 
@@ -1284,6 +1309,16 @@ export default function EmployeesPage() {
                           >
                           Prontuário
                           </button>
+                          {canEdit && (
+                            <button
+                              onClick={() => setEmployeeToDelete(emp)}
+                              className="inline-flex items-center justify-center text-red-600 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest border border-red-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
+                              title="Excluir colaborador"
+                              aria-label={`Excluir ${emp.full_name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                       </td>
                       </tr>
                   ))}
@@ -1355,6 +1390,16 @@ export default function EmployeesPage() {
                         >
                           Prontuário
                         </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => setEmployeeToDelete(emp)}
+                            className="flex items-center justify-center rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-red-600 transition-all hover:bg-red-100"
+                            title="Excluir colaborador"
+                            aria-label={`Excluir ${emp.full_name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                     </div>
                   </div>
                 ))}
@@ -1368,6 +1413,46 @@ export default function EmployeesPage() {
           )}
         </div>
       </div>
+      )}
+
+      {employeeToDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl border border-red-100 bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-red-600">Excluir colaborador</p>
+              <h2 className="mt-2 text-xl font-black uppercase tracking-tight text-slate-900">
+                {employeeToDelete.full_name}
+              </h2>
+              <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
+                Esta acao remove o cadastro do colaborador. Se existir historico, treinamentos ou documentos assinados, o sistema vai bloquear a exclusao para preservar a auditoria.
+              </p>
+              <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[11px] font-bold leading-relaxed text-amber-800">
+                Para colaboradores com historico real, use a opcao de desligamento no prontuario.
+              </div>
+            </div>
+            <div className="flex gap-3 border-t border-slate-100 bg-slate-50/70 p-4">
+              <button
+                type="button"
+                disabled={isDeletingEmployee}
+                onClick={() => setEmployeeToDelete(null)}
+                className="flex-1 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-white hover:text-slate-700 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingEmployee}
+                onClick={() => void handleDeleteEmployee()}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/15 transition-all hover:bg-red-700 disabled:opacity-60"
+              >
+                {isDeletingEmployee ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal Adicionar Colaborador */}
@@ -1624,6 +1709,14 @@ export default function EmployeesPage() {
                       >
                         <FileDown className="w-4 h-4 mr-2" /> Ficha NR-06
                       </button>
+                      {canEdit && emp && (
+                        <button
+                          onClick={() => setEmployeeToDelete(emp)}
+                          className="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                        </button>
+                      )}
                       <button 
                         onClick={() => setIsProfileOpen(false)} 
                         title="Fechar prontuário"
