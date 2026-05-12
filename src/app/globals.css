@@ -135,6 +135,28 @@ body.company-theme .text-\[\#2563EB\] svg {
   color: var(--brand-color) !important;
 }
 
+[data-sonner-toaster][dir="ltr"],
+html[dir="ltr"] {
+  --toast-close-button-start: unset;
+  --toast-close-button-end: 0;
+  --toast-close-button-transform: translate(35%, -35%);
+}
+
+[data-sonner-toast][data-styled="true"] {
+  border-radius: 16px !important;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16) !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-close-button] {
+  left: auto !important;
+  right: -8px !important;
+  top: -8px !important;
+  height: 22px !important;
+  width: 22px !important;
+  transform: none !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

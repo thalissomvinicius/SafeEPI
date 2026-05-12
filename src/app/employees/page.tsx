@@ -1499,28 +1499,46 @@ export default function EmployeesPage() {
 
       {employeeToDelete && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-3xl border border-red-100 bg-white shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-                <Trash2 className="h-5 w-5" />
+          <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)] animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-red-100 bg-red-50 text-red-600">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-red-600">Excluir colaborador</p>
+                  <h2 className="mt-1 text-lg font-black uppercase tracking-tight text-slate-900">
+                    {employeeToDelete.full_name}
+                  </h2>
+                </div>
               </div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-red-600">Excluir colaborador</p>
-              <h2 className="mt-2 text-xl font-black uppercase tracking-tight text-slate-900">
-                {employeeToDelete.full_name}
-              </h2>
-              <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
-                Esta acao remove o colaborador das telas de cadastro e selecao, mas preserva o registro interno para manter entregas, certificados e documentos assinados vinculados corretamente.
-              </p>
-              <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[11px] font-bold leading-relaxed text-amber-800">
-                Use para corrigir cadastros ou retirar colaboradores inativos da lista sem perder auditoria.
-              </div>
-            </div>
-            <div className="flex gap-3 border-t border-slate-100 bg-slate-50/70 p-4">
               <button
                 type="button"
                 disabled={isDeletingEmployee}
                 onClick={() => setEmployeeToDelete(null)}
-                className="flex-1 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-white hover:text-slate-700 disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50"
+                aria-label="Fechar confirmação de exclusão"
+                title="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+                <p className="text-sm font-semibold leading-relaxed text-slate-600">
+                  Esta acao remove o colaborador das telas de cadastro e selecao, mas preserva o registro interno para manter entregas, certificados e documentos assinados vinculados corretamente.
+                </p>
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] font-bold leading-relaxed text-amber-800">
+                  Use para corrigir cadastros ou retirar colaboradores inativos da lista sem perder auditoria.
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 border-t border-slate-100 bg-white px-6 py-5 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={isDeletingEmployee}
+                onClick={() => setEmployeeToDelete(null)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -1528,7 +1546,7 @@ export default function EmployeesPage() {
                 type="button"
                 disabled={isDeletingEmployee}
                 onClick={() => void handleDeleteEmployee()}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/15 transition-all hover:bg-red-700 disabled:opacity-60"
+                className="rounded-2xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/20 transition-all hover:bg-red-700 disabled:opacity-60"
               >
                 {isDeletingEmployee ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Excluir"}
               </button>

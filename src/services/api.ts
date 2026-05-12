@@ -34,6 +34,7 @@ export type CompanyWithCounts = Company & {
 };
 
 const SESSION_REFRESH_BUFFER_SECONDS = 60;
+const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete";
 
 type SupabaseLikeError = {
   code?: string;
@@ -240,6 +241,42 @@ function isMissingEmployeeSoftDeleteColumnIssue(error: unknown): boolean {
     text.includes("could not find") ||
     text.includes("column")
   ) && text.includes("deleted_at");
+}
+
+type RemoteLinkArchiveMarker = {
+  employee_id: string | null;
+  data: unknown;
+};
+
+function isEmployeeArchiveMarkerData(data: unknown): boolean {
+  return (
+    !!data &&
+    typeof data === "object" &&
+    (data as { safeepi_purpose?: unknown }).safeepi_purpose === EMPLOYEE_ARCHIVE_MARKER
+  );
+}
+
+async function getArchivedEmployeeIds(companyId: string | null): Promise<Set<string>> {
+  let query = supabase
+    .from("remote_links")
+    .select("employee_id, data")
+    .eq("type", "capture")
+    .eq("status", "completed");
+
+  if (companyId) query = query.eq("company_id", companyId);
+
+  const { data, error } = await withSessionRetry(() => query);
+
+  if (error) {
+    console.warn("[getArchivedEmployeeIds] Nao foi possivel carregar marcadores de colaboradores arquivados:", error);
+    return new Set();
+  }
+
+  return new Set(
+    ((data || []) as RemoteLinkArchiveMarker[])
+      .filter((link) => link.employee_id && isEmployeeArchiveMarkerData(link.data))
+      .map((link) => link.employee_id as string),
+  );
 }
 
 function normalizeCatalogName(name: string): string {
@@ -920,6 +957,7 @@ export const api = {
   // --- Colaboradores ---
   async getEmployees() {
     const companyId = await getCurrentCompanyId();
+    let hasSoftDeleteColumn = true;
     const buildQuery = (includeSoftDeleteFilter: boolean) => {
       let query = supabase
         .from('employees')
@@ -933,13 +971,22 @@ export const api = {
     let { data, error } = await withSessionRetry(() => buildQuery(true));
 
     if (error && isMissingEmployeeSoftDeleteColumnIssue(error)) {
+      hasSoftDeleteColumn = false;
       const fallback = await withSessionRetry(() => buildQuery(false));
       data = fallback.data;
       error = fallback.error;
     }
     
     if (error) throw error;
-    return (data as Employee[]).filter(employee => !employee.deleted_at);
+
+    let employees = (data as Employee[]).filter(employee => !employee.deleted_at);
+
+    if (!hasSoftDeleteColumn) {
+      const archivedIds = await getArchivedEmployeeIds(companyId);
+      employees = employees.filter(employee => !archivedIds.has(employee.id));
+    }
+
+    return employees;
   },
 
   async addEmployee(employee: Omit<Employee, 'id' | 'created_at'>, photoFile?: File) {

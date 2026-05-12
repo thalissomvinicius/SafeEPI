@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
+import crypto from "crypto"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+
+const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete"
 
 type SupabaseLikeError = {
   code?: string
@@ -26,6 +29,12 @@ function isMissingSoftDeleteColumn(error: unknown) {
     text.includes("could not find") ||
     text.includes("column")
   ) && text.includes("deleted_at")
+}
+
+function getLongArchiveExpiry() {
+  const expiresAt = new Date()
+  expiresAt.setFullYear(expiresAt.getFullYear() + 100)
+  return expiresAt.toISOString()
 }
 
 export async function POST(request: NextRequest) {
@@ -176,12 +185,59 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       if (isMissingSoftDeleteColumn(error)) {
-        return NextResponse.json(
-          {
-            error: "A exclusao preservando historico precisa da coluna deleted_at. Rode o script add_employee_soft_delete.sql no Supabase e tente novamente.",
+        const archivedAt = new Date().toISOString()
+        const token = crypto.randomBytes(32).toString("hex")
+
+        const { error: fallbackUpdateError } = await supabaseAdmin
+          .from("employees")
+          .update({
+            active: false,
+            ...(!employee.termination_date ? { termination_date: today } : {}),
+          })
+          .eq("id", id)
+          .eq("company_id", companyId)
+
+        if (fallbackUpdateError) {
+          console.error("[API employees/update] Fallback archive update error:", fallbackUpdateError)
+          return NextResponse.json({ error: fallbackUpdateError.message }, { status: 500 })
+        }
+
+        const { error: markerError } = await supabaseAdmin
+          .from("remote_links")
+          .insert({
+            employee_id: id,
+            company_id: companyId,
+            type: "capture",
+            token,
+            status: "completed",
+            data: {
+              safeepi_purpose: EMPLOYEE_ARCHIVE_MARKER,
+              archived_at: archivedAt,
+              archived_by: auth.user.id,
+              employee_name: employee.full_name,
+            },
+            expires_at: getLongArchiveExpiry(),
+            completed_at: archivedAt,
+          })
+
+        if (markerError) {
+          console.error("[API employees/update] Fallback archive marker error:", markerError)
+          return NextResponse.json(
+            {
+              error: "Colaborador foi inativado, mas o sistema nao conseguiu criar o marcador de exclusao. Rode o script add_employee_soft_delete.sql no Supabase para concluir este recurso.",
+            },
+            { status: 500 },
+          )
+        }
+
+        return NextResponse.json({
+          employee: {
+            id: employee.id,
+            full_name: employee.full_name,
+            archived_at: archivedAt,
           },
-          { status: 409 },
-        )
+          warning: "Banco sem coluna deleted_at; arquivamento preservado por marcador interno.",
+        })
       }
 
       console.error("[API employees/update] Soft delete error:", error)
