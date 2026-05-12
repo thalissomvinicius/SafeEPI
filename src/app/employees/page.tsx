@@ -909,6 +909,11 @@ export default function EmployeesPage() {
   const importPercent = importProgress?.total
     ? Math.min(100, Math.round((importProgress.processed / importProgress.total) * 100))
     : 0
+  const activeEmployeesCount = employees.filter(emp => emp.active).length
+  const totalEmployeesCount = employees.length
+  const activeEmployeesPercent = totalEmployeesCount > 0
+    ? Math.round((activeEmployeesCount / totalEmployeesCount) * 100)
+    : 0
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in relative">
@@ -968,6 +973,47 @@ export default function EmployeesPage() {
              Acesso Restrito
           </div>
         )}
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-200/70">
+        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB] ring-1 ring-[#2563EB]/10">
+              <Users className="h-7 w-7" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Colaboradores ativos</p>
+              <div className="mt-1 flex items-end gap-3">
+                <span className="text-4xl font-black leading-none tracking-tight text-slate-900">
+                  {loading ? "..." : activeEmployeesCount}
+                </span>
+                <span className="pb-1 text-xs font-black uppercase tracking-widest text-emerald-600">
+                  em atividade
+                </span>
+              </div>
+              <p className="mt-2 text-xs font-bold text-slate-500">
+                {loading ? "Carregando quadro atual..." : `${totalEmployeesCount} colaborador(es) cadastrado(s) nesta empresa.`}
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full rounded-2xl bg-slate-50 p-4 sm:max-w-xs">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quadro ativo</span>
+              <span className="text-sm font-black text-[#2563EB]">{loading ? "--" : `${activeEmployeesPercent}%`}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
+              <div
+                className="h-full rounded-full bg-[#2563EB] transition-all duration-500"
+                style={{ width: loading ? "35%" : `${activeEmployeesPercent}%` }}
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <span>{loading ? "Sincronizando" : `${totalEmployeesCount - activeEmployeesCount} inativo(s)`}</span>
+              <span>SafeEPI</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {importProgress && (
