@@ -9,6 +9,8 @@ export type Employee = {
   active: boolean;
   workplace_id: string | null;
   termination_date?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
   photo_url?: string | null;
   face_descriptor?: number[] | null; // Armazenado como JSONB
   created_at?: string;

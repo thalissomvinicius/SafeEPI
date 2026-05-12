@@ -229,6 +229,19 @@ function isMissingSignedDocumentsTableIssue(error: unknown): boolean {
   );
 }
 
+function isMissingEmployeeSoftDeleteColumnIssue(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError & { status?: number };
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && text.includes("deleted_at");
+}
+
 function normalizeCatalogName(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
 }
@@ -907,19 +920,26 @@ export const api = {
   // --- Colaboradores ---
   async getEmployees() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
+    const buildQuery = (includeSoftDeleteFilter: boolean) => {
+      let query = supabase
         .from('employees')
         .select('*')
         .order('full_name', { ascending: true });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
+      if (companyId) query = query.eq('company_id', companyId);
+      if (includeSoftDeleteFilter) query = query.is('deleted_at', null);
+      return query;
+    };
+
+    let { data, error } = await withSessionRetry(() => buildQuery(true));
+
+    if (error && isMissingEmployeeSoftDeleteColumnIssue(error)) {
+      const fallback = await withSessionRetry(() => buildQuery(false));
+      data = fallback.data;
+      error = fallback.error;
+    }
     
     if (error) throw error;
-    return data as Employee[];
+    return (data as Employee[]).filter(employee => !employee.deleted_at);
   },
 
   async addEmployee(employee: Omit<Employee, 'id' | 'created_at'>, photoFile?: File) {
@@ -1031,6 +1051,13 @@ export const api = {
     }
 
     return result.employee;
+  },
+
+  async activateEmployee(id: string) {
+    return await this.updateEmployee(id, {
+      active: true,
+      termination_date: null,
+    });
   },
 
   async terminateEmployee(employeeId: string) {

@@ -687,6 +687,24 @@ export default function EmployeesPage() {
     }
   }
 
+  const handleActivateEmployee = async (employee: Employee) => {
+    try {
+      setIsSaving(true)
+      await api.activateEmployee(employee.id)
+      toast.success("Colaborador reativado com sucesso.")
+      await loadData()
+      if (selectedEmployeeId === employee.id) {
+        const history = await api.getEmployeeHistory(employee.id)
+        setEmployeeHistory(history)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao ativar colaborador."
+      toast.error(message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const openTstModal = () => {
     if (employeeHistory.length === 0) return
     setTstSelectedEmployee(null)
@@ -1349,6 +1367,15 @@ export default function EmployeesPage() {
                             Editar
                             </button>
                           )}
+                          {canEdit && !emp.active && (
+                            <button
+                              onClick={() => void handleActivateEmployee(emp)}
+                              disabled={isSaving}
+                              className="text-emerald-700 hover:bg-emerald-50 font-black text-[10px] uppercase tracking-widest border border-emerald-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all disabled:opacity-50"
+                            >
+                              Ativar
+                            </button>
+                          )}
                           <button 
                             onClick={() => openProfile(emp.id)}
                             className="text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest border border-blue-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
@@ -1430,6 +1457,15 @@ export default function EmployeesPage() {
                             Editar
                           </button>
                         )}
+                        {canEdit && !emp.active && (
+                          <button
+                            onClick={() => void handleActivateEmployee(emp)}
+                            disabled={isSaving}
+                            className="flex-1 rounded-xl border border-emerald-100 bg-emerald-50 py-3 text-center text-[10px] font-black uppercase tracking-widest text-emerald-700 transition-all hover:bg-emerald-100 disabled:opacity-50"
+                          >
+                            Ativar
+                          </button>
+                        )}
                         <button 
                           onClick={() => openProfile(emp.id)}
                           className="flex-[2] text-white hover:bg-[#1D4ED8] bg-[#2563EB] font-black text-[10px] uppercase tracking-widest border border-blue-600 py-3 rounded-xl shadow-sm shadow-blue-900/20 transition-all text-center"
@@ -1473,10 +1509,10 @@ export default function EmployeesPage() {
                 {employeeToDelete.full_name}
               </h2>
               <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
-                Esta acao remove o cadastro do colaborador. Se existir historico, treinamentos ou documentos assinados, o sistema vai bloquear a exclusao para preservar a auditoria.
+                Esta acao remove o colaborador das telas de cadastro e selecao, mas preserva o registro interno para manter entregas, certificados e documentos assinados vinculados corretamente.
               </p>
               <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[11px] font-bold leading-relaxed text-amber-800">
-                Para colaboradores com historico real, use a opcao de desligamento no prontuario.
+                Use para corrigir cadastros ou retirar colaboradores inativos da lista sem perder auditoria.
               </div>
             </div>
             <div className="flex gap-3 border-t border-slate-100 bg-slate-50/70 p-4">
@@ -1763,6 +1799,15 @@ export default function EmployeesPage() {
                           <Trash2 className="w-4 h-4 mr-2" /> Excluir
                         </button>
                       )}
+                      {canEdit && emp && !emp.active && (
+                        <button
+                          onClick={() => void handleActivateEmployee(emp)}
+                          disabled={isSaving}
+                          className="flex-1 sm:flex-none bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-50"
+                        >
+                          <ShieldCheck className="w-4 h-4 mr-2" /> Ativar
+                        </button>
+                      )}
                       <button 
                         onClick={() => setIsProfileOpen(false)} 
                         title="Fechar prontuário"
@@ -1847,6 +1892,18 @@ export default function EmployeesPage() {
                       >
                         <UserMinus className="w-4 h-4 mr-2" />
                         Desligar Colaborador (Dar baixa em tudo)
+                      </button>
+                    </div>
+                  )}
+                  {emp && !emp.active && canEdit && (
+                    <div className="p-4 border-t border-slate-200 bg-emerald-50/60 flex justify-end">
+                      <button
+                        onClick={() => void handleActivateEmployee(emp)}
+                        disabled={isSaving}
+                        className="text-emerald-700 hover:bg-emerald-700 hover:text-white border border-emerald-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center disabled:opacity-50"
+                      >
+                        <ShieldCheck className="w-4 h-4 mr-2" />
+                        Ativar Colaborador
                       </button>
                     </div>
                   )}

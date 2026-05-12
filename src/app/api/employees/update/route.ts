@@ -2,24 +2,30 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
+type SupabaseLikeError = {
+  code?: string
+  details?: string | null
+  hint?: string | null
+  message?: string
+}
+
 function resolveCompanyId(authUser: { role: string; company_id: string | null }, requestedCompanyId: unknown) {
   if (authUser.role === "MASTER") return typeof requestedCompanyId === "string" && requestedCompanyId ? requestedCompanyId : null
   return authUser.company_id
 }
 
-async function countEmployeeLinks(tableName: "deliveries" | "trainings" | "signed_documents", employeeId: string, companyId: string) {
-  const { count, error } = await supabaseAdmin
-    .from(tableName)
-    .select("id", { count: "exact", head: true })
-    .eq("employee_id", employeeId)
-    .eq("company_id", companyId)
+function isMissingSoftDeleteColumn(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as SupabaseLikeError
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase()
 
-  if (error) {
-    console.error(`[API employees/update] Link count error on ${tableName}:`, error)
-    throw error
-  }
-
-  return count || 0
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && text.includes("deleted_at")
 }
 
 export async function POST(request: NextRequest) {
@@ -139,7 +145,7 @@ export async function DELETE(request: NextRequest) {
 
     const { data: employee, error: employeeError } = await supabaseAdmin
       .from("employees")
-      .select("id, full_name")
+      .select("id, full_name, active, termination_date")
       .eq("id", id)
       .eq("company_id", companyId)
       .maybeSingle()
@@ -153,32 +159,32 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Colaborador nao encontrado nesta empresa." }, { status: 404 })
     }
 
-    const [deliveriesCount, trainingsCount, signedDocumentsCount] = await Promise.all([
-      countEmployeeLinks("deliveries", id, companyId),
-      countEmployeeLinks("trainings", id, companyId),
-      countEmployeeLinks("signed_documents", id, companyId),
-    ])
-
-    const linkedRecords = deliveriesCount + trainingsCount + signedDocumentsCount
-    if (linkedRecords > 0) {
-      return NextResponse.json(
-        {
-          error: "Este colaborador possui historico, treinamentos ou documentos assinados. Use Desligar para preservar a auditoria.",
-          linkedRecords,
-        },
-        { status: 409 },
-      )
+    const today = new Date().toISOString().slice(0, 10)
+    const updates = {
+      active: false,
+      deleted_at: new Date().toISOString(),
+      deleted_by: auth.user.id,
+      ...(!employee.termination_date ? { termination_date: today } : {}),
     }
 
     const { data, error } = await supabaseAdmin
       .from("employees")
-      .delete()
+      .update(updates)
       .eq("id", id)
       .eq("company_id", companyId)
-      .select("id, full_name")
+      .select("id, full_name, deleted_at")
 
     if (error) {
-      console.error("[API employees/update] Delete error:", error)
+      if (isMissingSoftDeleteColumn(error)) {
+        return NextResponse.json(
+          {
+            error: "A exclusao preservando historico precisa da coluna deleted_at. Rode o script add_employee_soft_delete.sql no Supabase e tente novamente.",
+          },
+          { status: 409 },
+        )
+      }
+
+      console.error("[API employees/update] Soft delete error:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
