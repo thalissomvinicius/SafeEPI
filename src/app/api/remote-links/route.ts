@@ -83,7 +83,63 @@ export async function GET(request: NextRequest) {
     const includeCompleted = searchParams.get("include_completed") === "1"
 
     if (!token) {
-      return NextResponse.json({ error: "Token não informado" }, { status: 400 })
+      const auth = await requireAuthorizedUser(request)
+      if (!auth.authorized) {
+        return auth.response
+      }
+
+      const type = searchParams.get("type") || "delivery"
+      const status = searchParams.get("status") || "pending"
+      const signaturePendingOnly = searchParams.get("signature_pending_only") === "1"
+      const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
+
+      if (!companyId) {
+        return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
+      }
+
+      let query = supabaseAdmin
+        .from("remote_links")
+        .select("id, employee_id, company_id, type, token, status, data, expires_at, completed_at, created_at, employee:employees(id, full_name, cpf)")
+        .eq("company_id", companyId)
+        .eq("type", type)
+        .order("created_at", { ascending: false })
+        .limit(100)
+
+      if (status !== "all") {
+        query = query.eq("status", status)
+      }
+
+      const { data: links, error } = await query
+
+      if (error) {
+        console.error("[remote-links] List error:", error)
+        return NextResponse.json({ error: "Nao foi possivel carregar links pendentes." }, { status: 500 })
+      }
+
+      const now = new Date()
+      const expiredIds = (links || [])
+        .filter((link) => link.status === "pending" && new Date(link.expires_at) < now)
+        .map((link) => link.id)
+
+      if (expiredIds.length > 0) {
+        await supabaseAdmin
+          .from("remote_links")
+          .update({ status: "expired" })
+          .in("id", expiredIds)
+      }
+
+      const filteredLinks = (links || [])
+        .filter((link) => !(link.status === "pending" && new Date(link.expires_at) < now))
+        .filter((link) => {
+          if (!signaturePendingOnly) return true
+          return (
+            !!link.data &&
+            typeof link.data === "object" &&
+            (link.data as { signaturePendingOnly?: unknown }).signaturePendingOnly === true
+          )
+        })
+
+      return NextResponse.json({ links: filteredLinks })
     }
 
     const { data: link, error } = await supabaseAdmin

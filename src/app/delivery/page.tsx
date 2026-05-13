@@ -5,7 +5,7 @@ import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
 import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle } from "lucide-react"
 import { format, addDays } from "date-fns"
-import { api } from "@/services/api"
+import { api, type PendingDeliveryRemoteLink } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
@@ -212,10 +212,11 @@ export default function DeliveryPage() {
     })
   }
 
-  const loadPendingDrafts = useCallback(() => {
-    if (typeof window === "undefined") return
-
+  const readLocalPendingDrafts = useCallback(() => {
     const drafts: PendingDeliveryDraft[] = []
+
+    if (typeof window === "undefined") return drafts
+
     for (let index = 0; index < window.localStorage.length; index += 1) {
       const key = window.localStorage.key(index)
       if (!key?.startsWith("delivery-signature:")) continue
@@ -229,14 +230,116 @@ export default function DeliveryPage() {
       }
     }
 
-    setPendingDrafts(drafts.sort((a, b) => (b.expiresAt || "").localeCompare(a.expiresAt || "")))
+    return drafts
   }, [])
+
+  const getStringFromData = (data: Record<string, unknown> | null | undefined, key: string) => {
+    const value = data?.[key]
+    return typeof value === "string" ? value : ""
+  }
+
+  const getStringArrayFromData = (data: Record<string, unknown> | null | undefined, key: string) => {
+    const value = data?.[key]
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+  }
+
+  const toCartItemFromRemote = (value: unknown, fallbackData?: Record<string, unknown> | null): CartItem | null => {
+    const source = value && typeof value === "object" ? value as Record<string, unknown> : {}
+    const ppeId = typeof source.ppeId === "string"
+      ? source.ppeId
+      : getStringFromData(fallbackData, "p")
+    const ppeName = typeof source.ppeName === "string" && source.ppeName.trim()
+      ? source.ppeName
+      : "EPI pendente"
+    const ppeCaNumber = typeof source.ppeCaNumber === "string"
+      ? source.ppeCaNumber
+      : "N/A"
+    const ppeCaExpiry = typeof source.ppeCaExpiry === "string"
+      ? source.ppeCaExpiry
+      : ""
+    const quantityRaw = typeof source.quantity === "number" ? source.quantity : Number(fallbackData?.q || 1)
+    const reason = typeof source.reason === "string"
+      ? source.reason
+      : getStringFromData(fallbackData, "r") || "Primeira Entrega"
+
+    if (!ppeId) return null
+
+    return {
+      ppeId,
+      ppeName,
+      ppeCaNumber,
+      ppeCaExpiry,
+      quantity: Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1,
+      reason,
+      autoReturnDeliveryIds: Array.isArray(source.autoReturnDeliveryIds)
+        ? source.autoReturnDeliveryIds.filter((id): id is string => typeof id === "string")
+        : getStringArrayFromData(fallbackData, "autoReturnedDeliveryIds"),
+      autoReturnNote: typeof source.autoReturnNote === "string" ? source.autoReturnNote : undefined,
+    }
+  }
+
+  const buildDraftFromRemoteLink = useCallback((link: PendingDeliveryRemoteLink, localDraft?: PendingDeliveryDraft): PendingDeliveryDraft | null => {
+    const data = link.data || {}
+    const rawItems = Array.isArray(data.items) ? data.items : []
+    const items = rawItems
+      .map((item) => toCartItemFromRemote(item, data))
+      .filter((item): item is CartItem => Boolean(item))
+    const item = items[0] || toCartItemFromRemote({}, data) || localDraft?.item
+
+    if (!link.token || !item) return null
+
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+    const key = `delivery-signature:${link.token}`
+
+    return {
+      key,
+      token: link.token,
+      linkUrl: localDraft?.linkUrl || `${baseUrl}/delivery/remote?t=${link.token}`,
+      status: link.status || "pending",
+      expiresAt: link.expires_at || localDraft?.expiresAt || null,
+      employeeId: getStringFromData(data, "e") || link.employee_id || localDraft?.employeeId || "",
+      employeeName: localDraft?.employeeName || getStringFromData(data, "employeeName") || link.employee?.full_name || "Colaborador",
+      workplaceId: getStringFromData(data, "w") || localDraft?.workplaceId || "",
+      workplaceName: localDraft?.workplaceName || getStringFromData(data, "workplaceName") || "Sede",
+      deliveryDate: getStringFromData(data, "deliveryDate") || localDraft?.deliveryDate || format(new Date(), "yyyy-MM-dd"),
+      item,
+      items: items.length > 0 ? items : localDraft?.items,
+      deliveryIds: getStringArrayFromData(data, "deliveryIds").length > 0
+        ? getStringArrayFromData(data, "deliveryIds")
+        : localDraft?.deliveryIds,
+      signaturePendingOnly: data.signaturePendingOnly === true || localDraft?.signaturePendingOnly === true,
+    }
+  }, [])
+
+  const loadPendingDrafts = useCallback(async () => {
+    if (typeof window === "undefined") return
+
+    const localDrafts = readLocalPendingDrafts()
+    const byToken = new Map(localDrafts.map((draft) => [draft.token, draft]))
+    setPendingDrafts(localDrafts.sort((a, b) => (b.expiresAt || "").localeCompare(a.expiresAt || "")))
+
+    try {
+      const links = await api.getPendingDeliverySignatureLinks()
+      for (const link of links) {
+        const remoteDraft = buildDraftFromRemoteLink(link, byToken.get(link.token))
+        if (!remoteDraft) continue
+        byToken.set(remoteDraft.token, remoteDraft)
+        window.localStorage.setItem(remoteDraft.key, JSON.stringify(remoteDraft))
+      }
+    } catch (error) {
+      console.warn("Nao foi possivel sincronizar pendencias remotas:", error)
+    }
+
+    setPendingDrafts(
+      Array.from(byToken.values()).sort((a, b) => (b.expiresAt || "").localeCompare(a.expiresAt || ""))
+    )
+  }, [buildDraftFromRemoteLink, readLocalPendingDrafts])
 
   const persistPendingDraft = useCallback((draft: Omit<PendingDeliveryDraft, "key">) => {
     if (typeof window === "undefined") return
     const key = `delivery-signature:${draft.token}`
     window.localStorage.setItem(key, JSON.stringify({ ...draft, key }))
-    loadPendingDrafts()
+    void loadPendingDrafts()
   }, [loadPendingDrafts])
 
   const updatePendingDraft = useCallback((token: string, updates: Partial<PendingDeliveryDraft>) => {
@@ -248,17 +351,17 @@ export default function DeliveryPage() {
     try {
       const parsed = JSON.parse(current) as PendingDeliveryDraft
       window.localStorage.setItem(key, JSON.stringify({ ...parsed, ...updates, key }))
-      loadPendingDrafts()
+      void loadPendingDrafts()
     } catch {
       window.localStorage.removeItem(key)
-      loadPendingDrafts()
+      void loadPendingDrafts()
     }
   }, [loadPendingDrafts])
 
   const removePendingDraft = useCallback((token: string) => {
     if (typeof window === "undefined") return
     window.localStorage.removeItem(`delivery-signature:${token}`)
-    loadPendingDrafts()
+    void loadPendingDrafts()
   }, [loadPendingDrafts])
 
   const isCurrentPpeExpired = currentPpe ? isDateOnlyPast(currentPpe.ca_expiry_date) : false
@@ -287,7 +390,7 @@ export default function DeliveryPage() {
   // -- Cart operations --
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      loadPendingDrafts()
+      void loadPendingDrafts()
     }, 0)
 
     return () => window.clearTimeout(timer)
@@ -668,6 +771,8 @@ export default function DeliveryPage() {
           r: cart[0].reason,
           deliveryIds,
           deliveryDate,
+          employeeName: selectedEmployee?.full_name || "Colaborador",
+          workplaceName: selectedWorkplace?.name || "Sede",
           items: cart,
           signaturePendingOnly: true,
           autoReturnedDeliveryIds,

@@ -271,6 +271,24 @@ type RemoteLinkArchiveMarker = {
   data: unknown;
 };
 
+export type PendingDeliveryRemoteLink = {
+  id: string;
+  employee_id: string;
+  company_id: string | null;
+  type: string;
+  token: string;
+  status: "pending" | "completed" | "expired";
+  data: Record<string, unknown> | null;
+  expires_at: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  employee?: {
+    id?: string;
+    full_name?: string | null;
+    cpf?: string | null;
+  } | null;
+};
+
 function isEmployeeArchiveMarkerData(data: unknown): boolean {
   return (
     !!data &&
@@ -793,6 +811,24 @@ export const api = {
     const data = await readResponseJson<{ error?: string; link?: { token: string; status: string; expires_at: string } }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel criar link remoto.");
     return data as { link: { token: string; status: string; expires_at: string } };
+  },
+
+  async getPendingDeliverySignatureLinks() {
+    const companyId = await getCurrentCompanyId();
+    const storedMasterCompanyId = getStoredMasterCompanyId();
+    const targetCompanyId = companyId || storedMasterCompanyId;
+    const params = new URLSearchParams({
+      type: "delivery",
+      status: "pending",
+      signature_pending_only: "1",
+    });
+
+    if (targetCompanyId) params.set("company_id", targetCompanyId);
+
+    const res = await fetchWithAuthRetry(`/api/remote-links?${params.toString()}`);
+    const data = await readResponseJson<{ error?: string; links?: PendingDeliveryRemoteLink[] }>(res);
+    if (!res.ok) throw new Error(data.error || "Nao foi possivel carregar pendencias de assinatura.");
+    return data.links || [];
   },
 
   // --- Canteiros (Workplaces) ---
