@@ -40,6 +40,17 @@ function isMissingCreatedByIssue(error: { code?: string; message?: string; detai
   )
 }
 
+function isMissingDeliveryIdIssue(error: { code?: string; message?: string; details?: string; hint?: string }) {
+  const text = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase()
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && text.includes("delivery_id")
+}
+
 async function insertMovement(payload: Record<string, unknown>) {
   const firstTry = await supabaseAdmin
     .from("stock_movements")
@@ -47,13 +58,18 @@ async function insertMovement(payload: Record<string, unknown>) {
     .select()
 
   if (!firstTry.error) return firstTry
+
+  if (isMissingDeliveryIdIssue(firstTry.error)) {
+    const fallbackPayload = { ...payload }
+    delete fallbackPayload.delivery_id
+    return insertMovement(fallbackPayload)
+  }
+
   if (!isMissingCreatedByIssue(firstTry.error)) return firstTry
 
-  const {
-    created_by_id: _createdById,
-    created_by_name: _createdByName,
-    ...fallbackPayload
-  } = payload
+  const fallbackPayload = { ...payload }
+  delete fallbackPayload.created_by_id
+  delete fallbackPayload.created_by_name
 
   return supabaseAdmin
     .from("stock_movements")
@@ -118,6 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (companyId) payload.company_id = companyId
+    if (typeof body.delivery_id === "string" && body.delivery_id) payload.delivery_id = body.delivery_id
     if (typeof body.created_by_id === "string" && body.created_by_id) payload.created_by_id = body.created_by_id
     if (typeof body.created_by_name === "string" && body.created_by_name) payload.created_by_name = body.created_by_name
 

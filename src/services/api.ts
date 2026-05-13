@@ -452,58 +452,21 @@ async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
   return null;
 }
 
-function getExpectedStockAfterMovement(
-  currentStock: number,
-  movementType: StockMovement["type"],
-  quantity: number
-): number {
-  if (movementType === "AJUSTE") return Math.max(0, quantity);
-  if (movementType === "SAIDA") return Math.max(0, currentStock - quantity);
-  return currentStock + quantity;
-}
-
-async function updatePpeCurrentStock(ppeId: string, currentStock: number): Promise<void> {
-  const companyId = await getCurrentCompanyId();
-  const { error } = await withSessionRetry(() => {
-    let query = supabase
-      .from("ppes")
-      .update({ current_stock: currentStock })
-      .eq("id", ppeId);
-
-    if (companyId) query = query.eq("company_id", companyId);
-    return query;
+async function insertStockMovementViaApi(
+  movement: Omit<StockMovement, "id" | "created_at" | "ppe">
+): Promise<void> {
+  const response = await fetchWithAuthRetry("/api/stock-movements", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(movement),
   });
 
-  if (error) throw error;
-}
-
-async function syncPpeStockAfterMovement(
-  ppeId: string,
-  movementType: StockMovement["type"],
-  quantity: number,
-  stockBefore: number | null
-): Promise<void> {
-  if (stockBefore === null) return;
-
-  const expectedStock = getExpectedStockAfterMovement(stockBefore, movementType, quantity);
-  const stockAfter = await getPpeCurrentStock(ppeId);
-
-  if (stockAfter !== expectedStock) {
-    await updatePpeCurrentStock(ppeId, expectedStock);
+  const result = await readResponseJson<{ error?: string }>(response);
+  if (!response.ok) {
+    throw new Error(result.error || "Erro ao aplicar movimentacao de estoque.");
   }
-}
-
-function isMissingDeliveryIdColumnError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError;
-  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
-  return (
-    maybeError.code === "PGRST204" ||
-    maybeError.code === "42703" ||
-    text.includes("schema cache") ||
-    text.includes("could not find") ||
-    text.includes("column")
-  ) && text.includes("delivery_id");
 }
 
 async function insertStockOutMovement(
@@ -513,7 +476,6 @@ async function insertStockOutMovement(
   deliveryId?: string | null,
 ): Promise<void> {
   if (quantity <= 0) return;
-  const stockBefore = await getPpeCurrentStock(ppeId);
   const payload = await withCompanyId({
     ppe_id: ppeId,
     quantity,
@@ -523,79 +485,7 @@ async function insertStockOutMovement(
     ...(deliveryId ? { delivery_id: deliveryId } : {}),
   });
 
-  const firstTry = await withSessionRetry(() =>
-    supabase
-      .from("stock_movements")
-      .insert([payload])
-      .select()
-  );
-
-  if (!firstTry.error) {
-    await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
-    return;
-  }
-
-  // Se a coluna delivery_id ainda nao existe no banco (migracao pendente),
-  // tenta de novo sem ela mantendo created_by_name.
-  if (deliveryId && isMissingDeliveryIdColumnError(firstTry.error)) {
-    const retryWithoutDeliveryId = await withSessionRetry(() => {
-      const { delivery_id: _omit, ...rest } = payload as Record<string, unknown>;
-      void _omit;
-      return supabase.from("stock_movements").insert([rest]).select();
-    });
-
-    if (!retryWithoutDeliveryId.error) {
-      await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
-      return;
-    }
-  }
-
-  const text = `${firstTry.error.message || ""} ${firstTry.error.details || ""}`.toLowerCase();
-  const missingCreatedByColumns =
-    firstTry.error.code === "PGRST204" ||
-    firstTry.error.code === "42703" ||
-    text.includes("created_by_name") ||
-    text.includes("created_by_id");
-
-  if (!missingCreatedByColumns) {
-    throw firstTry.error;
-  }
-
-  const fallbackPayload: Record<string, unknown> = {
-    ...(payload.company_id ? { company_id: payload.company_id } : {}),
-    ppe_id: ppeId,
-    quantity,
-    type: "SAIDA",
-    motive,
-    ...(deliveryId ? { delivery_id: deliveryId } : {}),
-  };
-
-  const fallbackTry = await withSessionRetry(() =>
-    supabase
-      .from("stock_movements")
-      .insert([fallbackPayload])
-      .select()
-  );
-
-  if (!fallbackTry.error) {
-    await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
-    return;
-  }
-
-  // Ultimo fallback: sem delivery_id (caso a migracao nao tenha sido aplicada).
-  if (deliveryId && isMissingDeliveryIdColumnError(fallbackTry.error)) {
-    const finalFallback = await withSessionRetry(() => {
-      const { delivery_id: _omit, ...rest } = fallbackPayload;
-      void _omit;
-      return supabase.from("stock_movements").insert([rest]).select();
-    });
-
-    if (finalFallback.error) throw finalFallback.error;
-    await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
-    return;
-  }
-
-  throw fallbackTry.error;
+  await insertStockMovementViaApi(payload as Omit<StockMovement, "id" | "created_at" | "ppe">);
 }
 
 async function insertStockInMovement(
@@ -605,7 +495,6 @@ async function insertStockInMovement(
   deliveryId?: string | null,
 ): Promise<void> {
   if (quantity <= 0) return;
-  const stockBefore = await getPpeCurrentStock(ppeId);
 
   const companyId = await getCurrentCompanyId();
   const payload: Record<string, unknown> = {
@@ -617,41 +506,11 @@ async function insertStockInMovement(
     ...(deliveryId ? { delivery_id: deliveryId } : {}),
   };
 
-  const { error } = await withSessionRetry(() =>
-    supabase
-      .from("stock_movements")
-      .insert([payload])
-  );
-
-  if (!error) {
-    try {
-      await syncPpeStockAfterMovement(ppeId, "ENTRADA", quantity, stockBefore);
-    } catch (stockError) {
-      console.warn("Nao foi possivel atualizar saldo automatico de devolucao:", stockError);
-    }
-    return;
+  try {
+    await insertStockMovementViaApi(payload as Omit<StockMovement, "id" | "created_at" | "ppe">);
+  } catch (error) {
+    console.warn("Nao foi possivel registrar entrada automatica de devolucao:", error);
   }
-
-  if (deliveryId && isMissingDeliveryIdColumnError(error)) {
-    const { delivery_id: _omit, ...rest } = payload;
-    void _omit;
-    const retry = await withSessionRetry(() =>
-      supabase.from("stock_movements").insert([rest])
-    );
-
-    if (!retry.error) {
-      try {
-        await syncPpeStockAfterMovement(ppeId, "ENTRADA", quantity, stockBefore);
-      } catch (stockError) {
-        console.warn("Nao foi possivel atualizar saldo automatico de devolucao:", stockError);
-      }
-      return;
-    }
-    console.warn("Nao foi possivel registrar entrada automatica de devolucao (retry):", retry.error);
-    return;
-  }
-
-  console.warn("Nao foi possivel registrar entrada automatica de devolucao:", error);
 }
 
 export const api = {
