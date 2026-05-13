@@ -401,6 +401,12 @@ export default function DeliveryPage() {
     return () => window.clearTimeout(timer)
   }, [loadPendingDrafts])
 
+  // Mantem referencia estavel para uso dentro do setInterval (auto-refresh).
+  const pendingDraftsRef = useRef<PendingDeliveryDraft[]>([])
+  useEffect(() => {
+    pendingDraftsRef.current = pendingDrafts
+  }, [pendingDrafts])
+
   const addToCart = () => {
     if (!currentPpe) return
     if (isCurrentPpeExpired) {
@@ -846,17 +852,21 @@ export default function DeliveryPage() {
     }
   }
 
-  const checkPendingDraft = useCallback(async (draft: PendingDeliveryDraft) => {
+  const checkPendingDraft = useCallback(async (
+    draft: PendingDeliveryDraft,
+    options?: { silent?: boolean }
+  ) => {
+    const silent = options?.silent === true
     try {
-      setCheckingPendingToken(draft.token)
+      if (!silent) setCheckingPendingToken(draft.token)
       const res = await fetch(`/api/remote-links?token=${draft.token}&include_completed=1`)
       const payload = await res.json()
 
       if (!res.ok) {
         if (payload.status === "expired") {
           updatePendingDraft(draft.token, { status: "expired" })
-          toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
-        } else {
+          if (!silent) toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
+        } else if (!silent) {
           toast.error(payload.error || "Nao foi possivel consultar esta pendencia.")
         }
         return
@@ -865,16 +875,20 @@ export default function DeliveryPage() {
       const status = payload.link?.status as RemoteLinkStatus | undefined
       if (status === "completed") {
         removePendingDraft(draft.token)
-        toast.success(draft.signaturePendingOnly
-          ? "Assinatura concluida. A pendencia foi removida."
-          : "Assinatura do colaborador concluida e entrega registrada."
-        )
+        if (!silent) {
+          toast.success(draft.signaturePendingOnly
+            ? "Assinatura concluida. A pendencia foi removida."
+            : "Assinatura do colaborador concluida e entrega registrada."
+          )
+        } else {
+          toast.success(`Assinatura concluida: ${draft.employeeName}`)
+        }
         return
       }
 
       if (payload.link?.expires_at && new Date(payload.link.expires_at) < new Date()) {
         updatePendingDraft(draft.token, { status: "expired", expiresAt: payload.link.expires_at })
-        toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
+        if (!silent) toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
         return
       }
 
@@ -882,14 +896,61 @@ export default function DeliveryPage() {
         status: "pending",
         expiresAt: payload.link?.expires_at || draft.expiresAt,
       })
-      toast.info("Ainda aguardando assinatura do colaborador.")
+      if (!silent) toast.info("Ainda aguardando assinatura do colaborador.")
     } catch (err) {
       console.error("Erro ao consultar pendencia de assinatura:", err)
-      toast.error("Erro ao consultar a pendencia.")
+      if (!silent) toast.error("Erro ao consultar a pendencia.")
     } finally {
-      setCheckingPendingToken(null)
+      if (!silent) setCheckingPendingToken(null)
     }
-  }, [updatePendingDraft])
+  }, [updatePendingDraft, removePendingDraft])
+
+  // Auto-refresh das pendencias de assinatura.
+  // - A cada 15s sincroniza a lista com o servidor (loadPendingDrafts).
+  // - Para cada pendente, checa silenciosamente se o colaborador ja assinou.
+  // - Pausa quando a aba esta oculta para nao gastar requisicoes.
+  useEffect(() => {
+    if (viewMode !== "pending") return
+    if (typeof window === "undefined") return
+
+    const REFRESH_INTERVAL_MS = 15000
+
+    const tick = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+      try {
+        await loadPendingDrafts()
+      } catch (err) {
+        console.warn("Auto-refresh: falha ao sincronizar pendencias:", err)
+      }
+
+      const drafts = pendingDraftsRef.current
+      for (const draft of drafts) {
+        if (draft.status !== "pending") continue
+        try {
+          await checkPendingDraft(draft, { silent: true })
+        } catch (err) {
+          console.warn("Auto-refresh: falha ao checar pendencia", draft.token, err)
+        }
+      }
+    }
+
+    const intervalId = window.setInterval(() => { void tick() }, REFRESH_INTERVAL_MS)
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void tick()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
+    // Dispara uma checagem imediata ao abrir a aba.
+    void tick()
+
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [viewMode, loadPendingDrafts, checkPendingDraft])
 
   const restorePendingDraft = (draft: PendingDeliveryDraft) => {
     if (draft.signaturePendingOnly) {
@@ -1022,7 +1083,13 @@ export default function DeliveryPage() {
                 <Hourglass className="w-5 h-5 text-amber-600" />
                 Pendencias de Assinatura
               </h2>
-              <p className="text-xs text-amber-700 font-bold mt-1">Entregas de EPI aguardando assinatura do colaborador.</p>
+              <p className="text-xs text-amber-700 font-bold mt-1 flex items-center gap-2">
+                Entregas de EPI aguardando assinatura do colaborador.
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-[9px] uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  Auto-refresh 15s
+                </span>
+              </p>
             </div>
             <button
               onClick={() => pendingDrafts.forEach((draft) => { if (draft.status === "pending") void checkPendingDraft(draft) })}

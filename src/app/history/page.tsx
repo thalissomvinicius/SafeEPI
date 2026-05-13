@@ -1,21 +1,26 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { ExternalLink, Fingerprint, History, ShieldCheck, Search, Loader2, FileDown } from "lucide-react"
+import { ExternalLink, Fingerprint, History, ShieldCheck, Search, Loader2, FileDown, Trash2, AlertTriangle } from "lucide-react"
 import { api } from "@/services/api"
 import { DeliveryWithRelations, SignedDocument } from "@/types/database"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
+import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
 
 export default function HistoryPage() {
+  const { user } = useAuth()
+  const isMaster = user?.role === "MASTER"
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [records, setRecords] = useState<DeliveryWithRelations[]>([])
   const [signedDocuments, setSignedDocuments] = useState<SignedDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<DeliveryWithRelations | null>(null)
 
   useEffect(() => {
     async function fetchHistory() {
@@ -120,6 +125,39 @@ export default function HistoryPage() {
       document.delivery_id === deliveryId ||
       document.delivery_ids?.includes(deliveryId)
     )
+
+  const handleDeleteDelivery = async (rec: DeliveryWithRelations) => {
+    if (!isMaster) {
+      toast.error("Somente o usuario MASTER pode excluir registros de entrega.")
+      return
+    }
+
+    try {
+      setDeletingId(rec.id)
+      const result = await api.deleteDelivery(rec.id)
+      setRecords((prev) => prev.filter((item) => item.id !== rec.id))
+      setSignedDocuments((prev) =>
+        prev.filter(
+          (document) =>
+            document.delivery_id !== rec.id &&
+            !document.delivery_ids?.includes(rec.id),
+        ),
+      )
+      const restored = Number(result?.restored_quantity || 0)
+      toast.success(
+        restored > 0
+          ? `Entrega excluida. ${restored} unidade(s) devolvida(s) ao estoque.`
+          : "Entrega excluida com sucesso.",
+      )
+      setConfirmDelete(null)
+    } catch (err) {
+      console.error("Erro ao excluir entrega:", err)
+      const message = err instanceof Error ? err.message : "Erro ao excluir entrega."
+      toast.error(message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const filteredRecords = records.filter((rec: DeliveryWithRelations) => 
     rec.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -230,18 +268,34 @@ export default function HistoryPage() {
                       )}
                     </td>
                     <td className="px-6 py-5 text-right">
-                        <button 
-                          onClick={() => handleDownloadPDF(rec)}
-                          disabled={downloadingId === rec.id}
-                          className="text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end w-full p-2 rounded transition-all group-hover:underline disabled:opacity-30"
-                        >
-                            {downloadingId === rec.id ? (
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            ) : (
-                              <FileDown className="w-4 h-4 mr-1" />
-                            )}
-                            PDF
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleDownloadPDF(rec)}
+                            disabled={downloadingId === rec.id}
+                            className="text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end p-2 rounded transition-all group-hover:underline disabled:opacity-30"
+                          >
+                              {downloadingId === rec.id ? (
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              ) : (
+                                <FileDown className="w-4 h-4 mr-1" />
+                              )}
+                              PDF
+                          </button>
+                          {isMaster && (
+                            <button
+                              onClick={() => setConfirmDelete(rec)}
+                              disabled={deletingId === rec.id}
+                              title="Excluir registro de entrega (Master)"
+                              className="text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 font-black text-[10px] uppercase tracking-widest flex items-center justify-center p-2 rounded transition-all disabled:opacity-30"
+                            >
+                              {deletingId === rec.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
                     </td>
                     </tr>
                   )
@@ -259,6 +313,84 @@ export default function HistoryPage() {
         </div>
       </div>
       {pdfActionDialog}
+
+      {confirmDelete && isMaster && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && deletingId !== confirmDelete.id) {
+              setConfirmDelete(null)
+            }
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-red-50/60 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">
+                  Excluir registro de entrega
+                </h2>
+                <p className="text-xs text-red-700 font-bold mt-1">
+                  Acao restrita ao usuario MASTER. Esta operacao nao pode ser desfeita.
+                </p>
+              </div>
+            </div>
+            <div className="p-5 space-y-3 text-sm text-slate-700">
+              <p className="font-medium">
+                Confirma a exclusao desta entrega? O EPI sera devolvido ao estoque automaticamente
+                e o arquivo juridico associado sera removido.
+              </p>
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1 text-xs">
+                <p>
+                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">
+                    Protocolo
+                  </span>
+                  <span className="font-mono">#{confirmDelete.id.slice(0, 8)}</span>
+                </p>
+                <p>
+                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">
+                    Colaborador
+                  </span>
+                  {confirmDelete.employee?.full_name || "-"}
+                </p>
+                <p>
+                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">EPI</span>
+                  {confirmDelete.ppe?.name || "-"} (CA {confirmDelete.ppe?.ca_number || "-"})
+                </p>
+                <p>
+                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">
+                    Quantidade
+                  </span>
+                  {confirmDelete.quantity}
+                </p>
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deletingId === confirmDelete.id}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-white font-black text-[11px] uppercase tracking-widest transition-all disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeleteDelivery(confirmDelete)}
+                disabled={deletingId === confirmDelete.id}
+                className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 font-black text-[11px] uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                {deletingId === confirmDelete.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                Excluir agora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

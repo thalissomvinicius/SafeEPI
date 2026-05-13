@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { BRAND_CHANGED_EVENT, getStoredBrand, normalizeHexColor, type ActiveBrand } from "@/lib/brandTheme"
 import type { Company } from "@/types/database"
 
@@ -23,17 +23,10 @@ function normalizeBrand(brand: ActiveBrand): ActiveBrand {
 }
 
 export function useActiveBrand(fallbackCompany?: Company | null) {
-  const [brand, setBrand] = useState<ActiveBrand>(() => brandFromCompany(fallbackCompany) || getStoredBrand())
-
-  useEffect(() => {
-    setBrand(brandFromCompany(fallbackCompany) || getStoredBrand())
-  }, [
-    fallbackCompany?.id,
-    fallbackCompany?.logo_url,
-    fallbackCompany?.name,
-    fallbackCompany?.primary_color,
-    fallbackCompany?.trade_name,
-  ])
+  const fallbackBrand = useMemo(() => {
+    return brandFromCompany(fallbackCompany)
+  }, [fallbackCompany])
+  const [brand, setBrand] = useState<ActiveBrand>(() => getStoredBrand())
 
   useEffect(() => {
     const handleBrandChanged = (event: Event) => {
@@ -56,5 +49,5 @@ export function useActiveBrand(fallbackCompany?: Company | null) {
     }
   }, [])
 
-  return brand
+  return fallbackBrand || brand
 }

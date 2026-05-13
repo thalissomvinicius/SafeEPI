@@ -54,6 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const profile = await api.getCurrentUser()
+      // O role é definido SOMENTE pelo backend (/api/me), que lê de
+      // fontes confiáveis (app_metadata / company_users / profiles).
+      // Nunca fazer override por e-mail aqui — qualquer bypass de UI
+      // é meramente cosmético e mascara falhas reais de autorização.
       const userData = {
         ...session.user,
         email: profile.email || session.user.email,
@@ -65,10 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           full_name: profile.full_name || session.user.user_metadata?.full_name,
           role: profile.role,
         },
-      }
-
-      if (session.user.email === "thalissomvinicius7@gmail.com" || session.user.email === "thalissom.cruz@VALLE.br") {
-        userData.role = "MASTER"
       }
 
       setUser(userData as User)

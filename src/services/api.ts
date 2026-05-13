@@ -493,7 +493,25 @@ async function syncPpeStockAfterMovement(
   }
 }
 
-async function insertStockOutMovement(ppeId: string, quantity: number, motive: string): Promise<void> {
+function isMissingDeliveryIdColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError;
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && text.includes("delivery_id");
+}
+
+async function insertStockOutMovement(
+  ppeId: string,
+  quantity: number,
+  motive: string,
+  deliveryId?: string | null,
+): Promise<void> {
   if (quantity <= 0) return;
   const stockBefore = await getPpeCurrentStock(ppeId);
   const payload = await withCompanyId({
@@ -502,6 +520,7 @@ async function insertStockOutMovement(ppeId: string, quantity: number, motive: s
     type: "SAIDA",
     motive,
     created_by_name: "Sistema (Entrega)",
+    ...(deliveryId ? { delivery_id: deliveryId } : {}),
   });
 
   const firstTry = await withSessionRetry(() =>
@@ -516,6 +535,21 @@ async function insertStockOutMovement(ppeId: string, quantity: number, motive: s
     return;
   }
 
+  // Se a coluna delivery_id ainda nao existe no banco (migracao pendente),
+  // tenta de novo sem ela mantendo created_by_name.
+  if (deliveryId && isMissingDeliveryIdColumnError(firstTry.error)) {
+    const retryWithoutDeliveryId = await withSessionRetry(() => {
+      const { delivery_id: _omit, ...rest } = payload as Record<string, unknown>;
+      void _omit;
+      return supabase.from("stock_movements").insert([rest]).select();
+    });
+
+    if (!retryWithoutDeliveryId.error) {
+      await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
+      return;
+    }
+  }
+
   const text = `${firstTry.error.message || ""} ${firstTry.error.details || ""}`.toLowerCase();
   const missingCreatedByColumns =
     firstTry.error.code === "PGRST204" ||
@@ -527,34 +561,60 @@ async function insertStockOutMovement(ppeId: string, quantity: number, motive: s
     throw firstTry.error;
   }
 
+  const fallbackPayload: Record<string, unknown> = {
+    ...(payload.company_id ? { company_id: payload.company_id } : {}),
+    ppe_id: ppeId,
+    quantity,
+    type: "SAIDA",
+    motive,
+    ...(deliveryId ? { delivery_id: deliveryId } : {}),
+  };
+
   const fallbackTry = await withSessionRetry(() =>
     supabase
       .from("stock_movements")
-      .insert([{
-        ...(payload.company_id ? { company_id: payload.company_id } : {}),
-        ppe_id: ppeId,
-        quantity,
-        type: "SAIDA",
-        motive,
-      }])
+      .insert([fallbackPayload])
       .select()
   );
 
-  if (fallbackTry.error) throw fallbackTry.error;
-  await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
+  if (!fallbackTry.error) {
+    await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
+    return;
+  }
+
+  // Ultimo fallback: sem delivery_id (caso a migracao nao tenha sido aplicada).
+  if (deliveryId && isMissingDeliveryIdColumnError(fallbackTry.error)) {
+    const finalFallback = await withSessionRetry(() => {
+      const { delivery_id: _omit, ...rest } = fallbackPayload;
+      void _omit;
+      return supabase.from("stock_movements").insert([rest]).select();
+    });
+
+    if (finalFallback.error) throw finalFallback.error;
+    await syncPpeStockAfterMovement(ppeId, "SAIDA", quantity, stockBefore);
+    return;
+  }
+
+  throw fallbackTry.error;
 }
 
-async function insertStockInMovement(ppeId: string, quantity: number, motive: string): Promise<void> {
+async function insertStockInMovement(
+  ppeId: string,
+  quantity: number,
+  motive: string,
+  deliveryId?: string | null,
+): Promise<void> {
   if (quantity <= 0) return;
   const stockBefore = await getPpeCurrentStock(ppeId);
 
   const companyId = await getCurrentCompanyId();
-  const payload = {
+  const payload: Record<string, unknown> = {
     ppe_id: ppeId,
     quantity,
     type: "ENTRADA",
     motive,
     ...(companyId ? { company_id: companyId } : {}),
+    ...(deliveryId ? { delivery_id: deliveryId } : {}),
   };
 
   const { error } = await withSessionRetry(() =>
@@ -563,16 +623,35 @@ async function insertStockInMovement(ppeId: string, quantity: number, motive: st
       .insert([payload])
   );
 
-  if (error) {
-    console.warn("Nao foi possivel registrar entrada automatica de devolucao:", error);
+  if (!error) {
+    try {
+      await syncPpeStockAfterMovement(ppeId, "ENTRADA", quantity, stockBefore);
+    } catch (stockError) {
+      console.warn("Nao foi possivel atualizar saldo automatico de devolucao:", stockError);
+    }
     return;
   }
 
-  try {
-    await syncPpeStockAfterMovement(ppeId, "ENTRADA", quantity, stockBefore);
-  } catch (stockError) {
-    console.warn("Nao foi possivel atualizar saldo automatico de devolucao:", stockError);
+  if (deliveryId && isMissingDeliveryIdColumnError(error)) {
+    const { delivery_id: _omit, ...rest } = payload;
+    void _omit;
+    const retry = await withSessionRetry(() =>
+      supabase.from("stock_movements").insert([rest])
+    );
+
+    if (!retry.error) {
+      try {
+        await syncPpeStockAfterMovement(ppeId, "ENTRADA", quantity, stockBefore);
+      } catch (stockError) {
+        console.warn("Nao foi possivel atualizar saldo automatico de devolucao:", stockError);
+      }
+      return;
+    }
+    console.warn("Nao foi possivel registrar entrada automatica de devolucao (retry):", retry.error);
+    return;
   }
+
+  console.warn("Nao foi possivel registrar entrada automatica de devolucao:", error);
 }
 
 export const api = {
@@ -1415,14 +1494,19 @@ export const api = {
       signatureUrl = await uploadDeliverySignature(signatureFile, delivery.employee_id, delivery.auth_method);
     }
 
-    const syncStockIfNeeded = async (reasonVariant: string) => {
+    const syncStockIfNeeded = async (reasonVariant: string, newDeliveryId?: string | null) => {
       const stockAfterInsert = await getPpeCurrentStock(delivery.ppe_id);
       const desiredStock = stockBefore === null ? null : Math.max(0, stockBefore - delivery.quantity);
 
       // If delivery insert did not reduce stock (missing trigger/misconfig), compensate via stock movement.
       if (desiredStock !== null && stockAfterInsert !== null && stockAfterInsert > desiredStock) {
         const missingOut = stockAfterInsert - desiredStock;
-        await insertStockOutMovement(delivery.ppe_id, missingOut, `Entrega de EPI (${reasonVariant})`);
+        await insertStockOutMovement(
+          delivery.ppe_id,
+          missingOut,
+          `Entrega de EPI (${reasonVariant})`,
+          newDeliveryId,
+        );
       }
     };
 
@@ -1450,7 +1534,7 @@ export const api = {
       );
 
       if (!firstInsertResult.error && firstInsertResult.data?.[0]) {
-        await syncStockIfNeeded(reasonVariant);
+        await syncStockIfNeeded(reasonVariant, firstInsertResult.data[0]?.id);
         return firstInsertResult.data[0];
       }
 
@@ -1476,7 +1560,7 @@ export const api = {
         );
 
         if (!fallbackResult.error && fallbackResult.data?.[0]) {
-          await syncStockIfNeeded(reasonVariant);
+          await syncStockIfNeeded(reasonVariant, fallbackResult.data[0]?.id);
           return fallbackResult.data[0];
         }
 
@@ -1493,6 +1577,24 @@ export const api = {
     }
 
     throw insertError || new Error("Falha ao salvar entrega no Supabase.");
+  },
+
+  async deleteDelivery(deliveryId: string) {
+    const companyId = await getCurrentCompanyId();
+    const params = new URLSearchParams({ id: deliveryId });
+    if (companyId) params.set("company_id", companyId);
+    const storedMasterCompanyId = getStoredMasterCompanyId();
+    if (!companyId && storedMasterCompanyId) params.set("company_id", storedMasterCompanyId);
+
+    const response = await fetchWithAuthRetry(`/api/deliveries?${params.toString()}`, {
+      method: "DELETE",
+    });
+
+    const result = await readResponseJson<{ error?: string; ok?: boolean; restored_quantity?: number }>(response);
+    if (!response.ok) {
+      throw new Error(result.error || "Erro ao excluir o registro da entrega.");
+    }
+    return result;
   },
 
   async returnDelivery(deliveryId: string, motive: string) {
@@ -1517,7 +1619,7 @@ export const api = {
 
     if (!error) {
       if (deliveryBefore?.ppe_id && quantityToReturn > 0) {
-        await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`);
+        await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`, deliveryId);
       }
       return;
     }
@@ -1532,7 +1634,7 @@ export const api = {
 
       if (!fallbackError) {
         if (deliveryBefore?.ppe_id && quantityToReturn > 0) {
-          await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`);
+          await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`, deliveryId);
         }
         return;
       }
@@ -1581,7 +1683,7 @@ export const api = {
 
     if (error) throw error;
 
-    await insertStockInMovement(delivery.ppe_id, quantityToReturn, `Baixa parcial por substituicao (${motive})`);
+    await insertStockInMovement(delivery.ppe_id, quantityToReturn, `Baixa parcial por substituicao (${motive})`, deliveryId);
   },
 
   async returnMultipleDeliveries(deliveryIds: string[], motive: string) {

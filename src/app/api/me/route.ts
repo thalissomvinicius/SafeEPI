@@ -5,85 +5,32 @@ import type { Company, Profile } from "@/types/database"
 type AppRole = Profile["role"]
 
 const VALID_ROLES = new Set<AppRole>(["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
-const ADMIN_BYPASS_EMAILS = new Set([
-  "thalissomvinicius7@gmail.com",
-  "thalissom.cruz@VALLE.br",
-])
 
-function normalizeRole(role: unknown): AppRole {
-  return VALID_ROLES.has(role as AppRole) ? role as AppRole : "ALMOXARIFE"
+/**
+ * Retorna AppRole se o valor for um role válido, ou null caso contrário.
+ * NUNCA defaulta para um role privilegiado.
+ */
+function normalizeRole(role: unknown): AppRole | null {
+  return VALID_ROLES.has(role as AppRole) ? (role as AppRole) : null
 }
 
-async function ensureUserCompany(user: { id: string; email?: string | null }, role: AppRole) {
-  if (role === "MASTER") {
-    return {
-      companyId: null,
-      company: null,
-      role,
-    }
-  }
-
-  const { data: existingMembership, error: membershipError } = await supabaseAdmin
+async function loadActiveMembership(userId: string) {
+  const { data } = await supabaseAdmin
     .from("company_users")
     .select("company_id, role, company:companies(*)")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("active", true)
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()
 
-  if (membershipError) {
-    throw membershipError
-  }
+  if (!data?.company_id) return null
 
-  if (existingMembership?.company_id) {
-    const company = Array.isArray(existingMembership.company)
-      ? existingMembership.company[0] || null
-      : existingMembership.company
-
-    return {
-      companyId: existingMembership.company_id as string,
-      company: company as unknown as Company | null,
-      role: normalizeRole(existingMembership.role || role),
-    }
-  }
-
-  const companyName = user.email?.split("@")[1]?.split(".")[0]
-    ? `${user.email.split("@")[1].split(".")[0].toUpperCase()} - SafeEPI`
-    : "Empresa SafeEPI"
-
-  const { data: company, error: companyError } = await supabaseAdmin
-    .from("companies")
-    .insert({
-      name: companyName,
-      trade_name: companyName,
-      primary_color: "#2563EB",
-      active: true,
-    })
-    .select("*")
-    .single()
-
-  if (companyError) {
-    throw companyError
-  }
-
-  const { error: userCompanyError } = await supabaseAdmin
-    .from("company_users")
-    .insert({
-      company_id: company.id,
-      user_id: user.id,
-      role,
-      active: true,
-    })
-
-  if (userCompanyError) {
-    throw userCompanyError
-  }
-
+  const company = Array.isArray(data.company) ? data.company[0] || null : data.company
   return {
-    companyId: company.id as string,
-    company: company as Company,
-    role,
+    companyId: data.company_id as string,
+    company: (company as unknown as Company | null) ?? null,
+    role: normalizeRole(data.role),
   }
 }
 
@@ -97,7 +44,7 @@ export async function GET(request: Request) {
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null
 
   if (!token) {
-    return NextResponse.json({ error: "Sessao nao informada." }, { status: 401 })
+    return NextResponse.json({ error: "Sessão não informada." }, { status: 401 })
   }
 
   const {
@@ -106,7 +53,7 @@ export async function GET(request: Request) {
   } = await supabaseAdmin.auth.getUser(token)
 
   if (error || !user) {
-    return NextResponse.json({ error: "Sessao invalida ou expirada." }, { status: 401 })
+    return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 })
   }
 
   const { data: profile, error: profileError } = await supabaseAdmin
@@ -116,22 +63,55 @@ export async function GET(request: Request) {
     .maybeSingle()
 
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 400 })
+    console.error("[/api/me] profile fetch error:", profileError)
+    return NextResponse.json({ error: "Falha ao carregar perfil." }, { status: 500 })
   }
 
-  const metadataRole = normalizeRole(user.user_metadata?.role)
-  const role = ADMIN_BYPASS_EMAILS.has(user.email ?? "")
-    ? "MASTER"
-    : normalizeRole(profile?.role || metadataRole)
+  // Resolução de role — apenas fontes confiáveis. user_metadata é IGNORADO.
+  const appMetadataRole = (user.app_metadata as { role?: unknown } | null | undefined)?.role
+  const membership = await loadActiveMembership(user.id)
+  const role =
+    normalizeRole(appMetadataRole) ||
+    membership?.role ||
+    normalizeRole(profile?.role)
+
+  if (!role) {
+    return NextResponse.json(
+      { error: "Conta sem permissão configurada. Contate o administrador." },
+      { status: 403 },
+    )
+  }
+
+  let companyId: string | null = null
+  let company: Company | null = null
+
+  if (role === "MASTER") {
+    companyId = null
+    company = null
+  } else {
+    if (!membership) {
+      // Não auto-cria empresa silenciosamente. Bloqueio explícito:
+      // a empresa precisa ser criada por um MASTER via /api/companies.
+      return NextResponse.json(
+        { error: "Usuário não vinculado a nenhuma empresa. Contate o administrador." },
+        { status: 403 },
+      )
+    }
+    companyId = membership.companyId
+    company = membership.company
+  }
+
+  if (company && (!company.active || company.subscription_status === "SUSPENDED")) {
+    return NextResponse.json(
+      { error: "Acesso da empresa desativado. Entre em contato com o suporte SafeEPI." },
+      { status: 403 },
+    )
+  }
 
   const fullName = profile?.full_name || user.user_metadata?.full_name || user.email || ""
   const email = profile?.email || user.email || null
-  const companyContext = await ensureUserCompany({ id: user.id, email }, role)
 
-  if (companyContext.company && (!companyContext.company.active || companyContext.company.subscription_status === "SUSPENDED")) {
-    return NextResponse.json({ error: "Acesso da empresa desativado. Entre em contato com o suporte SafeEPI." }, { status: 403 })
-  }
-
+  // Mantém profiles em sincronia com a fonte autoritativa (membership).
   if (!profile) {
     await supabaseAdmin
       .from("profiles")
@@ -139,16 +119,13 @@ export async function GET(request: Request) {
         id: user.id,
         email,
         full_name: fullName,
-        role: companyContext.role,
-        company_id: companyContext.companyId,
+        role,
+        company_id: companyId,
       })
-  } else if (profile.company_id !== companyContext.companyId || profile.role !== companyContext.role) {
+  } else if (profile.company_id !== companyId || profile.role !== role) {
     await supabaseAdmin
       .from("profiles")
-      .update({
-        company_id: companyContext.companyId,
-        role: companyContext.role,
-      })
+      .update({ company_id: companyId, role })
       .eq("id", user.id)
   }
 
@@ -157,9 +134,9 @@ export async function GET(request: Request) {
       id: user.id,
       email,
       full_name: fullName,
-      role: companyContext.role,
-      company_id: companyContext.companyId,
-      company: companyContext.company,
+      role,
+      company_id: companyId,
+      company,
     },
   })
 }

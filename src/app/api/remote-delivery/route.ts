@@ -86,6 +86,19 @@ function isMissingReturnMotiveIssue(error: unknown) {
   )
 }
 
+function isMissingDeliveryIdColumnIssue(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as SupabaseLikeError
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase()
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && text.includes("delivery_id")
+}
+
 function isDeliveryReasonConstraintIssue(error: unknown) {
   if (!error || typeof error !== "object") return false
   const maybeError = error as SupabaseLikeError
@@ -427,6 +440,7 @@ export async function POST(req: Request) {
         const missingOut = stockAfterInsert - desiredStock
         const movementPayload: Record<string, unknown> = {
           ppe_id,
+          delivery_id: savedDelivery.id,
           quantity: missingOut,
           type: "SAIDA",
           motive: `Entrega remota (${reason})`,
@@ -440,6 +454,16 @@ export async function POST(req: Request) {
 
         if (movementError) {
           const text = `${movementError.message || ""} ${movementError.details || ""}`.toLowerCase()
+          const { delivery_id: _deliveryId, ...movementWithoutDeliveryId } = movementPayload
+          void _deliveryId
+
+          if (isMissingDeliveryIdColumnIssue(movementError)) {
+            await supabaseAdmin
+              .from("stock_movements")
+              .insert([movementWithoutDeliveryId])
+            return NextResponse.json({ success: true, data: savedDelivery, autoReturnedDeliveryIds })
+          }
+
           const missingCreatedByColumns =
             movementError.code === "PGRST204" ||
             movementError.code === "42703" ||
@@ -447,15 +471,23 @@ export async function POST(req: Request) {
             text.includes("created_by_id")
 
           if (missingCreatedByColumns) {
-            await supabaseAdmin.from("stock_movements").insert([
-              {
-                ...(companyId ? { company_id: companyId } : {}),
-                ppe_id,
-                quantity: missingOut,
-                type: "SAIDA",
-                motive: `Entrega remota (${reason})`,
-              },
-            ])
+            const fallbackMovement = {
+              ...(companyId ? { company_id: companyId } : {}),
+              ppe_id,
+              delivery_id: savedDelivery.id,
+              quantity: missingOut,
+              type: "SAIDA",
+              motive: `Entrega remota (${reason})`,
+            }
+            const { error: fallbackMovementError } = await supabaseAdmin
+              .from("stock_movements")
+              .insert([fallbackMovement])
+
+            if (fallbackMovementError && isMissingDeliveryIdColumnIssue(fallbackMovementError)) {
+              const { delivery_id: _fallbackDeliveryId, ...fallbackWithoutDeliveryId } = fallbackMovement
+              void _fallbackDeliveryId
+              await supabaseAdmin.from("stock_movements").insert([fallbackWithoutDeliveryId])
+            }
           }
         }
       }

@@ -51,6 +51,7 @@ export type PPE = {
 export type StockMovement = {
   id: string;
   company_id?: string | null;
+  delivery_id?: string | null;
   ppe_id: string;
   quantity: number;
   type: 'ENTRADA' | 'SAIDA' | 'AJUSTE';
