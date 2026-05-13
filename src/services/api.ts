@@ -35,6 +35,14 @@ export type CompanyWithCounts = Company & {
 
 const SESSION_REFRESH_BUFFER_SECONDS = 60;
 const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete";
+const SIGNED_DOCUMENT_DIRECT_UPLOAD_THRESHOLD_BYTES = 2.5 * 1024 * 1024;
+
+type SignedDocumentUploadTarget = {
+  error?: string;
+  path?: string;
+  token?: string;
+  publicUrl?: string;
+};
 
 type SupabaseLikeError = {
   code?: string;
@@ -638,10 +646,51 @@ export const api = {
       if (!payload.linkToken) throw error;
     }
 
+    let preuploadedPdf: { storagePath: string; documentUrl: string } | null = null;
+    if (payload.pdfBlob.size >= SIGNED_DOCUMENT_DIRECT_UPLOAD_THRESHOLD_BYTES) {
+      const uploadFormData = new FormData();
+      uploadFormData.append("document_type", payload.documentType);
+      uploadFormData.append("file_name", payload.fileName);
+      if (companyId) uploadFormData.append("company_id", companyId);
+      if (payload.employeeId) uploadFormData.append("employee_id", payload.employeeId);
+      if (payload.linkToken) uploadFormData.append("link_token", payload.linkToken);
+
+      const uploadTargetResponse = await fetch("/api/signed-documents/upload-url", {
+        method: "POST",
+        headers: await this.getAuthHeaders(),
+        body: uploadFormData,
+      });
+      const uploadTarget = await readResponseJson<SignedDocumentUploadTarget>(uploadTargetResponse);
+
+      if (!uploadTargetResponse.ok || !uploadTarget.path || !uploadTarget.token || !uploadTarget.publicUrl) {
+        throw new Error(uploadTarget.error || "Nao foi possivel preparar upload direto do PDF.");
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from("ppe_signatures")
+        .uploadToSignedUrl(uploadTarget.path, uploadTarget.token, payload.pdfBlob, {
+          contentType: "application/pdf",
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message || "Nao foi possivel enviar o PDF para o Storage.");
+      }
+
+      preuploadedPdf = {
+        storagePath: uploadTarget.path,
+        documentUrl: uploadTarget.publicUrl,
+      };
+    }
+
     formData.append("document_type", payload.documentType);
     if (companyId) formData.append("company_id", companyId);
     formData.append("file_name", payload.fileName);
-    formData.append("pdfFile", new File([payload.pdfBlob], payload.fileName, { type: "application/pdf" }));
+    if (preuploadedPdf) {
+      formData.append("storage_path", preuploadedPdf.storagePath);
+      formData.append("document_url", preuploadedPdf.documentUrl);
+    } else {
+      formData.append("pdfFile", new File([payload.pdfBlob], payload.fileName, { type: "application/pdf" }));
+    }
     formData.append("sha256_hash", sha256Hash);
 
     if (payload.employeeId) formData.append("employee_id", payload.employeeId);

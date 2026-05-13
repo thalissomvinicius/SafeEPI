@@ -83,6 +83,10 @@ function getFileExtension(file: File) {
   return "jpg"
 }
 
+function isValidPreuploadedPath(path: string, documentType: string) {
+  return path.startsWith(`signed-documents/${documentType}/`) && !path.includes("..")
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -90,15 +94,22 @@ export async function POST(request: Request) {
     const documentType = String(formData.get("document_type") || "")
     const employeeId = String(formData.get("employee_id") || "") || null
     const linkToken = String(formData.get("link_token") || "") || null
+    const preuploadedStoragePath = String(formData.get("storage_path") || "")
+    const preuploadedDocumentUrl = String(formData.get("document_url") || "")
+    const hasPreuploadedPdf = Boolean(preuploadedStoragePath && preuploadedDocumentUrl)
     const createdBy = await resolveUserId(request)
     let remoteCompanyId: string | null = null
 
-    if (!pdfFile || !(pdfFile instanceof File) || pdfFile.size === 0) {
+    if (!VALID_DOCUMENT_TYPES.has(documentType)) {
+      return NextResponse.json({ error: "Tipo de documento invalido." }, { status: 400 })
+    }
+
+    if (!hasPreuploadedPdf && (!pdfFile || !(pdfFile instanceof File) || pdfFile.size === 0)) {
       return NextResponse.json({ error: "PDF assinado nao informado." }, { status: 400 })
     }
 
-    if (!VALID_DOCUMENT_TYPES.has(documentType)) {
-      return NextResponse.json({ error: "Tipo de documento invalido." }, { status: 400 })
+    if (hasPreuploadedPdf && !isValidPreuploadedPath(preuploadedStoragePath, documentType)) {
+      return NextResponse.json({ error: "Caminho do PDF pre-enviado invalido." }, { status: 400 })
     }
 
     if (!createdBy) {
@@ -114,24 +125,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Hash SHA-256 invalido." }, { status: 400 })
     }
 
-    const fileName = sanitizeFileName(String(formData.get("file_name") || pdfFile.name || "documento_assinado.pdf"))
-    const storagePath = `signed-documents/${documentType}/${Date.now()}_${fileName}`
-    const arrayBuffer = await pdfFile.arrayBuffer()
+    const fileName = sanitizeFileName(String(
+      formData.get("file_name") ||
+      (pdfFile instanceof File ? pdfFile.name : "") ||
+      "documento_assinado.pdf"
+    ))
+    let storagePath = preuploadedStoragePath
+    let documentUrl = preuploadedDocumentUrl
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("ppe_signatures")
-      .upload(storagePath, arrayBuffer, {
-        contentType: pdfFile.type || "application/pdf",
-        upsert: false,
-      })
+    if (!hasPreuploadedPdf) {
+      const uploadFile = pdfFile as File
+      storagePath = `signed-documents/${documentType}/${Date.now()}_${fileName}`
+      const arrayBuffer = await uploadFile.arrayBuffer()
 
-    if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 400 })
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("ppe_signatures")
+        .upload(storagePath, arrayBuffer, {
+          contentType: uploadFile.type || "application/pdf",
+          upsert: false,
+        })
+
+      if (uploadError) {
+        return NextResponse.json({ error: uploadError.message }, { status: 400 })
+      }
+
+      const { data: publicUrlData } = supabaseAdmin.storage
+        .from("ppe_signatures")
+        .getPublicUrl(storagePath)
+      documentUrl = publicUrlData.publicUrl
     }
-
-    const { data: publicUrlData } = supabaseAdmin.storage
-      .from("ppe_signatures")
-      .getPublicUrl(storagePath)
 
     let photoEvidenceUrl = String(formData.get("photo_evidence_url") || "") || null
     let photoEvidenceStoragePath: string | null = null
@@ -171,7 +193,7 @@ export async function POST(request: Request) {
       delivery_ids: deliveryIds,
       training_id: String(formData.get("training_id") || "") || null,
       file_name: fileName,
-      document_url: publicUrlData.publicUrl,
+      document_url: documentUrl,
       storage_path: storagePath,
       sha256_hash: sha256Hash.toLowerCase(),
       auth_method: String(formData.get("auth_method") || "") || null,
