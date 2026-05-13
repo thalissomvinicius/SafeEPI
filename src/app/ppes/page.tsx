@@ -62,7 +62,7 @@ export default function PpesPage() {
 
     try {
       setIsSaving(true)
-      const initialStock = Math.max(0, parseInt(formData.stock, 10) || 0)
+      const desiredStock = Math.max(0, parseInt(formData.stock, 10) || 0)
       
       if (formData.id) {
         const currentPpe = ppes.find((ppe) => ppe.id === formData.id)
@@ -73,12 +73,13 @@ export default function PpesPage() {
           cost: parseFloat(formData.cost) || 0,
         })
 
-        if (canAdjustPpeStock && currentPpe && initialStock !== currentPpe.current_stock) {
+        if (canAdjustPpeStock && currentPpe && desiredStock !== currentPpe.current_stock) {
+          const stockDelta = desiredStock - currentPpe.current_stock
           await api.addStockMovement({
             ppe_id: currentPpe.id,
-            quantity: initialStock,
-            type: "AJUSTE",
-            motive: "Ajuste de saldo via edição do EPI/CA"
+            quantity: Math.abs(stockDelta),
+            type: stockDelta > 0 ? "ENTRADA" : "SAIDA",
+            motive: `Ajuste de saldo via edição do EPI/CA (${currentPpe.current_stock} -> ${desiredStock})`
           })
         }
       } else {
@@ -93,10 +94,10 @@ export default function PpesPage() {
           current_stock: 0
         })
 
-        if (initialStock > 0) {
+        if (desiredStock > 0) {
           await api.addStockMovement({
             ppe_id: newPpe.id,
-            quantity: initialStock,
+            quantity: desiredStock,
             type: 'ENTRADA',
             motive: 'Saldo Inicial (Cadastro)'
           })
