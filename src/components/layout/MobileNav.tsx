@@ -10,7 +10,7 @@ import { useActiveBrand } from "@/hooks/useActiveBrand"
 const allItems = [
   { href: "/companies", label: "Empresas", icon: Building2, roles: ['MASTER'] },
   { href: "/", label: "Dashboard", icon: Home, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
-  { href: "/delivery", label: "Entrega", icon: PenTool, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE'] },
+  { href: "/delivery", label: "Entrega", icon: PenTool, roles: ['MASTER', 'ADMIN'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE'] },
   { href: "/employees", label: "Equipe", icon: Users, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/workplaces", label: "Obras", icon: HardDrive, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },

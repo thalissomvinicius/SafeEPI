@@ -1,4 +1,4 @@
-﻿import jsPDF from "jspdf"
+import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -9,11 +9,6 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
 import { formatDateOnly, formatDeliveryDate, formatDeliveryTime, getDaysUntilDateOnly } from "@/lib/dateOnly"
 import { calculateTrainingValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
-
-/**
- * PDF Generator Utility for SafeEPI
- * Version: 1.1.2 - Fixes layout and colors
- */
 
 let [r, g, b] = COMPANY_CONFIG.primaryColorRgb
 type AuthMethod = 'manual' | 'facial' | 'manual_facial'
@@ -64,18 +59,12 @@ function addPdfLogo(doc: jsPDF, x: number, y: number, maxW: number, maxH: number
   }
 }
 
-// ---------------------------------------------
-// SHARED HELPERS
-// ---------------------------------------------
-
 function addPageHeader(doc: jsPDF, title: string, subtitle: string) {
   const pageWidth = doc.internal.pageSize.getWidth()
 
-  // Background bar
   doc.setFillColor(r, g, b)
   doc.rect(0, 0, pageWidth, 38, "F")
 
-  // White accent line
   doc.setFillColor(r + 30, g + 30, b + 30)
   doc.rect(0, 34, pageWidth, 4, "F")
 
@@ -133,10 +122,6 @@ function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number)
   doc.text(value || "-", x, y + 5)
 }
 
-// ---------------------------------------------
-// 1. FICHA DE ENTREGA (NR-06) - MODERN LAYOUT
-// ---------------------------------------------
-
 export interface DeliveryPDFData {
   employeeName: string
   employeeCpf: string
@@ -169,21 +154,21 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
 
   doc.setFillColor(r, g, b)
   doc.rect(0, 0, pageWidth, 40, "F")
-  
+
   doc.setTextColor(255, 255, 255)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
   if (!addPdfLogo(doc, 14, 8, 26, 14)) {
     doc.text(getPdfCompanyName().toUpperCase(), 14, 15)
   }
-  
+
   doc.setFontSize(18)
   doc.text("FICHA DE ENTREGA DE EPI", pageWidth / 2, 22, { align: "center" })
-  
+
   doc.setFont("helvetica", "normal")
   doc.setFontSize(9)
   doc.text("NR-06 | Certificado de Uso Individual", pageWidth / 2, 30, { align: "center" })
-  
+
   doc.setFontSize(7)
   const today = data.deliveryDate ? format(new Date(data.deliveryDate), "dd/MM/yyyy", { locale: ptBR }) : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
   doc.text(today, pageWidth - 14, 15, { align: "right" })
@@ -192,28 +177,28 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFillColor(255, 255, 255)
   doc.setDrawColor(230, 230, 230)
   doc.roundedRect(14, currentY, pageWidth - 28, 35, 3, 3, "S")
-  
+
   doc.setFont("helvetica", "bold")
   doc.setFontSize(12)
   doc.setTextColor(r, g, b)
   doc.text(data.employeeName.toUpperCase(), 20, currentY + 10)
-  
+
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
   doc.setTextColor(100, 116, 139)
-  
+
   doc.text("CPF", 20, currentY + 18)
   doc.setTextColor(30, 41, 59)
   doc.setFont("helvetica", "bold")
   doc.text(data.employeeCpf, 20, currentY + 23)
-  
+
   doc.setTextColor(100, 116, 139)
   doc.setFont("helvetica", "normal")
   doc.text("CARGO / FUNÇÃO", pageWidth / 2, currentY + 18)
   doc.setTextColor(30, 41, 59)
   doc.setFont("helvetica", "bold")
   doc.text(data.employeeRole || "Não Informado", pageWidth / 2, currentY + 23)
-  
+
   doc.setTextColor(100, 116, 139)
   doc.setFont("helvetica", "normal")
   doc.text("UNIDADE / CANTEIRO", pageWidth - 20, currentY + 18, { align: "right" })
@@ -243,12 +228,12 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   currentY = doc.lastAutoTable.finalY + 15
   doc.setFillColor(255, 255, 255)
   doc.roundedRect(14, currentY, pageWidth - 28, 25, 2, 2, "S")
-  
+
   doc.setFont("helvetica", "bold")
   doc.setFontSize(8)
   doc.setTextColor(r, g, b)
   doc.text("TERMO DE RESPONSABILIDADE", 20, currentY + 7)
-  
+
   doc.setFont("helvetica", "normal")
   doc.setFontSize(7.5)
   doc.setTextColor(71, 85, 105)
@@ -257,11 +242,11 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.text(splitTerm, 18, currentY + 13, { align: "left" })
 
   currentY += 35
-  
+
   const hasManualAndPhoto = data.authMethod === 'manual_facial' && Boolean(data.photoBase64)
   let isPhoto = data.authMethod === 'facial'
   let imgRatio = 1
-  
+
   if (data.signatureBase64) {
     try {
       const imgProps = doc.getImageProperties(data.signatureBase64)
@@ -331,13 +316,13 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
     doc.text("AUTENTICAÇÃO BIOMÉTRICA", pageWidth / 2, currentY, { align: "center" })
-    
+
     const containerSize = 50
     const containerX = pageWidth / 2 - containerSize / 2
     doc.setDrawColor(226, 232, 240)
     doc.setFillColor(248, 250, 252)
     doc.roundedRect(containerX - 2, currentY + 5, containerSize + 4, containerSize + 4, 3, 3, "FD")
-    
+
     try {
       let drawW: number, drawH: number
       if (imgRatio >= 1) {
@@ -353,32 +338,32 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     } catch (e) {
       console.error("Error adding photo to PDF", e)
     }
-    
+
     doc.setFont("helvetica", "bold")
     doc.setFontSize(9)
     doc.setTextColor(30, 41, 59)
     doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + containerSize + 16, { align: "center" })
-    
+
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(148, 163, 184)
     doc.text("Identidade Validada por IA (face-api.js / TensorFlow)", pageWidth / 2, currentY + containerSize + 21, { align: "center" })
-    
+
     currentY += containerSize + 30
   } else {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
     doc.text("ASSINATURA DO COLABORADOR", pageWidth / 2, currentY, { align: "center" })
-    
+
     const sigBoxW = 100
     const sigBoxH = 30
     const sigBoxX = (pageWidth - sigBoxW) / 2
-    
+
     doc.setDrawColor(226, 232, 240)
     doc.setFillColor(252, 252, 252)
     doc.roundedRect(sigBoxX, currentY + 4, sigBoxW, sigBoxH, 2, 2, "FD")
-    
+
     try {
       const imgProps = doc.getImageProperties(data.signatureBase64)
       const sigRatio = imgProps.width / imgProps.height
@@ -392,22 +377,22 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
       const drawY = currentY + 4 + (sigBoxH - drawH) / 2
       doc.addImage(data.signatureBase64, 'PNG', drawX, drawY, drawW, drawH)
     } catch {}
-    
+
     doc.setDrawColor(200, 200, 200)
     doc.line(sigBoxX + 10, currentY + sigBoxH + 6, sigBoxX + sigBoxW - 10, currentY + sigBoxH + 6)
-    
+
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(30, 41, 59)
     doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + sigBoxH + 12, { align: "center" })
-    
+
     currentY += sigBoxH + 22
   }
 
   doc.setFillColor(252, 252, 252)
   doc.setDrawColor(240, 240, 240)
   doc.roundedRect(14, currentY, pageWidth - 28, 35, 3, 3, "FD")
-  
+
   const metaX = 20
   doc.setFontSize(7)
   doc.setFont("helvetica", "normal")
@@ -416,14 +401,14 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFont("helvetica", "bold")
   doc.setTextColor(71, 85, 105)
   doc.text(hash, metaX, currentY + 14)
-  
+
   doc.setFont("helvetica", "normal")
   doc.setTextColor(148, 163, 184)
   doc.text("IP DO TERMINAL", metaX, currentY + 21)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(71, 85, 105)
   doc.text(data.ipAddress || "Remoto", metaX, currentY + 25)
-  
+
   doc.setFont("helvetica", "normal")
   doc.setTextColor(148, 163, 184)
   doc.text("GEOLOCALIZAÇÃO", metaX, currentY + 31)
@@ -452,10 +437,6 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
 
   return doc.output("blob")
 }
-
-// ---------------------------------------------
-// 2. RECIBO DE BAIXA / SUBSTITUIÇÃO
-// ---------------------------------------------
 
 export interface ReturnPDFData {
   employeeName: string
@@ -563,10 +544,6 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   addPageFooter(doc, hash)
   return doc.output("blob")
 }
-
-// ---------------------------------------------
-// 3. FICHA NR-06 (Prontuário do Colaborador)
-// ---------------------------------------------
 
 export interface NR06PDFData {
   employeeName: string
@@ -831,10 +808,6 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   return doc.output("blob")
 }
 
-// ---------------------------------------------
-// 4. RELATÓRIO GERAL (ANALYTICS)
-// ---------------------------------------------
-
 export interface ReportPDFData {
   stats: { label: string; value: string; change: string }[]
   deliveries: DeliveryWithRelations[]
@@ -979,10 +952,6 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   return doc.output("blob")
 }
 
-// ---------------------------------------------
-// 5. CERTIFICADO DE TREINAMENTO
-// ---------------------------------------------
-
 export interface TrainingCertificateData {
   employeeName: string
   employeeCpf: string
@@ -1007,31 +976,25 @@ export interface TrainingCertificateData {
 export async function generateTrainingCertificate(data: TrainingCertificateData): Promise<Blob> {
   refreshPdfBrand()
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
-  const pageWidth = doc.internal.pageSize.getWidth() // 297
-  const pageHeight = doc.internal.pageSize.getHeight() // 210
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const centerX = pageWidth / 2
 
   const drawBorders = () => {
-    // Outer border: 6px solid #8B0000 -> 6px is ~2.1mm
     doc.setDrawColor(r, g, b)
     doc.setLineWidth(2.1)
     doc.rect(10, 10, pageWidth - 20, pageHeight - 20)
-    // Inner border: 1.5px solid #8B0000 -> 1.5px is ~0.5mm
     doc.setLineWidth(0.5)
     doc.rect(13.5, 13.5, pageWidth - 27, pageHeight - 27)
   }
 
-  // --- PAGE 1: FRENTE ---
-  // Background changed to pure white so the logo doesn't show a white bounding box
   doc.setFillColor(255, 255, 255)
   doc.rect(0, 0, pageWidth, pageHeight, "F")
-  
-  drawBorders()
-  
-  // Header: Logo on left, title in center
-  const logoBase64 = getPdfLogoDataUrl()
 
-  const marginX = 25; // 30px padding from border ~ 10mm + 13.5mm = ~23.5mm
+  drawBorders()
+
+  const logoBase64 = getPdfLogoDataUrl()
+  const marginX = 25
 
   if (logoBase64) {
     try {
@@ -1041,32 +1004,29 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   doc.setFont("times", "bold")
   doc.setFontSize(28)
-  doc.setTextColor(26, 26, 46) // #1a1a2e
+  doc.setTextColor(26, 26, 46)
   doc.text("CERTIFICADO DE CONCLUSÃO", centerX, 40, { align: "center" })
 
-  // Decorative line below title (220px ~ 77mm)
   doc.setDrawColor(r, g, b)
   doc.setLineWidth(0.7)
   const lineW = 77
   doc.line(centerX - lineW/2, 45, centerX + lineW/2, 45)
 
-  // Corpo Central
   doc.setFont("helvetica", "italic")
   doc.setFontSize(12)
-  doc.setTextColor(85, 85, 85) // #555555
+  doc.setTextColor(85, 85, 85)
   doc.text("Certificamos para os devidos fins que", centerX, 70, { align: "center" })
 
   doc.setFont("times", "bold")
   doc.setFontSize(24)
-  doc.setTextColor(r, g, b) // #8B0000
+  doc.setTextColor(r, g, b)
   doc.text(data.employeeName.toUpperCase(), centerX, 85, { align: "center" })
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(11)
-  doc.setTextColor(68, 68, 68) // #444444
+  doc.setTextColor(68, 68, 68)
   doc.text(`Portador(a) do CPF: ${data.employeeCpf}`, centerX, 95, { align: "center" })
 
-  // Divisor ornamental (drawn with lines instead of text to avoid weird spacing)
   doc.setDrawColor(r, g, b)
   doc.setLineWidth(0.5)
   doc.line(centerX - 12, 103, centerX - 3, 103)
@@ -1098,30 +1058,27 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setTextColor(68, 68, 68)
   doc.text(`Realizado em: ${completionText}  |  Carga Horária: ${workload.label}  |  ${validityLabel}`, centerX, 137, { align: "center" })
 
-  // Rodapé (3 cols)
   const footerY = 160
-  
-  const code = data.validationCode || generateAuditCode(`CERT-${format(new Date(data.completionDate), "yyyy")}`, 10);
-  const validationUrl = `https://app.safeepi.com.br/validar/${code}`;
-  
-  // Left: QR Code (70x70px ~ 25x25mm)
+
+  const code = data.validationCode || generateAuditCode(`CERT-${format(new Date(data.completionDate), "yyyy")}`, 10)
+  const validationUrl = `https://app.safeepi.com.br/validar/${code}`
+
   try {
     const qrDataUrl = await QRCode.toDataURL(validationUrl, { width: 150, margin: 1 })
     doc.addImage(qrDataUrl, 'PNG', marginX, footerY, 25, 25)
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
-    doc.setTextColor(119, 119, 119) // #777777
+    doc.setTextColor(119, 119, 119)
     doc.text(`Autenticação:`, marginX + 12.5, footerY + 28, { align: "center" })
     doc.setFontSize(5.5)
     doc.text(`app.safeepi.com.br`, marginX + 12.5, footerY + 31, { align: "center" })
     doc.text(`/validar/${code}`, marginX + 12.5, footerY + 33.5, { align: "center" })
   } catch {}
 
-  // Center: participant evidence
   const participantSignature = data.participantSignatureBase64 || data.signatureBase64
   const participantPhoto = data.participantPhotoBase64
   if (participantSignature || participantPhoto || data.participantBlankSignature) {
-    const sigLineW = 100 // ~280px
+    const sigLineW = 100
     const sigY = footerY + 15
     const hasSignature = Boolean(participantSignature)
     const hasPhoto = Boolean(participantPhoto)
@@ -1136,12 +1093,12 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
       try {
         const imgProps = doc.getImageProperties(participantSignature)
         const ratio = imgProps.width / imgProps.height
-        let drawH = 15; // ~45px
-        let drawW = drawH * ratio;
+        let drawH = 15
+        let drawW = drawH * ratio
         const maxW = hasPhoto ? 72 : sigLineW
         if (drawW > maxW) {
-          drawW = maxW;
-          drawH = drawW / ratio;
+          drawW = maxW
+          drawH = drawW / ratio
         }
         doc.addImage(participantSignature, "PNG", signatureCenterX - drawW/2, sigY - drawH - 1, drawW, drawH)
       } catch {}
@@ -1166,32 +1123,29 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     doc.setFontSize(11)
     doc.setTextColor(85, 85, 85)
     doc.text(data.employeeName.toUpperCase(), signatureCenterX, sigY + 5, { align: "center" })
-    
+
     doc.setFont("helvetica", "normal")
     doc.setFontSize(10)
     doc.text("Colaborador treinado", signatureCenterX, sigY + 10, { align: "center" })
   }
 
-  // Right: Footer text
-  const rightX = pageWidth - marginX;
+  const rightX = pageWidth - marginX
   doc.setFont("helvetica", "italic")
   doc.setFontSize(8)
-  doc.setTextColor(136, 136, 136) // #888888
+  doc.setTextColor(136, 136, 136)
   const emitDate = format(new Date(), "dd/MM/yyyy")
   const emitTime = format(new Date(), "HH:mm")
   doc.text(`Documento emitido digitalmente em ${emitDate} às ${emitTime}`, rightX, footerY + 18, { align: "right" })
-  
+
   doc.setFont("helvetica", "normal")
   doc.text("via Sistema SESMT Digital", rightX, footerY + 22, { align: "right" })
-  
+
   doc.setFont("helvetica", "bold")
   doc.text(`Código: ${code}`, rightX, footerY + 26, { align: "right" })
 
-  // --- PAGE 2: VERSO ---
   doc.addPage()
   drawBorders()
 
-  // Cabeçalho Simplificado
   if (logoBase64) {
     try {
       addImageContained(doc, logoBase64, marginX, 20, 35, 26, "left")
@@ -1208,9 +1162,8 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
   doc.setTextColor(r, g, b)
   doc.text(data.trainingName.toUpperCase(), centerX, 38, { align: "center" })
 
-  // Tabela de Conteúdo Programático
-  const content = data.programContent && data.programContent.length > 0 
-    ? data.programContent 
+  const content = data.programContent && data.programContent.length > 0
+    ? data.programContent
     : [
         "1. Normas e regulamentos de segurança aplicáveis à atividade.",
         "2. Identificação, avaliação e controle de riscos e perigos.",
@@ -1220,14 +1173,14 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
         "6. Direitos, deveres e responsabilidades do empregador e empregado.",
         "7. Prevenção de acidentes e doenças ocupacionais.",
         "8. Sinalização de segurança e isolamento de áreas."
-      ];
-    
-  const tableData = [];
+      ]
+
+  const tableData = []
   for (let i = 0; i < content.length; i += 2) {
     tableData.push([
       content[i] ? `   ${content[i]}` : "",
       content[i+1] ? `   ${content[i+1]}` : ""
-    ]);
+    ])
   }
 
   autoTable(doc, {
@@ -1241,7 +1194,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
       cellPadding: 4,
     },
     alternateRowStyles: {
-      fillColor: [250, 250, 250] // #fafafa
+      fillColor: [250, 250, 250]
     },
     columnStyles: {
       0: { cellWidth: (pageWidth - 2 * marginX) / 2 },
@@ -1250,14 +1203,12 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     margin: { left: marginX, right: marginX },
     didDrawCell: (hookData) => {
       if (hookData.section === 'body' && hookData.cell.raw && typeof hookData.cell.raw === 'string' && hookData.cell.raw.trim().length > 0) {
-        // Draw small red bullet points
-        hookData.doc.setFillColor(r, g, b);
-        hookData.doc.circle(hookData.cell.x + 4, hookData.cell.y + hookData.cell.height/2, 1.2, "F");
+        hookData.doc.setFillColor(r, g, b)
+        hookData.doc.circle(hookData.cell.x + 4, hookData.cell.y + hookData.cell.height/2, 1.2, "F")
       }
     }
   })
 
-  // Informações Legais (Footer Verso)
   if (data.instructorSignatureBase64 || data.instructorBlankSignature) {
     const signY = 138
     const signCenterX = centerX
@@ -1294,27 +1245,23 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     doc.text("Assinatura do instrutor", signCenterX, signY + 15, { align: "center" })
   }
 
-  const versoFooterY = pageHeight - 45;
-  
-  // Draw Box
-  doc.setFillColor(245, 245, 245) // #f5f5f5
+  const versoFooterY = pageHeight - 45
+
+  doc.setFillColor(245, 245, 245)
   doc.rect(marginX, versoFooterY, pageWidth - 2 * marginX - 40, 20, "F")
-  
-  // Left border of the box
+
   doc.setDrawColor(r, g, b)
-  doc.setLineWidth(1.4) // 4px
+  doc.setLineWidth(1.4)
   doc.line(marginX, versoFooterY, marginX, versoFooterY + 20)
 
-  // Box text
   doc.setFont("helvetica", "normal")
   doc.setFontSize(10)
   doc.setTextColor(85, 85, 85)
-  const nrNumberMatch = data.trainingName.match(/NR-?(\d+)/i);
-  const nrNumber = nrNumberMatch ? nrNumberMatch[1] : "06";
-  const legalText = `Este certificado é válido conforme NR-${nrNumber} e demais legislações vigentes.\nEmitido pelo SESMT da SafeEPI.`;
+  const nrNumberMatch = data.trainingName.match(/NR-?(\d+)/i)
+  const nrNumber = nrNumberMatch ? nrNumberMatch[1] : "06"
+  const legalText = `Este certificado é válido conforme NR-${nrNumber} e demais legislações vigentes.\nEmitido pelo SESMT da SafeEPI.`
   doc.text(legalText, marginX + 5, versoFooterY + 8)
 
-  // Right QR Code
   try {
     const qrDataUrl = await QRCode.toDataURL(validationUrl, { width: 100, margin: 1 })
     doc.addImage(qrDataUrl, 'PNG', pageWidth - marginX - 25, versoFooterY, 25, 25)
@@ -1327,10 +1274,6 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
 
   return doc.output("blob")
 }
-
-// ---------------------------------------------
-// 6. MOVEMENTS REPORT - SIMPLE & PRESENTATION PDF
-// ---------------------------------------------
 
 export interface MovementsStats {
   deliveries: number
@@ -2148,4 +2091,3 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
 
   return doc.output("blob")
 }
-

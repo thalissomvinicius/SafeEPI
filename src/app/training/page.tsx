@@ -72,7 +72,6 @@ export default function TrainingPage() {
   const [certificateToDelete, setCertificateToDelete] = useState<TrainingWithRelations | null>(null)
   const [pendingDrafts, setPendingDrafts] = useState<PendingTrainingDraft[]>([])
 
-  // Form State
   const [formData, setFormData] = useState({
     employee_id: "",
     training_name: "Uso e Guarda de EPI (NR-06)",
@@ -80,8 +79,7 @@ export default function TrainingPage() {
   })
   const [customTrainingName, setCustomTrainingName] = useState("")
 
-  // TST / Instructor Modal State
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1) // 1=Course, 2=Instructor, 3=Participant, 4=Instructor Signature
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [tstSelectedEmployee, setTstSelectedEmployee] = useState<Employee | null>(null)
   const [tstSearchTerm, setTstSearchTerm] = useState("")
   const [tstRole, setTstRole] = useState("Técnico de Segurança do Trabalho")
@@ -178,7 +176,7 @@ export default function TrainingPage() {
           instructorExpiresAt: parsed.instructorExpiresAt || null,
         })
       } catch {
-        // Ignore malformed drafts.
+        // noop
       }
     }
 
@@ -290,10 +288,7 @@ export default function TrainingPage() {
       return
     }
 
-    const fetchInitialData = async () => {
-        await loadData()
-    }
-    fetchInitialData()
+    void loadData()
   }, [router, user])
 
   useEffect(() => {
@@ -469,7 +464,6 @@ export default function TrainingPage() {
     setParticipantRemoteExpiresAt(null)
     setInstructorRemoteExpiresAt(null)
     setTstRole(emp.job_title || "Técnico de Segurança do Trabalho")
-    
     if (emp.photo_url) {
       try {
         const res = await fetch(emp.photo_url)
@@ -729,7 +723,7 @@ export default function TrainingPage() {
         return
       }
     } catch (error) {
-      console.warn("Nao foi possivel carregar o certificado arquivado:", error)
+      console.error("Nao foi possivel carregar o certificado arquivado:", error)
       toast.warning("PDF arquivado nao encontrado. Gerando uma copia reconstruida pelo cadastro.")
     }
 
@@ -982,7 +976,6 @@ export default function TrainingPage() {
         </p>
       </div>
 
-      {/* Modal Adicionar Treinamento */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
@@ -1158,7 +1151,6 @@ export default function TrainingPage() {
 
                 {step === 3 && tstSelectedEmployee && (
                   <div className="p-8 space-y-5">
-                    {/* Notice for Missing Facial Descriptor */}
                     {!getTrainedEmployee()?.face_descriptor && !tstSignatureBase64 && !participantBlankSignature && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
                         <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />

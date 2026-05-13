@@ -154,14 +154,10 @@ export default function EmployeesPage() {
   const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const importProgressTimerRef = useRef<number | null>(null)
-  
-  // Prontuario State
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
   const [employeeHistory, setEmployeeHistory] = useState<DeliveryWithRelations[]>([])
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(false)
-  
-  // Form State
   const [formData, setFormData] = useState<{
     id?: string;
     name: string;
@@ -184,9 +180,8 @@ export default function EmployeesPage() {
     photo_url: null,
     face_descriptor: null
   })
-  // TST Signer State
   const [isTstModalOpen, setIsTstModalOpen] = useState(false)
-  const [tstStep, setTstStep] = useState<1|2>(1) // 1=identify, 2=sign
+  const [tstStep, setTstStep] = useState<1|2>(1)
   const [tstSelectedEmployee, setTstSelectedEmployee] = useState<Employee | null>(null)
   const [tstSearchTerm, setTstSearchTerm] = useState("")
   const [tstRole, setTstRole] = useState("Técnico de Segurança do Trabalho")
@@ -270,11 +265,8 @@ export default function EmployeesPage() {
     loadPendingCaptureDrafts()
   }, [loadPendingCaptureDrafts])
 
-  // Fetch real data from Supabase
   const loadData = async () => {
     try {
-      // Removed synchronous setLoading(true) to avoid cascading renders in useEffect.
-      // Loading is initialized to true.
       const [empData, wpData, jobData, deptData] = await Promise.all([
         api.getEmployees(),
         api.getWorkplaces(),
@@ -295,7 +287,6 @@ export default function EmployeesPage() {
   }
 
   useEffect(() => {
-    // Initial load - wrapped in setTimeout to ensure it's asynchronous and avoid cascading render warnings
     const timer = setTimeout(() => {
       loadData()
       loadPendingCaptureDrafts()
@@ -355,7 +346,6 @@ export default function EmployeesPage() {
     const normalizedDepartment = normalizeName(formData.department)
     try {
       setIsSaving(true)
-      
       let photoFile: File | undefined;
       if (formData.photo_url && formData.photo_url.startsWith('data:')) {
         const response = await fetch(formData.photo_url);
@@ -364,7 +354,6 @@ export default function EmployeesPage() {
       }
 
       if (formData.id) {
-        // Atualiza campos textuais
         const updates: Record<string, unknown> = {
           full_name: normalizedName,
           job_title: normalizedRole,
@@ -377,21 +366,16 @@ export default function EmployeesPage() {
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
         }
 
-        // Se tem foto HTTP existente, mantém
         if (formData.photo_url && formData.photo_url.startsWith('http')) {
           updates.photo_url = formData.photo_url
         }
 
-        // Atualiza campos gerais (e foto se for nova captura via photoFile)
         await api.updateEmployee(formData.id, updates as Partial<Employee>, photoFile)
 
-        // Se a foto foi REMOVIDA (null), faz chamada dedicada separada
         if (formData.photo_url === null) {
-          console.log('[handleSave] Foto removida - chamando removeEmployeePhoto')
           await api.removeEmployeePhoto(formData.id)
         }
-        
-        // Recarrega a lista para garantir dados consistentes
+
         await loadData()
 
         toast.success("Cadastro atualizado com sucesso!")
@@ -411,8 +395,6 @@ export default function EmployeesPage() {
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
         }, photoFile)
         toast.success("Colaborador cadastrado com sucesso!")
-        
-        // Novo cadastro: recarrega a lista completa para incluir o novo
         setLoading(true)
         await loadData()
         resetFormData()
@@ -640,14 +622,9 @@ export default function EmployeesPage() {
     const emp = employees.find(e => e.id === selectedEmployeeId)
     
     if (!confirm(`Deseja realmente DESLIGAR o colaborador ${emp?.full_name} e dar baixa em todos os seus EPIs ativos?`)) return
-    
     try {
       setLoadingHistory(true)
-      
-      // 1. Desligar colaborador
       await api.terminateEmployee(selectedEmployeeId)
-      
-      // 2. Dar baixa em todos EPIs ativos
       const activeDeliveries = employeeHistory.filter(d => !d.returned_at)
       if (activeDeliveries.length > 0) {
         await api.returnMultipleDeliveries(activeDeliveries.map(d => d.id), "Desligamento")
@@ -723,7 +700,6 @@ export default function EmployeesPage() {
     setTstSignatureBase64(null)
     setTstPhotoBase64(null)
     setTstRole(getJobTitleName(emp.job_title || "Técnico de Segurança do Trabalho"))
-    // If employee has a photo, use it as the signature automatically
     if (emp.photo_url) {
       try {
         const res = await fetch(emp.photo_url)
@@ -736,7 +712,6 @@ export default function EmployeesPage() {
         setTstPhotoBase64(b64)
         setTstAuthMethod('manual_facial')
       } catch {
-        // If photo fetch fails, go to manual
         setTstPhotoBase64(null)
       }
     } else {
@@ -1313,7 +1288,6 @@ export default function EmployeesPage() {
       </div>
   ) : (
             <>
-              {/* Desktop View (Table) */}
               <table className="w-full text-sm text-left hidden md:table">
                   <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                   <tr>
@@ -1408,11 +1382,9 @@ export default function EmployeesPage() {
                   </tbody>
               </table>
 
-              {/* Mobile View (Cards) */}
               <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-slate-50/50">
                 {filteredEmployees.map((emp) => (
                   <div key={emp.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 relative overflow-hidden">
-                    {/* Status Badge absolute */}
                     <div className="absolute top-4 right-4">
                         <span className={`px-3 py-1 text-[9px] font-black uppercase rounded-full border ${
                           emp.active 
@@ -1499,7 +1471,6 @@ export default function EmployeesPage() {
         </div>
       </div>
       )}
-
       {employeeToDelete && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)] animate-in zoom-in-95 duration-200">
@@ -1558,7 +1529,6 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* Modal Adicionar Colaborador */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-4 animate-in fade-in duration-300">
           <div className="my-3 sm:my-4 bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 flex flex-col">
@@ -1786,7 +1756,6 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* Modal Prontuario */}
       {isProfileOpen && selectedEmployeeId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
@@ -1852,7 +1821,6 @@ export default function EmployeesPage() {
                             Histórico de Movimentações
                           </h3>
                         </div>
-                        
                         <div className="space-y-3">
                           {employeeHistory.map((delivery) => {
                             const deliveryDate = parseDeliveryDateTime(delivery.delivery_date)
@@ -1945,8 +1913,6 @@ export default function EmployeesPage() {
       {isTstModalOpen && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col border border-slate-200 animate-in zoom-in-95 duration-200">
-            
-            {/* Header */}
             <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Assinar Prontuário</h2>
@@ -1959,7 +1925,6 @@ export default function EmployeesPage() {
               </button>
             </div>
 
-            {/* Step 1 - Select TST from employee list */}
             {tstStep === 1 && (
               <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
@@ -2020,10 +1985,8 @@ export default function EmployeesPage() {
               </div>
             )}
 
-            {/* Step 2 - Capture Signature */}
             {tstStep === 2 && (
               <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
-                {/* Notice for Missing Photo */}
                 {!tstSelectedEmployee?.photo_url && !tstSignatureBase64 && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
                     <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -2033,7 +1996,6 @@ export default function EmployeesPage() {
                   </div>
                 )}
 
-                {/* Auth Method Toggle */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-1 rounded-xl">
                   <button
                     onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(false); }}
@@ -2055,7 +2017,6 @@ export default function EmployeesPage() {
                   </button>
                 </div>
 
-                {/* Manual Signature Pad */}
                 {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && !isFaceCameraTstOpen && (
                   <div className="space-y-2">
                     {tstAuthMethod === 'manual_facial' && (
@@ -2121,7 +2082,6 @@ export default function EmployeesPage() {
                   </div>
                 )}
 
-                {/* Facial Capture */}
                 {tstAuthMethod === 'facial' && (
                   <div>
                     {tstSignatureBase64 ? (
@@ -2147,7 +2107,6 @@ export default function EmployeesPage() {
                   </div>
                 )}
 
-                {/* Generate PDF button */}
                 <div className="flex gap-2 pt-2 pb-2 shrink-0">
                   <button
                     onClick={() => setTstStep(1)}

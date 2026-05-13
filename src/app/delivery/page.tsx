@@ -7,6 +7,7 @@ import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fin
 import { format, addDays } from "date-fns"
 import { api, type PendingDeliveryRemoteLink } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
+import { useAuth } from "@/contexts/AuthContext"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
@@ -65,6 +66,7 @@ const getRemainingDeliveryQuantity = (delivery: DeliveryWithRelations) =>
   Math.max(0, Number(delivery.quantity || 0) - Number(delivery.returned_quantity || 0))
 
 export default function DeliveryPage() {
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   const sigCanvas = useRef<SignatureCanvas | null>(null)
   
@@ -77,11 +79,9 @@ export default function DeliveryPage() {
   const [remoteWaitHours, setRemoteWaitHours] = useState(24)
   const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
 
-  // Metadados de Autenticidade
   const [ipAddress, setIpAddress] = useState<string>("")
   const [location, setLocation] = useState<string>("")
 
-  // Dados do banco
   const [employees, setEmployees] = useState<Employee[]>([])
   const [ppes, setPpes] = useState<PPE[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
@@ -89,20 +89,17 @@ export default function DeliveryPage() {
   const [loadingActiveDeliveries, setLoadingActiveDeliveries] = useState(false)
   const [loadingOptions, setLoadingOptions] = useState(true)
 
-  // Estados dos formulários selecionados
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("")
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("")
   const [ppeSearchTerm, setPpeSearchTerm] = useState("")
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
   const [deliveryDate, setDeliveryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
 
-  // -- CART: Multi-EPI --
   const [cart, setCart] = useState<CartItem[]>([])
   const [currentPpeId, setCurrentPpeId] = useState("")
   const [currentQuantity, setCurrentQuantity] = useState(1)
   const [currentReason, setCurrentReason] = useState("Primeira Entrega")
 
-  // Biometria Facial
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
 
@@ -118,8 +115,7 @@ export default function DeliveryPage() {
                   (pos) => {
                     setLocation(`${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`)
                   },
-                  (err) => {
-                    console.warn("Geolocation denied or unavailable:", err.message)
+                  () => {
                     setLocation("Permissão negada pelo dispositivo")
                   },
                   { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -331,8 +327,8 @@ export default function DeliveryPage() {
         byToken.set(remoteDraft.token, remoteDraft)
         window.localStorage.setItem(remoteDraft.key, JSON.stringify(remoteDraft))
       }
-    } catch (error) {
-      console.warn("Nao foi possivel sincronizar pendencias remotas:", error)
+    } catch {
+      // remote sync is best-effort; local drafts are still valid
     }
 
     setPendingDrafts(
@@ -392,7 +388,6 @@ export default function DeliveryPage() {
     }
   }
 
-  // -- Cart operations --
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadPendingDrafts()
@@ -401,7 +396,6 @@ export default function DeliveryPage() {
     return () => window.clearTimeout(timer)
   }, [loadPendingDrafts])
 
-  // Mantem referencia estavel para uso dentro do setInterval (auto-refresh).
   const pendingDraftsRef = useRef<PendingDeliveryDraft[]>([])
   useEffect(() => {
     pendingDraftsRef.current = pendingDrafts
@@ -414,7 +408,6 @@ export default function DeliveryPage() {
       return
     }
     
-    // Verificação de Estoque
     const totalInCart = cart.reduce((acc, item) => item.ppeId === currentPpeId ? acc + item.quantity : acc, 0)
     if (totalInCart + currentQuantity > currentPpe.current_stock) {
       toast.error(`Estoque Insuficiente! Você possui apenas ${currentPpe.current_stock} unidades de ${currentPpe.name} no estoque. Por favor, adicione mais estoque primeiro.`)
@@ -435,11 +428,7 @@ export default function DeliveryPage() {
         const available = getRemainingDeliveryQuantity(delivery)
         if (available <= 0) continue
         const quantityToReturn = Math.min(available, pendingReturnQuantity)
-        autoReturnAllocations.push({
-          deliveryId: delivery.id,
-          quantity: quantityToReturn,
-          deliveryDate: delivery.delivery_date,
-        })
+        autoReturnAllocations.push({ deliveryId: delivery.id, quantity: quantityToReturn, deliveryDate: delivery.delivery_date })
         pendingReturnQuantity -= quantityToReturn
       }
     }
@@ -523,7 +512,6 @@ export default function DeliveryPage() {
       const savedDeliveries: Delivery[] = []
       const autoReturnedDeliveryIds: string[] = []
 
-      // Save each item as a separate delivery record (same signature)
       for (const item of cart) {
         const savedDelivery = await api.saveDelivery({
           employee_id: selectedEmployeeId,
@@ -550,7 +538,6 @@ export default function DeliveryPage() {
         }
       }
 
-      // Generate ONE PDF with all items
       const pdfBlob = await generateDeliveryPDF({
         employeeName: selectedEmployee?.full_name || "",
         employeeCpf: selectedEmployee?.cpf || "",
@@ -619,7 +606,6 @@ export default function DeliveryPage() {
           || lowerMessage.includes("payload too large")
 
         if (payloadTooLarge) {
-          console.warn("PDF assinado gerado, mas o arquivo juridico excedeu o limite da funcao:", archiveError)
           toast.info("Entrega salva. O PDF ficou disponivel para baixar, mas o arquivo juridico excedeu o limite automatico.")
         } else {
           toast.warning(message)
@@ -905,10 +891,6 @@ export default function DeliveryPage() {
     }
   }, [updatePendingDraft, removePendingDraft])
 
-  // Auto-refresh das pendencias de assinatura.
-  // - A cada 15s sincroniza a lista com o servidor (loadPendingDrafts).
-  // - Para cada pendente, checa silenciosamente se o colaborador ja assinou.
-  // - Pausa quando a aba esta oculta para nao gastar requisicoes.
   useEffect(() => {
     if (viewMode !== "pending") return
     if (typeof window === "undefined") return
@@ -919,8 +901,8 @@ export default function DeliveryPage() {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return
       try {
         await loadPendingDrafts()
-      } catch (err) {
-        console.warn("Auto-refresh: falha ao sincronizar pendencias:", err)
+      } catch {
+        // best-effort sync
       }
 
       const drafts = pendingDraftsRef.current
@@ -928,8 +910,8 @@ export default function DeliveryPage() {
         if (draft.status !== "pending") continue
         try {
           await checkPendingDraft(draft, { silent: true })
-        } catch (err) {
-          console.warn("Auto-refresh: falha ao checar pendencia", draft.token, err)
+        } catch {
+          // best-effort check
         }
       }
     }
@@ -943,7 +925,6 @@ export default function DeliveryPage() {
     }
     document.addEventListener("visibilitychange", onVisibilityChange)
 
-    // Dispara uma checagem imediata ao abrir a aba.
     void tick()
 
     return () => {
@@ -972,6 +953,16 @@ export default function DeliveryPage() {
     setCart([draft.item])
     setStep(1)
     setViewMode("new")
+  }
+
+  if (user && user.role !== "MASTER" && user.role !== "ADMIN") {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 text-center">
+        <ShieldAlert className="w-14 h-14 text-slate-300 mb-4" />
+        <h2 className="text-xl font-black text-slate-700 uppercase tracking-tighter">Acesso Restrito</h2>
+        <p className="text-slate-400 text-sm font-medium mt-2">Apenas Administradores e Masters podem registrar entregas de EPI.</p>
+      </div>
+    )
   }
 
   if (loadingOptions) {
@@ -1210,7 +1201,6 @@ export default function DeliveryPage() {
       ) : (
 
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40">
-        {/* Progress Bar Header */}
         <div className="flex bg-slate-50 border-b border-slate-100">
           <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 1 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-400 border-b-2 border-transparent'}`}>1. Seleção e Carrinho</div>
           <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 2 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-400 border-b-2 border-transparent'}`}>2. Autenticação e Assinatura</div>
@@ -1220,7 +1210,6 @@ export default function DeliveryPage() {
           {step === 1 && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 animate-in fade-in slide-in-from-left-4">
               
-              {/* --- COLUNA ESQUERDA: DADOS BASE --- */}
               <div className="lg:col-span-5 space-y-6 lg:border-r lg:border-slate-100 lg:pr-8">
                 <div className="mb-2 hidden lg:block">
                   <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><User className="w-5 h-5 text-[#2563EB]"/> Favorecido</h2>
@@ -1315,7 +1304,6 @@ export default function DeliveryPage() {
                 </div>
               </div>
 
-              {/* --- COLUNA DIREITA: EPI E CARRINHO --- */}
               <div className="lg:col-span-7 space-y-6 flex flex-col h-full">
                 <div className="mb-2 hidden lg:block">
                   <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Package className="w-5 h-5 text-[#2563EB]"/> Equipamentos</h2>
@@ -1324,7 +1312,6 @@ export default function DeliveryPage() {
 
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                    {/* Busca EPI */}
                     <div className="space-y-2">
                       <input 
                         type="text"
@@ -1365,7 +1352,6 @@ export default function DeliveryPage() {
                       </div>
                     </div>
 
-                    {/* Controles de Qtd e Motivo */}
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -1441,7 +1427,6 @@ export default function DeliveryPage() {
                   </div>
                 </div>
 
-                {/* Carrinho */}
                 {cart.length > 0 && (
                   <div className="space-y-3 pt-4 border-t border-slate-100">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">

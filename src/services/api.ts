@@ -673,16 +673,9 @@ export const api = {
 
   async getSignedDocuments() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from("signed_documents")
-        .select("*")
-        .order("created_at", { ascending: false });
-        if (companyId) query = query.eq("company_id", companyId);
-        return query;
-      }
-    );
+    let sdQuery = supabase.from("signed_documents").select("*").order("created_at", { ascending: false });
+    if (companyId) sdQuery = sdQuery.eq("company_id", companyId);
+    const { data, error } = await withSessionRetry(() => sdQuery);
 
     if (error) {
       if (isMissingSignedDocumentsTableIssue(error)) return [] as SignedDocument[];
@@ -694,19 +687,9 @@ export const api = {
 
   async getTrainingCertificateDocument(trainingId: string) {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-          .from("signed_documents")
-          .select("*")
-          .eq("document_type", "training_certificate")
-          .eq("training_id", trainingId)
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (companyId) query = query.eq("company_id", companyId);
-        return query;
-      }
-    );
+    let tcQuery = supabase.from("signed_documents").select("*").eq("document_type", "training_certificate").eq("training_id", trainingId).order("created_at", { ascending: false }).limit(1);
+    if (companyId) tcQuery = tcQuery.eq("company_id", companyId);
+    const { data, error } = await withSessionRetry(() => tcQuery);
 
     if (error) {
       if (isMissingSignedDocumentsTableIssue(error)) return null;
@@ -872,17 +855,9 @@ export const api = {
   // --- Canteiros (Workplaces) ---
   async getWorkplaces() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from('workplaces')
-        .select('*')
-        .order('name', { ascending: true });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
-    
+    let query = supabase.from('workplaces').select('*').order('name', { ascending: true });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
     if (error) throw error;
     return data as Workplace[];
   },
@@ -927,18 +902,9 @@ export const api = {
   // --- Cargos e Setores ---
   async getJobTitles() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from('job_titles')
-        .select('*')
-        .eq('active', true)
-        .order('name', { ascending: true });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
-
+    let query = supabase.from('job_titles').select('*').eq('active', true).order('name', { ascending: true });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
     if (error) {
       if (isMissingCatalogTableIssue(error)) return [] as CatalogItem[];
       throw error;
@@ -990,18 +956,9 @@ export const api = {
 
   async getDepartments() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from('departments')
-        .select('*')
-        .eq('active', true)
-        .order('name', { ascending: true });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
-
+    let query = supabase.from('departments').select('*').eq('active', true).order('name', { ascending: true });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
     if (error) {
       if (isMissingCatalogTableIssue(error)) return [] as CatalogItem[];
       throw error;
@@ -1054,16 +1011,9 @@ export const api = {
   // --- Colaboradores ---
   async getEmployees() {
     const companyId = await getCurrentCompanyId();
-    const buildQuery = () => {
-      let query = supabase
-        .from('employees')
-        .select('*')
-        .order('full_name', { ascending: true });
-      if (companyId) query = query.eq('company_id', companyId);
-      return query;
-    };
-
-    const { data, error } = await withSessionRetry(() => buildQuery());
+    let empQuery = supabase.from('employees').select('*').order('full_name', { ascending: true });
+    if (companyId) empQuery = empQuery.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => empQuery);
     
     if (error) throw error;
 
@@ -1088,7 +1038,7 @@ export const api = {
     if (photoFile) {
       const fileName = `emp_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
       const { error: storageError } = await supabase.storage
-        .from('ppe_signatures') // Reusing same bucket or could use another
+        .from('ppe_signatures')
         .upload(fileName, photoFile);
       
       if (storageError) throw storageError;
@@ -1126,7 +1076,6 @@ export const api = {
     const finalUpdates = { ...updates };
     await ensureActiveSession();
 
-    // Upload da foto se houver arquivo novo
     if (photoFile) {
       const fileName = `emp_${Date.now()}_${id}.png`;
       const { error: storageError } = await supabase.storage
@@ -1142,7 +1091,6 @@ export const api = {
       finalUpdates.photo_url = publicUrl;
     }
 
-    // Usa rota server-side para contornar RLS
     const response = await fetch('/api/employees/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
@@ -1150,7 +1098,6 @@ export const api = {
     });
 
     const result = await readResponseJson<{ error?: string; employee?: Employee }>(response);
-    console.log('[updateEmployee] Server response:', result);
 
     if (!response.ok) {
       if (isDuplicateCpfIssue(result)) {
@@ -1162,7 +1109,6 @@ export const api = {
   },
 
   async removeEmployeePhoto(id: string) {
-    console.log('[removeEmployeePhoto] Chamando API server-side para remover foto');
     const response = await fetch('/api/employees/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...(await this.getAuthHeaders()) },
@@ -1170,8 +1116,6 @@ export const api = {
     });
 
     const result = await readResponseJson<{ error?: string; employee?: Employee }>(response);
-    console.log('[removeEmployeePhoto] Server response:', result);
-
     if (!response.ok) throw new Error(result.error || 'Erro ao remover foto');
     return result.employee as Employee;
   },
@@ -1203,7 +1147,7 @@ export const api = {
     const { error } = await withSessionRetry(() =>
       supabase
         .from('employees')
-        .update({ active: false }) // termination_date removed as it's missing from DB
+        .update({ active: false })
         .eq('id', employeeId)
     );
     
@@ -1213,18 +1157,9 @@ export const api = {
   // --- EPIs ---
   async getPpes() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from('ppes')
-        .select('*')
-        .eq('active', true)
-        .order('name', { ascending: true });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
-    
+    let query = supabase.from('ppes').select('*').eq('active', true).order('name', { ascending: true });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
     if (error) throw error;
     return data as PPE[];
   },
@@ -1276,20 +1211,9 @@ export const api = {
   // --- Estoque (Stock Movements) ---
   async getStockMovements() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from('stock_movements')
-        .select(`
-          *,
-          ppe:ppes(name, active)
-        `)
-        .order('created_at', { ascending: false });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
-    
+    let query = supabase.from('stock_movements').select('*, ppe:ppes(name, active)').order('created_at', { ascending: false });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
     if (error) throw error;
     return (data || []).filter((movement) => movement.ppe && movement.ppe.active !== false) as StockMovement[];
   },
@@ -1318,22 +1242,9 @@ export const api = {
   // --- Entregas ---
   async getDeliveries() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from('deliveries')
-        .select(`
-          *,
-          employee:employees(full_name, cpf, job_title),
-          ppe:ppes(name, ca_number, ca_expiry_date, cost, lifespan_days),
-          workplace:workplaces(name)
-        `)
-        .order('delivery_date', { ascending: false });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
-    
+    let query = supabase.from('deliveries').select(`*, employee:employees(full_name, cpf, job_title), ppe:ppes(name, ca_number, ca_expiry_date, cost, lifespan_days), workplace:workplaces(name)`).order('delivery_date', { ascending: false });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
     if (error) throw error;
     return data as DeliveryWithRelations[];
   },
@@ -1383,7 +1294,6 @@ export const api = {
       }
     };
 
-    // 3. Salva o registro na tabela de entregas
     const baseInsertPayload = await withCompanyId({
       ...delivery,
       reason: normalizedReason,
@@ -1575,20 +1485,9 @@ export const api = {
   // --- Treinamentos ---
   async getTrainings() {
     const companyId = await getCurrentCompanyId();
-    const { data, error } = await withSessionRetry(() =>
-      {
-        let query = supabase
-        .from('trainings')
-        .select(`
-          *,
-          employee:employees!trainings_employee_id_fkey(full_name, cpf)
-        `)
-        .order('completion_date', { ascending: false });
-        if (companyId) query = query.eq('company_id', companyId);
-        return query;
-      }
-    );
-    
+    let query = supabase.from('trainings').select('*, employee:employees!trainings_employee_id_fkey(full_name, cpf)').order('completion_date', { ascending: false });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
     if (error) throw error;
     return data as TrainingWithRelations[];
   },
