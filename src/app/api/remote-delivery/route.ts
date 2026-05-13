@@ -8,6 +8,11 @@ type SupabaseLikeError = {
   message?: string
 }
 
+type DeliveryInsertRow = {
+  id?: string
+  [key: string]: unknown
+}
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
 
@@ -33,6 +38,29 @@ function normalizeDeliveryReason(reason: string) {
   return "Primeira Entrega"
 }
 
+function uniqueDeliveryReasons(reasons: string[]) {
+  return Array.from(new Set(reasons.filter(Boolean)))
+}
+
+function getDeliveryReasonStorageVariants(reason: string) {
+  const normalizedReason = normalizeDeliveryReason(reason)
+  const normalizedText = normalizedReason
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
+  if (normalizedText.includes("substitu")) {
+    return uniqueDeliveryReasons([
+      "Substituição (Desgaste/Validade)",
+      "Substitui\u00c3\u00a7\u00c3\u00a3o (Desgaste/Validade)",
+      "Substituicao (Desgaste/Validade)",
+      normalizedReason,
+    ])
+  }
+
+  return [normalizedReason]
+}
+
 function isDeliverySchemaCompatibilityIssue(error: unknown) {
   if (!error || typeof error !== "object") return false
   const maybeError = error as SupabaseLikeError
@@ -56,6 +84,13 @@ function isMissingReturnMotiveIssue(error: unknown) {
     (maybeError.code === "PGRST204" || maybeError.code === "42703") &&
     text.includes("return_motive")
   )
+}
+
+function isDeliveryReasonConstraintIssue(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as SupabaseLikeError
+  const text = `${maybeError.message || ""} ${maybeError.details || ""}`.toLowerCase()
+  return maybeError.code === "23514" && (text.includes("reason") || text.includes("deliveries"))
 }
 
 function shouldAutoReturnReason(reason: string) {
@@ -277,7 +312,7 @@ export async function POST(req: Request) {
     const stockBefore =
       typeof ppe.current_stock === "number" ? ppe.current_stock : null
 
-    const insertPayload: Record<string, unknown> = {
+    const baseInsertPayload: Record<string, unknown> = {
       employee_id,
       ppe_id,
       workplace_id: workplace_id === "null" || !workplace_id ? null : workplace_id,
@@ -288,30 +323,49 @@ export async function POST(req: Request) {
       auth_method,
       delivery_date: new Date().toISOString(),
     }
-    if (companyId) insertPayload.company_id = companyId
+    if (companyId) baseInsertPayload.company_id = companyId
 
-    let { data, error } = await supabaseAdmin
-      .from("deliveries")
-      .insert([insertPayload])
-      .select()
+    let data: DeliveryInsertRow[] | null = null
+    let error: unknown = null
 
-    if (error && isDeliverySchemaCompatibilityIssue(error)) {
-      const fallbackPayload = {
-        ...(companyId ? { company_id: companyId } : {}),
-        employee_id,
-        ppe_id,
-        reason,
-        quantity,
-        ip_address,
-        signature_url: signatureUrl,
-        delivery_date: insertPayload.delivery_date,
+    for (const reasonVariant of getDeliveryReasonStorageVariants(reason)) {
+      const insertPayload: Record<string, unknown> = {
+        ...baseInsertPayload,
+        reason: reasonVariant,
       }
-      const fallbackResult = await supabaseAdmin
+
+      const insertResult = await supabaseAdmin
         .from("deliveries")
-        .insert([fallbackPayload])
+        .insert([insertPayload])
         .select()
-      data = fallbackResult.data
-      error = fallbackResult.error
+
+      data = insertResult.data
+      error = insertResult.error
+
+      if (!error) break
+
+      if (isDeliverySchemaCompatibilityIssue(error)) {
+        const fallbackPayload = {
+          ...(companyId ? { company_id: companyId } : {}),
+          employee_id,
+          ppe_id,
+          reason: reasonVariant,
+          quantity,
+          ip_address,
+          signature_url: signatureUrl,
+          delivery_date: insertPayload.delivery_date,
+        }
+        const fallbackResult = await supabaseAdmin
+          .from("deliveries")
+          .insert([fallbackPayload])
+          .select()
+        data = fallbackResult.data
+        error = fallbackResult.error
+
+        if (!error) break
+      }
+
+      if (!isDeliveryReasonConstraintIssue(error)) break
     }
 
     if (error) {
@@ -320,7 +374,7 @@ export async function POST(req: Request) {
     }
 
     const savedDelivery = data?.[0]
-    if (!savedDelivery) {
+    if (!savedDelivery || typeof savedDelivery.id !== "string") {
       return NextResponse.json({ error: "Entrega não retornou registro." }, { status: 500 })
     }
 

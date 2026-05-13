@@ -148,6 +148,29 @@ function normalizeDeliveryReason(reason: Delivery["reason"] | string): Delivery[
   return "Primeira Entrega";
 }
 
+function uniqueDeliveryReasons(reasons: string[]): string[] {
+  return Array.from(new Set(reasons.filter(Boolean)));
+}
+
+function getDeliveryReasonStorageVariants(reason: Delivery["reason"] | string): string[] {
+  const normalizedReason = normalizeDeliveryReason(reason);
+  const normalizedText = normalizedReason
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (normalizedText.includes("substitu")) {
+    return uniqueDeliveryReasons([
+      "Substituição (Desgaste/Validade)",
+      "Substitui\u00c3\u00a7\u00c3\u00a3o (Desgaste/Validade)",
+      "Substituicao (Desgaste/Validade)",
+      normalizedReason,
+    ]);
+  }
+
+  return [normalizedReason];
+}
+
 function isDeliverySchemaCompatibilityIssue(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as SupabaseLikeError;
@@ -1267,7 +1290,8 @@ export const api = {
   async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at'>, signatureFile?: File) {
     let signatureUrl = null;
     await ensureActiveSession();
-    const normalizedReason = normalizeDeliveryReason(delivery.reason);
+    const reasonVariants = getDeliveryReasonStorageVariants(delivery.reason);
+    const normalizedReason = reasonVariants[0] as Delivery["reason"];
     const stockBefore = await getPpeCurrentStock(delivery.ppe_id);
 
     // 1. Se houver imagem da assinatura, faz o upload para o Storage
@@ -1288,73 +1312,80 @@ export const api = {
       signatureUrl = publicUrl;
     }
 
-    // 3. Salva o registro na tabela de entregas
-    const insertPayload = await withCompanyId({
-      ...delivery,
-      reason: normalizedReason,
-      signature_url: signatureUrl,
-      delivery_date: delivery.delivery_date || new Date().toISOString(),
-    } as Record<string, unknown>);
-
-    const firstInsertResult = await withSessionRetry(() =>
-      supabase
-        .from('deliveries')
-        .insert([insertPayload])
-        .select()
-    );
-
-    if (!firstInsertResult.error && firstInsertResult.data?.[0]) {
+    const syncStockIfNeeded = async (reasonVariant: string) => {
       const stockAfterInsert = await getPpeCurrentStock(delivery.ppe_id);
       const desiredStock = stockBefore === null ? null : Math.max(0, stockBefore - delivery.quantity);
 
       // If delivery insert did not reduce stock (missing trigger/misconfig), compensate via stock movement.
       if (desiredStock !== null && stockAfterInsert !== null && stockAfterInsert > desiredStock) {
         const missingOut = stockAfterInsert - desiredStock;
-        await insertStockOutMovement(delivery.ppe_id, missingOut, `Entrega de EPI (${normalizedReason})`);
+        await insertStockOutMovement(delivery.ppe_id, missingOut, `Entrega de EPI (${reasonVariant})`);
       }
+    };
 
-      return firstInsertResult.data[0];
-    }
+    // 3. Salva o registro na tabela de entregas
+    const baseInsertPayload = await withCompanyId({
+      ...delivery,
+      reason: normalizedReason,
+      signature_url: signatureUrl,
+      delivery_date: delivery.delivery_date || new Date().toISOString(),
+    } as Record<string, unknown>);
 
-    let insertError = firstInsertResult.error;
+    let insertError: unknown = null;
 
-    if (isDeliverySchemaCompatibilityIssue(insertError)) {
-      const fallbackPayload = {
-        ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
-        employee_id: insertPayload.employee_id,
-        ppe_id: insertPayload.ppe_id,
-        reason: insertPayload.reason,
-        quantity: insertPayload.quantity,
-        signature_url: insertPayload.signature_url,
-        ip_address: insertPayload.ip_address,
-        delivery_date: insertPayload.delivery_date,
+    for (const reasonVariant of reasonVariants) {
+      const insertPayload: Record<string, unknown> = {
+        ...baseInsertPayload,
+        reason: reasonVariant,
       };
 
-      const fallbackResult = await withSessionRetry(() =>
+      const firstInsertResult = await withSessionRetry(() =>
         supabase
           .from('deliveries')
-          .insert([fallbackPayload])
+          .insert([insertPayload])
           .select()
       );
 
-      if (!fallbackResult.error && fallbackResult.data?.[0]) {
-        const stockAfterInsert = await getPpeCurrentStock(delivery.ppe_id);
-        const desiredStock = stockBefore === null ? null : Math.max(0, stockBefore - delivery.quantity);
-
-        if (desiredStock !== null && stockAfterInsert !== null && stockAfterInsert > desiredStock) {
-          const missingOut = stockAfterInsert - desiredStock;
-          await insertStockOutMovement(delivery.ppe_id, missingOut, `Entrega de EPI (${normalizedReason})`);
-        }
-
-        return fallbackResult.data[0];
+      if (!firstInsertResult.error && firstInsertResult.data?.[0]) {
+        await syncStockIfNeeded(reasonVariant);
+        return firstInsertResult.data[0];
       }
 
-      insertError = fallbackResult.error;
+      insertError = firstInsertResult.error;
+
+      if (isDeliverySchemaCompatibilityIssue(insertError)) {
+        const fallbackPayload = {
+          ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
+          employee_id: insertPayload.employee_id,
+          ppe_id: insertPayload.ppe_id,
+          reason: insertPayload.reason,
+          quantity: insertPayload.quantity,
+          signature_url: insertPayload.signature_url,
+          ip_address: insertPayload.ip_address,
+          delivery_date: insertPayload.delivery_date,
+        };
+
+        const fallbackResult = await withSessionRetry(() =>
+          supabase
+            .from('deliveries')
+            .insert([fallbackPayload])
+            .select()
+        );
+
+        if (!fallbackResult.error && fallbackResult.data?.[0]) {
+          await syncStockIfNeeded(reasonVariant);
+          return fallbackResult.data[0];
+        }
+
+        insertError = fallbackResult.error;
+      }
+
+      if (!isDeliveryReasonConstraintIssue(insertError)) break;
     }
 
     if (isDeliveryReasonConstraintIssue(insertError)) {
       throw new Error(
-        "Falha ao salvar entrega por incompatibilidade de motivo no banco. Verifique o CHECK da coluna reason na tabela deliveries."
+        "Motivo da entrega nao aceito pelo banco. Atualize o CHECK da coluna reason em deliveries para aceitar Substituição (Desgaste/Validade)."
       );
     }
 
