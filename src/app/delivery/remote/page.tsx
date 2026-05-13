@@ -330,11 +330,20 @@ function RemoteDeliveryContent() {
         })
       } catch (archiveError) {
         const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
-        const securityPolicyIssue = message.toLowerCase().includes("row-level security")
-        toast.warning(securityPolicyIssue
-          ? "Assinatura salva. O arquivo juridico nao foi arquivado por regra de seguranca do Storage."
-          : message
-        )
+        const lowerMessage = message.toLowerCase()
+        const securityPolicyIssue = lowerMessage.includes("row-level security")
+        const payloadTooLarge = lowerMessage.includes("function_payload_too_large")
+          || lowerMessage.includes("request entity too large")
+          || lowerMessage.includes("payload too large")
+
+        if (payloadTooLarge) {
+          console.warn("PDF assinado gerado, mas o arquivo juridico excedeu o limite da funcao:", archiveError)
+        } else {
+          toast.warning(securityPolicyIssue
+            ? "Assinatura salva. O arquivo juridico nao foi arquivado por regra de seguranca do Storage."
+            : message
+          )
+        }
       }
 
       const pdfUrl = URL.createObjectURL(pdfBlob)

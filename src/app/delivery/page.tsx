@@ -36,6 +36,7 @@ type PendingDeliveryDraft = {
   linkUrl: string
   status: RemoteLinkStatus
   expiresAt: string | null
+  companyId?: string | null
   employeeId: string
   employeeName: string
   workplaceId: string
@@ -297,6 +298,7 @@ export default function DeliveryPage() {
       linkUrl: localDraft?.linkUrl || `${baseUrl}/delivery/remote?t=${link.token}`,
       status: link.status || "pending",
       expiresAt: link.expires_at || localDraft?.expiresAt || null,
+      companyId: link.company_id || localDraft?.companyId || null,
       employeeId: getStringFromData(data, "e") || link.employee_id || localDraft?.employeeId || "",
       employeeName: localDraft?.employeeName || getStringFromData(data, "employeeName") || link.employee?.full_name || "Colaborador",
       workplaceId: getStringFromData(data, "w") || localDraft?.workplaceId || "",
@@ -314,7 +316,10 @@ export default function DeliveryPage() {
   const loadPendingDrafts = useCallback(async () => {
     if (typeof window === "undefined") return
 
-    const localDrafts = readLocalPendingDrafts()
+    const currentCompanyId = api.getMasterCompanyContext()
+    const localDrafts = readLocalPendingDrafts().filter((draft) =>
+      !currentCompanyId || draft.companyId === currentCompanyId
+    )
     const byToken = new Map(localDrafts.map((draft) => [draft.token, draft]))
     setPendingDrafts(localDrafts.sort((a, b) => (b.expiresAt || "").localeCompare(a.expiresAt || "")))
 
@@ -602,7 +607,17 @@ export default function DeliveryPage() {
         })
       } catch (archiveError) {
         const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
-        toast.warning(message)
+        const lowerMessage = message.toLowerCase()
+        const payloadTooLarge = lowerMessage.includes("function_payload_too_large")
+          || lowerMessage.includes("request entity too large")
+          || lowerMessage.includes("payload too large")
+
+        if (payloadTooLarge) {
+          console.warn("PDF assinado gerado, mas o arquivo juridico excedeu o limite da funcao:", archiveError)
+          toast.info("Entrega salva. O PDF ficou disponivel para baixar, mas o arquivo juridico excedeu o limite automatico.")
+        } else {
+          toast.warning(message)
+        }
       }
       
       const pdfUrl = URL.createObjectURL(pdfBlob)
@@ -694,6 +709,7 @@ export default function DeliveryPage() {
           linkUrl: url,
           status: "pending",
           expiresAt: data.link.expires_at,
+          companyId: selectedEmployee?.company_id || api.getMasterCompanyContext() || null,
           employeeId: selectedEmployeeId,
           employeeName: selectedEmployee?.full_name || "Colaborador",
           workplaceId: selectedWorkplaceId,
@@ -785,6 +801,7 @@ export default function DeliveryPage() {
         linkUrl: url,
         status: "pending",
         expiresAt: data.link.expires_at,
+        companyId: selectedEmployee?.company_id || api.getMasterCompanyContext() || null,
         employeeId: selectedEmployeeId,
         employeeName: selectedEmployee?.full_name || "Colaborador",
         workplaceId: selectedWorkplaceId,

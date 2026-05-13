@@ -397,6 +397,34 @@ async function withCompanyId<T extends Record<string, unknown>>(payload: T): Pro
   return companyId ? { ...payload, company_id: companyId } : payload;
 }
 
+async function uploadDeliverySignature(
+  signatureFile: File,
+  employeeId: string,
+  authMethod?: Delivery["auth_method"] | null,
+): Promise<string> {
+  const formData = new FormData();
+  const companyId = await getCurrentCompanyId();
+  const storedMasterCompanyId = getStoredMasterCompanyId();
+  const targetCompanyId = companyId || storedMasterCompanyId;
+
+  formData.append("signatureFile", signatureFile);
+  formData.append("employee_id", employeeId);
+  if (authMethod) formData.append("auth_method", authMethod);
+  if (targetCompanyId) formData.append("company_id", targetCompanyId);
+
+  const response = await fetchWithAuthRetry("/api/signature-upload", {
+    method: "POST",
+    body: formData,
+  });
+  const result = await readResponseJson<{ error?: string; publicUrl?: string }>(response);
+
+  if (!response.ok || !result.publicUrl) {
+    throw new Error(result.error || "Nao foi possivel salvar a assinatura.");
+  }
+
+  return result.publicUrl;
+}
+
 async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
   const { data, error } = await withSessionRetry(() =>
     supabase
@@ -590,6 +618,10 @@ export const api = {
 
   getMasterCompanyContext() {
     return getStoredMasterCompanyId();
+  },
+
+  async getCurrentCompanyContext() {
+    return getCurrentCompanyId();
   },
 
   setMasterCompanyContext(companyId: string | null) {
@@ -1021,29 +1053,24 @@ export const api = {
   // --- Colaboradores ---
   async getEmployees() {
     const companyId = await getCurrentCompanyId();
-    let hasSoftDeleteColumn = true;
-    const buildQuery = (includeSoftDeleteFilter: boolean) => {
+    const buildQuery = () => {
       let query = supabase
         .from('employees')
         .select('*')
         .order('full_name', { ascending: true });
       if (companyId) query = query.eq('company_id', companyId);
-      if (includeSoftDeleteFilter) query = query.is('deleted_at', null);
       return query;
     };
 
-    let { data, error } = await withSessionRetry(() => buildQuery(true));
-
-    if (error && isMissingEmployeeSoftDeleteColumnIssue(error)) {
-      hasSoftDeleteColumn = false;
-      const fallback = await withSessionRetry(() => buildQuery(false));
-      data = fallback.data;
-      error = fallback.error;
-    }
+    const { data, error } = await withSessionRetry(() => buildQuery());
     
     if (error) throw error;
 
-    let employees = (data as Employee[]).filter(employee => !employee.deleted_at);
+    const rows = (data || []) as Employee[];
+    const hasSoftDeleteColumn = rows.some((employee) =>
+      Object.prototype.hasOwnProperty.call(employee as Record<string, unknown>, "deleted_at")
+    );
+    let employees = rows.filter(employee => !employee.deleted_at);
 
     if (!hasSoftDeleteColumn) {
       const archivedIds = await getArchivedEmployeeIds(companyId);
@@ -1335,22 +1362,8 @@ export const api = {
     const normalizedReason = reasonVariants[0] as Delivery["reason"];
     const stockBefore = await getPpeCurrentStock(delivery.ppe_id);
 
-    // 1. Se houver imagem da assinatura, faz o upload para o Storage
     if (signatureFile) {
-      const prefix = delivery.auth_method === 'facial' ? 'bio_' : 'sig_';
-      const fileName = `${prefix}${Date.now()}_${delivery.employee_id}.png`;
-      const { error: storageError } = await supabase.storage
-        .from('ppe_signatures')
-        .upload(fileName, signatureFile);
-      
-      if (storageError) throw storageError;
-
-      // 2. Pega a URL pública do arquivo
-      const { data: { publicUrl } } = supabase.storage
-        .from('ppe_signatures')
-        .getPublicUrl(fileName);
-      
-      signatureUrl = publicUrl;
+      signatureUrl = await uploadDeliverySignature(signatureFile, delivery.employee_id, delivery.auth_method);
     }
 
     const syncStockIfNeeded = async (reasonVariant: string) => {
