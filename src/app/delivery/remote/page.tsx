@@ -330,7 +330,11 @@ function RemoteDeliveryContent() {
         })
       } catch (archiveError) {
         const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
-        toast.warning(message)
+        const securityPolicyIssue = message.toLowerCase().includes("row-level security")
+        toast.warning(securityPolicyIssue
+          ? "Assinatura salva. O arquivo juridico nao foi arquivado por regra de seguranca do Storage."
+          : message
+        )
       }
 
       const pdfUrl = URL.createObjectURL(pdfBlob)

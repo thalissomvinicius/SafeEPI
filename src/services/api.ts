@@ -599,7 +599,12 @@ export const api = {
   async archiveSignedDocument(payload: SignedDocumentArchivePayload) {
     const formData = new FormData();
     const sha256Hash = payload.sha256Hash || await sha256Hex(payload.pdfBlob);
-    const companyId = await getCurrentCompanyId();
+    let companyId: string | null = null;
+    try {
+      companyId = await getCurrentCompanyId();
+    } catch (error) {
+      if (!payload.linkToken) throw error;
+    }
 
     formData.append("document_type", payload.documentType);
     if (companyId) formData.append("company_id", companyId);

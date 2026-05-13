@@ -55,20 +55,26 @@ async function resolveUserId(request: Request) {
   return data.user.id
 }
 
-async function validateRemoteLink(linkToken: string | null, employeeId: string | null) {
-  if (!linkToken) return false
+type RemoteLinkValidationResult =
+  | { ok: true; companyId: string | null }
+  | { ok: false }
+
+async function validateRemoteLink(linkToken: string | null, employeeId: string | null): Promise<RemoteLinkValidationResult> {
+  if (!linkToken) return { ok: false }
 
   const { data: link } = await supabaseAdmin
     .from("remote_links")
-    .select("employee_id,status,expires_at")
+    .select("employee_id,company_id,status,expires_at")
     .eq("token", linkToken)
     .maybeSingle()
 
-  if (!link) return false
-  if (employeeId && link.employee_id !== employeeId) return false
-  if (new Date(link.expires_at) < new Date()) return false
+  if (!link) return { ok: false }
+  if (employeeId && link.employee_id !== employeeId) return { ok: false }
+  if (new Date(link.expires_at) < new Date()) return { ok: false }
 
-  return link.status === "completed" || link.status === "pending"
+  if (link.status !== "completed" && link.status !== "pending") return { ok: false }
+
+  return { ok: true, companyId: link.company_id || null }
 }
 
 function getFileExtension(file: File) {
@@ -85,6 +91,7 @@ export async function POST(request: Request) {
     const employeeId = String(formData.get("employee_id") || "") || null
     const linkToken = String(formData.get("link_token") || "") || null
     const createdBy = await resolveUserId(request)
+    let remoteCompanyId: string | null = null
 
     if (!pdfFile || !(pdfFile instanceof File) || pdfFile.size === 0) {
       return NextResponse.json({ error: "PDF assinado nao informado." }, { status: 400 })
@@ -95,10 +102,11 @@ export async function POST(request: Request) {
     }
 
     if (!createdBy) {
-      const remoteLinkOk = await validateRemoteLink(linkToken, employeeId)
-      if (!remoteLinkOk) {
+      const remoteLink = await validateRemoteLink(linkToken, employeeId)
+      if (!remoteLink.ok) {
         return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
       }
+      remoteCompanyId = remoteLink.companyId
     }
 
     const sha256Hash = String(formData.get("sha256_hash") || "").trim()
@@ -154,7 +162,7 @@ export async function POST(request: Request) {
       .filter((id) => typeof id === "string" && id.length > 0)
 
     const metadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
-    const companyId = String(formData.get("company_id") || "") || null
+    const companyId = String(formData.get("company_id") || "") || remoteCompanyId
     const insertPayload = {
       company_id: companyId,
       document_type: documentType,
