@@ -228,6 +228,20 @@ function isMissingDeliveryReturnMotiveIssue(error: unknown): boolean {
   );
 }
 
+function shouldRestockReturnedDelivery(motive: string): boolean {
+  const normalized = motive
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return !(
+    normalized.includes("perda") ||
+    normalized.includes("extravio") ||
+    normalized.includes("dano") ||
+    normalized.includes("quebra")
+  );
+}
+
 function isMissingCatalogTableIssue(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as SupabaseLikeError & { status?: number };
@@ -1477,7 +1491,7 @@ export const api = {
     );
 
     if (!error) {
-      if (deliveryBefore?.ppe_id && quantityToReturn > 0) {
+      if (deliveryBefore?.ppe_id && quantityToReturn > 0 && shouldRestockReturnedDelivery(motive)) {
         await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`, deliveryId);
       }
       return;
@@ -1492,7 +1506,7 @@ export const api = {
       );
 
       if (!fallbackError) {
-        if (deliveryBefore?.ppe_id && quantityToReturn > 0) {
+        if (deliveryBefore?.ppe_id && quantityToReturn > 0 && shouldRestockReturnedDelivery(motive)) {
           await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`, deliveryId);
         }
         return;
@@ -1542,7 +1556,9 @@ export const api = {
 
     if (error) throw error;
 
-    await insertStockInMovement(delivery.ppe_id, quantityToReturn, `Baixa parcial por substituicao (${motive})`, deliveryId);
+    if (shouldRestockReturnedDelivery(motive)) {
+      await insertStockInMovement(delivery.ppe_id, quantityToReturn, `Baixa parcial por substituicao (${motive})`, deliveryId);
+    }
   },
 
   async returnMultipleDeliveries(deliveryIds: string[], motive: string) {
