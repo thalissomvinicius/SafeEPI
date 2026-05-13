@@ -7,7 +7,7 @@ import QRCode from "qrcode"
 import { DeliveryWithRelations, Employee, PPE } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
 import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
-import { formatDateOnly, getDaysUntilDateOnly } from "@/lib/dateOnly"
+import { formatDateOnly, formatDeliveryDate, formatDeliveryTime, getDaysUntilDateOnly } from "@/lib/dateOnly"
 import { calculateTrainingValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
 
 /**
@@ -952,7 +952,7 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
     startY: 123,
     head: [["Data", "Colaborador", "EPI (C.A.)", "Qtd", "Local"]],
     body: recentDeliveries.length > 0 ? recentDeliveries.map(d => [
-      format(new Date(d.delivery_date), "dd/MM/yyyy HH:mm"),
+      `${formatDeliveryDate(d.delivery_date)} ${formatDeliveryTime(d.delivery_date)}`,
       d.employee?.full_name || 'N/A',
       `${d.ppe?.name || 'N/A'} (${d.ppe?.ca_number || 'N/A'})`,
       String(d.quantity),
@@ -1786,7 +1786,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
     startY: cardY + cardH + 8,
     head: [["Data", "Colaborador", "EPI / CA", "Qtd", "Tipo", "Unidade"]],
     body: data.movements.map(m => [
-      format(new Date(m.delivery_date), "dd/MM/yyyy"),
+      formatDeliveryDate(m.delivery_date),
       m.employee?.full_name || "-",
       `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
       String(m.quantity),
@@ -2055,7 +2055,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     head: [["#", "Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade", "Assinatura"]],
     body: data.movements.map((m, idx) => [
       String(idx + 1),
-      format(new Date(m.delivery_date), "dd/MM/yyyy HH:mm"),
+      `${formatDeliveryDate(m.delivery_date)} ${formatDeliveryTime(m.delivery_date)}`,
       m.employee?.full_name || "-",
       m.employee?.cpf || "-",
       `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,

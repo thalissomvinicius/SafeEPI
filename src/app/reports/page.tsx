@@ -11,7 +11,7 @@ import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
 import { DeliveryWithRelations, PPE, Training, Workplace } from "@/types/database"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
-import { getDaysUntilDateOnly } from "@/lib/dateOnly"
+import { getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 
@@ -110,7 +110,10 @@ export default function ReportsPage() {
           cutoff.setDate(cutoff.getDate() - 90)
         }
         
-        filteredDeliveries = rawDeliveries.filter(d => new Date(d.delivery_date) >= cutoff)
+        filteredDeliveries = rawDeliveries.filter(d => {
+          const deliveryDate = parseDeliveryDateTime(d.delivery_date)
+          return deliveryDate ? deliveryDate >= cutoff : false
+        })
         filteredTrainings = rawTrainings.filter(t => new Date(t.completion_date) >= cutoff)
       }
     }

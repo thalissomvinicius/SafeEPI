@@ -13,7 +13,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
-import { isDateOnlyPast } from "@/lib/dateOnly"
+import { isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "sonner"
 
 interface CartItem {
@@ -404,6 +404,7 @@ export default function DeliveryPage() {
       const signatureFile = new File([blob], "signature.png", { type: "image/png" })
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
       const persistedAuthMethod: Delivery['auth_method'] = authMethod
+      const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)
 
       const savedDeliveries: Delivery[] = []
       const autoReturnedDeliveryIds: string[] = []
@@ -419,7 +420,7 @@ export default function DeliveryPage() {
           ip_address: ipAddress || "Desconhecido",
           auth_method: persistedAuthMethod,
           signature_url: null,
-          delivery_date: new Date(deliveryDate).toISOString()
+          delivery_date: selectedDeliveryDateIso
         }, signatureFile)
         savedDeliveries.push(savedDelivery as Delivery)
 
@@ -460,7 +461,7 @@ export default function DeliveryPage() {
         ipAddress,
         location,
         validationHash,
-        deliveryDate: new Date(deliveryDate).toISOString()
+        deliveryDate: selectedDeliveryDateIso
       })
       
       const shortId = validationHash.slice(0, 8)
@@ -624,6 +625,7 @@ export default function DeliveryPage() {
 
     try {
       setIsSaving(true)
+      const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)
       const savedDeliveries: Delivery[] = []
       const autoReturnedDeliveryIds: string[] = []
 
@@ -637,7 +639,7 @@ export default function DeliveryPage() {
           ip_address: ipAddress || "Desconhecido",
           auth_method: "manual",
           signature_url: null,
-          delivery_date: new Date(deliveryDate).toISOString()
+          delivery_date: selectedDeliveryDateIso
         })
         savedDeliveries.push(savedDelivery as Delivery)
 

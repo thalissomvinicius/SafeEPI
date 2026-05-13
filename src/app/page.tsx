@@ -7,7 +7,7 @@ import { api } from "@/services/api"
 import { DeliveryWithRelations } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts"
-import { getDaysUntilDateOnly } from "@/lib/dateOnly"
+import { formatDeliveryDate, getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
 
 function DashboardSkeleton() {
   return (
@@ -87,7 +87,7 @@ export default function Dashboard() {
           date.setDate(date.getDate() - (6 - i))
           const dateStr = date.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric' })
           const count = deliveryData.filter(d => 
-            new Date(d.delivery_date).toDateString() === date.toDateString()
+            parseDeliveryDateTime(d.delivery_date)?.toDateString() === date.toDateString()
           ).length
           return { name: dateStr, value: count }
         })
@@ -214,7 +214,7 @@ export default function Dashboard() {
                                 <span className="text-[9px] font-black text-slate-400">#{delivery.id.slice(0,4)}</span>
                             </div>
                             <p className="text-[10px] text-slate-500 font-medium">
-                                {delivery.ppe?.name} • {new Date(delivery.delivery_date).toLocaleDateString()}
+                                {delivery.ppe?.name} • {formatDeliveryDate(delivery.delivery_date)}
                             </p>
                             <div className="mt-3 flex items-center justify-between">
                                 <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[8px] font-black uppercase rounded tracking-widest border border-green-100">Assinado</span>

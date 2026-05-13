@@ -12,6 +12,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { generateReturnPDF } from "@/utils/pdfGenerator"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
+import { formatDeliveryDate } from "@/lib/dateOnly"
 import { toast } from "sonner"
 
 export default function ReturnsPage() {
@@ -326,7 +327,7 @@ export default function ReturnsPage() {
                     <div key={delivery.id} className="border border-slate-200 rounded-2xl p-4 flex justify-between items-center hover:border-slate-300 transition-colors">
                       <div>
                         <p className="font-bold text-slate-800 text-sm">{delivery.ppe?.name}</p>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest">Entregue em: {format(new Date(delivery.delivery_date), "dd/MM/yyyy")}</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-widest">Entregue em: {formatDeliveryDate(delivery.delivery_date)}</p>
                       </div>
                       <button 
                         onClick={() => handleStartReturn(delivery)}

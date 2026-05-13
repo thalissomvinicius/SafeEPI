@@ -11,6 +11,7 @@ import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
+import { toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "sonner"
 
 interface DeliveryData {
@@ -289,7 +290,7 @@ function RemoteDeliveryContent() {
         ipAddress,
         location,
         validationHash,
-        deliveryDate: deliveryData?.deliveryDate ? new Date(deliveryData.deliveryDate).toISOString() : undefined,
+        deliveryDate: deliveryData?.deliveryDate ? toLocalDeliveryDateISOString(deliveryData.deliveryDate) : undefined,
       })
 
       const shortId = validationHash.slice(0, 8)

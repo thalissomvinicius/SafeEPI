@@ -2,6 +2,7 @@ import * as XLSX from "xlsx"
 import { format } from "date-fns"
 import { COMPANY_CONFIG } from "@/config/company"
 import { DeliveryWithRelations } from "@/types/database"
+import { formatDeliveryDate } from "@/lib/dateOnly"
 
 function addHeaderToSheet(ws: XLSX.WorkSheet, title: string) {
   const headerData = [
@@ -32,7 +33,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
   const wb = XLSX.utils.book_new()
 
   const rows = deliveries.map((delivery) => ({
-    "Data Entrega": delivery.delivery_date ? format(new Date(delivery.delivery_date), "dd/MM/yyyy") : "",
+    "Data Entrega": formatDeliveryDate(delivery.delivery_date),
     Colaborador: delivery.employee?.full_name || "",
     CPF: delivery.employee?.cpf || "",
     Cargo: delivery.employee?.job_title || "",
@@ -108,7 +109,7 @@ export function exportEmployeeToExcel(
   const wb = XLSX.utils.book_new()
 
   const rows = deliveries.map((delivery) => ({
-    "Data Entrega": delivery.delivery_date ? format(new Date(delivery.delivery_date), "dd/MM/yyyy") : "",
+    "Data Entrega": formatDeliveryDate(delivery.delivery_date),
     EPI: delivery.ppe?.name || "",
     "No. C.A.": delivery.ppe?.ca_number || "",
     Quantidade: delivery.quantity || 1,

@@ -12,6 +12,7 @@ import { DeliveryWithRelations } from "@/types/database"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateMovementsSimplePDF, generateMovementsPresentationPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
+import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime, parseLocalDateOnly } from "@/lib/dateOnly"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 
@@ -79,16 +80,18 @@ export default function MovementsPage() {
       } else if (dateFilter === 'last90') {
         start = subDays(now, 90)
       } else if (dateFilter === 'custom' && customStartDate && customEndDate) {
-        start = new Date(customStartDate)
-        end = new Date(customEndDate + 'T23:59:59')
+        start = parseLocalDateOnly(customStartDate)
+        const localEnd = parseLocalDateOnly(customEndDate)
+        end = localEnd ? new Date(localEnd.getFullYear(), localEnd.getMonth(), localEnd.getDate(), 23, 59, 59, 999) : end
       } else if (dateFilter === 'specific_month' && specificMonth) {
-        start = new Date(specificMonth + '-01T00:00:00')
-        end = endOfMonth(start)
+        start = parseLocalDateOnly(`${specificMonth}-01`)
+        end = start ? endOfMonth(start) : end
       }
 
       if (start) {
         filtered = filtered.filter(d => {
-          const dDate = new Date(d.delivery_date)
+          const dDate = parseDeliveryDateTime(d.delivery_date)
+          if (!dDate) return false
           return isWithinInterval(dDate, { start: start!, end })
         })
       }
@@ -103,7 +106,11 @@ export default function MovementsPage() {
       )
     }
 
-    return filtered.sort((a, b) => new Date(b.delivery_date).getTime() - new Date(a.delivery_date).getTime())
+    return filtered.sort((a, b) => {
+      const dateA = parseDeliveryDateTime(a.delivery_date)?.getTime() || 0
+      const dateB = parseDeliveryDateTime(b.delivery_date)?.getTime() || 0
+      return dateB - dateA
+    })
   }
 
   const filteredMovements = getFilteredData()
@@ -382,8 +389,8 @@ export default function MovementsPage() {
                   <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
-                        <span className="font-bold text-slate-700">{format(new Date(move.delivery_date), "dd/MM/yyyy")}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{format(new Date(move.delivery_date), "HH:mm")}h</span>
+                        <span className="font-bold text-slate-700">{formatDeliveryDate(move.delivery_date)}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">{formatDeliveryTime(move.delivery_date)}h</span>
                       </div>
                     </td>
                     <td className="px-6 py-5">

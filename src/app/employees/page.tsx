@@ -16,6 +16,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { generateEmployeesReportPDF, generateNR06PDF } from "@/utils/pdfGenerator"
 import { formatCpf, isValidCpf } from "@/utils/cpf"
 import { copyTextToClipboard } from "@/utils/clipboard"
+import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime } from "@/lib/dateOnly"
 import { toast } from "sonner"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
@@ -774,15 +775,17 @@ export default function EmployeesPage() {
         items: employeeHistory.map(d => {
           const signedDocument = getSignedDocumentForDelivery(d.id)
           const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | null
+          const deliveryDate = parseDeliveryDateTime(d.delivery_date)
+          const expiryDate = deliveryDate && d.ppe ? addDays(deliveryDate, d.ppe.lifespan_days || 180) : null
 
           return {
-            deliveryDate: format(new Date(d.delivery_date), "dd/MM/yyyy"),
+            deliveryDate: formatDeliveryDate(d.delivery_date),
             ppeName: d.ppe?.name || "N/A",
             caNr: d.ppe?.ca_number || "N/A",
             quantity: d.quantity,
             reason: d.reason,
             returnedAt: d.returned_at,
-            isExpired: d.ppe ? isPast(addDays(new Date(d.delivery_date), d.ppe.lifespan_days || 180)) : false,
+            isExpired: expiryDate ? isPast(expiryDate) : false,
             authMethod,
             signatureUrl: d.signature_url || signedDocument?.signature_url || null,
             photoEvidenceUrl: signedDocument?.photo_evidence_url || null,
@@ -1851,46 +1854,54 @@ export default function EmployeesPage() {
                         </div>
                         
                         <div className="space-y-3">
-                          {employeeHistory.map((delivery) => (
-                            <div key={delivery.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 group">
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-black text-slate-800">{delivery.ppe?.name}</span>
-                                  <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">CA {delivery.ppe?.ca_number}</span>
-                                  <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-bold">Qtd: {delivery.quantity}</span>
+                          {employeeHistory.map((delivery) => {
+                            const deliveryDate = parseDeliveryDateTime(delivery.delivery_date)
+                            const exchangeDate = deliveryDate && delivery.ppe?.lifespan_days
+                              ? addDays(deliveryDate, delivery.ppe.lifespan_days)
+                              : null
+                            const exchangeIsPast = exchangeDate ? isPast(exchangeDate) : false
+
+                            return (
+                              <div key={delivery.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 group">
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-black text-slate-800">{delivery.ppe?.name}</span>
+                                    <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">CA {delivery.ppe?.ca_number}</span>
+                                    <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-bold">Qtd: {delivery.quantity}</span>
+                                  </div>
+                                  <div className="text-xs text-slate-500 font-medium flex flex-wrap gap-x-4 gap-y-1">
+                                    <span>Entregue: {formatDeliveryDate(delivery.delivery_date)} {formatDeliveryTime(delivery.delivery_date)}</span>
+                                    {exchangeDate && !delivery.returned_at && (
+                                      <span className={exchangeIsPast ? "text-red-600 font-black animate-pulse" : ""}>
+                                        Troca em: {format(exchangeDate, "dd/MM/yyyy")}
+                                        {exchangeIsPast && " • TROCA PENDENTE!"}
+                                      </span>
+                                    )}
+                                    <span>Motivo: {delivery.reason}</span>
+                                    {delivery.returned_at && (
+                                      <span className="text-[#2563EB] font-bold">
+                                        Baixado em: {format(new Date(delivery.returned_at), "dd/MM/yyyy")} ({delivery.return_motive})
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-slate-500 font-medium flex flex-wrap gap-x-4 gap-y-1">
-                                  <span>Entregue: {format(new Date(delivery.delivery_date), "dd/MM/yyyy HH:mm")}</span>
-                                  {delivery.ppe?.lifespan_days && !delivery.returned_at && (
-                                    <span className={isPast(addDays(new Date(delivery.delivery_date), delivery.ppe.lifespan_days)) ? "text-red-600 font-black animate-pulse" : ""}>
-                                      Troca em: {format(addDays(new Date(delivery.delivery_date), delivery.ppe.lifespan_days), "dd/MM/yyyy")}
-                                      {isPast(addDays(new Date(delivery.delivery_date), delivery.ppe.lifespan_days)) && " • TROCA PENDENTE!"}
-                                    </span>
-                                  )}
-                                  <span>Motivo: {delivery.reason}</span>
-                                  {delivery.returned_at && (
-                                    <span className="text-[#2563EB] font-bold">
-                                      Baixado em: {format(new Date(delivery.returned_at), "dd/MM/yyyy")} ({delivery.return_motive})
-                                    </span>
-                                  )}
-                                </div>
+
+                                {!delivery.returned_at && emp?.active && (
+                                  <button
+                                    onClick={() => handleReturnItem(delivery.id)}
+                                    className="text-[#2563EB] hover:bg-blue-50 text-[10px] font-black uppercase tracking-widest border border-blue-100 px-4 py-2 rounded-xl transition-all self-start sm:self-auto"
+                                  >
+                                    Dar Baixa
+                                  </button>
+                                )}
+                                {delivery.returned_at && (
+                                  <span className="flex items-center text-green-600 text-[10px] font-black uppercase tracking-widest self-start sm:self-auto bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
+                                    <ShieldCheck className="w-3 h-3 mr-1" /> Devolvido
+                                  </span>
+                                )}
                               </div>
-                              
-                              {!delivery.returned_at && emp?.active && (
-                                <button 
-                                  onClick={() => handleReturnItem(delivery.id)}
-                                  className="text-[#2563EB] hover:bg-blue-50 text-[10px] font-black uppercase tracking-widest border border-blue-100 px-4 py-2 rounded-xl transition-all self-start sm:self-auto"
-                                >
-                                  Dar Baixa
-                                </button>
-                              )}
-                              {delivery.returned_at && (
-                                <span className="flex items-center text-green-600 text-[10px] font-black uppercase tracking-widest self-start sm:self-auto bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
-                                  <ShieldCheck className="w-3 h-3 mr-1" /> Devolvido
-                                </span>
-                              )}
-                            </div>
-                          ))}
+                            )
+                          })}
                           {employeeHistory.length === 0 && (
                             <div className="text-center py-10 bg-white border border-slate-200 border-dashed rounded-2xl">
                               <ShieldAlert className="w-10 h-10 text-slate-300 mx-auto mb-3" />

@@ -6,6 +6,7 @@ import { api } from "@/services/api"
 import { DeliveryWithRelations, SignedDocument } from "@/types/database"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
+import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
 import { toast } from "sonner"
 
 export default function HistoryPage() {
@@ -184,8 +185,8 @@ export default function HistoryPage() {
                         <span className="text-[10px] text-slate-400 font-bold uppercase">CA {rec.ppe?.ca_number}</span>
                     </td>
                     <td className="px-6 py-5 text-slate-400 text-xs font-bold uppercase">
-                        {new Date(rec.delivery_date).toLocaleDateString()} <br/>
-                        {new Date(rec.delivery_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatDeliveryDate(rec.delivery_date)} <br/>
+                        {formatDeliveryTime(rec.delivery_date)}
                     </td>
                     <td className="px-6 py-5">
                         {signedDocument ? (
