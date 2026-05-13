@@ -1,40 +1,42 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
 type SupabaseLikeError = {
-  code?: string;
-  details?: string | null;
-  hint?: string | null;
-  message?: string;
-};
+  code?: string
+  details?: string | null
+  hint?: string | null
+  message?: string
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const TOKEN_REGEX = /^[0-9a-f]{64}$/i
+
+function isValidUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_REGEX.test(value)
+}
+
+function isValidToken(value: unknown): value is string {
+  return typeof value === "string" && TOKEN_REGEX.test(value)
+}
 
 function normalizeDeliveryReason(reason: string) {
   const normalized = reason
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
 
-  if (normalized.includes("primeira") || normalized.includes("prim")) return "Primeira Entrega";
-  if (normalized.includes("substitu")) return "Substituição (Desgaste/Validade)";
-  if (normalized.includes("perda")) return "Perda";
-  if (normalized.includes("dano")) return "Dano";
-  return "Primeira Entrega";
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === "object") {
-    const maybeError = error as SupabaseLikeError;
-    return maybeError.message || maybeError.details || maybeError.hint || JSON.stringify(error);
-  }
-  return "Erro interno do servidor";
+  if (normalized.includes("primeira") || normalized.includes("prim")) return "Primeira Entrega"
+  if (normalized.includes("substitu")) return "Substituição (Desgaste/Validade)"
+  if (normalized.includes("perda")) return "Perda"
+  if (normalized.includes("dano")) return "Dano"
+  return "Primeira Entrega"
 }
 
 function isDeliverySchemaCompatibilityIssue(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError;
-  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as SupabaseLikeError
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase()
 
   return (
     maybeError.code === "PGRST204" ||
@@ -42,271 +44,372 @@ function isDeliverySchemaCompatibilityIssue(error: unknown) {
     text.includes("schema cache") ||
     text.includes("could not find the") ||
     (text.includes("column") && (text.includes("auth_method") || text.includes("workplace_id")))
-  );
+  )
 }
 
 function isMissingReturnMotiveIssue(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError;
-  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as SupabaseLikeError
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase()
 
   return (
     (maybeError.code === "PGRST204" || maybeError.code === "42703") &&
     text.includes("return_motive")
-  );
+  )
 }
 
 function shouldAutoReturnReason(reason: string) {
-  return reason !== "Primeira Entrega";
+  return reason !== "Primeira Entrega"
 }
 
 function getAutoReturnMotive(reason: string) {
   const normalized = reason
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
 
-  if (normalized.includes("perda")) return "Baixa automatica por perda/extravio";
-  if (normalized.includes("dano")) return "Baixa automatica por dano/quebra";
-  return "Baixa automatica por substituicao";
+  if (normalized.includes("perda")) return "Baixa automatica por perda/extravio"
+  if (normalized.includes("dano")) return "Baixa automatica por dano/quebra"
+  return "Baixa automatica por substituicao"
+}
+
+function getDeliveryIdsFromLinkData(data: unknown): string[] {
+  if (!data || typeof data !== "object") return []
+  const deliveryIds = (data as { deliveryIds?: unknown }).deliveryIds
+  if (!Array.isArray(deliveryIds)) return []
+  return deliveryIds.filter((id): id is string => isValidUuid(id))
+}
+
+function isSignatureOnlyLinkData(data: unknown) {
+  return (
+    !!data &&
+    typeof data === "object" &&
+    (data as { signaturePendingOnly?: unknown }).signaturePendingOnly === true
+  )
+}
+
+function getStringArrayFromLinkData(data: unknown, key: string): string[] {
+  if (!data || typeof data !== "object") return []
+  const value = (data as Record<string, unknown>)[key]
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
 export async function POST(req: Request) {
   try {
-    // Inicializa o cliente DENTRO da função para evitar erros de build na Vercel 
-    // se a variável de ambiente não estiver disponível durante a compilação estática.
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error("Variáveis de ambiente do Supabase ausentes no servidor.");
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 });
+      console.error("Variáveis de ambiente do Supabase ausentes no servidor.")
+      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
 
-    const formData = await req.formData();
-    
-    const employee_id = formData.get('employee_id') as string;
-    const ppe_id = formData.get('ppe_id') as string;
-    const workplace_id = formData.get('workplace_id') as string | null;
-    const reason = normalizeDeliveryReason(formData.get('reason') as string || 'Primeira Entrega');
-    const quantity = parseInt(formData.get('quantity') as string || '1');
-    const ip_address = formData.get('ip_address') as string;
-    const auth_method = formData.get('auth_method') as string || 'manual';
-    const signatureFile = formData.get('signatureFile') as File | null;
-    const token = formData.get('token') as string | null;
+    const formData = await req.formData()
 
-    if (!employee_id || !ppe_id) {
-      return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
+    const employee_id = formData.get("employee_id") as string
+    const ppe_id = formData.get("ppe_id") as string
+    const workplace_id = formData.get("workplace_id") as string | null
+    const reason = normalizeDeliveryReason((formData.get("reason") as string) || "Primeira Entrega")
+    const quantityRaw = Number(formData.get("quantity"))
+    const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 && quantityRaw <= 1000
+      ? Math.floor(quantityRaw)
+      : 1
+    const ip_address = formData.get("ip_address") as string
+    const auth_method = (formData.get("auth_method") as string) || "manual"
+    const signatureFile = formData.get("signatureFile") as File | null
+    const token = formData.get("token") as string | null
+
+    if (!isValidUuid(employee_id) || !isValidUuid(ppe_id)) {
+      return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 })
     }
 
-    // Validação de Token se fornecido
-    if (token) {
-      const { data: link, error: linkError } = await supabaseAdmin
-        .from('remote_links')
-        .select('*')
-        .eq('token', token)
-        .eq('status', 'pending')
-        .single()
-
-      if (linkError || !link) {
-        return NextResponse.json({ error: 'Este link já foi utilizado ou é inválido.' }, { status: 403 })
-      }
-
-      if (new Date(link.expires_at) < new Date()) {
-        await supabaseAdmin.from('remote_links').update({ status: 'expired' }).eq('id', link.id)
-        return NextResponse.json({ error: 'Este link expirou.' }, { status: 403 })
-      }
+    // Token agora é OBRIGATÓRIO. Sem token não há rota pública pra criar
+    // entrega — operações autenticadas usam a rota normal /deliveries.
+    if (!isValidToken(token)) {
+      return NextResponse.json({ error: "Token inválido." }, { status: 401 })
     }
 
-    let signatureUrl = null;
+    const { data: link } = await supabaseAdmin
+      .from("remote_links")
+      .select("id, employee_id, company_id, type, status, expires_at, data")
+      .eq("token", token)
+      .maybeSingle()
 
-    // 1. Upload da assinatura usando a chave de Admin
+    if (!link) {
+      return NextResponse.json({ error: "Link não encontrado." }, { status: 404 })
+    }
+    if (link.employee_id !== employee_id) {
+      return NextResponse.json({ error: "Link não corresponde ao colaborador." }, { status: 403 })
+    }
+    if (link.type !== "delivery") {
+      return NextResponse.json({ error: "Tipo de link incompatível." }, { status: 403 })
+    }
+    if (new Date(link.expires_at) < new Date()) {
+      await supabaseAdmin.from("remote_links").update({ status: "expired" }).eq("id", link.id)
+      return NextResponse.json({ error: "Este link expirou." }, { status: 410 })
+    }
+    if (link.status !== "pending") {
+      return NextResponse.json({ error: "Este link já foi utilizado." }, { status: 410 })
+    }
+
+    // Reivindica o link de forma atômica antes de fazer qualquer escrita.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from("remote_links")
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", link.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle()
+
+    if (claimError || !claimed) {
+      return NextResponse.json({ error: "Link já consumido por outra requisição." }, { status: 409 })
+    }
+
+    const companyId = link.company_id || null
+
+    let signatureUrl: string | null = null
     if (signatureFile && signatureFile.size > 0) {
-      // Prefix filename with auth method to distinguish in history
-      const prefix = auth_method === 'facial' ? 'bio_' : 'sig_';
-      const fileName = `${prefix}${Date.now()}_${employee_id}.png`;
+      // Limita tamanho a ~3 MB.
+      if (signatureFile.size > 3 * 1024 * 1024) {
+        return NextResponse.json({ error: "Arquivo de assinatura excede 3MB." }, { status: 413 })
+      }
+      const prefix = auth_method === "facial" ? "bio_" : "sig_"
+      const fileName = `${prefix}${Date.now()}_${employee_id}.png`
       const { error: storageError } = await supabaseAdmin.storage
-        .from('ppe_signatures')
-        .upload(fileName, signatureFile);
-      
+        .from("ppe_signatures")
+        .upload(fileName, signatureFile)
+
       if (storageError) {
-        console.error("Storage upload error:", storageError);
-        throw new Error("Erro ao fazer upload da assinatura no Storage");
+        console.error("[/api/remote-delivery] storage error:", storageError)
+        return NextResponse.json({ error: "Falha ao salvar assinatura." }, { status: 500 })
       }
 
       const { data: { publicUrl } } = supabaseAdmin.storage
-        .from('ppe_signatures')
-        .getPublicUrl(fileName);
-      
-      signatureUrl = publicUrl;
+        .from("ppe_signatures")
+        .getPublicUrl(fileName)
+
+      signatureUrl = publicUrl
     }
 
-    const { data: beforeStockData, error: beforeStockError } = await supabaseAdmin
-      .from('ppes')
-      .select('current_stock')
-      .eq('id', ppe_id)
-      .maybeSingle();
-    if (beforeStockError) throw beforeStockError;
-    const stockBeforeRaw = (beforeStockData as { current_stock?: number | string } | null)?.current_stock;
-    const stockBefore =
-      typeof stockBeforeRaw === 'number'
-        ? stockBeforeRaw
-        : typeof stockBeforeRaw === 'string' && Number.isFinite(Number(stockBeforeRaw))
-          ? Number(stockBeforeRaw)
-          : null;
+    // Confirma que o ppe pertence à mesma empresa do link.
+    const signatureOnlyDeliveryIds = getDeliveryIdsFromLinkData(link.data)
+    if (isSignatureOnlyLinkData(link.data) && signatureOnlyDeliveryIds.length > 0) {
+      const { data: existingDeliveries, error: existingError } = await supabaseAdmin
+        .from("deliveries")
+        .select("id, employee_id, company_id, ppe_id, quantity, reason, delivery_date")
+        .in("id", signatureOnlyDeliveryIds)
 
-    // 2. Insere a entrega no banco usando a chave de Admin
-    const insertPayload = {
+      if (existingError) {
+        console.error("[/api/remote-delivery] existing delivery fetch error:", existingError)
+        return NextResponse.json({ error: "Falha ao localizar entregas pendentes de assinatura." }, { status: 500 })
+      }
+
+      const validDeliveries = (existingDeliveries || []).filter((delivery: { employee_id?: string; company_id?: string | null }) =>
+        delivery.employee_id === employee_id &&
+        (!companyId || !delivery.company_id || delivery.company_id === companyId)
+      )
+
+      if (validDeliveries.length !== signatureOnlyDeliveryIds.length) {
+        return NextResponse.json({ error: "Entrega pendente nao pertence ao colaborador ou empresa do link." }, { status: 403 })
+      }
+
+      const updatePayload: Record<string, unknown> = {
+        signature_url: signatureUrl,
+        auth_method,
+        ip_address,
+      }
+
+      const { data: updatedDeliveries, error: updateError } = await supabaseAdmin
+        .from("deliveries")
+        .update(updatePayload)
+        .in("id", signatureOnlyDeliveryIds)
+        .select()
+
+      if (updateError && isDeliverySchemaCompatibilityIssue(updateError)) {
+        const { data: fallbackUpdated, error: fallbackUpdateError } = await supabaseAdmin
+          .from("deliveries")
+          .update({ signature_url: signatureUrl, ip_address })
+          .in("id", signatureOnlyDeliveryIds)
+          .select()
+
+        if (fallbackUpdateError) {
+          console.error("[/api/remote-delivery] fallback signature update error:", fallbackUpdateError)
+          return NextResponse.json({ error: "Falha ao salvar assinatura na entrega existente." }, { status: 500 })
+        }
+
+        return NextResponse.json({
+          success: true,
+          data: fallbackUpdated?.[0] || validDeliveries[0],
+          deliveries: fallbackUpdated || validDeliveries,
+          deliveryIds: signatureOnlyDeliveryIds,
+          signatureOnly: true,
+          autoReturnedDeliveryIds: getStringArrayFromLinkData(link.data, "autoReturnedDeliveryIds"),
+        })
+      }
+
+      if (updateError) {
+        console.error("[/api/remote-delivery] signature update error:", updateError)
+        return NextResponse.json({ error: "Falha ao salvar assinatura na entrega existente." }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: updatedDeliveries?.[0] || validDeliveries[0],
+        deliveries: updatedDeliveries || validDeliveries,
+        deliveryIds: signatureOnlyDeliveryIds,
+        signatureOnly: true,
+        autoReturnedDeliveryIds: getStringArrayFromLinkData(link.data, "autoReturnedDeliveryIds"),
+      })
+    }
+
+    const { data: ppe } = await supabaseAdmin
+      .from("ppes")
+      .select("id, company_id, current_stock")
+      .eq("id", ppe_id)
+      .maybeSingle()
+
+    if (!ppe || (companyId && ppe.company_id && ppe.company_id !== companyId)) {
+      return NextResponse.json({ error: "EPI não pertence à empresa do link." }, { status: 403 })
+    }
+
+    const stockBefore =
+      typeof ppe.current_stock === "number" ? ppe.current_stock : null
+
+    const insertPayload: Record<string, unknown> = {
       employee_id,
       ppe_id,
-      workplace_id: workplace_id === 'null' || !workplace_id ? null : workplace_id,
+      workplace_id: workplace_id === "null" || !workplace_id ? null : workplace_id,
       reason,
       quantity,
       ip_address,
       signature_url: signatureUrl,
       auth_method,
-      delivery_date: new Date().toISOString()
-    };
+      delivery_date: new Date().toISOString(),
+    }
+    if (companyId) insertPayload.company_id = companyId
 
     let { data, error } = await supabaseAdmin
-      .from('deliveries')
+      .from("deliveries")
       .insert([insertPayload])
-      .select();
+      .select()
 
     if (error && isDeliverySchemaCompatibilityIssue(error)) {
       const fallbackPayload = {
-        employee_id: insertPayload.employee_id,
-        ppe_id: insertPayload.ppe_id,
-        reason: insertPayload.reason,
-        quantity: insertPayload.quantity,
-        ip_address: insertPayload.ip_address,
-        signature_url: insertPayload.signature_url,
+        ...(companyId ? { company_id: companyId } : {}),
+        employee_id,
+        ppe_id,
+        reason,
+        quantity,
+        ip_address,
+        signature_url: signatureUrl,
         delivery_date: insertPayload.delivery_date,
-      };
-
+      }
       const fallbackResult = await supabaseAdmin
-        .from('deliveries')
+        .from("deliveries")
         .insert([fallbackPayload])
-        .select();
-
-      data = fallbackResult.data;
-      error = fallbackResult.error;
+        .select()
+      data = fallbackResult.data
+      error = fallbackResult.error
     }
-    
+
     if (error) {
-      console.error("Database insert error:", error);
-      throw new Error(getErrorMessage(error));
+      console.error("[/api/remote-delivery] insert error:", error)
+      return NextResponse.json({ error: "Falha ao registrar entrega." }, { status: 500 })
     }
 
-    const savedDelivery = data?.[0];
+    const savedDelivery = data?.[0]
     if (!savedDelivery) {
-      throw new Error("Entrega remota nao retornou registro salvo.");
+      return NextResponse.json({ error: "Entrega não retornou registro." }, { status: 500 })
     }
 
-    let autoReturnedDeliveryIds: string[] = [];
+    let autoReturnedDeliveryIds: string[] = []
     if (shouldAutoReturnReason(reason)) {
-      const { data: activeSamePpe, error: activeSamePpeError } = await supabaseAdmin
-        .from('deliveries')
-        .select('id')
-        .eq('employee_id', employee_id)
-        .eq('ppe_id', ppe_id)
-        .is('returned_at', null)
-        .neq('id', savedDelivery.id);
-
-      if (activeSamePpeError) throw activeSamePpeError;
+      const { data: activeSamePpe } = await supabaseAdmin
+        .from("deliveries")
+        .select("id")
+        .eq("employee_id", employee_id)
+        .eq("ppe_id", ppe_id)
+        .is("returned_at", null)
+        .neq("id", savedDelivery.id)
 
       const previousDeliveryIds = (activeSamePpe || [])
         .map((item: { id?: string }) => item.id)
-        .filter((id): id is string => Boolean(id));
+        .filter((id): id is string => Boolean(id))
 
       if (previousDeliveryIds.length > 0) {
-        const returnedAt = new Date().toISOString();
+        const returnedAt = new Date().toISOString()
         const { error: returnError } = await supabaseAdmin
-          .from('deliveries')
+          .from("deliveries")
           .update({ returned_at: returnedAt, return_motive: getAutoReturnMotive(reason) })
-          .in('id', previousDeliveryIds);
+          .in("id", previousDeliveryIds)
 
         if (returnError && isMissingReturnMotiveIssue(returnError)) {
-          const { error: fallbackReturnError } = await supabaseAdmin
-            .from('deliveries')
+          await supabaseAdmin
+            .from("deliveries")
             .update({ returned_at: returnedAt })
-            .in('id', previousDeliveryIds);
-
-          if (fallbackReturnError) throw fallbackReturnError;
-        } else if (returnError) {
-          throw returnError;
+            .in("id", previousDeliveryIds)
         }
-
-        autoReturnedDeliveryIds = previousDeliveryIds;
+        autoReturnedDeliveryIds = previousDeliveryIds
       }
     }
 
-    const { data: afterStockData, error: afterStockError } = await supabaseAdmin
-      .from('ppes')
-      .select('current_stock')
-      .eq('id', ppe_id)
-      .maybeSingle();
-    if (afterStockError) throw afterStockError;
-    const stockAfterRaw = (afterStockData as { current_stock?: number | string } | null)?.current_stock;
-    const stockAfterInsert =
-      typeof stockAfterRaw === 'number'
-        ? stockAfterRaw
-        : typeof stockAfterRaw === 'string' && Number.isFinite(Number(stockAfterRaw))
-          ? Number(stockAfterRaw)
-          : null;
+    // Sincroniza estoque se o trigger não fez (mesma lógica anterior).
+    if (stockBefore !== null) {
+      const { data: afterStockData } = await supabaseAdmin
+        .from("ppes")
+        .select("current_stock")
+        .eq("id", ppe_id)
+        .maybeSingle()
 
-    const desiredStock = stockBefore === null ? null : Math.max(0, stockBefore - quantity);
-    if (desiredStock !== null && stockAfterInsert !== null && stockAfterInsert > desiredStock) {
-      const missingOut = stockAfterInsert - desiredStock;
-      const movementPayload = {
-        ppe_id,
-        quantity: missingOut,
-        type: 'SAIDA',
-        motive: `Entrega remota (${reason})`,
-        created_by_name: 'Sistema (Entrega Remota)',
-      };
-      const { error: movementError } = await supabaseAdmin
-        .from('stock_movements')
-        .insert([movementPayload]);
+      const stockAfterInsert =
+        typeof afterStockData?.current_stock === "number"
+          ? afterStockData.current_stock
+          : null
+      const desiredStock = Math.max(0, stockBefore - quantity)
 
-      if (movementError) {
-        const text = `${movementError.message || ''} ${movementError.details || ''}`.toLowerCase();
-        const missingCreatedByColumns =
-          movementError.code === 'PGRST204' ||
-          movementError.code === '42703' ||
-          text.includes('created_by_name') ||
-          text.includes('created_by_id');
+      if (stockAfterInsert !== null && stockAfterInsert > desiredStock) {
+        const missingOut = stockAfterInsert - desiredStock
+        const movementPayload: Record<string, unknown> = {
+          ppe_id,
+          quantity: missingOut,
+          type: "SAIDA",
+          motive: `Entrega remota (${reason})`,
+          created_by_name: "Sistema (Entrega Remota)",
+        }
+        if (companyId) movementPayload.company_id = companyId
 
-        if (!missingCreatedByColumns) throw movementError;
+        const { error: movementError } = await supabaseAdmin
+          .from("stock_movements")
+          .insert([movementPayload])
 
-        const { error: fallbackError } = await supabaseAdmin
-          .from('stock_movements')
-          .insert([{
-            ppe_id,
-            quantity: missingOut,
-            type: 'SAIDA',
-            motive: `Entrega remota (${reason})`,
-          }]);
+        if (movementError) {
+          const text = `${movementError.message || ""} ${movementError.details || ""}`.toLowerCase()
+          const missingCreatedByColumns =
+            movementError.code === "PGRST204" ||
+            movementError.code === "42703" ||
+            text.includes("created_by_name") ||
+            text.includes("created_by_id")
 
-        if (fallbackError) throw fallbackError;
+          if (missingCreatedByColumns) {
+            await supabaseAdmin.from("stock_movements").insert([
+              {
+                ...(companyId ? { company_id: companyId } : {}),
+                ppe_id,
+                quantity: missingOut,
+                type: "SAIDA",
+                motive: `Entrega remota (${reason})`,
+              },
+            ])
+          }
+        }
       }
     }
 
-    // 3. Marca link como concluído se existir
-    if (token) {
-      await supabaseAdmin
-        .from('remote_links')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('token', token)
-    }
-    
-    return NextResponse.json({ success: true, data: savedDelivery, autoReturnedDeliveryIds });
-
+    return NextResponse.json({ success: true, data: savedDelivery, autoReturnedDeliveryIds })
   } catch (error: unknown) {
-    console.error('Remote delivery save error:', error);
-    const message = getErrorMessage(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[/api/remote-delivery] unexpected error:", error)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }

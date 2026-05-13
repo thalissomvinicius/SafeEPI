@@ -31,8 +31,12 @@ export async function POST(request: NextRequest) {
     const linkData = type === "training_signature"
       ? { ...(data || {}), remoteType: "training_signature" }
       : data || null
+    const keepsExistingDeliveryLinks =
+      !!linkData &&
+      typeof linkData === "object" &&
+      (linkData as { signaturePendingOnly?: unknown }).signaturePendingOnly === true
 
-    if (type !== "training_signature") {
+    if (type !== "training_signature" && !keepsExistingDeliveryLinks) {
       await supabaseAdmin
         .from("remote_links")
         .update({ status: "expired" })

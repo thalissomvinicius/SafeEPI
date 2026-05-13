@@ -42,6 +42,9 @@ type PendingDeliveryDraft = {
   workplaceName: string
   deliveryDate: string
   item: CartItem
+  items?: CartItem[]
+  deliveryIds?: string[]
+  signaturePendingOnly?: boolean
 }
 
 const SUBSTITUTION_REASON = "Substituição (Desgaste/Validade)"
@@ -608,6 +611,117 @@ export default function DeliveryPage() {
       }
   }
 
+  const saveForLaterSignature = async () => {
+    if (cart.length === 0) {
+      toast.error("Adicione pelo menos um EPI à lista de entrega.")
+      return
+    }
+    if (!selectedEmployeeId) {
+      toast.error("Selecione o colaborador antes de continuar.")
+      return
+    }
+    if (!validateCartForDelivery()) return
+
+    try {
+      setIsSaving(true)
+      const savedDeliveries: Delivery[] = []
+      const autoReturnedDeliveryIds: string[] = []
+
+      for (const item of cart) {
+        const savedDelivery = await api.saveDelivery({
+          employee_id: selectedEmployeeId,
+          ppe_id: item.ppeId,
+          workplace_id: selectedWorkplaceId || null,
+          reason: item.reason as Delivery['reason'],
+          quantity: item.quantity,
+          ip_address: ipAddress || "Desconhecido",
+          auth_method: "manual",
+          signature_url: null,
+          delivery_date: new Date(deliveryDate).toISOString()
+        })
+        savedDeliveries.push(savedDelivery as Delivery)
+
+        const previousAllocations = item.autoReturnAllocations || (item.autoReturnDeliveryIds || []).map(deliveryId => ({
+          deliveryId,
+          quantity: item.quantity,
+          deliveryDate: "",
+        }))
+        for (const allocation of previousAllocations) {
+          if (allocation.deliveryId === (savedDelivery as Delivery).id) continue
+          await api.returnDeliveryQuantity(allocation.deliveryId, getAutoReturnMotive(item.reason), allocation.quantity)
+          autoReturnedDeliveryIds.push(allocation.deliveryId)
+        }
+      }
+
+      const deliveryIds = savedDeliveries.map((delivery) => delivery.id).filter(Boolean)
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+      const data = await api.createRemoteLink({
+        employee_id: selectedEmployeeId,
+        type: 'delivery',
+        data: {
+          e: selectedEmployeeId,
+          p: cart[0].ppeId,
+          w: selectedWorkplaceId,
+          q: cart[0].quantity,
+          r: cart[0].reason,
+          deliveryIds,
+          deliveryDate,
+          items: cart,
+          signaturePendingOnly: true,
+          autoReturnedDeliveryIds,
+        },
+        expires_hours: remoteWaitHours
+      })
+      const url = `${baseUrl}/delivery/remote?t=${data.link.token}`
+      persistPendingDraft({
+        token: data.link.token,
+        linkUrl: url,
+        status: "pending",
+        expiresAt: data.link.expires_at,
+        employeeId: selectedEmployeeId,
+        employeeName: selectedEmployee?.full_name || "Colaborador",
+        workplaceId: selectedWorkplaceId,
+        workplaceName: selectedWorkplace?.name || "Sede",
+        deliveryDate,
+        item: cart[0],
+        items: cart,
+        deliveryIds,
+        signaturePendingOnly: true,
+      })
+
+      const copied = await copyTextToClipboard(url)
+      setViewMode("pending")
+      setStep(1)
+      setCart([])
+      setActiveDeliveries(prev => prev
+        .map(delivery => {
+          const returnedForDelivery = cart
+            .flatMap(item => item.autoReturnAllocations || [])
+            .filter(allocation => allocation.deliveryId === delivery.id)
+            .reduce((acc, allocation) => acc + allocation.quantity, 0)
+
+          if (returnedForDelivery <= 0) return delivery
+          return {
+            ...delivery,
+            returned_quantity: Number(delivery.returned_quantity || 0) + returnedForDelivery,
+          }
+        })
+        .filter(delivery => getRemainingDeliveryQuantity(delivery) > 0)
+      )
+
+      toast.success(copied
+        ? `Entrega registrada, estoque baixado e link de assinatura copiado.`
+        : `Entrega registrada e enviada para Pendencias. Copie o link por la.`
+      )
+    } catch (err: unknown) {
+      console.error("Erro ao registrar entrega pendente de assinatura:", err)
+      const message = err instanceof Error ? err.message : "Erro ao registrar entrega pendente."
+      toast.error(message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const checkPendingDraft = useCallback(async (draft: PendingDeliveryDraft) => {
     try {
       setCheckingPendingToken(draft.token)
@@ -626,8 +740,11 @@ export default function DeliveryPage() {
 
       const status = payload.link?.status as RemoteLinkStatus | undefined
       if (status === "completed") {
-        updatePendingDraft(draft.token, { status: "completed" })
-        toast.success("Assinatura do colaborador concluida e entrega registrada.")
+        removePendingDraft(draft.token)
+        toast.success(draft.signaturePendingOnly
+          ? "Assinatura concluida. A pendencia foi removida."
+          : "Assinatura do colaborador concluida e entrega registrada."
+        )
         return
       }
 
@@ -651,6 +768,16 @@ export default function DeliveryPage() {
   }, [updatePendingDraft])
 
   const restorePendingDraft = (draft: PendingDeliveryDraft) => {
+    if (draft.signaturePendingOnly) {
+      void copyTextToClipboard(draft.linkUrl).then((copied) => {
+        if (copied) {
+          toast.success("Esta entrega ja foi registrada. Link de assinatura copiado.")
+        } else {
+          toast.info("Esta entrega ja foi registrada. Abra o link para colher a assinatura.")
+        }
+      })
+      return
+    }
     setSelectedEmployeeId(draft.employeeId)
     setSelectedWorkplaceId(draft.workplaceId)
     setDeliveryDate(draft.deliveryDate)
@@ -819,6 +946,12 @@ export default function DeliveryPage() {
                           <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {draft.item.ppeCaNumber}</span>
                           <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {draft.item.quantity}</span>
                           <span className="text-[9px] font-bold text-slate-400">{draft.item.reason}</span>
+                          {draft.items && draft.items.length > 1 && (
+                            <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-2 py-0.5 rounded">+{draft.items.length - 1} EPI(s)</span>
+                          )}
+                          {draft.signaturePendingOnly && (
+                            <span className="text-[9px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">Entregue</span>
+                          )}
                           {draft.item.autoReturnDeliveryIds && draft.item.autoReturnDeliveryIds.length > 0 && (
                             <span className="text-[9px] font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">Baixa automática</span>
                           )}
@@ -867,7 +1000,7 @@ export default function DeliveryPage() {
                           onClick={() => restorePendingDraft(draft)}
                           className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
-                          <Package className="w-3.5 h-3.5" /> Reabrir
+                          <Package className="w-3.5 h-3.5" /> {draft.signaturePendingOnly ? "Copiar" : "Reabrir"}
                         </button>
                         <button
                           onClick={() => removePendingDraft(draft.token)}
@@ -1296,6 +1429,13 @@ export default function DeliveryPage() {
                   >
                     <Link2 className="w-4 h-4 text-blue-500" /> Enviar link para assinatura
                   </button>
+                  <button
+                    onClick={() => void saveForLaterSignature()}
+                    disabled={cart.length === 0 || isSaving}
+                    className="w-full bg-amber-50 border border-amber-200 text-amber-800 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-100 transition-all disabled:opacity-40"
+                  >
+                    <Hourglass className="w-4 h-4" /> Entregar agora e assinar depois
+                  </button>
                     </>
                   )}
                 </div>
@@ -1334,6 +1474,13 @@ export default function DeliveryPage() {
                         className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
                       >
                         <Link2 className="w-4 h-4 text-blue-500" /> Enviar link para assinatura
+                      </button>
+                      <button
+                        onClick={() => void saveForLaterSignature()}
+                        disabled={cart.length === 0 || isSaving}
+                        className="w-full bg-amber-50 border border-amber-200 text-amber-800 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-100 transition-all disabled:opacity-40"
+                      >
+                        <Hourglass className="w-4 h-4" /> Entregar agora e assinar depois
                       </button>
                     </>
                   )}

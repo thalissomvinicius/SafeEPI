@@ -19,6 +19,19 @@ interface DeliveryData {
   w: string // workplace id
   q: number // quantity
   r: string // reason
+  deliveryIds?: string[]
+  deliveryDate?: string
+  signaturePendingOnly?: boolean
+  items?: {
+    ppeId: string
+    ppeName: string
+    ppeCaNumber: string
+    ppeCaExpiry: string
+    quantity: number
+    reason: string
+    autoReturnNote?: string
+  }[]
+  autoReturnedDeliveryIds?: string[]
 }
 
 function RemoteDeliveryContent() {
@@ -39,6 +52,7 @@ function RemoteDeliveryContent() {
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [ppe, setPpe] = useState<PPE | null>(null)
   const [workplace, setWorkplace] = useState<Workplace | null>(null)
+  const [deliveryItems, setDeliveryItems] = useState<NonNullable<DeliveryData["items"]>>([])
 
   // -- Signing --
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
@@ -128,7 +142,8 @@ function RemoteDeliveryContent() {
         ])
         
         const emp = empFromToken || employees.find(e => e.id === decoded!.e)
-        const p = ppes.find(p => p.id === decoded!.p)
+        const firstItemPpeId = decoded?.items?.[0]?.ppeId || decoded!.p
+        const p = ppes.find(p => p.id === firstItemPpeId)
         const w = workplaces.find(w => w.id === decoded!.w)
 
         if (!emp || !p) {
@@ -138,6 +153,17 @@ function RemoteDeliveryContent() {
           setEmployee(emp)
           setPpe(p)
           setWorkplace(w || null)
+          setDeliveryItems(decoded?.items && decoded.items.length > 0
+            ? decoded.items
+            : [{
+              ppeId: p.id,
+              ppeName: p.name,
+              ppeCaNumber: p.ca_number,
+              ppeCaExpiry: p.ca_expiry_date,
+              quantity: decoded?.q || 1,
+              reason: decoded?.r || "Entrega Remota",
+            }]
+          )
           setPhase('verify') // Go to identity verification
         }
       } catch {
@@ -201,10 +227,11 @@ function RemoteDeliveryContent() {
 
       const formData = new FormData()
       formData.append('employee_id', employee.id)
-      formData.append('ppe_id', ppe.id)
+      const firstItem = deliveryItems[0]
+      formData.append('ppe_id', firstItem?.ppeId || ppe.id)
       if (workplace?.id) formData.append('workplace_id', workplace.id)
-      formData.append('reason', deliveryData?.r || 'Primeira Entrega')
-      formData.append('quantity', String(deliveryData?.q || 1))
+      formData.append('reason', firstItem?.reason || deliveryData?.r || 'Primeira Entrega')
+      formData.append('quantity', String(firstItem?.quantity || deliveryData?.q || 1))
       formData.append('ip_address', ipAddress || 'Remoto')
       formData.append('auth_method', persistedAuthMethod)
       formData.append('signatureFile', signatureFile)
@@ -219,35 +246,50 @@ function RemoteDeliveryContent() {
       if (!apiRes.ok) throw new Error(responseData.error || "Erro ao salvar na nuvem")
       const autoReturnedDeliveryIds = Array.isArray(responseData.autoReturnedDeliveryIds)
         ? responseData.autoReturnedDeliveryIds as string[]
-        : []
+        : deliveryData?.autoReturnedDeliveryIds || []
+      const deliveryIds = Array.isArray(responseData.deliveryIds)
+        ? responseData.deliveryIds as string[]
+        : deliveryData?.deliveryIds || (responseData.data?.id ? [responseData.data.id] : [])
       const autoReturnNote = autoReturnedDeliveryIds.length > 0
         ? `Baixa automatica do registro anterior${autoReturnedDeliveryIds.length > 1 ? ` (${autoReturnedDeliveryIds.length})` : ""}.`
         : undefined
+      const pdfItems = deliveryItems.length > 0
+        ? deliveryItems
+        : [{
+          ppeId: ppe.id,
+          ppeName: ppe.name,
+          ppeCaNumber: ppe.ca_number,
+          ppeCaExpiry: ppe.ca_expiry_date,
+          quantity: deliveryData?.q || 1,
+          reason: deliveryData?.r || "Entrega Remota",
+          autoReturnNote,
+        }]
 
       const pdfBlob = await generateDeliveryPDF({
         employeeName: employee.full_name,
         employeeCpf: employee.cpf,
         employeeRole: employee.job_title,
         workplaceName: workplace?.name || "Sede",
-        ppeName: ppe.name,
-        ppeCaNumber: ppe.ca_number,
-        ppeCaExpiry: ppe.ca_expiry_date,
-        quantity: deliveryData?.q || 1,
-        reason: deliveryData?.r || "Entrega Remota",
-        items: [{
-          ppeName: ppe.name,
-          ppeCaNumber: ppe.ca_number,
-          caExpiry: ppe.ca_expiry_date,
-          quantity: deliveryData?.q || 1,
-          reason: deliveryData?.r || "Entrega Remota",
-          autoReturnNote,
-        }],
+        ppeName: pdfItems[0].ppeName,
+        ppeCaNumber: pdfItems[0].ppeCaNumber,
+        ppeCaExpiry: pdfItems[0].ppeCaExpiry,
+        quantity: pdfItems[0].quantity,
+        reason: pdfItems[0].reason,
+        items: pdfItems.map((item) => ({
+          ppeName: item.ppeName,
+          ppeCaNumber: item.ppeCaNumber,
+          caExpiry: item.ppeCaExpiry,
+          quantity: item.quantity,
+          reason: item.reason,
+          autoReturnNote: item.autoReturnNote || autoReturnNote,
+        })),
         authMethod,
         signatureBase64: signatureDataUrl,
         photoBase64,
         ipAddress,
         location,
-        validationHash
+        validationHash,
+        deliveryDate: deliveryData?.deliveryDate ? new Date(deliveryData.deliveryDate).toISOString() : undefined,
       })
 
       const shortId = validationHash.slice(0, 8)
@@ -259,8 +301,8 @@ function RemoteDeliveryContent() {
         await api.archiveSignedDocument({
           documentType: "remote_delivery",
           employeeId: employee.id,
-          deliveryId: responseData.data?.id,
-          deliveryIds: responseData.data?.id ? [responseData.data.id] : [],
+          deliveryId: deliveryIds[0] || responseData.data?.id,
+          deliveryIds,
           fileName,
           pdfBlob,
           authMethod,
@@ -272,12 +314,15 @@ function RemoteDeliveryContent() {
           metadata: {
             validationHash,
             remoteLinkToken: linkToken,
+            signaturePendingOnly: deliveryData?.signaturePendingOnly === true,
             workplaceName: workplace?.name || "Sede",
-            ppeId: ppe.id,
-            ppeName: ppe.name,
-            caNumber: ppe.ca_number,
-            quantity: deliveryData?.q || 1,
-            reason: deliveryData?.r || "Entrega Remota",
+            items: pdfItems.map((item) => ({
+              ppeId: item.ppeId,
+              ppeName: item.ppeName,
+              caNumber: item.ppeCaNumber,
+              quantity: item.quantity,
+              reason: item.reason,
+            })),
             autoReturnedDeliveryIds,
             autoReturnNote,
           },
@@ -308,7 +353,7 @@ function RemoteDeliveryContent() {
     } finally {
       setIsSaving(false)
     }
-  }, [employee, ppe, workplace, deliveryData, authMethod, capturedPhotoBase64, ipAddress, location, linkToken])
+  }, [employee, ppe, workplace, deliveryData, deliveryItems, authMethod, capturedPhotoBase64, ipAddress, location, linkToken])
 
   // ---------------------------------------
   // RENDER: Loading
@@ -371,14 +416,19 @@ function RemoteDeliveryContent() {
         </div>
 
         <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-5">
-          {/* EPI Info (read-only preview) */}
           <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100">
-            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Item pendente de assinatura:</p>
-            <div className="flex justify-between items-center">
-              <span className="font-bold text-slate-800 text-sm sm:text-base">{ppe?.name}</span>
-              <span className="bg-slate-200 text-slate-600 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded">Qtd: {deliveryData?.q}</span>
+            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Item(ns) pendente(s) de assinatura:</p>
+            <div className="space-y-2">
+              {(deliveryItems.length > 0 ? deliveryItems : []).map((item) => (
+                <div key={item.ppeId} className="rounded-xl border border-slate-100 bg-white px-3 py-2">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-bold text-slate-800 text-sm sm:text-base">{item.ppeName}</span>
+                    <span className="bg-slate-200 text-slate-600 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded self-start">Qtd: {item.quantity}</span>
+                  </div>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">C.A.: {item.ppeCaNumber}</p>
+                </div>
+              ))}
             </div>
-            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">C.A.: {ppe?.ca_number}</p>
           </div>
 
           <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3">
@@ -450,14 +500,19 @@ function RemoteDeliveryContent() {
         </div>
 
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-4 sm:space-y-6">
-          {/* EPI Summary */}
           <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100">
-            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Item a ser assinado:</p>
-            <div className="flex justify-between items-center">
-              <span className="font-bold text-slate-800 text-sm">{ppe?.name}</span>
-              <span className="bg-slate-200 text-slate-600 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded">Qtd: {deliveryData?.q}</span>
+            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Item(ns) a ser assinado(s):</p>
+            <div className="space-y-2">
+              {deliveryItems.map((item) => (
+                <div key={item.ppeId} className="rounded-xl border border-slate-100 bg-white px-3 py-2">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-bold text-slate-800 text-sm">{item.ppeName}</span>
+                    <span className="bg-slate-200 text-slate-600 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded self-start">Qtd: {item.quantity}</span>
+                  </div>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">C.A.: {item.ppeCaNumber}</p>
+                </div>
+              ))}
             </div>
-            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">C.A.: {ppe?.ca_number}</p>
           </div>
 
           {/* Auth method toggle */}
