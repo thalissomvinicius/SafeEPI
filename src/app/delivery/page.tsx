@@ -1,9 +1,9 @@
 ﻿"use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle } from "lucide-react"
+import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle, Search } from "lucide-react"
 import { format, addDays } from "date-fns"
 import { api, type PendingDeliveryRemoteLink } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
@@ -30,6 +30,7 @@ interface CartItem {
 }
 
 type RemoteLinkStatus = "pending" | "completed" | "expired"
+type PendingCheckResult = "completed" | "expired" | "pending" | "error"
 
 type PendingDeliveryDraft = {
   key: string
@@ -65,6 +66,12 @@ const getAutoReturnMotive = (reason: string) => {
 const getRemainingDeliveryQuantity = (delivery: DeliveryWithRelations) =>
   Math.max(0, Number(delivery.quantity || 0) - Number(delivery.returned_quantity || 0))
 
+const normalizeSearchText = (value: unknown) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
 export default function DeliveryPage() {
   const { user } = useAuth()
   const [step, setStep] = useState(1)
@@ -76,6 +83,7 @@ export default function DeliveryPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [viewMode, setViewMode] = useState<"new" | "pending">("new")
   const [pendingDrafts, setPendingDrafts] = useState<PendingDeliveryDraft[]>([])
+  const [pendingSearchTerm, setPendingSearchTerm] = useState("")
   const [remoteWaitHours, setRemoteWaitHours] = useState(24)
   const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
 
@@ -376,6 +384,31 @@ export default function DeliveryPage() {
     emp.full_name.toLowerCase().includes(employeeSearchTerm.toLowerCase()) || 
     (emp.cpf && emp.cpf.includes(employeeSearchTerm))
   )
+
+  const filteredPendingDrafts = useMemo(() => {
+    const query = normalizeSearchText(pendingSearchTerm.trim())
+    if (!query) return pendingDrafts
+
+    return pendingDrafts.filter((draft) => {
+      const draftItems = draft.items && draft.items.length > 0 ? draft.items : [draft.item]
+      const searchableText = [
+        draft.employeeName,
+        draft.workplaceName,
+        draft.deliveryDate,
+        draft.status,
+        draft.token,
+        ...draftItems.flatMap((item) => [
+          item.ppeName,
+          item.ppeCaNumber,
+          item.reason,
+          item.quantity,
+          item.autoReturnNote,
+        ]),
+      ].join(" ")
+
+      return normalizeSearchText(searchableText).includes(query)
+    })
+  }, [pendingDrafts, pendingSearchTerm])
 
   const handleEmployeeChange = (empId: string) => {
     setSelectedEmployeeId(empId)
@@ -841,7 +874,7 @@ export default function DeliveryPage() {
   const checkPendingDraft = useCallback(async (
     draft: PendingDeliveryDraft,
     options?: { silent?: boolean }
-  ) => {
+  ): Promise<PendingCheckResult> => {
     const silent = options?.silent === true
     try {
       if (!silent) setCheckingPendingToken(draft.token)
@@ -852,10 +885,11 @@ export default function DeliveryPage() {
         if (payload.status === "expired") {
           updatePendingDraft(draft.token, { status: "expired" })
           if (!silent) toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
+          return "expired"
         } else if (!silent) {
           toast.error(payload.error || "Nao foi possivel consultar esta pendencia.")
         }
-        return
+        return "error"
       }
 
       const status = payload.link?.status as RemoteLinkStatus | undefined
@@ -866,16 +900,14 @@ export default function DeliveryPage() {
             ? "Assinatura concluida. A pendencia foi removida."
             : "Assinatura do colaborador concluida e entrega registrada."
           )
-        } else {
-          toast.success(`Assinatura concluida: ${draft.employeeName}`)
         }
-        return
+        return "completed"
       }
 
       if (payload.link?.expires_at && new Date(payload.link.expires_at) < new Date()) {
         updatePendingDraft(draft.token, { status: "expired", expiresAt: payload.link.expires_at })
         if (!silent) toast.warning("Link expirado. Gere uma nova assinatura remota para esta entrega.")
-        return
+        return "expired"
       }
 
       updatePendingDraft(draft.token, {
@@ -883,13 +915,48 @@ export default function DeliveryPage() {
         expiresAt: payload.link?.expires_at || draft.expiresAt,
       })
       if (!silent) toast.info("Ainda aguardando assinatura do colaborador.")
+      return "pending"
     } catch (err) {
       console.error("Erro ao consultar pendencia de assinatura:", err)
       if (!silent) toast.error("Erro ao consultar a pendencia.")
+      return "error"
     } finally {
       if (!silent) setCheckingPendingToken(null)
     }
   }, [updatePendingDraft, removePendingDraft])
+
+  const checkVisiblePendingDrafts = useCallback(async () => {
+    const draftsToCheck = filteredPendingDrafts.filter((draft) => draft.status === "pending")
+    if (draftsToCheck.length === 0) {
+      toast.info("Nenhuma pendencia aguardando assinatura para atualizar.")
+      return
+    }
+
+    setCheckingPendingToken("batch")
+    try {
+      const results = await Promise.all(
+        draftsToCheck.map((draft) => checkPendingDraft(draft, { silent: true }))
+      )
+      const completed = results.filter((result) => result === "completed").length
+      const expired = results.filter((result) => result === "expired").length
+      const errors = results.filter((result) => result === "error").length
+      const pending = results.filter((result) => result === "pending").length
+
+      if (completed > 0) {
+        toast.success(`${completed} assinatura(s) concluida(s).`)
+      } else if (errors > 0) {
+        toast.error("Nao foi possivel consultar uma ou mais pendencias.")
+      } else if (expired > 0 && pending === 0) {
+        toast.warning(`${expired} link(s) expirado(s).`)
+      } else if (expired > 0) {
+        toast.warning(`${expired} link(s) expirado(s); demais ainda aguardando.`)
+      } else {
+        toast.info("Ainda aguardando assinatura do colaborador.")
+      }
+    } finally {
+      setCheckingPendingToken(null)
+    }
+  }, [filteredPendingDrafts, checkPendingDraft])
 
   useEffect(() => {
     if (viewMode !== "pending") return
@@ -1068,8 +1135,8 @@ export default function DeliveryPage() {
 
       {viewMode === "pending" ? (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40 animate-in fade-in">
-          <div className="p-5 sm:p-6 border-b border-slate-100 bg-amber-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
+          <div className="p-5 sm:p-6 border-b border-slate-100 bg-amber-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="min-w-0">
               <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
                 <Hourglass className="w-5 h-5 text-amber-600" />
                 Pendencias de Assinatura
@@ -1082,30 +1149,48 @@ export default function DeliveryPage() {
                 </span>
               </p>
             </div>
-            <button
-              onClick={() => pendingDrafts.forEach((draft) => { if (draft.status === "pending") void checkPendingDraft(draft) })}
-              disabled={pendingDrafts.length === 0 || checkingPendingToken !== null}
-              className="bg-white border border-amber-200 text-amber-700 px-4 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${checkingPendingToken ? "animate-spin" : ""}`} /> Atualizar Status
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 lg:items-center">
+              <div className="relative min-w-0 sm:w-80">
+                <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={pendingSearchTerm}
+                  onChange={(event) => setPendingSearchTerm(event.target.value)}
+                  placeholder="Buscar por colaborador, EPI ou CA..."
+                  className="w-full bg-white border border-slate-200 text-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-amber-300 focus:ring-4 focus:ring-amber-100 transition-all text-xs font-bold"
+                />
+              </div>
+              <button
+                onClick={() => void checkVisiblePendingDrafts()}
+                disabled={filteredPendingDrafts.length === 0 || checkingPendingToken !== null}
+                className="bg-white border border-amber-200 text-amber-700 px-4 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${checkingPendingToken ? "animate-spin" : ""}`} /> Atualizar Status
+              </button>
+            </div>
           </div>
 
           <div className="p-4 sm:p-6">
-            {pendingDrafts.length === 0 ? (
+            {pendingDrafts.length === 0 || filteredPendingDrafts.length === 0 ? (
               <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
                 <CheckCircle2 className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                <p className="text-sm font-black text-slate-500 uppercase tracking-widest">Nenhuma pendencia de assinatura</p>
-                <p className="text-xs text-slate-400 mt-2 font-medium">Quando gerar um link remoto de EPI, ele aparece aqui.</p>
+                <p className="text-sm font-black text-slate-500 uppercase tracking-widest">
+                  {pendingDrafts.length === 0 ? "Nenhuma pendencia de assinatura" : "Nenhuma pendencia encontrada"}
+                </p>
+                <p className="text-xs text-slate-400 mt-2 font-medium">
+                  {pendingDrafts.length === 0
+                    ? "Quando gerar um link remoto de EPI, ele aparece aqui."
+                    : "Tente buscar pelo nome do colaborador, EPI, CA ou unidade."}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {pendingDrafts.map((draft) => {
-                  const isChecking = checkingPendingToken === draft.token
+                {filteredPendingDrafts.map((draft) => {
+                  const isChecking = checkingPendingToken === draft.token || checkingPendingToken === "batch"
                   const statusStyle = draft.status === "completed"
                     ? "bg-green-50 text-green-700 border-green-200"
                     : draft.status === "expired"
-                      ? "bg-red-50 text-red-700 border-blue-200"
+                      ? "bg-red-50 text-red-700 border-red-200"
                       : "bg-amber-50 text-amber-700 border-amber-200"
                   const StatusIcon = draft.status === "completed" ? CheckCircle2 : draft.status === "expired" ? XCircle : Hourglass
 
