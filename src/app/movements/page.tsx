@@ -25,6 +25,7 @@ export default function MovementsPage() {
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
   const [signedDocuments, setSignedDocuments] = useState<SignedDocument[]>([])
   const [downloadingDeliveryId, setDownloadingDeliveryId] = useState<string | null>(null)
+  const [creatingSignatureLinkId, setCreatingSignatureLinkId] = useState<string | null>(null)
   const [showPdfModal, setShowPdfModal] = useState(false)
   const [technicianName, setTechnicianName] = useState("")
   const [technicianRole, setTechnicianRole] = useState("Técnico de Segurança do Trabalho")
@@ -200,6 +201,64 @@ export default function MovementsPage() {
       toast.error("Erro ao processar o comprovante PDF.")
     } finally {
       setDownloadingDeliveryId(null)
+    }
+  }
+
+  const getPendingSignatureLinkToken = async (deliveryId: string) => {
+    const links = await api.getPendingDeliverySignatureLinks().catch(() => [])
+    const existing = links.find((link) => {
+      const deliveryIds = Array.isArray(link.data?.deliveryIds)
+        ? link.data.deliveryIds.filter((id): id is string => typeof id === "string")
+        : []
+      return deliveryIds.includes(deliveryId)
+    })
+
+    return existing?.token || null
+  }
+
+  const openSignatureFlow = async (delivery: DeliveryWithRelations) => {
+    if (!delivery.employee_id || !delivery.ppe_id) {
+      toast.error("Nao foi possivel identificar colaborador ou EPI desta entrega.")
+      return
+    }
+
+    try {
+      setCreatingSignatureLinkId(delivery.id)
+      const existingToken = await getPendingSignatureLinkToken(delivery.id)
+      const token = existingToken || (await api.createRemoteLink({
+        employee_id: delivery.employee_id,
+        type: "delivery",
+        data: {
+          e: delivery.employee_id,
+          p: delivery.ppe_id,
+          w: delivery.workplace_id || "",
+          q: delivery.quantity,
+          r: delivery.reason || "Primeira Entrega",
+          deliveryIds: [delivery.id],
+          deliveryDate: delivery.delivery_date?.slice(0, 10),
+          employeeName: delivery.employee?.full_name || "Colaborador",
+          workplaceName: delivery.workplace?.name || "Sede",
+          items: [{
+            ppeId: delivery.ppe_id,
+            ppeName: delivery.ppe?.name || "EPI pendente",
+            ppeCaNumber: delivery.ppe?.ca_number || "N/A",
+            ppeCaExpiry: delivery.ppe?.ca_expiry_date || "",
+            quantity: delivery.quantity,
+            reason: delivery.reason || "Primeira Entrega",
+          }],
+          signaturePendingOnly: true,
+        },
+        expires_hours: 24,
+      })).link.token
+
+      toast.success(existingToken ? "Abrindo assinatura pendente." : "Link de assinatura criado.")
+      router.push(`/delivery/remote?t=${token}`)
+    } catch (error) {
+      console.error("Erro ao abrir assinatura da movimentacao:", error)
+      const message = error instanceof Error ? error.message : "Nao foi possivel abrir a assinatura desta entrega."
+      toast.error(message)
+    } finally {
+      setCreatingSignatureLinkId(null)
     }
   }
 
@@ -476,6 +535,7 @@ export default function MovementsPage() {
               <tbody className="divide-y divide-slate-50">
                 {filteredMovements.map((move, i) => {
                   const isDownloading = downloadingDeliveryId === move.id
+                  const isCreatingSignatureLink = creatingSignatureLinkId === move.id
 
                   return (
                     <tr key={move.id || i} className="hover:bg-slate-50/80 transition-colors group">
@@ -534,7 +594,22 @@ export default function MovementsPage() {
                             PDF
                           </button>
                         ) : (
-                          <span className="text-[10px] font-bold text-slate-300 uppercase">Sem assinatura</span>
+                          <div className="ml-auto flex items-center justify-end gap-2">
+                            <span className="text-[10px] font-bold text-slate-300 uppercase">Sem assinatura</span>
+                            <button
+                              onClick={() => void openSignatureFlow(move)}
+                              disabled={isCreatingSignatureLink}
+                              title="Abrir assinatura desta entrega"
+                              className="inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              {isCreatingSignatureLink ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <PenTool className="h-3.5 w-3.5" />
+                              )}
+                              Assinar
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
