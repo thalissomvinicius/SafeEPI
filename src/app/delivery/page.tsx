@@ -1337,7 +1337,7 @@ export default function DeliveryPage() {
                           <button
                             onClick={() => void reopenExpiredPendingDraft(draft)}
                             disabled={isReopening}
-                            className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            className="py-3 rounded-xl bg-[#B91C1C] hover:bg-[#991B1B] text-white border border-[#7F1D1D] shadow-sm shadow-red-900/20 hover:shadow-md hover:shadow-red-900/25 hover:-translate-y-0.5 active:translate-y-0 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                           >
                             {isReopening ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
