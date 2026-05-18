@@ -8,11 +8,12 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { format, startOfMonth, endOfMonth, subDays, isWithinInterval } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { DeliveryWithRelations } from "@/types/database"
+import { DeliveryWithRelations, SignedDocument } from "@/types/database"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
-import { generateMovementsSimplePDF, generateMovementsPresentationPDF } from "@/utils/pdfGenerator"
+import { generateDeliveryPDF, generateMovementsSimplePDF, generateMovementsPresentationPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime, parseLocalDateOnly } from "@/lib/dateOnly"
+import { toast } from "sonner"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 
@@ -22,6 +23,8 @@ export default function MovementsPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [loading, setLoading] = useState(true)
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [signedDocuments, setSignedDocuments] = useState<SignedDocument[]>([])
+  const [downloadingDeliveryId, setDownloadingDeliveryId] = useState<string | null>(null)
   const [showPdfModal, setShowPdfModal] = useState(false)
   const [technicianName, setTechnicianName] = useState("")
   const [technicianRole, setTechnicianRole] = useState("Técnico de Segurança do Trabalho")
@@ -50,8 +53,12 @@ export default function MovementsPage() {
       if (!user || user.role === 'ALMOXARIFE') return
       try {
         setLoading(true)
-        const data = await api.getDeliveries()
-        setRawDeliveries(data)
+        const [deliveryData, documentData] = await Promise.all([
+          api.getDeliveries(),
+          api.getSignedDocuments(),
+        ])
+        setRawDeliveries(deliveryData)
+        setSignedDocuments(documentData)
       } catch (err) {
         console.error("Erro ao carregar movimentações:", err)
       } finally {
@@ -114,6 +121,87 @@ export default function MovementsPage() {
   }
 
   const filteredMovements = getFilteredData()
+
+  const getSignedDocumentForDelivery = (deliveryId: string) =>
+    signedDocuments.find((document) =>
+      document.delivery_id === deliveryId ||
+      document.delivery_ids?.includes(deliveryId)
+    )
+
+  const urlToBase64 = async (url: string) => {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  const handleDeliveryReceiptPDF = async (delivery: DeliveryWithRelations) => {
+    if (!delivery.signature_url) {
+      toast.error("Esta entrega não possui assinatura digital.")
+      return
+    }
+
+    try {
+      setDownloadingDeliveryId(delivery.id)
+      const signedDocument = getSignedDocumentForDelivery(delivery.id)
+
+      if (signedDocument?.document_url) {
+        const archivedResponse = await fetch(signedDocument.document_url)
+        const archivedBlob = await archivedResponse.blob()
+        openPdfDialog(archivedBlob, signedDocument.file_name || `Comprovante_${delivery.id.slice(0, 8)}.pdf`, {
+          title: "Comprovante arquivado",
+          description: "Este e o PDF juridico original salvo no arquivo digital.",
+        })
+        toast.success(`PDF aberto: ${signedDocument.file_name}`)
+        return
+      }
+
+      const base64Signature = await urlToBase64(delivery.signature_url)
+      const photoBase64 = signedDocument?.photo_evidence_url
+        ? await urlToBase64(signedDocument.photo_evidence_url).catch(() => undefined)
+        : undefined
+      const authMethod = signedDocument?.auth_method === "manual_facial" || delivery.auth_method === "manual_facial"
+        ? "manual_facial"
+        : (delivery.signature_url.includes("bio_") || delivery.signature_url.includes("emp_") || delivery.auth_method === "facial") ? "facial" : "manual"
+
+      const pdfBlob = await generateDeliveryPDF({
+        employeeName: delivery.employee?.full_name || "Desconhecido",
+        employeeCpf: delivery.employee?.cpf || "000.000.000-00",
+        employeeRole: delivery.employee?.job_title || "Geral",
+        workplaceName: delivery.workplace?.name || "Sede",
+        ppeName: delivery.ppe?.name || "N/A",
+        ppeCaNumber: delivery.ppe?.ca_number || "N/A",
+        ppeCaExpiry: delivery.ppe?.ca_expiry_date,
+        quantity: delivery.quantity,
+        reason: delivery.reason,
+        authMethod,
+        signatureBase64: base64Signature,
+        photoBase64,
+        ipAddress: delivery.ip_address || "Remoto",
+        validationHash: delivery.id.slice(0, 8).toUpperCase(),
+        deliveryDate: delivery.delivery_date,
+      })
+
+      const shortId = delivery.id.slice(0, 8).toUpperCase()
+      const safeName = (delivery.employee?.full_name || "Comprovante").split(" ")[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const safePpe = (delivery.ppe?.name || "EPI").split(" ")[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const fileName = `Comprovante_${shortId}_${safeName}_${safePpe}.pdf`
+
+      openPdfDialog(pdfBlob, fileName, {
+        title: "Comprovante pronto",
+        description: "Visualize o comprovante em uma nova aba ou baixe o PDF completo.",
+      })
+      toast.success(`PDF gerado: ${fileName}`)
+    } catch (err) {
+      console.error("Erro ao gerar comprovante da movimentação:", err)
+      toast.error("Erro ao processar o comprovante PDF.")
+    } finally {
+      setDownloadingDeliveryId(null)
+    }
+  }
 
   const stats = {
     deliveries: filteredMovements.filter(m => !m.returned_at).length,
@@ -382,55 +470,79 @@ export default function MovementsPage() {
                   <th className="px-6 py-5 text-center">Qtd</th>
                   <th className="px-6 py-5 text-center">Tipo</th>
                   <th className="px-6 py-5">Unidade</th>
+                  <th className="px-6 py-5 text-right">Comprovante</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredMovements.map((move, i) => (
-                  <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-700">{formatDeliveryDate(move.delivery_date)}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{formatDeliveryTime(move.delivery_date)}h</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col">
-                        <span className="font-black text-slate-800 uppercase tracking-tighter">{move.employee?.full_name}</span>
-                        <span className="text-[10px] text-slate-400 font-bold tracking-widest">{move.employee?.cpf}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-600">{move.ppe?.name}</span>
-                        <span className="text-[10px] text-slate-400 font-medium uppercase">C.A. {move.ppe?.ca_number}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 text-center">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-black text-xs">
-                        {move.quantity}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5 text-center">
-                      {move.returned_at ? (
-                        <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-                          <ArrowDownLeft className="w-3 h-3" /> Devolução
+                {filteredMovements.map((move, i) => {
+                  const isDownloading = downloadingDeliveryId === move.id
+
+                  return (
+                    <tr key={move.id || i} className="hover:bg-slate-50/80 transition-colors group">
+                      <td className="px-6 py-5">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-700">{formatDeliveryDate(move.delivery_date)}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{formatDeliveryTime(move.delivery_date)}h</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex flex-col">
+                          <span className="font-black text-slate-800 uppercase tracking-tighter">{move.employee?.full_name}</span>
+                          <span className="text-[10px] text-slate-400 font-bold tracking-widest">{move.employee?.cpf}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-600">{move.ppe?.name}</span>
+                          <span className="text-[10px] text-slate-400 font-medium uppercase">C.A. {move.ppe?.ca_number}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-black text-xs">
+                          {move.quantity}
                         </span>
-                      ) : (
-                        <span className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-                          <ArrowUpRight className="w-3 h-3" /> Entrega
+                      </td>
+                      <td className="px-6 py-5 text-center">
+                        {move.returned_at ? (
+                          <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+                            <ArrowDownLeft className="w-3 h-3" /> Devolução
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+                            <ArrowUpRight className="w-3 h-3" /> Entrega
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest truncate max-w-[120px] block">
+                          {move.workplace?.name || "Geral"}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest truncate max-w-[120px] block">
-                        {move.workplace?.name || "Geral"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        {move.signature_url ? (
+                          <button
+                            onClick={() => void handleDeliveryReceiptPDF(move)}
+                            disabled={isDownloading}
+                            title="Emitir comprovante de entrega do EPI"
+                            className="ml-auto text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end px-3 py-2 rounded-xl transition-all group-hover:underline disabled:opacity-30"
+                          >
+                            {isDownloading ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                              <FileDown className="w-4 h-4 mr-1" />
+                            )}
+                            PDF
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-300 uppercase">Sem assinatura</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
                 {filteredMovements.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-20 text-center text-slate-400 italic">
+                    <td colSpan={7} className="px-6 py-20 text-center text-slate-400 italic">
                       <ArrowRightLeft className="w-10 h-10 mx-auto mb-4 opacity-20" />
                       <p className="text-sm font-black uppercase tracking-widest">Nenhuma movimentação neste período.</p>
                     </td>
