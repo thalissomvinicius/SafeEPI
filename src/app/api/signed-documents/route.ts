@@ -112,12 +112,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Caminho do PDF pre-enviado invalido." }, { status: 400 })
     }
 
-    if (!createdBy) {
+    if (linkToken) {
       const remoteLink = await validateRemoteLink(linkToken, employeeId)
       if (!remoteLink.ok) {
         return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
       }
       remoteCompanyId = remoteLink.companyId
+    } else if (!createdBy) {
+      return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
     }
 
     const sha256Hash = String(formData.get("sha256_hash") || "").trim()
@@ -184,7 +186,7 @@ export async function POST(request: Request) {
       .filter((id) => typeof id === "string" && id.length > 0)
 
     const metadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
-    const companyId = String(formData.get("company_id") || "") || remoteCompanyId
+    const companyId = remoteCompanyId || String(formData.get("company_id") || "") || null
     const insertPayload = {
       company_id: companyId,
       document_type: documentType,

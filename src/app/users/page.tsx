@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Shield, UserCog, Mail, Calendar, Loader2, AlertCircle, Plus, Key, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
 import { Profile } from "@/types/database"
@@ -34,7 +34,7 @@ export default function UsersPage() {
     }
   }, [authLoading, canManageUsers, currentUser, router])
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setLoading(true)
       const data = await api.getUsers(masterCompanyId)
@@ -45,7 +45,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [masterCompanyId])
 
   useEffect(() => {
     if (canManageUsers) {
@@ -54,7 +54,7 @@ export default function UsersPage() {
       }, 0)
       return () => clearTimeout(timer)
     }
-  }, [canManageUsers, currentUser])
+  }, [canManageUsers, currentUser, loadUsers])
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     try {

@@ -37,7 +37,7 @@ export default function PpesPage() {
       setPpes(data)
     } catch (error) {
       console.error("Erro ao carregar EPIs:", error)
-      alert("Falha ao carregar catálogo de EPIs.")
+      toast.error("Falha ao carregar catálogo de EPIs.")
     } finally {
       setLoading(false)
     }
@@ -110,7 +110,7 @@ export default function PpesPage() {
       setIsModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar EPI:", error)
-      alert("Erro ao salvar EPI no banco de dados.")
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar EPI no banco de dados.")
     } finally {
       setIsSaving(false)
     }

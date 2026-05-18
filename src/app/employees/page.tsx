@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink, FileUp, Download, Handshake } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
-import * as XLSX from "xlsx"
+import ExcelJS from "exceljs"
 import { api } from "@/services/api"
 import { Employee, Workplace, DeliveryWithRelations, CatalogItem, ThirdParty } from "@/types/database"
 import { format, addDays, isPast } from "date-fns"
@@ -24,6 +24,32 @@ const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLoc
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
 
 type EmployeeImportRow = Record<string, unknown>
+
+function downloadWorkbookBuffer(buffer: ExcelJS.Buffer, fileName: string) {
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
+function worksheetToImportRows(worksheet: ExcelJS.Worksheet): EmployeeImportRow[] {
+  const headerRow = worksheet.getRow(1)
+  const headers = headerRow.values as ExcelJS.CellValue[]
+
+  return worksheet.getRows(2, worksheet.rowCount - 1)?.map((row) => {
+    const item: EmployeeImportRow = {}
+    headers.forEach((header, index) => {
+      if (!index || header === null || header === undefined || header === "") return
+      item[String(header)] = row.getCell(index).value ?? ""
+    })
+    return item
+  }).filter((row) => Object.values(row).some((value) => String(value ?? "").trim() !== "")) || []
+}
 
 type ImportProgress = {
   fileName: string
@@ -69,10 +95,8 @@ const getImportDate = (value: unknown) => {
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
-    const parsed = XLSX.SSF.parse_date_code(value)
-    if (parsed) {
-      return `${String(parsed.y).padStart(4, "0")}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`
-    }
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000))
+    return `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`
   }
 
   const raw = String(value).trim()
@@ -97,6 +121,7 @@ type PendingCaptureDraft = {
   linkUrl: string
   status: RemoteLinkStatus
   expiresAt: string | null
+  companyId?: string | null
   employeeId: string
   employeeName: string
   employeeCpf: string
@@ -233,6 +258,8 @@ export default function EmployeesPage() {
       try {
         const parsed = JSON.parse(window.localStorage.getItem(key) || "{}") as PendingCaptureDraft
         if (!parsed.token || !parsed.employeeId) continue
+        const currentCompanyId = api.getMasterCompanyContext()
+        if (currentCompanyId && parsed.companyId !== currentCompanyId) continue
         drafts.push({ ...parsed, key, status: parsed.status || "pending" })
       } catch {
         window.localStorage.removeItem(key)
@@ -271,7 +298,7 @@ export default function EmployeesPage() {
     loadPendingCaptureDrafts()
   }, [loadPendingCaptureDrafts])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [empData, wpData, jobData, deptData, thirdPartyData] = await Promise.all([
         api.getEmployees(),
@@ -292,7 +319,7 @@ export default function EmployeesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [hasThirdPartyFeature])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -300,7 +327,7 @@ export default function EmployeesPage() {
       loadPendingCaptureDrafts()
     }, 0)
     return () => clearTimeout(timer)
-  }, [loadPendingCaptureDrafts])
+  }, [loadData, loadPendingCaptureDrafts])
 
   const resetFormData = () => setFormData({
     id: undefined,
@@ -343,7 +370,7 @@ export default function EmployeesPage() {
     e.preventDefault()
     if (!formData.name) return
     if (formData.cpf && !isValidCpf(formData.cpf)) {
-      alert("O CPF informado é inválido. Por favor, verifique.")
+      toast.error("O CPF informado é inválido. Por favor, verifique.")
       return
     }
 
@@ -483,7 +510,7 @@ export default function EmployeesPage() {
     }
   }
 
-  const downloadImportTemplate = () => {
+  const downloadImportTemplate = async () => {
     const rows = [
       {
         nome: "JOAO DA SILVA",
@@ -496,10 +523,17 @@ export default function EmployeesPage() {
         status: "ATIVO",
       },
     ]
-    const worksheet = XLSX.utils.json_to_sheet(rows)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Colaboradores")
-    XLSX.writeFile(workbook, "modelo_importacao_colaboradores_safeepi.xlsx")
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet("Colaboradores")
+    worksheet.columns = Object.keys(rows[0]).map((key) => ({
+      header: key,
+      key,
+      width: key === "nome" ? 28 : 18,
+    }))
+    worksheet.addRows(rows)
+    worksheet.getRow(1).font = { bold: true }
+    const buffer = await workbook.xlsx.writeBuffer()
+    downloadWorkbookBuffer(buffer, "modelo_importacao_colaboradores_safeepi.xlsx")
   }
 
   const handleImportEmployees = async (file: File) => {
@@ -519,9 +553,10 @@ export default function EmployeesPage() {
         phase: "Lendo planilha...",
       })
       const buffer = await file.arrayBuffer()
-      const workbook = XLSX.read(buffer, { type: "array" })
-      const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<EmployeeImportRow>(sheet, { defval: "" })
+      const workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(buffer)
+      const sheet = workbook.worksheets[0]
+      const rows = sheet ? worksheetToImportRows(sheet) : []
 
       let imported = 0
       let skipped = 0
@@ -862,6 +897,7 @@ export default function EmployeesPage() {
         linkUrl: link,
         status: "pending",
         expiresAt: data.link.expires_at,
+        companyId: emp.company_id || api.getMasterCompanyContext() || null,
         employeeId: emp.id,
         employeeName: emp.full_name,
         employeeCpf: emp.cpf,
@@ -920,7 +956,7 @@ export default function EmployeesPage() {
     } finally {
       setCheckingPendingToken(null)
     }
-  }, [updatePendingCaptureDraft])
+  }, [loadData, updatePendingCaptureDraft])
 
   const importPercent = importProgress?.total
     ? Math.min(100, Math.round((importProgress.processed / importProgress.total) * 100))

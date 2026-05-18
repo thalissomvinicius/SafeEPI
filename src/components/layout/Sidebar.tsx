@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog, Handshake } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
@@ -43,10 +44,13 @@ export function Sidebar() {
   return (
     <aside className="w-64 bg-white border-r border-slate-200 text-slate-600 hidden md:flex flex-col h-screen sticky top-0 shadow-sm">
       <div className="h-32 flex flex-col items-center justify-center border-b border-slate-100 bg-white p-4">
-        <img
+        <Image
           src={brandLogo}
           alt={brandName}
+          width={190}
+          height={80}
           className="h-20 w-auto max-w-[190px] object-contain"
+          priority
         />
       </div>
       

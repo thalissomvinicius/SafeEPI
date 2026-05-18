@@ -420,7 +420,12 @@ export default function CompaniesPage() {
 
                 <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white p-4 text-center transition-colors hover:border-[#2563EB]">
                   {logoPreview || companyForm.logo_url ? (
-                    <img src={logoPreview || companyForm.logo_url} alt="Logo da empresa" className="max-h-24 max-w-full object-contain" />
+                    <span
+                      aria-label="Logo da empresa"
+                      role="img"
+                      className="block h-24 w-full bg-contain bg-center bg-no-repeat"
+                      style={{ backgroundImage: `url("${logoPreview || companyForm.logo_url}")` }}
+                    />
                   ) : (
                     <>
                       <UploadCloud className="h-8 w-8 text-[#2563EB]" />
@@ -537,7 +542,12 @@ export default function CompaniesPage() {
               </div>
               {selectedCompany?.logo_url && (
                 <div className="flex h-12 w-24 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-2">
-                  <img src={selectedCompany.logo_url} alt={selectedCompany.trade_name || selectedCompany.name} className="max-h-full max-w-full object-contain" />
+                  <span
+                    aria-label={selectedCompany.trade_name || selectedCompany.name}
+                    role="img"
+                    className="block h-full w-full bg-contain bg-center bg-no-repeat"
+                    style={{ backgroundImage: `url("${selectedCompany.logo_url}")` }}
+                  />
                 </div>
               )}
             </div>
@@ -644,7 +654,12 @@ function CompanyCard({
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex h-20 w-36 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-3">
             {company.logo_url ? (
-              <img src={company.logo_url} alt={company.trade_name || company.name} className="max-h-full max-w-full object-contain" />
+              <span
+                aria-label={company.trade_name || company.name}
+                role="img"
+                className="block h-full w-full bg-contain bg-center bg-no-repeat"
+                style={{ backgroundImage: `url("${company.logo_url}")` }}
+              />
             ) : (
               <ImageIcon className="h-7 w-7 text-slate-300" />
             )}

@@ -50,18 +50,17 @@ export async function POST(request: Request) {
   const auth = await requireAuthorizedUser(request)
   let companyId: string | null = null
 
-  if (auth.authorized) {
-    companyId = auth.user.role === "MASTER"
-      ? requestedCompanyId
-      : auth.user.company_id
-    if (!companyId && linkToken) {
-      companyId = await validateRemoteLink(linkToken, employeeId)
-    }
-  } else {
+  if (linkToken) {
     companyId = await validateRemoteLink(linkToken, employeeId)
     if (!companyId) {
       return NextResponse.json({ error: "Sessao ou link remoto invalido para preparar upload." }, { status: 401 })
     }
+  } else if (auth.authorized) {
+    companyId = auth.user.role === "MASTER"
+      ? requestedCompanyId
+      : auth.user.company_id
+  } else {
+    return NextResponse.json({ error: "Sessao ou link remoto invalido para preparar upload." }, { status: 401 })
   }
 
   if (!companyId) {

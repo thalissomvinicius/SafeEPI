@@ -247,17 +247,17 @@ export default function DeliveryPage() {
     return drafts
   }, [])
 
-  const getStringFromData = (data: Record<string, unknown> | null | undefined, key: string) => {
+  const getStringFromData = useCallback((data: Record<string, unknown> | null | undefined, key: string) => {
     const value = data?.[key]
     return typeof value === "string" ? value : ""
-  }
+  }, [])
 
-  const getStringArrayFromData = (data: Record<string, unknown> | null | undefined, key: string) => {
+  const getStringArrayFromData = useCallback((data: Record<string, unknown> | null | undefined, key: string) => {
     const value = data?.[key]
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
-  }
+  }, [])
 
-  const toCartItemFromRemote = (value: unknown, fallbackData?: Record<string, unknown> | null): CartItem | null => {
+  const toCartItemFromRemote = useCallback((value: unknown, fallbackData?: Record<string, unknown> | null): CartItem | null => {
     const source = value && typeof value === "object" ? value as Record<string, unknown> : {}
     const ppeId = typeof source.ppeId === "string"
       ? source.ppeId
@@ -290,7 +290,7 @@ export default function DeliveryPage() {
         : getStringArrayFromData(fallbackData, "autoReturnedDeliveryIds"),
       autoReturnNote: typeof source.autoReturnNote === "string" ? source.autoReturnNote : undefined,
     }
-  }
+  }, [getStringArrayFromData, getStringFromData])
 
   const buildDraftFromRemoteLink = useCallback((link: PendingDeliveryRemoteLink, localDraft?: PendingDeliveryDraft): PendingDeliveryDraft | null => {
     const data = link.data || {}
@@ -324,7 +324,7 @@ export default function DeliveryPage() {
         : localDraft?.deliveryIds,
       signaturePendingOnly: data.signaturePendingOnly === true || localDraft?.signaturePendingOnly === true,
     }
-  }, [])
+  }, [getStringArrayFromData, getStringFromData, toCartItemFromRemote])
 
   const loadPendingDrafts = useCallback(async () => {
     if (typeof window === "undefined") return

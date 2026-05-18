@@ -8,6 +8,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
 
 export default function InventoryPage() {
   const { user } = useAuth()
@@ -54,26 +55,25 @@ export default function InventoryPage() {
   const handleAddMovement = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.ppe_id || formData.quantity <= 0) {
-      console.warn('[Estoque] Formulário inválido:', formData)
+      toast.error("Informe um EPI e uma quantidade válida para ajustar o estoque.")
       return
     }
 
     try {
       setIsSaving(true)
       setLoading(true)
-      console.log('[Estoque] Enviando movimento:', formData)
-      const result = await api.addStockMovement({
+      await api.addStockMovement({
         ...formData,
         created_by_id: user?.id ?? null,
         created_by_name: user?.user_metadata?.full_name || user?.email || 'Sistema'
       })
-      console.log('[Estoque] Movimento registrado com sucesso:', result)
       await loadData()
       setIsModalOpen(false)
       setFormData(prev => ({ ...prev, quantity: 1, motive: "Compra / Reposição de Estoque" }))
+      toast.success("Ajuste de estoque registrado com sucesso.")
     } catch (error) {
       console.error('[Estoque] ERRO ao salvar movimentação:', error)
-      alert(`Erro ao aplicar ajuste de estoque:\n\n${error instanceof Error ? error.message : JSON.stringify(error)}`)
+      toast.error(error instanceof Error ? error.message : "Erro ao aplicar ajuste de estoque.")
     } finally {
       setIsSaving(false)
       setLoading(false)

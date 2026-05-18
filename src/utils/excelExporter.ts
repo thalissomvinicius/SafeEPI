@@ -1,36 +1,53 @@
-import * as XLSX from "xlsx"
+import ExcelJS from "exceljs"
 import { format } from "date-fns"
 import { COMPANY_CONFIG } from "@/config/company"
 import { DeliveryWithRelations } from "@/types/database"
 import { formatDeliveryDate } from "@/lib/dateOnly"
 
-function addHeaderToSheet(ws: XLSX.WorkSheet, title: string) {
-  const headerData = [
-    [`${COMPANY_CONFIG.name.toUpperCase()} - ${COMPANY_CONFIG.systemName.toUpperCase()}`],
-    [`Relatorio: ${title}`],
-    [`Exportado em: ${format(new Date(), "dd/MM/yyyy HH:mm")} | Compliance NR-06`],
-    [],
-  ]
+type ExcelValue = string | number | null
+type ExcelRow = Record<string, ExcelValue>
 
-  XLSX.utils.sheet_add_aoa(ws, headerData, { origin: "A1" })
+function addReportSheet(workbook: ExcelJS.Workbook, sheetName: string, title: string, rows: ExcelRow[]) {
+  const worksheet = workbook.addWorksheet(sheetName)
+  const headers = Object.keys(rows[0] || {})
+
+  worksheet.addRow([`${COMPANY_CONFIG.name.toUpperCase()} - ${COMPANY_CONFIG.systemName.toUpperCase()}`])
+  worksheet.addRow([`Relatorio: ${title}`])
+  worksheet.addRow([`Exportado em: ${format(new Date(), "dd/MM/yyyy HH:mm")} | Compliance NR-06`])
+  worksheet.addRow([])
+  worksheet.addRow(headers)
+
+  rows.forEach((row) => {
+    worksheet.addRow(headers.map((header) => row[header] ?? ""))
+  })
+
+  worksheet.getRow(1).font = { bold: true, size: 14 }
+  worksheet.getRow(2).font = { bold: true }
+  worksheet.getRow(5).font = { bold: true }
+  worksheet.getRow(5).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } }
+
+  headers.forEach((header, index) => {
+    worksheet.getColumn(index + 1).width = header.toLowerCase().includes("colaborador") ? 35 : 22
+  })
 }
 
-function styleWorksheet(ws: XLSX.WorkSheet, colCount: number) {
-  const colWidths = []
+async function saveWorkbook(workbook: ExcelJS.Workbook, fileName: string) {
+  if (typeof window === "undefined") return
 
-  for (let i = 0; i < colCount; i++) {
-    colWidths.push({ wch: 22 })
-  }
-
-  if (colWidths.length > 1) {
-    colWidths[1] = { wch: 35 }
-  }
-
-  ws["!cols"] = colWidths
+  const buffer = await workbook.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
 }
 
 export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
-  const wb = XLSX.utils.book_new()
+  const workbook = new ExcelJS.Workbook()
 
   const rows = deliveries.map((delivery) => ({
     "Data Entrega": formatDeliveryDate(delivery.delivery_date),
@@ -48,11 +65,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     "Custo Total (R$)": (delivery.ppe?.cost || 0) * (delivery.quantity || 1),
   }))
 
-  const ws = XLSX.utils.aoa_to_sheet([])
-  addHeaderToSheet(ws, "Historico Geral de Entregas")
-  XLSX.utils.sheet_add_json(ws, rows, { origin: "A5" })
-  styleWorksheet(ws, Object.keys(rows[0] || {}).length)
-  XLSX.utils.book_append_sheet(wb, ws, "Entregas")
+  addReportSheet(workbook, "Entregas", "Historico Geral de Entregas", rows)
 
   const ppeMap: Record<string, { qtd: number; custo: number }> = {}
   deliveries.forEach((delivery) => {
@@ -70,11 +83,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     }))
     .sort((a, b) => b["Total Entregue"] - a["Total Entregue"])
 
-  const wsSummary = XLSX.utils.aoa_to_sheet([])
-  addHeaderToSheet(wsSummary, "Resumo por EPI")
-  XLSX.utils.sheet_add_json(wsSummary, summaryRows, { origin: "A5" })
-  styleWorksheet(wsSummary, 3)
-  XLSX.utils.book_append_sheet(wb, wsSummary, "Resumo por EPI")
+  addReportSheet(workbook, "Resumo por EPI", "Resumo por EPI", summaryRows)
 
   const workplaceMap: Record<string, { qtd: number; custo: number }> = {}
   deliveries.forEach((delivery) => {
@@ -92,21 +101,16 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     }))
     .sort((a, b) => b["Investimento Total (R$)"] - a["Investimento Total (R$)"])
 
-  const wsWorkplaces = XLSX.utils.aoa_to_sheet([])
-  addHeaderToSheet(wsWorkplaces, "Resumo por Canteiro")
-  XLSX.utils.sheet_add_json(wsWorkplaces, workplaceRows, { origin: "A5" })
-  styleWorksheet(wsWorkplaces, 3)
-  XLSX.utils.book_append_sheet(wb, wsWorkplaces, "Resumo Canteiros")
+  addReportSheet(workbook, "Resumo Canteiros", "Resumo por Canteiro", workplaceRows)
 
-  const fileName = `Relatorio_EPIs_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`
-  XLSX.writeFile(wb, fileName)
+  void saveWorkbook(workbook, `Relatorio_EPIs_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
 }
 
 export function exportEmployeeToExcel(
   employeeName: string,
   deliveries: DeliveryWithRelations[]
 ) {
-  const wb = XLSX.utils.book_new()
+  const workbook = new ExcelJS.Workbook()
 
   const rows = deliveries.map((delivery) => ({
     "Data Entrega": formatDeliveryDate(delivery.delivery_date),
@@ -119,11 +123,7 @@ export function exportEmployeeToExcel(
     "Custo (R$)": delivery.ppe?.cost || 0,
   }))
 
-  const ws = XLSX.utils.aoa_to_sheet([])
-  addHeaderToSheet(ws, `Prontuario Individual: ${employeeName}`)
-  XLSX.utils.sheet_add_json(ws, rows, { origin: "A5" })
-  styleWorksheet(ws, 8)
-  XLSX.utils.book_append_sheet(wb, ws, "Prontuario")
+  addReportSheet(workbook, "Prontuario", `Prontuario Individual: ${employeeName}`, rows)
 
-  XLSX.writeFile(wb, `Prontuario_${employeeName.replace(/\s+/g, "_")}.xlsx`)
+  void saveWorkbook(workbook, `Prontuario_${employeeName.replace(/\s+/g, "_")}.xlsx`)
 }

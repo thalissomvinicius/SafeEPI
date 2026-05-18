@@ -291,19 +291,6 @@ function isMissingSignedDocumentsTableIssue(error: unknown): boolean {
   );
 }
 
-function isMissingEmployeeSoftDeleteColumnIssue(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError & { status?: number };
-  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
-  return (
-    maybeError.code === "PGRST204" ||
-    maybeError.code === "42703" ||
-    text.includes("schema cache") ||
-    text.includes("could not find") ||
-    text.includes("column")
-  ) && text.includes("deleted_at");
-}
-
 type RemoteLinkArchiveMarker = {
   employee_id: string | null;
   data: unknown;
@@ -458,6 +445,29 @@ async function uploadDeliverySignature(
 
   if (!response.ok || !result.publicUrl) {
     throw new Error(result.error || "Nao foi possivel salvar a assinatura.");
+  }
+
+  return result.publicUrl;
+}
+
+async function uploadEmployeePhoto(photoFile: File, employeeId?: string): Promise<string> {
+  const formData = new FormData();
+  const companyId = await getCurrentCompanyId();
+  const storedMasterCompanyId = getStoredMasterCompanyId();
+  const targetCompanyId = companyId || storedMasterCompanyId;
+
+  formData.append("photoFile", photoFile);
+  formData.append("employee_id", employeeId || "new");
+  if (targetCompanyId) formData.append("company_id", targetCompanyId);
+
+  const response = await fetchWithAuthRetry("/api/employee-photo-upload", {
+    method: "POST",
+    body: formData,
+  });
+  const result = await readResponseJson<{ error?: string; publicUrl?: string }>(response);
+
+  if (!response.ok || !result.publicUrl) {
+    throw new Error(result.error || "Nao foi possivel salvar a foto do colaborador.");
   }
 
   return result.publicUrl;
@@ -1106,18 +1116,7 @@ export const api = {
     await ensureActiveSession();
 
     if (photoFile) {
-      const fileName = `emp_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
-      const { error: storageError } = await supabase.storage
-        .from('ppe_signatures')
-        .upload(fileName, photoFile);
-      
-      if (storageError) throw storageError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('ppe_signatures')
-        .getPublicUrl(fileName);
-      
-      photoUrl = publicUrl;
+      photoUrl = await uploadEmployeePhoto(photoFile);
     }
 
     const employeePayload = await withCompanyId({ ...employee, photo_url: photoUrl } as Record<string, unknown>);
@@ -1147,18 +1146,7 @@ export const api = {
     await ensureActiveSession();
 
     if (photoFile) {
-      const fileName = `emp_${Date.now()}_${id}.png`;
-      const { error: storageError } = await supabase.storage
-        .from('ppe_signatures')
-        .upload(fileName, photoFile);
-      
-      if (storageError) throw storageError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('ppe_signatures')
-        .getPublicUrl(fileName);
-      
-      finalUpdates.photo_url = publicUrl;
+      finalUpdates.photo_url = await uploadEmployeePhoto(photoFile, id);
     }
 
     const response = await fetch('/api/employees/update', {

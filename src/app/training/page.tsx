@@ -243,7 +243,7 @@ export default function TrainingPage() {
     }
   }, [getRemoteDraftKey])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true)
       const [trainingsResult, employeesResult] = await Promise.allSettled([
@@ -279,7 +279,7 @@ export default function TrainingPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (user?.company?.training_enabled === false) {
@@ -288,8 +288,12 @@ export default function TrainingPage() {
       return
     }
 
-    void loadData()
-  }, [router, user])
+    const timer = window.setTimeout(() => {
+      void loadData()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [loadData, router, user])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
