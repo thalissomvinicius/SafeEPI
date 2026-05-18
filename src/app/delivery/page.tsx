@@ -94,6 +94,7 @@ export default function DeliveryPage() {
   const [pendingSearchTerm, setPendingSearchTerm] = useState("")
   const [remoteWaitHours, setRemoteWaitHours] = useState(24)
   const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
+  const [reopeningPendingToken, setReopeningPendingToken] = useState<string | null>(null)
 
   const [ipAddress, setIpAddress] = useState<string>("")
   const [location, setLocation] = useState<string>("")
@@ -972,6 +973,60 @@ export default function DeliveryPage() {
     }
   }, [filteredPendingDrafts, checkPendingDraft])
 
+  const reopenExpiredPendingDraft = useCallback(async (draft: PendingDeliveryDraft) => {
+    if (draft.status !== "expired") return
+
+    try {
+      setReopeningPendingToken(draft.token)
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+      const draftItems = draft.items && draft.items.length > 0 ? draft.items : [draft.item]
+      const firstItem = draftItems[0]
+      const linkData = {
+        e: draft.employeeId,
+        p: firstItem.ppeId,
+        w: draft.workplaceId,
+        q: firstItem.quantity,
+        r: firstItem.reason,
+        deliveryDate: draft.deliveryDate,
+        employeeName: draft.employeeName,
+        workplaceName: draft.workplaceName,
+        items: draftItems,
+        ...(draft.deliveryIds?.length ? { deliveryIds: draft.deliveryIds } : {}),
+        ...(draft.signaturePendingOnly ? { signaturePendingOnly: true } : {}),
+        ...(firstItem.autoReturnDeliveryIds?.length ? { autoReturnedDeliveryIds: firstItem.autoReturnDeliveryIds } : {}),
+      }
+
+      const data = await api.createRemoteLink({
+        employee_id: draft.employeeId,
+        type: "delivery",
+        data: linkData,
+        expires_hours: remoteWaitHours,
+      })
+      const url = `${baseUrl}/delivery/remote?t=${data.link.token}`
+
+      removePendingDraft(draft.token)
+      persistPendingDraft({
+        ...draft,
+        token: data.link.token,
+        linkUrl: url,
+        status: "pending",
+        expiresAt: data.link.expires_at,
+      })
+
+      const copied = await copyTextToClipboard(url)
+      toast.success(copied
+        ? `Link reaberto e copiado. Valido por ${remoteWaitHours}h.`
+        : `Link reaberto. Use Copiar ou Abrir no novo card.`
+      )
+    } catch (err) {
+      console.error("Erro ao reabrir link expirado:", err)
+      const message = err instanceof Error ? err.message : "Nao foi possivel reabrir o link."
+      toast.error(message)
+    } finally {
+      setReopeningPendingToken(null)
+    }
+  }, [remoteWaitHours, removePendingDraft, persistPendingDraft])
+
   useEffect(() => {
     if (viewMode !== "pending") return
     if (typeof window === "undefined") return
@@ -1201,6 +1256,7 @@ export default function DeliveryPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {filteredPendingDrafts.map((draft) => {
                   const isChecking = checkingPendingToken === draft.token || checkingPendingToken === "batch"
+                  const isReopening = reopeningPendingToken === draft.token
                   const statusStyle = draft.status === "completed"
                     ? "bg-green-50 text-green-700 border-green-200"
                     : draft.status === "expired"
@@ -1277,12 +1333,27 @@ export default function DeliveryPage() {
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} /> Checar
                         </button>
-                        <button
-                          onClick={() => restorePendingDraft(draft)}
-                          className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
-                        >
-                          <Package className="w-3.5 h-3.5" /> {draft.signaturePendingOnly ? "Copiar" : "Reabrir"}
-                        </button>
+                        {draft.status === "expired" ? (
+                          <button
+                            onClick={() => void reopenExpiredPendingDraft(draft)}
+                            disabled={isReopening}
+                            className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          >
+                            {isReopening ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Link2 className="w-3.5 h-3.5" />
+                            )}
+                            Reabrir Link
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => restorePendingDraft(draft)}
+                            className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          >
+                            <Package className="w-3.5 h-3.5" /> {draft.signaturePendingOnly ? "Copiar" : "Reabrir"}
+                          </button>
+                        )}
                         <button
                           onClick={() => removePendingDraft(draft.token)}
                           className="py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
