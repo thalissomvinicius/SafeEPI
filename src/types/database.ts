@@ -105,6 +105,7 @@ export type DeliveryWithRelations = Delivery & {
     full_name: string;
     cpf: string;
     job_title?: string;
+    third_party_id?: string | null;
   };
   ppe?: {
     name: string;
@@ -115,6 +116,7 @@ export type DeliveryWithRelations = Delivery & {
   };
   workplace?: {
     name: string;
+    third_party_id?: string | null;
   };
 };
 

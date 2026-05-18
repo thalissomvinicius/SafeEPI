@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink, FileUp, Download } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink, FileUp, Download, Handshake } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
 import * as XLSX from "xlsx"
 import { api } from "@/services/api"
-import { Employee, Workplace, DeliveryWithRelations, CatalogItem } from "@/types/database"
+import { Employee, Workplace, DeliveryWithRelations, CatalogItem, ThirdParty } from "@/types/database"
 import { format, addDays, isPast } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -135,6 +135,7 @@ export default function EmployeesPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
+  const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
   const [jobTitles, setJobTitles] = useState<CatalogItem[]>([])
   const [departments, setDepartments] = useState<CatalogItem[]>([])
   const [catalogWarning, setCatalogWarning] = useState("")
@@ -164,6 +165,7 @@ export default function EmployeesPage() {
     role: string;
     department: string;
     cpf: string;
+    third_party_id: string;
     workplace_id: string;
     admission_date: string;
     termination_date: string;
@@ -174,6 +176,7 @@ export default function EmployeesPage() {
     role: "", 
     department: "", 
     cpf: "",
+    third_party_id: "",
     workplace_id: "",
     admission_date: "",
     termination_date: "",
@@ -197,6 +200,7 @@ export default function EmployeesPage() {
   const [isDeletingEmployee, setIsDeletingEmployee] = useState(false)
   const { user } = useAuth()
   const canEdit = user?.role === 'MASTER' || user?.role === 'ADMIN'
+  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
 
   useEffect(() => {
     return () => {
@@ -267,14 +271,16 @@ export default function EmployeesPage() {
 
   const loadData = async () => {
     try {
-      const [empData, wpData, jobData, deptData] = await Promise.all([
+      const [empData, wpData, jobData, deptData, thirdPartyData] = await Promise.all([
         api.getEmployees(),
         api.getWorkplaces(),
         api.getJobTitles(),
-        api.getDepartments()
+        api.getDepartments(),
+        hasThirdPartyFeature ? api.getThirdParties() : Promise.resolve([] as ThirdParty[])
       ])
       setEmployees(empData)
       setWorkplaces(wpData)
+      setThirdParties(thirdPartyData)
       setJobTitles(jobData)
       setDepartments(deptData)
       setCatalogWarning("")
@@ -300,6 +306,7 @@ export default function EmployeesPage() {
     role: "",
     department: "",
     cpf: "",
+    third_party_id: "",
     workplace_id: "",
     admission_date: "",
     termination_date: "",
@@ -307,9 +314,14 @@ export default function EmployeesPage() {
     face_descriptor: null
   })
 
+  const getThirdPartyName = (id: string | null) => {
+    return normalizeName(thirdParties.find(thirdParty => thirdParty.id === id)?.trade_name || thirdParties.find(thirdParty => thirdParty.id === id)?.name || "Sem terceiro")
+  }
+
   const filteredEmployees = employees.filter(emp => {
     const search = searchTerm.toLowerCase()
-    const matchesSearch = emp.full_name.toLowerCase().includes(search) || emp.cpf.includes(searchTerm)
+    const thirdPartyName = getThirdPartyName(emp.third_party_id || null)
+    const matchesSearch = emp.full_name.toLowerCase().includes(search) || emp.cpf.includes(searchTerm) || thirdPartyName.toLowerCase().includes(search)
     const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? emp.active : !emp.active)
     const matchesDepartment = departmentFilter === "all" || emp.department === departmentFilter
     const matchesWorkplace = workplaceFilter === "all" || (workplaceFilter === "none" ? !emp.workplace_id : emp.workplace_id === workplaceFilter)
@@ -359,6 +371,7 @@ export default function EmployeesPage() {
           job_title: normalizedRole,
           department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
+          third_party_id: hasThirdPartyFeature ? formData.third_party_id || null : null,
           workplace_id: formData.workplace_id || null,
           admission_date: formData.admission_date || null,
           termination_date: formData.termination_date || null,
@@ -387,6 +400,7 @@ export default function EmployeesPage() {
           job_title: normalizedRole,
           department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
+          third_party_id: hasThirdPartyFeature ? formData.third_party_id || null : null,
           admission_date: formData.admission_date || null,
           termination_date: formData.termination_date || null,
           active: !formData.termination_date,
@@ -417,6 +431,7 @@ export default function EmployeesPage() {
       role: getJobTitleName(emp.job_title),
       department: getDepartmentName(emp.department),
       cpf: emp.cpf,
+      third_party_id: emp.third_party_id || "",
       workplace_id: emp.workplace_id || "",
       admission_date: emp.admission_date ? String(emp.admission_date).slice(0, 10) : "",
       termination_date: emp.termination_date ? String(emp.termination_date).slice(0, 10) : "",
@@ -1314,6 +1329,7 @@ export default function EmployeesPage() {
                       <th className="px-6 py-5">Nome do Colaborador</th>
                       <th className="px-6 py-5">Cargo / Setor</th>
                       <th className="px-6 py-5">Obra / Canteiro</th>
+                      {hasThirdPartyFeature && <th className="px-6 py-5">Tomador</th>}
                       <th className="px-6 py-5">Biometria</th>
                       <th className="px-6 py-5">Status</th>
                       <th className="px-6 py-5 text-right">Ações</th>
@@ -1335,6 +1351,14 @@ export default function EmployeesPage() {
                               {getWorkplaceName(emp.workplace_id)}
                           </div>
                       </td>
+                      {hasThirdPartyFeature && (
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter">
+                            <Handshake className="w-3 h-3 text-amber-600" />
+                            {getThirdPartyName(emp.third_party_id || null)}
+                          </div>
+                        </td>
+                      )}
                       <td className="px-6 py-5">
                           {(() => {
                             const biometry = getBiometryStatus(emp)
@@ -1394,7 +1418,7 @@ export default function EmployeesPage() {
                   ))}
                   {filteredEmployees.length === 0 && (
                       <tr>
-                          <td colSpan={6} className="px-6 py-10 text-center text-slate-400 italic font-medium">
+                          <td colSpan={hasThirdPartyFeature ? 7 : 6} className="px-6 py-10 text-center text-slate-400 italic font-medium">
                               Nenhum colaborador encontrado.
                           </td>
                       </tr>
@@ -1432,6 +1456,12 @@ export default function EmployeesPage() {
                           <HardDrive className="w-3.5 h-3.5 text-[#2563EB]" />
                           {getWorkplaceName(emp.workplace_id)}
                       </div>
+                      {hasThirdPartyFeature && (
+                        <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter pt-1">
+                          <Handshake className="w-3.5 h-3.5 text-amber-600" />
+                          {getThirdPartyName(emp.third_party_id || null)}
+                        </div>
+                      )}
                       {(() => {
                         const biometry = getBiometryStatus(emp)
                         return (
@@ -1720,7 +1750,14 @@ export default function EmployeesPage() {
                   id="workplace_select"
                   title="Selecionar canteiro de obra"
                   value={formData.workplace_id}
-                  onChange={(e) => setFormData({...formData, workplace_id: e.target.value})}
+                  onChange={(e) => {
+                    const workplace = workplaces.find(item => item.id === e.target.value)
+                    setFormData({
+                      ...formData,
+                      workplace_id: e.target.value,
+                      third_party_id: formData.third_party_id || workplace?.third_party_id || "",
+                    })
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
                 >
                   <option value="">Administrativo / Sem Canteiro</option>
@@ -1729,6 +1766,29 @@ export default function EmployeesPage() {
                   ))}
                 </select>
               </div>
+
+              {hasThirdPartyFeature && (
+                <div className="space-y-2">
+                  <label htmlFor="third_party_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Empresa terceira / Tomador</label>
+                  <div className="relative">
+                    <Handshake className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-600" />
+                    <select
+                      id="third_party_select"
+                      title="Vincular colaborador a uma empresa terceira"
+                      value={formData.third_party_id}
+                      onChange={(e) => setFormData({ ...formData, third_party_id: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
+                    >
+                      <option value="">Colaborador proprio / sem terceiro</option>
+                      {thirdParties.filter(thirdParty => thirdParty.active).map(thirdParty => (
+                        <option key={thirdParty.id} value={thirdParty.id}>
+                          {thirdParty.trade_name || thirdParty.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1791,6 +1851,7 @@ export default function EmployeesPage() {
                       </div>
                       <p className="text-slate-500 text-sm font-medium mt-1">
                         {getJobTitleName(emp?.job_title)} • CPF: {emp?.cpf} • Setor: {getDepartmentName(emp?.department)} • Canteiro: {getWorkplaceName(emp?.workplace_id || null)}
+                        {hasThirdPartyFeature && emp?.third_party_id ? ` • Tomador: ${getThirdPartyName(emp.third_party_id)}` : ""}
                       </p>
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto">

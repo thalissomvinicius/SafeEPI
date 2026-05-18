@@ -235,6 +235,7 @@ export default function MovementsPage() {
           q: delivery.quantity,
           r: delivery.reason || "Primeira Entrega",
           deliveryIds: [delivery.id],
+          thirdPartyId: delivery.third_party_id || delivery.employee?.third_party_id || delivery.workplace?.third_party_id || null,
           deliveryDate: delivery.delivery_date?.slice(0, 10),
           employeeName: delivery.employee?.full_name || "Colaborador",
           workplaceName: delivery.workplace?.name || "Sede",

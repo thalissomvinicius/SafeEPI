@@ -18,6 +18,7 @@ interface DeliveryData {
   e: string // employee id
   p: string // ppe id
   w: string // workplace id
+  thirdPartyId?: string | null
   q: number // quantity
   r: string // reason
   deliveryIds?: string[]
@@ -237,6 +238,7 @@ function RemoteDeliveryContent() {
       const firstItem = deliveryItems[0]
       formData.append('ppe_id', firstItem?.ppeId || ppe.id)
       if (workplace?.id) formData.append('workplace_id', workplace.id)
+      if (deliveryData?.thirdPartyId) formData.append('third_party_id', deliveryData.thirdPartyId)
       formData.append('reason', firstItem?.reason || deliveryData?.r || 'Primeira Entrega')
       formData.append('quantity', String(firstItem?.quantity || deliveryData?.q || 1))
       formData.append('ip_address', ipAddress || 'Remoto')

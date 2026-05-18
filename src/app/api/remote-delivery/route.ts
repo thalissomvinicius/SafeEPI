@@ -71,7 +71,7 @@ function isDeliverySchemaCompatibilityIssue(error: unknown) {
     maybeError.code === "42703" ||
     text.includes("schema cache") ||
     text.includes("could not find the") ||
-    (text.includes("column") && (text.includes("auth_method") || text.includes("workplace_id")))
+    (text.includes("column") && (text.includes("auth_method") || text.includes("workplace_id") || text.includes("third_party_id")))
   )
 }
 
@@ -142,6 +142,12 @@ function getStringArrayFromLinkData(data: unknown, key: string): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
+function getStringFromLinkData(data: unknown, key: string) {
+  if (!data || typeof data !== "object") return ""
+  const value = (data as Record<string, unknown>)[key]
+  return typeof value === "string" ? value : ""
+}
+
 function getImageFileExtension(file: File) {
   if (file.type === "image/jpeg") return "jpg"
   if (file.type === "image/webp") return "webp"
@@ -187,6 +193,7 @@ export async function POST(req: Request) {
     const employee_id = formData.get("employee_id") as string
     const ppe_id = formData.get("ppe_id") as string
     const workplace_id = formData.get("workplace_id") as string | null
+    const third_party_id_from_form = formData.get("third_party_id") as string | null
     const reason = normalizeDeliveryReason((formData.get("reason") as string) || "Primeira Entrega")
     const quantityRaw = Number(formData.get("quantity"))
     const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 && quantityRaw <= 1000
@@ -256,6 +263,9 @@ export async function POST(req: Request) {
     claimedLinkId = claimed.id
 
     const companyId = link.company_id || null
+    const third_party_id = isValidUuid(third_party_id_from_form)
+      ? third_party_id_from_form
+      : getStringFromLinkData(link.data, "thirdPartyId")
 
     let signatureUrl: string | null = null
     if (signatureFile.size > 0) {
@@ -369,6 +379,7 @@ export async function POST(req: Request) {
       employee_id,
       ppe_id,
       workplace_id: workplace_id === "null" || !workplace_id ? null : workplace_id,
+      third_party_id: isValidUuid(third_party_id) ? third_party_id : null,
       reason,
       quantity,
       ip_address,

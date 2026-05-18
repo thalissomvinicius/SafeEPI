@@ -206,6 +206,7 @@ export default function DeliveryPage() {
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const currentPpe = ppes.find(p => p.id === currentPpeId)
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
+  const selectedThirdPartyId = selectedEmployee?.third_party_id || selectedWorkplace?.third_party_id || null
   const currentActiveSamePpeDeliveries = activeDeliveries.filter(delivery => delivery.ppe_id === currentPpeId && !delivery.returned_at)
 
   const shouldAutoReturn = (reason: string, deliveries = currentActiveSamePpeDeliveries) =>
@@ -554,6 +555,7 @@ export default function DeliveryPage() {
       for (const item of cart) {
         const savedDelivery = await api.saveDelivery({
           employee_id: selectedEmployeeId,
+          third_party_id: selectedThirdPartyId,
           ppe_id: item.ppeId,
           workplace_id: selectedWorkplaceId || null,
           reason: item.reason as Delivery['reason'],
@@ -624,6 +626,7 @@ export default function DeliveryPage() {
           metadata: {
             validationHash,
             workplaceName: selectedWorkplace?.name || "Sede",
+            thirdPartyId: selectedThirdPartyId,
             itemCount: cart.length,
             items: cart.map((item) => ({
               ppeId: item.ppeId,
@@ -689,7 +692,7 @@ export default function DeliveryPage() {
     } finally {
       setIsSaving(false)
     }
-  }, [selectedEmployeeId, selectedWorkplaceId, cart, ipAddress, location, authMethod, capturedPhotoBase64, selectedEmployee, selectedWorkplace, deliveryDate, validateCartForDelivery])
+  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, location, authMethod, capturedPhotoBase64, selectedEmployee, selectedWorkplace, deliveryDate, validateCartForDelivery])
 
   const handleManualSave = () => {
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
@@ -723,6 +726,7 @@ export default function DeliveryPage() {
           e: selectedEmployeeId,
           p: cart[0].ppeId,
           w: selectedWorkplaceId,
+          thirdPartyId: selectedThirdPartyId,
           q: cart[0].quantity,
           r: cart[0].reason
       }
@@ -782,6 +786,7 @@ export default function DeliveryPage() {
       for (const item of cart) {
         const savedDelivery = await api.saveDelivery({
           employee_id: selectedEmployeeId,
+          third_party_id: selectedThirdPartyId,
           ppe_id: item.ppeId,
           workplace_id: selectedWorkplaceId || null,
           reason: item.reason as Delivery['reason'],
@@ -814,6 +819,7 @@ export default function DeliveryPage() {
           e: selectedEmployeeId,
           p: cart[0].ppeId,
           w: selectedWorkplaceId,
+          thirdPartyId: selectedThirdPartyId,
           q: cart[0].quantity,
           r: cart[0].reason,
           deliveryIds,

@@ -191,7 +191,8 @@ function isDeliverySchemaCompatibilityIssue(error: unknown): boolean {
     text.includes("could not find the") ||
     text.includes("column") && (
       text.includes("auth_method") ||
-      text.includes("workplace_id")
+      text.includes("workplace_id") ||
+      text.includes("third_party_id")
     )
   );
 }

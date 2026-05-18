@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type React from "react"
-import { Building2, CheckCircle2, Edit3, Handshake, Loader2, Mail, MapPin, Phone, Plus, Search, ShieldAlert, Trash2, type LucideIcon } from "lucide-react"
+import { Building2, CheckCircle2, DollarSign, Edit3, Handshake, Loader2, Mail, MapPin, Package, Phone, Plus, Search, ShieldAlert, Trash2, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/services/api"
-import type { ThirdParty, Workplace } from "@/types/database"
+import type { DeliveryWithRelations, Employee, ThirdParty, Workplace } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 
 type ThirdPartyForm = {
@@ -33,12 +33,18 @@ const emptyForm: ThirdPartyForm = {
   active: true,
 }
 
+const formatCurrency = (value: number) =>
+  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+
 export default function ThirdPartiesPage() {
   const { user, loading: authLoading } = useAuth()
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [deliveries, setDeliveries] = useState<DeliveryWithRelations[]>([])
   const [form, setForm] = useState<ThirdPartyForm>(emptyForm)
   const [searchTerm, setSearchTerm] = useState("")
+  const [billingFilter, setBillingFilter] = useState("all")
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
@@ -63,6 +69,55 @@ export default function ThirdPartiesPage() {
 
   const activeCount = thirdParties.filter((thirdParty) => thirdParty.active).length
   const linkedWorkplacesCount = workplaces.filter((workplace) => workplace.third_party_id).length
+  const linkedEmployeesCount = employees.filter((employee) => employee.third_party_id).length
+
+  const thirdPartyById = useMemo(() => new Map(thirdParties.map((thirdParty) => [thirdParty.id, thirdParty])), [thirdParties])
+  const employeeThirdPartyById = useMemo(() => new Map(employees.map((employee) => [employee.id, employee.third_party_id || null])), [employees])
+  const workplaceThirdPartyById = useMemo(() => new Map(workplaces.map((workplace) => [workplace.id, workplace.third_party_id || null])), [workplaces])
+
+  const getDeliveryThirdPartyId = useCallback((delivery: DeliveryWithRelations) =>
+    delivery.third_party_id ||
+    delivery.employee?.third_party_id ||
+    delivery.workplace?.third_party_id ||
+    employeeThirdPartyById.get(delivery.employee_id) ||
+    workplaceThirdPartyById.get(delivery.workplace_id || "") ||
+    null,
+  [employeeThirdPartyById, workplaceThirdPartyById])
+
+  const thirdPartyDeliveries = useMemo(() =>
+    deliveries
+      .map((delivery) => ({ delivery, thirdPartyId: getDeliveryThirdPartyId(delivery) }))
+      .filter((item): item is { delivery: DeliveryWithRelations; thirdPartyId: string } => Boolean(item.thirdPartyId))
+      .filter((item) => billingFilter === "all" || item.thirdPartyId === billingFilter),
+  [billingFilter, deliveries, getDeliveryThirdPartyId])
+
+  const totalBillingValue = thirdPartyDeliveries.reduce((acc, item) =>
+    acc + Number(item.delivery.quantity || 0) * Number(item.delivery.ppe?.cost || 0),
+  0)
+
+  const billingSummary = useMemo(() => {
+    const summary = new Map<string, { thirdParty: ThirdParty; deliveries: number; items: number; value: number; employees: Set<string> }>()
+
+    for (const item of thirdPartyDeliveries) {
+      const thirdParty = thirdPartyById.get(item.thirdPartyId)
+      if (!thirdParty) continue
+
+      const current = summary.get(item.thirdPartyId) || {
+        thirdParty,
+        deliveries: 0,
+        items: 0,
+        value: 0,
+        employees: new Set<string>(),
+      }
+      current.deliveries += 1
+      current.items += Number(item.delivery.quantity || 0)
+      current.value += Number(item.delivery.quantity || 0) * Number(item.delivery.ppe?.cost || 0)
+      current.employees.add(item.delivery.employee_id)
+      summary.set(item.thirdPartyId, current)
+    }
+
+    return Array.from(summary.values()).sort((a, b) => b.value - a.value)
+  }, [thirdPartyById, thirdPartyDeliveries])
 
   const loadData = useCallback(async () => {
     if (!hasAccess) {
@@ -72,12 +127,16 @@ export default function ThirdPartiesPage() {
 
     try {
       setLoading(true)
-      const [thirdPartyData, workplaceData] = await Promise.all([
+      const [thirdPartyData, workplaceData, employeeData, deliveryData] = await Promise.all([
         api.getThirdParties(),
         api.getWorkplaces(),
+        api.getEmployees(),
+        api.getDeliveries(),
       ])
       setThirdParties(thirdPartyData)
       setWorkplaces(workplaceData)
+      setEmployees(employeeData)
+      setDeliveries(deliveryData)
     } catch (error) {
       console.error("Erro ao carregar terceiros:", error)
       const message = error instanceof Error ? error.message : "Nao foi possivel carregar terceiros."
@@ -208,10 +267,116 @@ export default function ThirdPartiesPage() {
           </button>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
+        <div className="mt-6 grid gap-3 md:grid-cols-4">
           <Metric icon={Building2} label="Cadastrados" value={thirdParties.length} />
           <Metric icon={CheckCircle2} label="Ativos" value={activeCount} />
+          <Metric icon={Handshake} label="Colaboradores" value={linkedEmployeesCount} />
           <Metric icon={MapPin} label="Obras Vinculadas" value={linkedWorkplacesCount} />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-100 p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cobrança de EPIs</p>
+            <h2 className="mt-1 text-lg font-black uppercase tracking-tight text-slate-800">Relatório de entregas a terceiros</h2>
+            <p className="mt-1 text-xs font-bold text-slate-400">Valores calculados por quantidade entregue x custo unitário do EPI.</p>
+          </div>
+          <select
+            value={billingFilter}
+            onChange={(event) => setBillingFilter(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#2563EB]"
+            title="Filtrar relatório por terceiro"
+          >
+            <option value="all">Todos os terceiros</option>
+            {thirdParties.map((thirdParty) => (
+              <option key={thirdParty.id} value={thirdParty.id}>
+                {thirdParty.trade_name || thirdParty.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid gap-3 border-b border-slate-100 p-5 md:grid-cols-3">
+          <TextMetric icon={Package} label="Itens entregues" value={String(thirdPartyDeliveries.reduce((acc, item) => acc + Number(item.delivery.quantity || 0), 0))} />
+          <TextMetric icon={Building2} label="Registros" value={String(thirdPartyDeliveries.length)} />
+          <TextMetric icon={DollarSign} label="Total para cobrança" value={formatCurrency(totalBillingValue)} />
+        </div>
+
+        {billingSummary.length > 0 && (
+          <div className="grid gap-3 border-b border-slate-100 p-5 lg:grid-cols-3">
+            {billingSummary.map((summary) => (
+              <div key={summary.thirdParty.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-sm font-black uppercase tracking-tight text-slate-800">{summary.thirdParty.trade_name || summary.thirdParty.name}</p>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-lg font-black text-slate-900">{summary.items}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Itens</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-black text-slate-900">{summary.employees.size}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Pessoas</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-emerald-700">{formatCurrency(summary.value)}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Valor</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+              <tr>
+                <th className="px-5 py-4">Data</th>
+                <th className="px-5 py-4">Terceiro</th>
+                <th className="px-5 py-4">Colaborador</th>
+                <th className="px-5 py-4">EPI / CA</th>
+                <th className="px-5 py-4 text-center">Qtd</th>
+                <th className="px-5 py-4 text-right">Custo Unit.</th>
+                <th className="px-5 py-4 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {thirdPartyDeliveries.slice(0, 80).map(({ delivery, thirdPartyId }) => {
+                const thirdParty = thirdPartyById.get(thirdPartyId)
+                const unitCost = Number(delivery.ppe?.cost || 0)
+                const total = Number(delivery.quantity || 0) * unitCost
+
+                return (
+                  <tr key={delivery.id} className="hover:bg-slate-50/80">
+                    <td className="px-5 py-4 text-xs font-bold text-slate-500">
+                      {new Date(delivery.delivery_date).toLocaleDateString("pt-BR")}
+                    </td>
+                    <td className="px-5 py-4 text-xs font-black uppercase text-slate-700">
+                      {thirdParty?.trade_name || thirdParty?.name || "Terceiro"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-xs font-black uppercase text-slate-800">{delivery.employee?.full_name || "Colaborador"}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">{delivery.employee?.cpf}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-xs font-black uppercase text-slate-700">{delivery.ppe?.name || "EPI"}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">CA {delivery.ppe?.ca_number || "N/A"}</p>
+                    </td>
+                    <td className="px-5 py-4 text-center text-xs font-black text-slate-700">{delivery.quantity}</td>
+                    <td className="px-5 py-4 text-right text-xs font-bold text-slate-500">{formatCurrency(unitCost)}</td>
+                    <td className="px-5 py-4 text-right text-xs font-black text-emerald-700">{formatCurrency(total)}</td>
+                  </tr>
+                )
+              })}
+              {thirdPartyDeliveries.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center text-sm font-bold uppercase tracking-widest text-slate-400">
+                    Nenhuma entrega vinculada a terceiros.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -340,6 +505,16 @@ function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string;
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
       <Icon className="h-5 w-5 text-[#2563EB]" />
       <p className="mt-3 text-2xl font-black text-slate-900">{value}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+    </div>
+  )
+}
+
+function TextMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+      <Icon className="h-5 w-5 text-[#2563EB]" />
+      <p className="mt-3 text-xl font-black text-slate-900">{value}</p>
       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
     </div>
   )
