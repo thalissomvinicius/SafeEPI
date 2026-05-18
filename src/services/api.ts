@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, CurrentUser, Company } from "@/types/database";
+import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, CurrentUser, Company, ThirdParty } from "@/types/database";
 import { Session } from "@supabase/supabase-js";
 
 type AddTrainingResult = {
@@ -256,6 +256,21 @@ function isMissingCatalogTableIssue(error: unknown): boolean {
     text.includes("schema cache") ||
     text.includes("does not exist") ||
     text.includes("could not find")
+  );
+}
+
+function isMissingThirdPartiesTableIssue(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError;
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+  return (
+    maybeError.code === "42P01" ||
+    maybeError.code === "PGRST205" ||
+    text.includes("third_parties") && (
+      text.includes("schema cache") ||
+      text.includes("does not exist") ||
+      text.includes("could not find")
+    )
   );
 }
 
@@ -893,6 +908,60 @@ export const api = {
     const { error } = await withSessionRetry(() =>
       supabase
         .from('workplaces')
+        .update({ active: false })
+        .eq('id', id)
+    );
+    if (error) throw error;
+  },
+
+  // --- Terceiros / Tomadores ---
+  async getThirdParties() {
+    const companyId = await getCurrentCompanyId();
+    let query = supabase.from('third_parties').select('*').order('name', { ascending: true });
+    if (companyId) query = query.eq('company_id', companyId);
+    const { data, error } = await withSessionRetry(() => query);
+    if (error) {
+      if (isMissingThirdPartiesTableIssue(error)) return [] as ThirdParty[];
+      throw error;
+    }
+    return data as ThirdParty[];
+  },
+
+  async addThirdParty(thirdParty: Omit<ThirdParty, 'id' | 'created_at' | 'updated_at'>) {
+    const payload = await withCompanyId(thirdParty as Record<string, unknown>);
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('third_parties')
+        .insert([payload])
+        .select()
+    );
+
+    if (error) {
+      if (isMissingThirdPartiesTableIssue(error)) {
+        throw new Error("A tabela third_parties ainda nao existe no Supabase. Rode o SQL safeepi_third_parties.sql antes de cadastrar terceiros.");
+      }
+      throw error;
+    }
+    return data[0] as ThirdParty;
+  },
+
+  async updateThirdParty(id: string, updates: Partial<ThirdParty>) {
+    const { data, error } = await withSessionRetry(() =>
+      supabase
+        .from('third_parties')
+        .update(updates)
+        .eq('id', id)
+        .select()
+    );
+
+    if (error) throw error;
+    return data[0] as ThirdParty;
+  },
+
+  async deleteThirdParty(id: string) {
+    const { error } = await withSessionRetry(() =>
+      supabase
+        .from('third_parties')
         .update({ active: false })
         .eq('id', id)
     );

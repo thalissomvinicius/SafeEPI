@@ -57,6 +57,7 @@ export function Header() {
     if (path.startsWith('/training')) return 'Treinamentos'
     if (path.startsWith('/users')) return 'Administração'
     if (path.startsWith('/workplaces')) return 'Obras e Canteiros'
+    if (path.startsWith('/third-parties')) return 'Terceiros'
     if (path.startsWith('/job-sectors')) return 'Cargos e Setores'
     return 'SafeEPI'
   }

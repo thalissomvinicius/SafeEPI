@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog } from "lucide-react"
+import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog, Handshake } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useActiveBrand } from "@/hooks/useActiveBrand"
 
@@ -14,6 +14,7 @@ const allItems = [
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE'] },
   { href: "/employees", label: "Equipe", icon: Users, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/workplaces", label: "Obras", icon: HardDrive, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/third-parties", label: "Terceiros", icon: Handshake, roles: ['MASTER', 'ADMIN', 'DIRETORIA'], feature: "third_parties" },
   { href: "/job-sectors", label: "Cargos", icon: BriefcaseBusiness, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
   { href: "/history", label: "Histórico", icon: History, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
@@ -35,7 +36,8 @@ export function MobileNav() {
 
   const filteredItems = allItems.filter(item => 
     item.roles.includes(user?.role || 'ADMIN') &&
-    (item.href !== "/training" || user?.role === "MASTER" || user?.company?.training_enabled !== false)
+    (item.href !== "/training" || user?.role === "MASTER" || user?.company?.training_enabled !== false) &&
+    (item.feature !== "third_parties" || user?.role === "MASTER" || user?.company?.third_parties_enabled === true)
   )
 
   // Top 4 items for the main bar

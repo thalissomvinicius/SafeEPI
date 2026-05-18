@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog } from "lucide-react"
+import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog, Handshake } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useActiveBrand } from "@/hooks/useActiveBrand"
 
@@ -12,6 +12,7 @@ const menuItems = [
   { href: "/delivery", label: "Nova Entrega", icon: PenTool, roles: ['MASTER', 'ADMIN'] },
   { href: "/inventory", label: "Estoque", icon: Package, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE'] },
   { href: "/workplaces", label: "Obras / Canteiros", icon: HardDrive, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
+  { href: "/third-parties", label: "Terceiros", icon: Handshake, roles: ['MASTER', 'ADMIN', 'DIRETORIA'], feature: "third_parties" },
   { href: "/job-sectors", label: "Cargos / Setores", icon: BriefcaseBusiness, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/employees", label: "Colaboradores", icon: Users, roles: ['MASTER', 'ADMIN', 'DIRETORIA'] },
   { href: "/ppes", label: "EPIs e CAs", icon: Shield, roles: ['MASTER', 'ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
@@ -35,7 +36,8 @@ export function Sidebar() {
   
   const filteredMenuItems = menuItems.filter(item => 
     item.roles.includes(user?.role || 'ADMIN') &&
-    (item.href !== "/training" || user?.role === "MASTER" || user?.company?.training_enabled !== false)
+    (item.href !== "/training" || user?.role === "MASTER" || user?.company?.training_enabled !== false) &&
+    (item.feature !== "third_parties" || user?.role === "MASTER" || user?.company?.third_parties_enabled === true)
   )
 
   return (

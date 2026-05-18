@@ -14,6 +14,7 @@ type CompanyPayload = {
   primary_color?: string | null
   active?: boolean
   training_enabled?: boolean
+  third_parties_enabled?: boolean
   subscription_status?: "ACTIVE" | "PAST_DUE" | "SUSPENDED"
   suspended_reason?: string | null
 }
@@ -52,6 +53,7 @@ function sanitizeCompanyPayload(payload: CompanyPayload) {
     primary_color: payload.primary_color || "#2563EB",
     active: payload.active ?? true,
     training_enabled: payload.training_enabled ?? false,
+    third_parties_enabled: payload.third_parties_enabled ?? false,
     subscription_status: payload.subscription_status || (payload.active === false ? "SUSPENDED" : "ACTIVE"),
     suspended_reason: payload.suspended_reason?.trim() || null,
   }
@@ -64,6 +66,7 @@ function isMissingCommercialColumns(error: { message?: string; details?: string 
     text.includes("schema cache") ||
     text.includes("subscription_status") ||
     text.includes("training_enabled") ||
+    text.includes("third_parties_enabled") ||
     text.includes("suspended_reason")
   )
 }
@@ -71,6 +74,7 @@ function isMissingCommercialColumns(error: { message?: string; details?: string 
 function withoutCommercialColumns(payload: ReturnType<typeof sanitizeCompanyPayload>) {
   const basicPayload: Partial<ReturnType<typeof sanitizeCompanyPayload>> = { ...payload }
   delete basicPayload.training_enabled
+  delete basicPayload.third_parties_enabled
   delete basicPayload.subscription_status
   delete basicPayload.suspended_reason
   return basicPayload

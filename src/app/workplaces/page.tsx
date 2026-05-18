@@ -1,16 +1,18 @@
 ﻿"use client"
 
-import { useState, useEffect } from "react"
-import { HardDrive, Plus, Search, MapPin, User, X, Loader2, CheckCircle2, Trash2, Users, Shield, AlertTriangle, Eye } from "lucide-react"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { HardDrive, Plus, Search, MapPin, User, X, Loader2, CheckCircle2, Trash2, Users, Shield, AlertTriangle, Eye, Handshake } from "lucide-react"
 import { api } from "@/services/api"
-import { Workplace, Employee, DeliveryWithRelations } from "@/types/database"
+import { Workplace, Employee, DeliveryWithRelations, ThirdParty } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 
 export default function WorkplacesPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
+  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
 
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
+  const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -26,40 +28,52 @@ export default function WorkplacesPage() {
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; linkedEmp: number; linkedDel: number }>({ open: false, linkedEmp: 0, linkedDel: 0 })
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const [formData, setFormData] = useState<{ id?: string; name: string; address: string; manager_name: string }>({
-    name: "", address: "", manager_name: ""
+  const [formData, setFormData] = useState<{ id?: string; name: string; address: string; manager_name: string; third_party_id: string }>({
+    name: "", address: "", manager_name: "", third_party_id: ""
   })
 
-  const loadWorkplaces = async () => {
+  const thirdPartyById = useMemo(() => new Map(thirdParties.map((thirdParty) => [thirdParty.id, thirdParty])), [thirdParties])
+
+  const loadWorkplaces = useCallback(async () => {
     try {
-      const data = await api.getWorkplaces()
+      const [data, thirdPartyData] = await Promise.all([
+        api.getWorkplaces(),
+        hasThirdPartyFeature ? api.getThirdParties() : Promise.resolve([] as ThirdParty[]),
+      ])
       setWorkplaces(data)
+      setThirdParties(thirdPartyData)
     } catch (error) {
       console.error("Erro ao carregar canteiros:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [hasThirdPartyFeature])
 
   useEffect(() => {
     const timer = setTimeout(() => { loadWorkplaces() }, 0)
     return () => clearTimeout(timer)
-  }, [])
+  }, [loadWorkplaces])
 
   const handleSaveWorkplace = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name) return
     try {
       setIsSaving(true)
+      const workplacePayload = {
+        name: formData.name,
+        address: formData.address,
+        manager_name: formData.manager_name,
+        ...(hasThirdPartyFeature ? { third_party_id: formData.third_party_id || null } : {}),
+      }
       if (formData.id) {
-        await api.updateWorkplace(formData.id, { name: formData.name, address: formData.address, manager_name: formData.manager_name })
+        await api.updateWorkplace(formData.id, workplacePayload)
       } else {
-        await api.addWorkplace({ name: formData.name, address: formData.address, manager_name: formData.manager_name, active: true })
+        await api.addWorkplace({ ...workplacePayload, active: true })
       }
       setLoading(true)
       await loadWorkplaces()
       setIsModalOpen(false)
-      setFormData({ id: undefined, name: "", address: "", manager_name: "" })
+      setFormData({ id: undefined, name: "", address: "", manager_name: "", third_party_id: "" })
     } catch (error) {
       console.error("Erro ao salvar canteiro:", error)
       alert("Erro ao salvar canteiro no banco de dados.")
@@ -69,12 +83,12 @@ export default function WorkplacesPage() {
   }
 
   const openEditWorkplace = (w: Workplace) => {
-    setFormData({ id: w.id, name: w.name, address: w.address || "", manager_name: w.manager_name || "" })
+    setFormData({ id: w.id, name: w.name, address: w.address || "", manager_name: w.manager_name || "", third_party_id: w.third_party_id || "" })
     setIsModalOpen(true)
   }
 
   const closeEditModal = () => {
-    setFormData({ id: undefined, name: "", address: "", manager_name: "" })
+    setFormData({ id: undefined, name: "", address: "", manager_name: "", third_party_id: "" })
     setIsModalOpen(false)
   }
 
@@ -116,7 +130,7 @@ export default function WorkplacesPage() {
       await loadWorkplaces()
       setDeleteModal({ open: false, linkedEmp: 0, linkedDel: 0 })
       setIsModalOpen(false)
-      setFormData({ id: undefined, name: "", address: "", manager_name: "" })
+      setFormData({ id: undefined, name: "", address: "", manager_name: "", third_party_id: "" })
     } catch (err) {
       console.error("Erro ao desativar canteiro:", err)
       alert("Erro ao desativar canteiro.")
@@ -127,7 +141,8 @@ export default function WorkplacesPage() {
 
   const filteredWorkplaces = workplaces.filter(w =>
     w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    w.manager_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    w.manager_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    thirdPartyById.get(w.third_party_id || "")?.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
@@ -144,7 +159,7 @@ export default function WorkplacesPage() {
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Cadastro de obras, canteiros e locais operacionais da empresa.</p>
         </div>
-        <button onClick={() => { setFormData({ id: undefined, name: "", address: "", manager_name: "" }); setIsModalOpen(true) }}
+        <button onClick={() => { setFormData({ id: undefined, name: "", address: "", manager_name: "", third_party_id: "" }); setIsModalOpen(true) }}
           title="Nova obra ou canteiro" className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center whitespace-nowrap">
           <Plus className="w-4 h-4 mr-2" /> Nova Obra / Canteiro
         </button>
@@ -186,6 +201,12 @@ export default function WorkplacesPage() {
                       <User className="w-4 h-4 text-slate-400" />
                       <span className="text-xs font-bold uppercase tracking-tight text-slate-600">Resp: {w.manager_name || "Não atribuído"}</span>
                     </div>
+                    {hasThirdPartyFeature && w.third_party_id && (
+                      <div className="flex items-center gap-2">
+                        <Handshake className="w-4 h-4 text-slate-400" />
+                        <span className="text-xs font-bold uppercase tracking-tight text-slate-600">Tomador: {thirdPartyById.get(w.third_party_id)?.trade_name || thirdPartyById.get(w.third_party_id)?.name || "Terceiro vinculado"}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-6 pt-4 border-t border-slate-50 flex justify-between items-center relative z-10">
                     <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[8px] font-black rounded border border-green-100 uppercase tracking-widest">Operacional</span>
@@ -254,6 +275,12 @@ export default function WorkplacesPage() {
                   <User className="w-4 h-4 text-slate-400" />
                   <span className="text-sm font-bold">{detailsWorkplace.manager_name || "Responsável não atribuído"}</span>
                 </div>
+                {hasThirdPartyFeature && detailsWorkplace.third_party_id && (
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <Handshake className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm font-bold">{thirdPartyById.get(detailsWorkplace.third_party_id)?.name || "Terceiro vinculado"}</span>
+                  </div>
+                )}
               </div>
 
               {/* Stats */}
@@ -339,6 +366,26 @@ export default function WorkplacesPage() {
                     value={formData.manager_name} onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })} />
                 </div>
               </div>
+              {hasThirdPartyFeature && (
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tomador / Terceiro</label>
+                  <div className="relative">
+                    <Handshake className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <select
+                      className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold"
+                      value={formData.third_party_id}
+                      onChange={(e) => setFormData({ ...formData, third_party_id: e.target.value })}
+                    >
+                      <option value="">Sem terceiro vinculado</option>
+                      {thirdParties.filter((thirdParty) => thirdParty.active).map((thirdParty) => (
+                        <option key={thirdParty.id} value={thirdParty.id}>
+                          {thirdParty.trade_name || thirdParty.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Endereço / Localização</label>
                 <div className="relative">

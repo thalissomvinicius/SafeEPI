@@ -9,6 +9,7 @@ import {
   CreditCard,
   FileBadge2,
   GraduationCap,
+  Handshake,
   ImageIcon,
   Loader2,
   Mail,
@@ -43,6 +44,7 @@ type CompanyForm = {
   primary_color: string
   active: boolean
   training_enabled: boolean
+  third_parties_enabled: boolean
   subscription_status: "ACTIVE" | "PAST_DUE" | "SUSPENDED"
   suspended_reason: string
 }
@@ -68,6 +70,7 @@ const emptyCompanyForm: CompanyForm = {
   primary_color: "#2563EB",
   active: true,
   training_enabled: false,
+  third_parties_enabled: false,
   subscription_status: "ACTIVE",
   suspended_reason: "",
 }
@@ -194,6 +197,7 @@ export default function CompaniesPage() {
       primary_color: company.primary_color || "#2563EB",
       active: company.active,
       training_enabled: company.training_enabled ?? false,
+      third_parties_enabled: company.third_parties_enabled ?? false,
       subscription_status: company.subscription_status || (company.active ? "ACTIVE" : "SUSPENDED"),
       suspended_reason: company.suspended_reason || "",
     })
@@ -456,6 +460,19 @@ export default function CompaniesPage() {
                     />
                   </label>
 
+                  <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <span>
+                      <span className="block text-xs font-black uppercase tracking-widest text-slate-700">Aba Terceiros</span>
+                      <span className="mt-1 block text-[11px] font-medium text-slate-500">Libera cadastro de tomadores/clientes atendidos pela empresa.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={companyForm.third_parties_enabled}
+                      onChange={(event) => setCompanyForm({ ...companyForm, third_parties_enabled: event.target.checked })}
+                      className="h-5 w-5 shrink-0 accent-[#2563EB]"
+                    />
+                  </label>
+
                   <div className="grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
                     <label>
                       <span className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Status financeiro</span>
@@ -645,6 +662,12 @@ function CompanyCard({
               }`}>
                 <GraduationCap className="h-3 w-3" />
                 {company.training_enabled ? "Premium" : "Sem treino"}
+              </span>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${
+                company.third_parties_enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+              }`}>
+                <Handshake className="h-3 w-3" />
+                {company.third_parties_enabled ? "Terceiros" : "Sem terceiros"}
               </span>
               {company.subscription_status === "SUSPENDED" && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-red-700">

@@ -1,6 +1,7 @@
 export type Employee = {
   id: string;
   company_id?: string | null;
+  third_party_id?: string | null;
   full_name: string;
   cpf: string;
   job_title: string;
@@ -19,6 +20,7 @@ export type Employee = {
 export type Workplace = {
   id: string;
   company_id?: string | null;
+  third_party_id?: string | null;
   name: string;
   address: string | null;
   manager_name: string | null;
@@ -65,6 +67,7 @@ export type StockMovement = {
 export type Delivery = {
   id: string;
   company_id?: string | null;
+  third_party_id?: string | null;
   employee_id: string;
   ppe_id: string;
   delivery_date: string;
@@ -83,6 +86,7 @@ export type Delivery = {
 export type Training = {
   id: string;
   company_id?: string | null;
+  third_party_id?: string | null;
   employee_id: string;
   training_name: string;
   completion_date: string;
@@ -124,6 +128,7 @@ export type TrainingWithRelations = Training & {
 export type SignedDocument = {
   id: string;
   company_id?: string | null;
+  third_party_id?: string | null;
   document_type: 'delivery' | 'remote_delivery' | 'return' | 'nr06' | 'training_certificate';
   employee_id: string | null;
   delivery_id: string | null;
@@ -165,8 +170,25 @@ export type Company = {
   email: string | null;
   active: boolean;
   training_enabled?: boolean;
+  third_parties_enabled?: boolean;
   subscription_status?: 'ACTIVE' | 'PAST_DUE' | 'SUSPENDED';
   suspended_reason?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ThirdParty = {
+  id: string;
+  company_id?: string | null;
+  name: string;
+  trade_name?: string | null;
+  cnpj?: string | null;
+  contact_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  active: boolean;
   created_at?: string;
   updated_at?: string;
 };
