@@ -35,6 +35,14 @@ interface DeliveryData {
   autoReturnedDeliveryIds?: string[]
 }
 
+const dataUrlToImageFile = async (dataUrl: string, baseName: string) => {
+  const response = await fetch(dataUrl)
+  const blob = await response.blob()
+  const mimeType = blob.type || "image/png"
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png"
+  return new File([blob], `${baseName}.${extension}`, { type: mimeType })
+}
+
 function RemoteDeliveryContent() {
   const searchParams = useSearchParams()
   const sigCanvas = useRef<SignatureCanvas | null>(null)
@@ -220,9 +228,7 @@ function RemoteDeliveryContent() {
       setIsSaving(true)
       const validationHash = generateAuditCode()
       
-      const response = await fetch(signatureDataUrl)
-      const blob = await response.blob()
-      const signatureFile = new File([blob], "remote_signature.png", { type: "image/png" })
+      const signatureFile = await dataUrlToImageFile(signatureDataUrl, "remote_signature")
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
       const persistedAuthMethod: Delivery['auth_method'] = authMethod
 

@@ -72,6 +72,14 @@ const normalizeSearchText = (value: unknown) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
 
+const dataUrlToImageFile = async (dataUrl: string, baseName: string) => {
+  const response = await fetch(dataUrl)
+  const blob = await response.blob()
+  const mimeType = blob.type || "image/png"
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png"
+  return new File([blob], `${baseName}.${extension}`, { type: mimeType })
+}
+
 export default function DeliveryPage() {
   const { user } = useAuth()
   const [step, setStep] = useState(1)
@@ -535,9 +543,7 @@ export default function DeliveryPage() {
       
       const validationHash = generateAuditCode()
       
-      const response = await fetch(signatureDataUrl)
-      const blob = await response.blob()
-      const signatureFile = new File([blob], "signature.png", { type: "image/png" })
+      const signatureFile = await dataUrlToImageFile(signatureDataUrl, "signature")
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
       const persistedAuthMethod: Delivery['auth_method'] = authMethod
       const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)

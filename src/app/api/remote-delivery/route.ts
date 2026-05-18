@@ -142,7 +142,21 @@ function getStringArrayFromLinkData(data: unknown, key: string): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
+function getImageFileExtension(file: File) {
+  if (file.type === "image/jpeg") return "jpg"
+  if (file.type === "image/webp") return "webp"
+  return "png"
+}
+
 export async function POST(req: Request) {
+  let claimedLinkId: string | null = null
+  let releaseClaimedLink = async () => {}
+
+  const failAfterClaim = async (body: Record<string, unknown>, status: number) => {
+    await releaseClaimedLink()
+    return NextResponse.json(body, { status })
+  }
+
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -153,6 +167,20 @@ export async function POST(req: Request) {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+    releaseClaimedLink = async () => {
+      if (!claimedLinkId) return
+      try {
+        await supabaseAdmin
+          .from("remote_links")
+          .update({ status: "pending", completed_at: null })
+          .eq("id", claimedLinkId)
+          .eq("status", "completed")
+      } catch (releaseError) {
+        console.error("[/api/remote-delivery] claim release error:", releaseError)
+      } finally {
+        claimedLinkId = null
+      }
+    }
 
     const formData = await req.formData()
 
@@ -177,6 +205,16 @@ export async function POST(req: Request) {
     // entrega — operações autenticadas usam a rota normal /deliveries.
     if (!isValidToken(token)) {
       return NextResponse.json({ error: "Token inválido." }, { status: 401 })
+    }
+
+    if (!signatureFile || !(signatureFile instanceof File) || signatureFile.size === 0) {
+      return NextResponse.json({ error: "Arquivo de assinatura nao informado." }, { status: 400 })
+    }
+    if (signatureFile.size > 3 * 1024 * 1024) {
+      return NextResponse.json({ error: "Arquivo de assinatura excede 3MB." }, { status: 413 })
+    }
+    if (!signatureFile.type.startsWith("image/")) {
+      return NextResponse.json({ error: "Arquivo de assinatura precisa ser uma imagem." }, { status: 400 })
     }
 
     const { data: link } = await supabaseAdmin
@@ -215,23 +253,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Link já consumido por outra requisição." }, { status: 409 })
     }
 
+    claimedLinkId = claimed.id
+
     const companyId = link.company_id || null
 
     let signatureUrl: string | null = null
-    if (signatureFile && signatureFile.size > 0) {
-      // Limita tamanho a ~3 MB.
-      if (signatureFile.size > 3 * 1024 * 1024) {
-        return NextResponse.json({ error: "Arquivo de assinatura excede 3MB." }, { status: 413 })
-      }
+    if (signatureFile.size > 0) {
       const prefix = auth_method === "facial" ? "bio_" : "sig_"
-      const fileName = `${prefix}${Date.now()}_${employee_id}.png`
+      const extension = getImageFileExtension(signatureFile)
+      const fileName = `${prefix}${Date.now()}_${employee_id}.${extension}`
       const { error: storageError } = await supabaseAdmin.storage
         .from("ppe_signatures")
-        .upload(fileName, signatureFile)
+        .upload(fileName, signatureFile, {
+          contentType: signatureFile.type || "image/png",
+          upsert: false,
+        })
 
       if (storageError) {
         console.error("[/api/remote-delivery] storage error:", storageError)
-        return NextResponse.json({ error: "Falha ao salvar assinatura." }, { status: 500 })
+        return failAfterClaim({ error: "Falha ao salvar assinatura." }, 500)
       }
 
       const { data: { publicUrl } } = supabaseAdmin.storage
@@ -251,7 +291,7 @@ export async function POST(req: Request) {
 
       if (existingError) {
         console.error("[/api/remote-delivery] existing delivery fetch error:", existingError)
-        return NextResponse.json({ error: "Falha ao localizar entregas pendentes de assinatura." }, { status: 500 })
+        return failAfterClaim({ error: "Falha ao localizar entregas pendentes de assinatura." }, 500)
       }
 
       const validDeliveries = (existingDeliveries || []).filter((delivery: { employee_id?: string; company_id?: string | null }) =>
@@ -260,7 +300,7 @@ export async function POST(req: Request) {
       )
 
       if (validDeliveries.length !== signatureOnlyDeliveryIds.length) {
-        return NextResponse.json({ error: "Entrega pendente nao pertence ao colaborador ou empresa do link." }, { status: 403 })
+        return failAfterClaim({ error: "Entrega pendente nao pertence ao colaborador ou empresa do link." }, 403)
       }
 
       const updatePayload: Record<string, unknown> = {
@@ -284,7 +324,7 @@ export async function POST(req: Request) {
 
         if (fallbackUpdateError) {
           console.error("[/api/remote-delivery] fallback signature update error:", fallbackUpdateError)
-          return NextResponse.json({ error: "Falha ao salvar assinatura na entrega existente." }, { status: 500 })
+          return failAfterClaim({ error: "Falha ao salvar assinatura na entrega existente." }, 500)
         }
 
         return NextResponse.json({
@@ -299,7 +339,7 @@ export async function POST(req: Request) {
 
       if (updateError) {
         console.error("[/api/remote-delivery] signature update error:", updateError)
-        return NextResponse.json({ error: "Falha ao salvar assinatura na entrega existente." }, { status: 500 })
+        return failAfterClaim({ error: "Falha ao salvar assinatura na entrega existente." }, 500)
       }
 
       return NextResponse.json({
@@ -319,7 +359,7 @@ export async function POST(req: Request) {
       .maybeSingle()
 
     if (!ppe || (companyId && ppe.company_id && ppe.company_id !== companyId)) {
-      return NextResponse.json({ error: "EPI não pertence à empresa do link." }, { status: 403 })
+      return failAfterClaim({ error: "EPI não pertence à empresa do link." }, 403)
     }
 
     const stockBefore =
@@ -383,12 +423,12 @@ export async function POST(req: Request) {
 
     if (error) {
       console.error("[/api/remote-delivery] insert error:", error)
-      return NextResponse.json({ error: "Falha ao registrar entrega." }, { status: 500 })
+      return failAfterClaim({ error: "Falha ao registrar entrega." }, 500)
     }
 
     const savedDelivery = data?.[0]
     if (!savedDelivery || typeof savedDelivery.id !== "string") {
-      return NextResponse.json({ error: "Entrega não retornou registro." }, { status: 500 })
+      return failAfterClaim({ error: "Entrega não retornou registro." }, 500)
     }
 
     let autoReturnedDeliveryIds: string[] = []
@@ -496,6 +536,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, data: savedDelivery, autoReturnedDeliveryIds })
   } catch (error: unknown) {
     console.error("[/api/remote-delivery] unexpected error:", error)
+    await releaseClaimedLink()
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
