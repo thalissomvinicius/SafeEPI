@@ -89,6 +89,7 @@ const getImportDate = (value: unknown) => {
 }
 
 type RemoteLinkStatus = "pending" | "completed" | "expired"
+type EmployeeScopeFilter = "own" | "third_party" | "all"
 
 type PendingCaptureDraft = {
   key: string
@@ -142,6 +143,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
+  const [employeeScopeFilter, setEmployeeScopeFilter] = useState<EmployeeScopeFilter>("own")
   const [departmentFilter, setDepartmentFilter] = useState("all")
   const [workplaceFilter, setWorkplaceFilter] = useState("all")
   const [biometryFilter, setBiometryFilter] = useState<"all" | "registered" | "pending">("all")
@@ -323,6 +325,9 @@ export default function EmployeesPage() {
     const thirdPartyName = getThirdPartyName(emp.third_party_id || null)
     const matchesSearch = emp.full_name.toLowerCase().includes(search) || emp.cpf.includes(searchTerm) || thirdPartyName.toLowerCase().includes(search)
     const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? emp.active : !emp.active)
+    const matchesEmployeeScope = !hasThirdPartyFeature ||
+      employeeScopeFilter === "all" ||
+      (employeeScopeFilter === "own" ? !emp.third_party_id : Boolean(emp.third_party_id))
     const matchesDepartment = departmentFilter === "all" || emp.department === departmentFilter
     const matchesWorkplace = workplaceFilter === "all" || (workplaceFilter === "none" ? !emp.workplace_id : emp.workplace_id === workplaceFilter)
     const hasBiometry = Boolean(emp.photo_url && emp.face_descriptor?.length)
@@ -331,7 +336,7 @@ export default function EmployeesPage() {
     const matchesAdmissionStart = !admissionStartFilter || (admission && admission >= new Date(`${admissionStartFilter}T00:00:00`))
     const matchesAdmissionEnd = !admissionEndFilter || (admission && admission <= new Date(`${admissionEndFilter}T23:59:59`))
 
-    return matchesSearch && matchesStatus && matchesDepartment && matchesWorkplace && matchesBiometry && matchesAdmissionStart && matchesAdmissionEnd
+    return matchesSearch && matchesStatus && matchesEmployeeScope && matchesDepartment && matchesWorkplace && matchesBiometry && matchesAdmissionStart && matchesAdmissionEnd
   })
 
   const handleSaveEmployee = async (e: React.FormEvent) => {
@@ -1249,7 +1254,14 @@ export default function EmployeesPage() {
               className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 xl:grid-cols-7 gap-3">
+            {hasThirdPartyFeature && (
+              <select value={employeeScopeFilter} onChange={(e) => setEmployeeScopeFilter(e.target.value as EmployeeScopeFilter)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+                <option value="own">Proprios</option>
+                <option value="third_party">Terceiros</option>
+                <option value="all">Todos vinculos</option>
+              </select>
+            )}
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
               <option value="all">Todos status</option>
               <option value="active">Ativos</option>
