@@ -170,7 +170,9 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.text("NR-06 | Certificado de Uso Individual", pageWidth / 2, 30, { align: "center" })
 
   doc.setFontSize(7)
-  const today = data.deliveryDate ? format(new Date(data.deliveryDate), "dd/MM/yyyy", { locale: ptBR }) : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
+  const today = data.deliveryDate
+    ? `${formatDeliveryDate(data.deliveryDate)} ${formatDeliveryTime(data.deliveryDate)}`
+    : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
   doc.text(today, pageWidth - 14, 15, { align: "right" })
 
   let currentY = 50
@@ -216,7 +218,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
       item.caExpiry ? format(new Date(item.caExpiry), "dd/MM/yyyy") : "-",
       String(item.quantity),
       item.autoReturnNote ? `${item.reason}\n${item.autoReturnNote}` : item.reason,
-      data.deliveryDate ? format(new Date(data.deliveryDate), "dd/MM/yyyy") : format(new Date(), "dd/MM/yyyy")
+      data.deliveryDate ? `${formatDeliveryDate(data.deliveryDate)} ${formatDeliveryTime(data.deliveryDate)}` : format(new Date(), "dd/MM/yyyy HH:mm")
     ]),
     styles: { fontSize: 8.5, cellPadding: 4, font: "helvetica" },
     headStyles: { fillColor: [245, 245, 245], textColor: [71, 85, 105], fontStyle: "bold" },

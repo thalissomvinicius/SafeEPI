@@ -44,6 +44,11 @@ const dataUrlToImageFile = async (dataUrl: string, baseName: string) => {
   return new File([blob], `${baseName}.${extension}`, { type: mimeType })
 }
 
+const getPdfDeliveryDate = (deliveryDate?: string | null) => {
+  if (!deliveryDate) return undefined
+  return deliveryDate.includes("T") ? deliveryDate : toLocalDeliveryDateISOString(deliveryDate)
+}
+
 function RemoteDeliveryContent() {
   const searchParams = useSearchParams()
   const sigCanvas = useRef<SignatureCanvas | null>(null)
@@ -259,6 +264,7 @@ function RemoteDeliveryContent() {
       const deliveryIds = Array.isArray(responseData.deliveryIds)
         ? responseData.deliveryIds as string[]
         : deliveryData?.deliveryIds || (responseData.data?.id ? [responseData.data.id] : [])
+      const authoritativeDeliveryDate = responseData.data?.delivery_date || responseData.deliveries?.[0]?.delivery_date || deliveryData?.deliveryDate
       const autoReturnNote = autoReturnedDeliveryIds.length > 0
         ? `Baixa automatica do registro anterior${autoReturnedDeliveryIds.length > 1 ? ` (${autoReturnedDeliveryIds.length})` : ""}.`
         : undefined
@@ -298,7 +304,7 @@ function RemoteDeliveryContent() {
         ipAddress,
         location,
         validationHash,
-        deliveryDate: deliveryData?.deliveryDate ? toLocalDeliveryDateISOString(deliveryData.deliveryDate) : undefined,
+        deliveryDate: getPdfDeliveryDate(authoritativeDeliveryDate),
       })
 
       const shortId = validationHash.slice(0, 8)

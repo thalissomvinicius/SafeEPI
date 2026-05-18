@@ -14,7 +14,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
-import { isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
+import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "sonner"
 
 interface CartItem {
@@ -722,13 +722,15 @@ export default function DeliveryPage() {
       }
       if (!validateCartForDelivery()) return
 	      const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+      const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)
       const deliveryDataPayload = {
           e: selectedEmployeeId,
           p: cart[0].ppeId,
           w: selectedWorkplaceId,
           thirdPartyId: selectedThirdPartyId,
           q: cart[0].quantity,
-          r: cart[0].reason
+          r: cart[0].reason,
+          deliveryDate: selectedDeliveryDateIso,
       }
 
       try {
@@ -749,7 +751,7 @@ export default function DeliveryPage() {
           employeeName: selectedEmployee?.full_name || "Colaborador",
           workplaceId: selectedWorkplaceId,
           workplaceName: selectedWorkplace?.name || "Sede",
-          deliveryDate,
+          deliveryDate: selectedDeliveryDateIso,
           item: cart[0],
         })
         const copied = await copyTextToClipboard(url)
@@ -823,7 +825,7 @@ export default function DeliveryPage() {
           q: cart[0].quantity,
           r: cart[0].reason,
           deliveryIds,
-          deliveryDate,
+          deliveryDate: selectedDeliveryDateIso,
           employeeName: selectedEmployee?.full_name || "Colaborador",
           workplaceName: selectedWorkplace?.name || "Sede",
           items: cart,
@@ -1025,7 +1027,7 @@ export default function DeliveryPage() {
     }
     setSelectedEmployeeId(draft.employeeId)
     setSelectedWorkplaceId(draft.workplaceId)
-    setDeliveryDate(draft.deliveryDate)
+    setDeliveryDate(getDateOnlyValue(draft.deliveryDate))
     setCurrentPpeId(draft.item.ppeId)
     setCurrentQuantity(draft.item.quantity)
     setCurrentReason(draft.item.reason)
@@ -1211,7 +1213,7 @@ export default function DeliveryPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-black text-slate-800 uppercase tracking-tight truncate">{draft.employeeName}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{draft.workplaceName} - {new Date(`${draft.deliveryDate}T12:00:00`).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{draft.workplaceName} - {new Date(`${getDateOnlyValue(draft.deliveryDate)}T12:00:00`).toLocaleDateString("pt-BR")}</p>
                         </div>
                         <span className={`px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 whitespace-nowrap ${statusStyle}`}>
                           <StatusIcon className="w-3 h-3" />

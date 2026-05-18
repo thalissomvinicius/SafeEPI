@@ -148,6 +148,17 @@ function getStringFromLinkData(data: unknown, key: string) {
   return typeof value === "string" ? value : ""
 }
 
+function getDeliveryDateFromLinkData(data: unknown) {
+  const value = getStringFromLinkData(data, "deliveryDate")
+  if (!value) return new Date().toISOString()
+
+  const parsed = value.includes("T")
+    ? new Date(value)
+    : new Date(`${value}T12:00:00`)
+
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()
+}
+
 function getImageFileExtension(file: File) {
   if (file.type === "image/jpeg") return "jpg"
   if (file.type === "image/webp") return "webp"
@@ -266,6 +277,7 @@ export async function POST(req: Request) {
     const third_party_id = isValidUuid(third_party_id_from_form)
       ? third_party_id_from_form
       : getStringFromLinkData(link.data, "thirdPartyId")
+    const deliveryDateFromLink = getDeliveryDateFromLinkData(link.data)
 
     let signatureUrl: string | null = null
     if (signatureFile.size > 0) {
@@ -385,7 +397,7 @@ export async function POST(req: Request) {
       ip_address,
       signature_url: signatureUrl,
       auth_method,
-      delivery_date: new Date().toISOString(),
+      delivery_date: deliveryDateFromLink,
     }
     if (companyId) baseInsertPayload.company_id = companyId
 

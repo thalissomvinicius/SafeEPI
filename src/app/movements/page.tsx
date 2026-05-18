@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { format, startOfMonth, endOfMonth, subDays, isWithinInterval } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { DeliveryWithRelations, SignedDocument } from "@/types/database"
+import { DeliveryWithRelations, Employee, SignedDocument, Workplace } from "@/types/database"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateDeliveryPDF, generateMovementsSimplePDF, generateMovementsPresentationPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
@@ -16,6 +16,7 @@ import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime, parseLoc
 import { toast } from "sonner"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
+type DeliveryScopeFilter = 'own' | 'third_party' | 'all'
 
 export default function MovementsPage() {
   const { user, loading: authLoading } = useAuth()
@@ -23,6 +24,8 @@ export default function MovementsPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [loading, setLoading] = useState(true)
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [signedDocuments, setSignedDocuments] = useState<SignedDocument[]>([])
   const [downloadingDeliveryId, setDownloadingDeliveryId] = useState<string | null>(null)
   const [creatingSignatureLinkId, setCreatingSignatureLinkId] = useState<string | null>(null)
@@ -40,6 +43,8 @@ export default function MovementsPage() {
   const [specificMonthSel, setSpecificMonthSel] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
   const [searchTerm, setSearchTerm] = useState("")
+  const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>('own')
+  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
 
   // Auth protection
   useEffect(() => {
@@ -54,12 +59,16 @@ export default function MovementsPage() {
       if (!user || user.role === 'ALMOXARIFE') return
       try {
         setLoading(true)
-        const [deliveryData, documentData] = await Promise.all([
+        const [deliveryData, documentData, employeeData, workplaceData] = await Promise.all([
           api.getDeliveries(),
           api.getSignedDocuments(),
+          hasThirdPartyFeature ? api.getEmployees() : Promise.resolve([] as Employee[]),
+          hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
         ])
         setRawDeliveries(deliveryData)
         setSignedDocuments(documentData)
+        setEmployees(employeeData)
+        setWorkplaces(workplaceData)
       } catch (err) {
         console.error("Erro ao carregar movimentações:", err)
       } finally {
@@ -67,7 +76,18 @@ export default function MovementsPage() {
       }
     }
     loadData()
-  }, [user])
+  }, [user, hasThirdPartyFeature])
+
+  const employeeThirdPartyById = new Map(employees.map((employee) => [employee.id, employee.third_party_id || null]))
+  const workplaceThirdPartyById = new Map(workplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
+
+  const getDeliveryThirdPartyId = (delivery: DeliveryWithRelations) =>
+    delivery.third_party_id ||
+    delivery.employee?.third_party_id ||
+    delivery.workplace?.third_party_id ||
+    employeeThirdPartyById.get(delivery.employee_id) ||
+    workplaceThirdPartyById.get(delivery.workplace_id || "") ||
+    null
 
   // Filter Logic
   const getFilteredData = () => {
@@ -103,6 +123,13 @@ export default function MovementsPage() {
           return isWithinInterval(dDate, { start: start!, end })
         })
       }
+    }
+
+    if (hasThirdPartyFeature && deliveryScopeFilter !== 'all') {
+      filtered = filtered.filter((delivery) => {
+        const isThirdPartyDelivery = Boolean(getDeliveryThirdPartyId(delivery))
+        return deliveryScopeFilter === 'third_party' ? isThirdPartyDelivery : !isThirdPartyDelivery
+      })
     }
 
     if (searchTerm) {
@@ -235,8 +262,8 @@ export default function MovementsPage() {
           q: delivery.quantity,
           r: delivery.reason || "Primeira Entrega",
           deliveryIds: [delivery.id],
-          thirdPartyId: delivery.third_party_id || delivery.employee?.third_party_id || delivery.workplace?.third_party_id || null,
-          deliveryDate: delivery.delivery_date?.slice(0, 10),
+          thirdPartyId: getDeliveryThirdPartyId(delivery),
+          deliveryDate: delivery.delivery_date,
           employeeName: delivery.employee?.full_name || "Colaborador",
           workplaceName: delivery.workplace?.name || "Sede",
           items: [{
@@ -421,6 +448,24 @@ export default function MovementsPage() {
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none transition-all"
             />
           </div>
+
+          {hasThirdPartyFeature && (
+            <div className="flex-1 space-y-2 w-full">
+              <label htmlFor="scope-mov" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+                <Users className="w-3 h-3 mr-1" /> Vínculo
+              </label>
+              <select
+                id="scope-mov"
+                value={deliveryScopeFilter}
+                onChange={(event) => setDeliveryScopeFilter(event.target.value as DeliveryScopeFilter)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none transition-all"
+              >
+                <option value="own">Próprios</option>
+                <option value="third_party">Terceiros</option>
+                <option value="all">Todos vínculos</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Custom Inputs */}

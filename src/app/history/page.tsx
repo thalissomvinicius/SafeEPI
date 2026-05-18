@@ -3,35 +3,45 @@
 import { useState, useEffect } from "react"
 import { ExternalLink, Fingerprint, History, ShieldCheck, Search, Loader2, FileDown, Trash2, AlertTriangle } from "lucide-react"
 import { api } from "@/services/api"
-import { DeliveryWithRelations, SignedDocument } from "@/types/database"
+import { DeliveryWithRelations, Employee, SignedDocument, Workplace } from "@/types/database"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
 
+type DeliveryScopeFilter = "own" | "third_party" | "all"
+
 export default function HistoryPage() {
   const { user } = useAuth()
   const isMaster = user?.role === "MASTER"
+  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [records, setRecords] = useState<DeliveryWithRelations[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [signedDocuments, setSignedDocuments] = useState<SignedDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<DeliveryWithRelations | null>(null)
+  const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>("own")
 
   useEffect(() => {
     async function fetchHistory() {
       try {
         setLoading(true)
-        const [deliveryData, documentData] = await Promise.all([
+        const [deliveryData, documentData, employeeData, workplaceData] = await Promise.all([
           api.getDeliveries(),
           api.getSignedDocuments(),
+          hasThirdPartyFeature ? api.getEmployees() : Promise.resolve([] as Employee[]),
+          hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
         ])
         setRecords(deliveryData)
         setSignedDocuments(documentData)
+        setEmployees(employeeData)
+        setWorkplaces(workplaceData)
       } catch (err) {
         console.error("Erro histórico:", err)
         toast.error("Falha ao carregar histórico.")
@@ -40,7 +50,18 @@ export default function HistoryPage() {
       }
     }
     fetchHistory()
-  }, [])
+  }, [hasThirdPartyFeature])
+
+  const employeeThirdPartyById = new Map(employees.map((employee) => [employee.id, employee.third_party_id || null]))
+  const workplaceThirdPartyById = new Map(workplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
+
+  const getDeliveryThirdPartyId = (delivery: DeliveryWithRelations) =>
+    delivery.third_party_id ||
+    delivery.employee?.third_party_id ||
+    delivery.workplace?.third_party_id ||
+    employeeThirdPartyById.get(delivery.employee_id) ||
+    workplaceThirdPartyById.get(delivery.workplace_id || "") ||
+    null
 
   const urlToBase64 = async (url: string) => {
     const response = await fetch(url)
@@ -97,7 +118,8 @@ export default function HistoryPage() {
         signatureBase64: base64Signature,
         photoBase64,
         ipAddress: rec.ip_address || "Remoto",
-        validationHash: rec.id.slice(0, 8).toUpperCase()
+        validationHash: rec.id.slice(0, 8).toUpperCase(),
+        deliveryDate: rec.delivery_date,
       })
 
       // 3. Criar nome de arquivo padronizado: Comprovante_[ID8]_[Nome]_[EPI].pdf
@@ -159,11 +181,18 @@ export default function HistoryPage() {
     }
   }
 
-  const filteredRecords = records.filter((rec: DeliveryWithRelations) => 
-    rec.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rec.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getSignedDocumentForDelivery(rec.id)?.sha256_hash.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredRecords = records.filter((rec: DeliveryWithRelations) => {
+    const isThirdPartyDelivery = Boolean(getDeliveryThirdPartyId(rec))
+    const matchesDeliveryScope = !hasThirdPartyFeature ||
+      deliveryScopeFilter === "all" ||
+      (deliveryScopeFilter === "third_party" ? isThirdPartyDelivery : !isThirdPartyDelivery)
+
+    return matchesDeliveryScope && (
+      rec.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getSignedDocumentForDelivery(rec.id)?.sha256_hash.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  })
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in">
@@ -179,15 +208,28 @@ export default function HistoryPage() {
 
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 border-b border-slate-200 bg-slate-50/50">
-          <div className="relative max-w-md">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Buscar colaborador ou ID da entrega..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
-            />
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="relative max-w-md flex-1">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar colaborador ou ID da entrega..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
+              />
+            </div>
+            {hasThirdPartyFeature && (
+              <select
+                value={deliveryScopeFilter}
+                onChange={(event) => setDeliveryScopeFilter(event.target.value as DeliveryScopeFilter)}
+                className="w-full md:w-56 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-[#2563EB] transition-all"
+              >
+                <option value="own">Próprios</option>
+                <option value="third_party">Terceiros</option>
+                <option value="all">Todos vínculos</option>
+              </select>
+            )}
           </div>
         </div>
         
