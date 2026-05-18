@@ -1254,8 +1254,28 @@ export default function EmployeesPage() {
               <option value="registered">Cadastrada</option>
               <option value="pending">Pendente</option>
             </select>
-            <input type="date" value={admissionStartFilter} onChange={(e) => setAdmissionStartFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]" title="Admissão inicial" />
-            <input type="date" value={admissionEndFilter} onChange={(e) => setAdmissionEndFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]" title="Admissão final" />
+            <label className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:border-[#2563EB] transition-colors">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Admissão de</span>
+              <input
+                type="date"
+                value={admissionStartFilter}
+                onChange={(e) => setAdmissionStartFilter(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-600 outline-none"
+                title="Filtrar colaboradores admitidos a partir desta data"
+                aria-label="Admissão de"
+              />
+            </label>
+            <label className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:border-[#2563EB] transition-colors">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Admissão até</span>
+              <input
+                type="date"
+                value={admissionEndFilter}
+                onChange={(e) => setAdmissionEndFilter(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-600 outline-none"
+                title="Filtrar colaboradores admitidos até esta data"
+                aria-label="Admissão até"
+              />
+            </label>
           </div>
         </div>
 
