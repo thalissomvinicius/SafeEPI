@@ -456,6 +456,8 @@ export default function ReportsPage() {
                           />
                           <Tooltip 
                              cursor={{fill: '#f8fafc'}}
+                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                             formatter={(value: any) => [`${Number(value).toLocaleString('pt-BR')} itens`, 'Quantidade']}
                              contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                           />
                           <Bar 

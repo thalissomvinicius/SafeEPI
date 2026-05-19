@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import SignatureCanvas from "react-signature-canvas"
 import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, Shield, Users, FileDown, Presentation, X, PenTool, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
@@ -17,6 +17,7 @@ import { toast } from "sonner"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 type DeliveryScopeFilter = 'own' | 'third_party' | 'all'
+type PdfReportType = 'simple' | 'presentation'
 
 export default function MovementsPage() {
   const { user, loading: authLoading } = useAuth()
@@ -30,6 +31,8 @@ export default function MovementsPage() {
   const [downloadingDeliveryId, setDownloadingDeliveryId] = useState<string | null>(null)
   const [creatingSignatureLinkId, setCreatingSignatureLinkId] = useState<string | null>(null)
   const [showPdfModal, setShowPdfModal] = useState(false)
+  const [selectedPdfType, setSelectedPdfType] = useState<PdfReportType>('simple')
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState("")
   const [technicianName, setTechnicianName] = useState("")
   const [technicianRole, setTechnicianRole] = useState("Técnico de Segurança do Trabalho")
   const [generatingPresentationPdf, setGeneratingPresentationPdf] = useState(false)
@@ -88,6 +91,31 @@ export default function MovementsPage() {
     employeeThirdPartyById.get(delivery.employee_id) ||
     workplaceThirdPartyById.get(delivery.workplace_id || "") ||
     null
+
+  const technicianOptions = useMemo(() => {
+    const activeEmployees = employees.filter((employee) => employee.active)
+    const technicalEmployees = activeEmployees.filter((employee) => {
+      const text = `${employee.job_title || ""} ${employee.department || ""}`
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+      return (
+        text.includes("tecnico") ||
+        text.includes("seguranca") ||
+        text.includes("tst") ||
+        text.includes("sesmt")
+      )
+    })
+
+    return technicalEmployees.length > 0 ? technicalEmployees : activeEmployees
+  }, [employees])
+
+  const handleTechnicianSelect = (employeeId: string) => {
+    setSelectedTechnicianId(employeeId)
+    const technician = technicianOptions.find((employee) => employee.id === employeeId)
+    setTechnicianName(technician?.full_name || "")
+    setTechnicianRole(technician?.job_title || "Técnico de Segurança do Trabalho")
+  }
 
   // Filter Logic
   const getFilteredData = () => {
@@ -318,8 +346,12 @@ export default function MovementsPage() {
   }
 
   const handlePresentationPDF = async () => {
+    if (!technicianName.trim()) {
+      toast.error("Selecione o responsável técnico cadastrado no sistema.")
+      return
+    }
     if (!movementSigCanvas.current || movementSigCanvas.current.isEmpty()) {
-      alert("Assine como responsável técnico antes de gerar o PDF de apresentação.")
+      toast.error("Assine como responsável técnico antes de gerar o PDF de apresentação.")
       return
     }
     try {
@@ -340,6 +372,15 @@ export default function MovementsPage() {
     } finally {
       setGeneratingPresentationPdf(false)
     }
+  }
+
+  const handleGenerateSelectedPDF = () => {
+    if (selectedPdfType === 'simple') {
+      handleSimplePDF()
+      return
+    }
+
+    void handlePresentationPDF()
   }
 
   return (
@@ -557,120 +598,139 @@ export default function MovementsPage() {
         ))}
       </div>
 
-      {/* Main Table */}
+      {/* Main List */}
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto min-h-[400px]">
+        <div className="min-h-[400px]">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 text-slate-400">
               <Loader2 className="w-10 h-10 animate-spin mb-4 text-[#2563EB]" />
               <p className="text-sm font-black uppercase tracking-widest italic">Acessando Banco de Dados...</p>
             </div>
           ) : (
-            <table className="w-full text-sm text-left">
-              <thead className="text-[10px] text-slate-400 bg-slate-50/50 uppercase tracking-[0.2em] border-b border-slate-100 font-black">
-                <tr>
-                  <th className="px-6 py-5">Data / Hora</th>
-                  <th className="px-6 py-5">Colaborador</th>
-                  <th className="px-6 py-5">EPI / CA</th>
-                  <th className="px-6 py-5 text-center">Qtd</th>
-                  <th className="px-6 py-5 text-center">Tipo</th>
-                  <th className="px-6 py-5">Unidade</th>
-                  <th className="px-6 py-5 text-right">Comprovante</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
+            <div className="bg-slate-50/70 p-4">
+              <div className="mb-3 flex flex-col gap-1 px-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                  {filteredMovements.length} movimentação(ões)
+                </p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {getPeriodLabel()}
+                </p>
+              </div>
+
+              <div className="space-y-3">
                 {filteredMovements.map((move, i) => {
                   const isDownloading = downloadingDeliveryId === move.id
                   const isCreatingSignatureLink = creatingSignatureLinkId === move.id
+                  const isThirdPartyMovement = Boolean(getDeliveryThirdPartyId(move))
+                  const movementTypeClass = move.returned_at
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-green-200 bg-green-50 text-green-700"
 
                   return (
-                    <tr key={move.id || i} className="hover:bg-slate-50/80 transition-colors group">
-                      <td className="px-6 py-5">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-700">{formatDeliveryDate(move.delivery_date)}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{formatDeliveryTime(move.delivery_date)}h</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-col">
-                          <span className="font-black text-slate-800 uppercase tracking-tighter">{move.employee?.full_name}</span>
-                          <span className="text-[10px] text-slate-400 font-bold tracking-widest">{move.employee?.cpf}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-600">{move.ppe?.name}</span>
-                          <span className="text-[10px] text-slate-400 font-medium uppercase">C.A. {move.ppe?.ca_number}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 text-center">
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-black text-xs">
-                          {move.quantity}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-center">
-                        {move.returned_at ? (
-                          <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-                            <ArrowDownLeft className="w-3 h-3" /> Devolução
-                          </span>
-                        ) : (
-                          <span className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-                            <ArrowUpRight className="w-3 h-3" /> Entrega
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest truncate max-w-[120px] block">
-                          {move.workplace?.name || "Geral"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        {move.signature_url ? (
-                          <button
-                            onClick={() => void handleDeliveryReceiptPDF(move)}
-                            disabled={isDownloading}
-                            title="Emitir comprovante de entrega do EPI"
-                            className="ml-auto text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end px-3 py-2 rounded-xl transition-all group-hover:underline disabled:opacity-30"
-                          >
-                            {isDownloading ? (
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            ) : (
-                              <FileDown className="w-4 h-4 mr-1" />
-                            )}
-                            PDF
-                          </button>
-                        ) : (
-                          <div className="ml-auto flex items-center justify-end gap-2">
-                            <span className="text-[10px] font-bold text-slate-300 uppercase">Sem assinatura</span>
-                            <button
-                              onClick={() => void openSignatureFlow(move)}
-                              disabled={isCreatingSignatureLink}
-                              title="Abrir assinatura desta entrega"
-                              className="inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
-                            >
-                              {isCreatingSignatureLink ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <div key={move.id || i} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${movementTypeClass}`}>
+                              {move.returned_at ? (
+                                <ArrowDownLeft className="h-3 w-3" />
                               ) : (
-                                <PenTool className="h-3.5 w-3.5" />
+                                <ArrowUpRight className="h-3 w-3" />
                               )}
-                              Assinar
-                            </button>
+                              {move.returned_at ? "Devolução" : "Entrega"}
+                            </span>
+                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                              {isThirdPartyMovement ? "Terceiro" : "Próprio"}
+                            </span>
                           </div>
-                        )}
-                      </td>
-                    </tr>
+                          <div className="mt-3 flex items-center gap-3">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                              <Calendar className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-black uppercase tracking-tight text-slate-900">{formatDeliveryDate(move.delivery_date)}</p>
+                              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">{formatDeliveryTime(move.delivery_date)}h</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid min-w-0 flex-[3] grid-cols-1 gap-3 lg:grid-cols-3">
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Colaborador</p>
+                            <p className="mt-1 text-xs font-black uppercase tracking-tight text-slate-800" title={move.employee?.full_name || "Colaborador"}>
+                              {move.employee?.full_name || "Colaborador não informado"}
+                            </p>
+                            <p className="mt-0.5 text-[10px] font-bold tracking-widest text-slate-400">{move.employee?.cpf || "CPF não informado"}</p>
+                          </div>
+
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">EPI / CA</p>
+                            <p className="mt-1 text-xs font-black uppercase tracking-tight text-slate-800" title={move.ppe?.name || "EPI"}>
+                              {move.ppe?.name || "EPI não informado"}
+                            </p>
+                            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">C.A. {move.ppe?.ca_number || "N/A"}</p>
+                          </div>
+
+                          <div className="grid grid-cols-[auto_1fr] gap-3">
+                            <div className="flex min-h-[74px] min-w-16 flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 px-3">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Qtd</p>
+                              <p className="mt-1 text-2xl font-black leading-none text-slate-900">{move.quantity}</p>
+                            </div>
+                            <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Unidade</p>
+                              <p className="mt-1 truncate text-xs font-black uppercase tracking-tight text-slate-800" title={move.workplace?.name || "Geral"}>
+                                {move.workplace?.name || "Geral"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
+                          {move.signature_url ? (
+                            <button
+                              onClick={() => void handleDeliveryReceiptPDF(move)}
+                              disabled={isDownloading}
+                              title="Emitir comprovante de entrega do EPI"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-[#1D4ED8] bg-[#2563EB] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/15 transition-all hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md disabled:opacity-40"
+                            >
+                              {isDownloading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <FileDown className="h-4 w-4" />
+                              )}
+                              PDF
+                            </button>
+                          ) : (
+                            <>
+                              <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Sem assinatura</span>
+                              <button
+                                onClick={() => void openSignatureFlow(move)}
+                                disabled={isCreatingSignatureLink}
+                                title="Abrir assinatura desta entrega"
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-all hover:-translate-y-0.5 hover:bg-amber-100 hover:shadow-md disabled:opacity-50"
+                              >
+                                {isCreatingSignatureLink ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <PenTool className="h-4 w-4" />
+                                )}
+                                Assinar
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )
                 })}
                 {filteredMovements.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-20 text-center text-slate-400 italic">
-                      <ArrowRightLeft className="w-10 h-10 mx-auto mb-4 opacity-20" />
-                      <p className="text-sm font-black uppercase tracking-widest">Nenhuma movimentação neste período.</p>
-                    </td>
-                  </tr>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-slate-400 italic">
+                    <ArrowRightLeft className="w-10 h-10 mx-auto mb-4 opacity-20" />
+                    <p className="text-sm font-black uppercase tracking-widest">Nenhuma movimentação neste período.</p>
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -678,8 +738,8 @@ export default function MovementsPage() {
       {/* PDF Choice Modal */}
       {showPdfModal && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90dvh] overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 flex flex-col">
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Gerar Relatório PDF</h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Escolha o formato ideal para sua necessidade</p>
@@ -689,86 +749,114 @@ export default function MovementsPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Simple PDF */}
               <button
-                onClick={handleSimplePDF}
-                className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50 transition-all"
+                type="button"
+                onClick={() => setSelectedPdfType('simple')}
+                className={`group flex flex-col items-center text-center p-6 rounded-2xl border-2 transition-all ${
+                  selectedPdfType === 'simple'
+                    ? 'border-[#2563EB] bg-blue-50 shadow-md shadow-blue-900/10'
+                    : 'border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50'
+                }`}
               >
-                <div className="w-14 h-14 rounded-2xl bg-slate-100 group-hover:bg-[#2563EB]/10 flex items-center justify-center mb-4 transition-all">
-                  <FileDown className="w-7 h-7 text-slate-500 group-hover:text-[#2563EB]" />
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-all ${selectedPdfType === 'simple' ? 'bg-[#2563EB]/10' : 'bg-slate-100 group-hover:bg-[#2563EB]/10'}`}>
+                  <FileDown className={`w-7 h-7 ${selectedPdfType === 'simple' ? 'text-[#2563EB]' : 'text-slate-500 group-hover:text-[#2563EB]'}`} />
                 </div>
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-2">PDF Simples</h3>
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                   Relatório operacional com tabela completa e resumo de indicadores. Ideal para arquivo e controle interno.
                 </p>
-                <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg">
+                <span className={`mt-4 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'simple' ? 'text-[#2563EB] bg-white border border-blue-100' : 'text-slate-400 bg-slate-100'}`}>
                   Retrato · 1 página+
                 </span>
               </button>
 
               {/* Presentation PDF */}
-              <div className="group flex flex-col items-center text-center p-6 rounded-2xl border-2 border-slate-100 bg-blue-50/30">
-                <div className="w-14 h-14 rounded-2xl bg-[#2563EB]/10 group-hover:bg-[#2563EB]/20 flex items-center justify-center mb-4 transition-all">
-                  <Presentation className="w-7 h-7 text-[#2563EB]" />
+              <button
+                type="button"
+                onClick={() => setSelectedPdfType('presentation')}
+                className={`group flex flex-col items-center text-center p-6 rounded-2xl border-2 transition-all ${
+                  selectedPdfType === 'presentation'
+                    ? 'border-[#B91C1C] bg-red-50 shadow-md shadow-red-900/10'
+                    : 'border-slate-100 hover:border-red-200 hover:bg-red-50/40'
+                }`}
+              >
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-all ${selectedPdfType === 'presentation' ? 'bg-red-100' : 'bg-slate-100 group-hover:bg-red-100'}`}>
+                  <Presentation className={`w-7 h-7 ${selectedPdfType === 'presentation' ? 'text-[#B91C1C]' : 'text-slate-500 group-hover:text-[#B91C1C]'}`} />
                 </div>
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-2">PDF Apresentação</h3>
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                   Relatório executivo com gráficos visuais e layout premium. Ideal para reuniões com gestores e diretoria.
                 </p>
-                <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#2563EB] bg-red-50 border border-blue-100 px-3 py-1.5 rounded-lg">
+                <span className={`mt-4 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'presentation' ? 'text-[#B91C1C] bg-white border border-red-100' : 'text-slate-400 bg-slate-100'}`}>
                   Paisagem · 2 páginas
                 </span>
-              </div>
+              </button>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <PenTool className="w-4 h-4 text-[#2563EB]" />
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assinatura do responsável técnico</p>
+              {selectedPdfType === 'presentation' && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <PenTool className="w-4 h-4 text-[#B91C1C]" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assinatura do responsável técnico</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-[1.3fr_1fr] gap-3">
+                    <select
+                      value={selectedTechnicianId}
+                      onChange={(e) => handleTechnicianSelect(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-[#2563EB]"
+                      title="Selecionar responsável técnico cadastrado"
+                    >
+                      <option value="">Selecione um técnico cadastrado</option>
+                      {technicianOptions.map((employee) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.full_name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={technicianRole}
+                      onChange={(e) => setTechnicianRole(e.target.value)}
+                      placeholder="Cargo"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
+                    />
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                    <SignatureCanvas
+                      ref={movementSigCanvas}
+                      canvasProps={{ className: "w-full h-32 bg-white" }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => movementSigCanvas.current?.clear()}
+                    className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Limpar assinatura
+                  </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input
-                    value={technicianName}
-                    onChange={(e) => setTechnicianName(e.target.value)}
-                    placeholder="Nome do técnico responsável"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
-                  />
-                  <input
-                    value={technicianRole}
-                    onChange={(e) => setTechnicianRole(e.target.value)}
-                    placeholder="Cargo"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
-                  />
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                  <SignatureCanvas
-                    ref={movementSigCanvas}
-                    canvasProps={{ className: "w-full h-36 bg-white" }}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => movementSigCanvas.current?.clear()}
-                  className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Limpar assinatura
-                </button>
-              </div>
+              )}
 
               <button
-                onClick={handlePresentationPDF}
+                onClick={handleGenerateSelectedPDF}
                 disabled={generatingPresentationPdf}
-                className="w-full rounded-2xl bg-[#2563EB] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/20 disabled:opacity-60 flex items-center justify-center gap-2"
+                className="w-full rounded-2xl bg-[#B91C1C] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/20 disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {generatingPresentationPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Presentation className="w-4 h-4" />}
-                Gerar apresentação assinada
+                {generatingPresentationPdf ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : selectedPdfType === 'presentation' ? (
+                  <Presentation className="w-4 h-4" />
+                ) : (
+                  <FileDown className="w-4 h-4" />
+                )}
+                {selectedPdfType === 'presentation' ? 'Gerar apresentação assinada' : 'Gerar PDF simples'}
               </button>
             </div>
 
-            <div className="px-6 pb-6">
+            <div className="px-6 pb-5 shrink-0">
               <p className="text-[10px] text-center text-slate-400 italic">
                 Período: <strong>{getPeriodLabel()}</strong> · {filteredMovements.length} movimentações
               </p>
