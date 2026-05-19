@@ -95,6 +95,7 @@ export default function ThirdPartiesPage() {
   const totalBillingValue = thirdPartyDeliveries.reduce((acc, item) =>
     acc + Number(item.delivery.quantity || 0) * Number(item.delivery.ppe?.cost || 0),
   0)
+  const billingItemsCount = thirdPartyDeliveries.reduce((acc, item) => acc + Number(item.delivery.quantity || 0), 0)
 
   const billingSummary = useMemo(() => {
     const summary = new Map<string, { thirdParty: ThirdParty; deliveries: number; items: number; value: number; employees: Set<string> }>()
@@ -259,29 +260,29 @@ export default function ThirdPartiesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-24 md:p-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 pb-24 md:p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Tomadores / clientes atendidos</p>
             <h1 className="mt-1 flex items-center gap-3 text-2xl font-black uppercase tracking-tighter text-slate-800">
               <Handshake className="h-7 w-7 text-[#2563EB]" />
               Terceiros
             </h1>
-            <p className="mt-2 max-w-2xl text-sm font-medium text-slate-500">
+            <p className="mt-1 max-w-2xl text-sm font-medium text-slate-500">
               Cadastre os tomadores para separar obras, custos, entregas e auditoria sem criar outro tenant no sistema.
             </p>
           </div>
           <button
             onClick={openNewThirdParty}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md hover:bg-[#1D4ED8]"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md shadow-blue-900/15 hover:bg-[#1D4ED8]"
           >
             <Plus className="h-4 w-4" />
             Novo Terceiro
           </button>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric icon={Building2} label="Cadastrados" value={thirdParties.length} />
           <Metric icon={CheckCircle2} label="Ativos" value={activeCount} />
           <Metric icon={Handshake} label="Colaboradores" value={linkedEmployeesCount} />
@@ -289,158 +290,57 @@ export default function ThirdPartiesPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-100 p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cobrança de EPIs</p>
-            <h2 className="mt-1 text-lg font-black uppercase tracking-tight text-slate-800">Relatório de entregas a terceiros</h2>
-            <p className="mt-1 text-xs font-bold text-slate-400">Valores calculados por quantidade entregue x custo unitário do EPI.</p>
-          </div>
-          <select
-            value={billingFilter}
-            onChange={(event) => setBillingFilter(event.target.value)}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#2563EB]"
-            title="Filtrar relatório por terceiro"
-          >
-            <option value="all">Todos os terceiros</option>
-            {thirdParties.map((thirdParty) => (
-              <option key={thirdParty.id} value={thirdParty.id}>
-                {thirdParty.trade_name || thirdParty.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid gap-3 border-b border-slate-100 p-5 md:grid-cols-3">
-          <TextMetric icon={Package} label="Itens entregues" value={String(thirdPartyDeliveries.reduce((acc, item) => acc + Number(item.delivery.quantity || 0), 0))} />
-          <TextMetric icon={Building2} label="Registros" value={String(thirdPartyDeliveries.length)} />
-          <TextMetric icon={DollarSign} label="Total para cobrança" value={formatCurrency(totalBillingValue)} />
-        </div>
-
-        {billingSummary.length > 0 && (
-          <div className="grid gap-3 border-b border-slate-100 p-5 lg:grid-cols-3">
-            {billingSummary.map((summary) => (
-              <div key={summary.thirdParty.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <p className="text-sm font-black uppercase tracking-tight text-slate-800">{summary.thirdParty.trade_name || summary.thirdParty.name}</p>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <p className="text-lg font-black text-slate-900">{summary.items}</p>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Itens</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-black text-slate-900">{summary.employees.size}</p>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Pessoas</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-emerald-700">{formatCurrency(summary.value)}</p>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Valor</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-              <tr>
-                <th className="px-5 py-4">Data</th>
-                <th className="px-5 py-4">Terceiro</th>
-                <th className="px-5 py-4">Colaborador</th>
-                <th className="px-5 py-4">EPI / CA</th>
-                <th className="px-5 py-4 text-center">Qtd</th>
-                <th className="px-5 py-4 text-right">Custo Unit.</th>
-                <th className="px-5 py-4 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {thirdPartyDeliveries.slice(0, 80).map(({ delivery, thirdPartyId }) => {
-                const thirdParty = thirdPartyById.get(thirdPartyId)
-                const unitCost = Number(delivery.ppe?.cost || 0)
-                const total = Number(delivery.quantity || 0) * unitCost
-
-                return (
-                  <tr key={delivery.id} className="hover:bg-slate-50/80">
-                    <td className="px-5 py-4 text-xs font-bold text-slate-500">
-                      {new Date(delivery.delivery_date).toLocaleDateString("pt-BR")}
-                    </td>
-                    <td className="px-5 py-4 text-xs font-black uppercase text-slate-700">
-                      {thirdParty?.trade_name || thirdParty?.name || "Terceiro"}
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-xs font-black uppercase text-slate-800">{delivery.employee?.full_name || "Colaborador"}</p>
-                      <p className="mt-1 text-[10px] font-bold text-slate-400">{delivery.employee?.cpf}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-xs font-black uppercase text-slate-700">{delivery.ppe?.name || "EPI"}</p>
-                      <p className="mt-1 text-[10px] font-bold text-slate-400">CA {delivery.ppe?.ca_number || "N/A"}</p>
-                    </td>
-                    <td className="px-5 py-4 text-center text-xs font-black text-slate-700">{delivery.quantity}</td>
-                    <td className="px-5 py-4 text-right text-xs font-bold text-slate-500">{formatCurrency(unitCost)}</td>
-                    <td className="px-5 py-4 text-right text-xs font-black text-emerald-700">{formatCurrency(total)}</td>
-                  </tr>
-                )
-              })}
-              {thirdPartyDeliveries.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-sm font-bold uppercase tracking-widest text-slate-400">
-                    Nenhuma entrega vinculada a terceiros.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <div className="grid gap-6">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)] xl:items-start">
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 p-4">
-            <div className="relative max-w-md">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cadastro operacional</p>
+              <h2 className="mt-1 text-base font-black uppercase tracking-tight text-slate-800">Terceiros cadastrados</h2>
+            </div>
+            <div className="relative w-full sm:max-w-sm">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Buscar por nome, CNPJ ou contato..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold outline-none focus:border-[#2563EB]"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm font-bold outline-none focus:border-[#2563EB]"
               />
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+              <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                 <tr>
-                  <th className="px-5 py-4">Terceiro</th>
-                  <th className="px-5 py-4">Contato</th>
-                  <th className="px-5 py-4">Endereço</th>
-                  <th className="px-5 py-4 text-center">Status</th>
-                  <th className="px-5 py-4 text-right">Ações</th>
+                  <th className="px-4 py-3">Terceiro</th>
+                  <th className="px-4 py-3">Contato</th>
+                  <th className="px-4 py-3">Endereco</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-right">Acoes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredThirdParties.map((thirdParty) => (
                   <tr key={thirdParty.id} className="hover:bg-slate-50/80">
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-3">
                       <p className="font-black uppercase tracking-tight text-slate-800">{thirdParty.trade_name || thirdParty.name}</p>
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{thirdParty.name}</p>
-                      {thirdParty.cnpj && <p className="mt-1 text-[10px] font-bold text-slate-500">CNPJ {thirdParty.cnpj}</p>}
+                      <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">{thirdParty.name}</p>
+                      {thirdParty.cnpj && <p className="mt-0.5 text-[10px] font-bold text-slate-500">CNPJ {thirdParty.cnpj}</p>}
                     </td>
-                    <td className="px-5 py-4 text-xs font-bold text-slate-500">
+                    <td className="px-4 py-3 text-xs font-bold text-slate-500">
                       {thirdParty.contact_name && <p className="text-slate-700">{thirdParty.contact_name}</p>}
                       {thirdParty.email && <p className="mt-1 flex items-center gap-1"><Mail className="h-3 w-3" /> {thirdParty.email}</p>}
                       {thirdParty.phone && <p className="mt-1 flex items-center gap-1"><Phone className="h-3 w-3" /> {thirdParty.phone}</p>}
                     </td>
-                    <td className="max-w-xs px-5 py-4 text-xs font-medium text-slate-500">{thirdParty.address || "-"}</td>
-                    <td className="px-5 py-4 text-center">
+                    <td className="max-w-[220px] px-4 py-3 text-xs font-medium text-slate-500">{thirdParty.address || "-"}</td>
+                    <td className="px-4 py-3 text-center">
                       <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
                         thirdParty.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
                       }`}>
                         {thirdParty.active ? "Ativo" : "Inativo"}
                       </span>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => editThirdParty(thirdParty)}
@@ -464,7 +364,7 @@ export default function ThirdPartiesPage() {
                 ))}
                 {filteredThirdParties.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-5 py-16 text-center text-sm font-bold uppercase tracking-widest text-slate-400">
+                    <td colSpan={5} className="px-4 py-10 text-center text-sm font-bold uppercase tracking-widest text-slate-400">
                       Nenhum terceiro encontrado.
                     </td>
                   </tr>
@@ -474,50 +374,120 @@ export default function ThirdPartiesPage() {
           </div>
         </section>
 
-        <div className="hidden">
-          <div className="mb-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cadastro</p>
-            <h2 className="text-base font-black uppercase tracking-tight text-slate-800">
-              {form.id ? "Editar terceiro" : "Novo terceiro"}
-            </h2>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:sticky xl:top-4">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between xl:flex-col xl:items-stretch">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cobrança de EPIs</p>
+            <h2 className="mt-1 text-base font-black uppercase tracking-tight text-slate-800">Relatório de entregas</h2>
+            <p className="mt-1 text-xs font-bold text-slate-400">Cobrança por quantidade x custo unitário.</p>
           </div>
-
-          <div className="grid gap-3">
-            <input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Razão social" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-            <input value={form.trade_name} onChange={(event) => setForm({ ...form, trade_name: event.target.value })} placeholder="Nome fantasia" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-            <input value={form.cnpj} onChange={(event) => setForm({ ...form, cnpj: event.target.value })} placeholder="CNPJ" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-            <input value={form.contact_name} onChange={(event) => setForm({ ...form, contact_name: event.target.value })} placeholder="Contato responsável" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Telefone" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-              <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="E-mail" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-            </div>
-            <input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Endereço" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-            <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Observações contratuais ou operacionais" rows={3} className="resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" />
-            <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <span className="text-xs font-black uppercase tracking-widest text-slate-700">Terceiro ativo</span>
-              <input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} className="h-5 w-5 accent-[#2563EB]" />
-            </label>
-          </div>
-
-          <button disabled={submitting} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-[#1D4ED8] disabled:opacity-60">
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Salvar Terceiro
-          </button>
-          {form.id && (
-            <button type="button" onClick={clearForm} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">
-              Cancelar edição
-            </button>
-          )}
+          <select
+            value={billingFilter}
+            onChange={(event) => setBillingFilter(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#2563EB]"
+            title="Filtrar relatório por terceiro"
+          >
+            <option value="all">Todos os terceiros</option>
+            {thirdParties.map((thirdParty) => (
+              <option key={thirdParty.id} value={thirdParty.id}>
+                {thirdParty.trade_name || thirdParty.name}
+              </option>
+            ))}
+          </select>
         </div>
+
+        <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-3 xl:grid-cols-1">
+          <TextMetric icon={Package} label="Itens entregues" value={String(billingItemsCount)} />
+          <TextMetric icon={Building2} label="Registros" value={String(thirdPartyDeliveries.length)} />
+          <TextMetric icon={DollarSign} label="Total para cobrança" value={formatCurrency(totalBillingValue)} />
+        </div>
+
+        {billingSummary.length > 0 && (
+          <div className="grid gap-3 border-b border-slate-100 p-4">
+            {billingSummary.map((summary) => (
+              <div key={summary.thirdParty.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-sm font-black uppercase tracking-tight text-slate-800">{summary.thirdParty.trade_name || summary.thirdParty.name}</p>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-lg font-black text-slate-900">{summary.items}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Itens</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-black text-slate-900">{summary.employees.size}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Pessoas</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-emerald-700">{formatCurrency(summary.value)}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Valor</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+              <tr>
+                <th className="px-4 py-3">Data</th>
+                <th className="px-4 py-3">Terceiro</th>
+                <th className="px-4 py-3">Colaborador</th>
+                <th className="px-4 py-3">EPI / CA</th>
+                <th className="px-4 py-3 text-center">Qtd</th>
+                <th className="px-4 py-3 text-right">Custo Unit.</th>
+                <th className="px-4 py-3 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {thirdPartyDeliveries.slice(0, 80).map(({ delivery, thirdPartyId }) => {
+                const thirdParty = thirdPartyById.get(thirdPartyId)
+                const unitCost = Number(delivery.ppe?.cost || 0)
+                const total = Number(delivery.quantity || 0) * unitCost
+
+                return (
+                  <tr key={delivery.id} className="hover:bg-slate-50/80">
+                    <td className="px-4 py-3 text-xs font-bold text-slate-500">
+                      {new Date(delivery.delivery_date).toLocaleDateString("pt-BR")}
+                    </td>
+                    <td className="px-4 py-3 text-xs font-black uppercase text-slate-700">
+                      {thirdParty?.trade_name || thirdParty?.name || "Terceiro"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-xs font-black uppercase text-slate-800">{delivery.employee?.full_name || "Colaborador"}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">{delivery.employee?.cpf}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-xs font-black uppercase text-slate-700">{delivery.ppe?.name || "EPI"}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">CA {delivery.ppe?.ca_number || "N/A"}</p>
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs font-black text-slate-700">{delivery.quantity}</td>
+                    <td className="px-4 py-3 text-right text-xs font-bold text-slate-500">{formatCurrency(unitCost)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-black text-emerald-700">{formatCurrency(total)}</td>
+                  </tr>
+                )
+              })}
+              {thirdPartyDeliveries.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-xs font-bold uppercase tracking-widest text-slate-400">
+                    Nenhuma entrega vinculada a terceiros.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
       </div>
+
 
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4">
           <form
             onSubmit={handleSubmit}
-            className="my-4 flex w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            className="my-3 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-5 sm:px-6">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/70 px-4 py-4 sm:px-5">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cadastro de terceiro</p>
                 <h2 className="mt-1 text-xl font-black uppercase tracking-tight text-slate-900">
@@ -539,38 +509,38 @@ export default function ThirdPartiesPage() {
               </button>
             </div>
 
-            <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+            <div className="grid min-h-0 gap-3 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5">
               <label className="space-y-2 sm:col-span-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Razao social</span>
-                <input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Razao social" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Razao social" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nome fantasia</span>
-                <input value={form.trade_name} onChange={(event) => setForm({ ...form, trade_name: event.target.value })} placeholder="Nome fantasia" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <input value={form.trade_name} onChange={(event) => setForm({ ...form, trade_name: event.target.value })} placeholder="Nome fantasia" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">CNPJ</span>
-                <input value={form.cnpj} onChange={(event) => setForm({ ...form, cnpj: event.target.value })} placeholder="00.000.000/0000-00" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <input value={form.cnpj} onChange={(event) => setForm({ ...form, cnpj: event.target.value })} placeholder="00.000.000/0000-00" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Contato responsavel</span>
-                <input value={form.contact_name} onChange={(event) => setForm({ ...form, contact_name: event.target.value })} placeholder="Nome do responsavel" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <input value={form.contact_name} onChange={(event) => setForm({ ...form, contact_name: event.target.value })} placeholder="Nome do responsavel" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Telefone</span>
-                <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Telefone" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Telefone" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">E-mail</span>
-                <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="E-mail" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="E-mail" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="space-y-2 sm:col-span-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Endereco</span>
-                <input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Endereco completo" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Endereco completo" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="space-y-2 sm:col-span-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Observacoes</span>
-                <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Observacoes contratuais ou operacionais" rows={4} className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+                <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Observacoes contratuais ou operacionais" rows={3} className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
               </label>
               <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2">
                 <span className="text-xs font-black uppercase tracking-widest text-slate-700">Terceiro ativo</span>
@@ -578,7 +548,7 @@ export default function ThirdPartiesPage() {
               </label>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
               <button type="button" onClick={closeForm} disabled={submitting} className="rounded-xl border border-slate-200 px-5 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50">
                 Cancelar
               </button>
@@ -596,9 +566,9 @@ export default function ThirdPartiesPage() {
 
 function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-      <Icon className="h-5 w-5 text-[#2563EB]" />
-      <p className="mt-3 text-2xl font-black text-slate-900">{value}</p>
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <Icon className="h-4 w-4 text-[#2563EB]" />
+      <p className="mt-2 text-2xl font-black text-slate-900">{value}</p>
       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
     </div>
   )
@@ -606,9 +576,9 @@ function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string;
 
 function TextMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-      <Icon className="h-5 w-5 text-[#2563EB]" />
-      <p className="mt-3 text-xl font-black text-slate-900">{value}</p>
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <Icon className="h-4 w-4 text-[#2563EB]" />
+      <p className="mt-2 text-lg font-black text-slate-900">{value}</p>
       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
     </div>
   )

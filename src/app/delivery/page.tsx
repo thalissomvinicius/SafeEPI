@@ -120,6 +120,18 @@ export default function DeliveryPage() {
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
 
+  const pendingSignatureSummary = useMemo(() => {
+    const pending = pendingDrafts.filter((draft) => draft.status === "pending").length
+    const expired = pendingDrafts.filter((draft) => draft.status === "expired").length
+    const completed = pendingDrafts.filter((draft) => draft.status === "completed").length
+    return {
+      total: pendingDrafts.length,
+      pending,
+      expired,
+      completed,
+    }
+  }, [pendingDrafts])
+
   useEffect(() => {
     const captureMetadata = async () => {
         try {
@@ -966,7 +978,7 @@ export default function DeliveryPage() {
       } else if (expired > 0) {
         toast.warning(`${expired} link(s) expirado(s); demais ainda aguardando.`)
       } else {
-        toast.info("Ainda aguardando assinatura do colaborador.")
+        toast.success(`Lista atualizada com sucesso. ${pending} pendencia(s) ainda em aberto.`)
       }
     } finally {
       setCheckingPendingToken(null)
@@ -1154,13 +1166,13 @@ export default function DeliveryPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto pb-24 lg:pb-8">
-      <div className="mb-6 lg:mb-8 border-l-4 border-[#2563EB] pl-4">
-        <h1 className="text-2xl lg:text-3xl font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
+    <div className="p-4 md:p-5 lg:p-6 max-w-7xl mx-auto pb-24 lg:pb-8">
+      <div className="mb-5 border-l-4 border-[#2563EB] pl-4">
+        <h1 className="text-2xl lg:text-[28px] font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
         <p className="text-slate-500 font-medium text-sm lg:text-base mt-1">Compliance NR-06 com Rastreabilidade de Autoria.</p>
       </div>
 
-      <div className="mb-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="mb-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
           <button
             onClick={() => setViewMode("new")}
@@ -1202,15 +1214,24 @@ export default function DeliveryPage() {
         </div>
       </div>
 
+      {viewMode === "pending" && (
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <SignatureSummaryCard label="Total" value={pendingSignatureSummary.total} tone="slate" />
+          <SignatureSummaryCard label="Em aberto" value={pendingSignatureSummary.pending} tone="amber" />
+          <SignatureSummaryCard label="Expirado" value={pendingSignatureSummary.expired} tone="red" />
+          <SignatureSummaryCard label="Assinado" value={pendingSignatureSummary.completed} tone="green" />
+        </div>
+      )}
+
       {viewMode === "pending" ? (
-        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40 animate-in fade-in">
-          <div className="p-5 sm:p-6 border-b border-slate-100 bg-amber-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 animate-in fade-in">
+          <div className="p-4 border-b border-slate-100 bg-amber-50/50 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+              <h2 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
                 <Hourglass className="w-5 h-5 text-amber-600" />
                 Pendencias de Assinatura
               </h2>
-              <p className="text-xs text-amber-700 font-bold mt-1 flex items-center gap-2">
+              <p className="text-xs text-amber-700 font-bold mt-1 flex items-center gap-2 flex-wrap">
                 Entregas de EPI aguardando assinatura do colaborador.
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-[9px] uppercase tracking-widest">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -1218,7 +1239,7 @@ export default function DeliveryPage() {
                 </span>
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 lg:items-center">
+            <div className="flex flex-col sm:flex-row gap-2 lg:items-center">
               <div className="relative min-w-0 sm:w-80">
                 <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -1226,20 +1247,20 @@ export default function DeliveryPage() {
                   value={pendingSearchTerm}
                   onChange={(event) => setPendingSearchTerm(event.target.value)}
                   placeholder="Buscar por colaborador, EPI ou CA..."
-                  className="w-full bg-white border border-slate-200 text-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-amber-300 focus:ring-4 focus:ring-amber-100 transition-all text-xs font-bold"
+                  className="w-full bg-white border border-slate-200 text-slate-700 rounded-xl pl-11 pr-4 py-2.5 outline-none focus:border-amber-300 focus:ring-4 focus:ring-amber-100 transition-all text-xs font-bold"
                 />
               </div>
               <button
                 onClick={() => void checkVisiblePendingDrafts()}
                 disabled={filteredPendingDrafts.length === 0 || checkingPendingToken !== null}
-                className="bg-white border border-amber-200 text-amber-700 px-4 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
+                className="bg-white border border-amber-200 text-amber-700 px-4 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${checkingPendingToken ? "animate-spin" : ""}`} /> Atualizar Status
               </button>
             </div>
           </div>
 
-          <div className="p-4 sm:p-6">
+          <div className="p-3 sm:p-4">
             {pendingDrafts.length === 0 || filteredPendingDrafts.length === 0 ? (
               <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
                 <CheckCircle2 className="w-12 h-12 mx-auto text-slate-300 mb-3" />
@@ -1253,7 +1274,7 @@ export default function DeliveryPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
                 {filteredPendingDrafts.map((draft) => {
                   const isChecking = checkingPendingToken === draft.token || checkingPendingToken === "batch"
                   const isReopening = reopeningPendingToken === draft.token
@@ -1265,7 +1286,7 @@ export default function DeliveryPage() {
                   const StatusIcon = draft.status === "completed" ? CheckCircle2 : draft.status === "expired" ? XCircle : Hourglass
 
                   return (
-                    <div key={draft.token} className="border border-slate-200 rounded-2xl p-4 sm:p-5 bg-white shadow-sm hover:shadow-md transition-all">
+                    <div key={draft.token} className="border border-slate-200 rounded-2xl p-3 bg-white shadow-sm hover:shadow-md transition-all">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-black text-slate-800 uppercase tracking-tight truncate">{draft.employeeName}</p>
@@ -1277,7 +1298,7 @@ export default function DeliveryPage() {
                         </span>
                       </div>
 
-                      <div className="mt-4 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                      <div className="mt-3 bg-slate-50 border border-slate-100 rounded-2xl p-3">
                         <p className="font-black text-xs text-slate-800 uppercase tracking-tight">{draft.item.ppeName}</p>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {draft.item.ppeCaNumber}</span>
@@ -1300,12 +1321,12 @@ export default function DeliveryPage() {
                         )}
                       </div>
 
-                      <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                      <div className="mt-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                         <Clock className="w-3.5 h-3.5" />
                         {draft.status === "pending" ? `Assinatura do colaborador aguardando ate ${formatRemoteExpiry(draft.expiresAt)}` : `Ultimo prazo: ${formatRemoteExpiry(draft.expiresAt)}`}
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
                         <button
                           onClick={() => void copyTextToClipboard(draft.linkUrl).then((copied) => {
                             if (copied) {
@@ -1314,7 +1335,7 @@ export default function DeliveryPage() {
                               toast.warning("Nao foi possivel copiar automaticamente. Abra o link e copie pela barra do navegador.")
                             }
                           })}
-                          className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Clipboard className="w-3.5 h-3.5" /> Copiar
                         </button>
@@ -1322,14 +1343,14 @@ export default function DeliveryPage() {
                           href={draft.linkUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <ExternalLink className="w-3.5 h-3.5" /> Abrir
                         </a>
                         <button
                           onClick={() => void checkPendingDraft(draft)}
                           disabled={isChecking}
-                          className="py-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          className="py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} /> Checar
                         </button>
@@ -1337,7 +1358,7 @@ export default function DeliveryPage() {
                           <button
                             onClick={() => void reopenExpiredPendingDraft(draft)}
                             disabled={isReopening}
-                            className="py-3 rounded-xl bg-[#B91C1C] hover:bg-[#991B1B] text-white border border-[#7F1D1D] shadow-sm shadow-red-900/20 hover:shadow-md hover:shadow-red-900/25 hover:-translate-y-0.5 active:translate-y-0 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                            className="py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 shadow-sm font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             {isReopening ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1349,14 +1370,14 @@ export default function DeliveryPage() {
                         ) : (
                           <button
                             onClick={() => restorePendingDraft(draft)}
-                            className="py-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                            className="py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                           >
                             <Package className="w-3.5 h-3.5" /> {draft.signaturePendingOnly ? "Copiar" : "Reabrir"}
                           </button>
                         )}
                         <button
                           onClick={() => removePendingDraft(draft.token)}
-                          className="py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Limpar
                         </button>
@@ -1843,6 +1864,30 @@ export default function DeliveryPage() {
         </div>
       </div>
       )}
+    </div>
+  )
+}
+
+function SignatureSummaryCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone: "slate" | "amber" | "red" | "green"
+}) {
+  const toneClass = {
+    slate: "border-slate-200 bg-white text-slate-800",
+    amber: "border-amber-200 bg-amber-50/70 text-amber-800",
+    red: "border-red-200 bg-red-50/70 text-red-700",
+    green: "border-emerald-200 bg-emerald-50/70 text-emerald-700",
+  }[tone]
+
+  return (
+    <div className={`rounded-2xl border px-4 py-3 shadow-sm ${toneClass}`}>
+      <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{label}</p>
+      <p className="mt-1 text-2xl font-black leading-none">{value}</p>
     </div>
   )
 }
