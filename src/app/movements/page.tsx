@@ -738,7 +738,7 @@ export default function MovementsPage() {
       {/* PDF Choice Modal */}
       {showPdfModal && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90dvh] overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 flex flex-col">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90dvh] overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 flex flex-col">
             <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Gerar Relatório PDF</h2>
@@ -749,101 +749,123 @@ export default function MovementsPage() {
               </button>
             </div>
 
-            <div className="p-5 sm:p-6 space-y-5 overflow-y-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Simple PDF */}
-              <button
-                type="button"
-                onClick={() => setSelectedPdfType('simple')}
-                className={`group flex flex-col items-center text-center p-6 rounded-2xl border-2 transition-all ${
-                  selectedPdfType === 'simple'
-                    ? 'border-[#2563EB] bg-blue-50 shadow-md shadow-blue-900/10'
-                    : 'border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50'
-                }`}
-              >
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-all ${selectedPdfType === 'simple' ? 'bg-[#2563EB]/10' : 'bg-slate-100 group-hover:bg-[#2563EB]/10'}`}>
-                  <FileDown className={`w-7 h-7 ${selectedPdfType === 'simple' ? 'text-[#2563EB]' : 'text-slate-500 group-hover:text-[#2563EB]'}`} />
-                </div>
-                <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-2">PDF Simples</h3>
-                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  Relatório operacional com tabela completa e resumo de indicadores. Ideal para arquivo e controle interno.
-                </p>
-                <span className={`mt-4 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'simple' ? 'text-[#2563EB] bg-white border border-blue-100' : 'text-slate-400 bg-slate-100'}`}>
-                  Retrato · 1 página+
-                </span>
-              </button>
-
-              {/* Presentation PDF */}
-              <button
-                type="button"
-                onClick={() => setSelectedPdfType('presentation')}
-                className={`group flex flex-col items-center text-center p-6 rounded-2xl border-2 transition-all ${
-                  selectedPdfType === 'presentation'
-                    ? 'border-[#B91C1C] bg-red-50 shadow-md shadow-red-900/10'
-                    : 'border-slate-100 hover:border-red-200 hover:bg-red-50/40'
-                }`}
-              >
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-all ${selectedPdfType === 'presentation' ? 'bg-red-100' : 'bg-slate-100 group-hover:bg-red-100'}`}>
-                  <Presentation className={`w-7 h-7 ${selectedPdfType === 'presentation' ? 'text-[#B91C1C]' : 'text-slate-500 group-hover:text-[#B91C1C]'}`} />
-                </div>
-                <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-2">PDF Apresentação</h3>
-                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  Relatório executivo com gráficos visuais e layout premium. Ideal para reuniões com gestores e diretoria.
-                </p>
-                <span className={`mt-4 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'presentation' ? 'text-[#B91C1C] bg-white border border-red-100' : 'text-slate-400 bg-slate-100'}`}>
-                  Paisagem · 2 páginas
-                </span>
-              </button>
-              </div>
-
-              {selectedPdfType === 'presentation' && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <PenTool className="w-4 h-4 text-[#B91C1C]" />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assinatura do responsável técnico</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-[1.3fr_1fr] gap-3">
-                    <select
-                      value={selectedTechnicianId}
-                      onChange={(e) => handleTechnicianSelect(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-[#2563EB]"
-                      title="Selecionar responsável técnico cadastrado"
-                    >
-                      <option value="">Selecione um técnico cadastrado</option>
-                      {technicianOptions.map((employee) => (
-                        <option key={employee.id} value={employee.id}>
-                          {employee.full_name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      value={technicianRole}
-                      onChange={(e) => setTechnicianRole(e.target.value)}
-                      placeholder="Cargo"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
-                    />
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                    <SignatureCanvas
-                      ref={movementSigCanvas}
-                      canvasProps={{ className: "w-full h-32 bg-white" }}
-                    />
-                  </div>
+            <div className="p-5 sm:p-6 overflow-y-auto">
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+                <div className="space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Formato do relatório</p>
                   <button
                     type="button"
-                    onClick={() => movementSigCanvas.current?.clear()}
-                    className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600"
+                    onClick={() => setSelectedPdfType('simple')}
+                    className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                      selectedPdfType === 'simple'
+                        ? 'border-[#2563EB] bg-blue-50 shadow-md shadow-blue-900/10'
+                        : 'border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50'
+                    }`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Limpar assinatura
+                    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-all ${selectedPdfType === 'simple' ? 'bg-[#2563EB]/10' : 'bg-slate-100 group-hover:bg-[#2563EB]/10'}`}>
+                      <FileDown className={`h-7 w-7 ${selectedPdfType === 'simple' ? 'text-[#2563EB]' : 'text-slate-500 group-hover:text-[#2563EB]'}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm">PDF Simples</h3>
+                      <p className="mt-1 text-[11px] text-slate-500 font-medium leading-relaxed">
+                        Tabela completa e resumo de indicadores para arquivo e controle interno.
+                      </p>
+                      <span className={`mt-3 inline-flex text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'simple' ? 'text-[#2563EB] bg-white border border-blue-100' : 'text-slate-400 bg-slate-100'}`}>
+                        Retrato · 1 página+
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPdfType('presentation')}
+                    className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                      selectedPdfType === 'presentation'
+                        ? 'border-[#B91C1C] bg-red-50 shadow-md shadow-red-900/10'
+                        : 'border-slate-100 hover:border-red-200 hover:bg-red-50/40'
+                    }`}
+                  >
+                    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-all ${selectedPdfType === 'presentation' ? 'bg-red-100' : 'bg-slate-100 group-hover:bg-red-100'}`}>
+                      <Presentation className={`h-7 w-7 ${selectedPdfType === 'presentation' ? 'text-[#B91C1C]' : 'text-slate-500 group-hover:text-[#B91C1C]'}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm">PDF Apresentação</h3>
+                      <p className="mt-1 text-[11px] text-slate-500 font-medium leading-relaxed">
+                        Gráficos visuais, layout executivo e assinatura para reuniões.
+                      </p>
+                      <span className={`mt-3 inline-flex text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'presentation' ? 'text-[#B91C1C] bg-white border border-red-100' : 'text-slate-400 bg-slate-100'}`}>
+                        Paisagem · 2 páginas
+                      </span>
+                    </div>
                   </button>
                 </div>
-              )}
 
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  {selectedPdfType === 'presentation' ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <PenTool className="w-4 h-4 text-[#B91C1C]" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assinatura do responsável técnico</p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-[1.3fr_1fr] gap-3">
+                        <select
+                          value={selectedTechnicianId}
+                          onChange={(e) => handleTechnicianSelect(e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-[#2563EB]"
+                          title="Selecionar responsável técnico cadastrado"
+                        >
+                          <option value="">Selecione um técnico cadastrado</option>
+                          {technicianOptions.map((employee) => (
+                            <option key={employee.id} value={employee.id}>
+                              {employee.full_name}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          value={technicianRole}
+                          onChange={(e) => setTechnicianRole(e.target.value)}
+                          placeholder="Cargo"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
+                        />
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                        <SignatureCanvas
+                          ref={movementSigCanvas}
+                          canvasProps={{ className: "w-full h-28 bg-white" }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => movementSigCanvas.current?.clear()}
+                        className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Limpar assinatura
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex h-full min-h-64 flex-col items-center justify-center text-center">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]">
+                        <FileDown className="h-8 w-8" />
+                      </div>
+                      <h3 className="mt-4 text-sm font-black uppercase tracking-tight text-slate-800">Pronto para gerar</h3>
+                      <p className="mt-2 max-w-sm text-xs font-bold leading-relaxed text-slate-500">
+                        O PDF simples não exige assinatura e será aberto assim que você confirmar.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <p className="text-[10px] text-slate-400 italic">
+                Período: <strong>{getPeriodLabel()}</strong> · {filteredMovements.length} movimentações
+              </p>
               <button
                 onClick={handleGenerateSelectedPDF}
                 disabled={generatingPresentationPdf}
-                className="w-full rounded-2xl bg-[#B91C1C] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/20 disabled:opacity-60 flex items-center justify-center gap-2"
+                className="rounded-2xl bg-[#B91C1C] px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/20 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {generatingPresentationPdf ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -854,12 +876,6 @@ export default function MovementsPage() {
                 )}
                 {selectedPdfType === 'presentation' ? 'Gerar apresentação assinada' : 'Gerar PDF simples'}
               </button>
-            </div>
-
-            <div className="px-6 pb-5 shrink-0">
-              <p className="text-[10px] text-center text-slate-400 italic">
-                Período: <strong>{getPeriodLabel()}</strong> · {filteredMovements.length} movimentações
-              </p>
             </div>
           </div>
         </div>

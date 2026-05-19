@@ -1030,38 +1030,55 @@ export default function EmployeesPage() {
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-200/70">
         <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB] ring-1 ring-[#2563EB]/10">
+            <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1 ${
+              loading
+                ? "bg-slate-100 text-slate-300 ring-slate-200"
+                : "bg-[#2563EB]/10 text-[#2563EB] ring-[#2563EB]/10"
+            }`}>
               <Users className="h-7 w-7" />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Colaboradores ativos</p>
-              <div className="mt-1 flex items-end gap-3">
-                <span className="text-4xl font-black leading-none tracking-tight text-slate-900">
-                  {loading ? "..." : activeEmployeesCount}
-                </span>
-                <span className="pb-1 text-xs font-black uppercase tracking-widest text-emerald-600">
-                  em atividade
-                </span>
-              </div>
-              <p className="mt-2 text-xs font-bold text-slate-500">
-                {loading ? "Carregando quadro atual..." : `${totalEmployeesCount} colaborador(es) cadastrado(s) nesta empresa.`}
-              </p>
+              {loading ? (
+                <div className="mt-3 space-y-3">
+                  <div className="h-8 w-36 animate-pulse rounded-xl bg-slate-100" />
+                  <div className="h-3 w-64 max-w-full animate-pulse rounded-full bg-slate-100" />
+                </div>
+              ) : (
+                <>
+                  <div className="mt-1 flex items-end gap-3">
+                    <span className="text-4xl font-black leading-none tracking-tight text-slate-900">
+                      {activeEmployeesCount}
+                    </span>
+                    <span className="pb-1 text-xs font-black uppercase tracking-widest text-emerald-600">
+                      em atividade
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-bold text-slate-500">
+                    {totalEmployeesCount} colaborador(es) cadastrado(s) nesta empresa.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
           <div className="w-full rounded-2xl bg-slate-50 p-4 sm:max-w-xs">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quadro ativo</span>
-              <span className="text-sm font-black text-[#2563EB]">{loading ? "--" : `${activeEmployeesPercent}%`}</span>
+              {loading ? (
+                <span className="h-4 w-10 animate-pulse rounded-full bg-slate-200" />
+              ) : (
+                <span className="text-sm font-black text-[#2563EB]">{activeEmployeesPercent}%</span>
+              )}
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
               <div
-                className="h-full rounded-full bg-[#2563EB] transition-all duration-500"
-                style={{ width: loading ? "35%" : `${activeEmployeesPercent}%` }}
+                className={`h-full rounded-full transition-all duration-500 ${loading ? "animate-pulse bg-slate-300" : "bg-[#2563EB]"}`}
+                style={{ width: loading ? "42%" : `${activeEmployeesPercent}%` }}
               />
             </div>
             <div className="mt-3 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <span>{loading ? "Sincronizando" : `${totalEmployeesCount - activeEmployeesCount} inativo(s)`}</span>
+              <span>{loading ? "Atualizando dados" : `${totalEmployeesCount - activeEmployeesCount} inativo(s)`}</span>
               <span>SafeEPI</span>
             </div>
           </div>
