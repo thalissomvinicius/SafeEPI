@@ -227,7 +227,7 @@ export default function EmployeesPage() {
   const [isDeletingEmployee, setIsDeletingEmployee] = useState(false)
   const { user } = useAuth()
   const canEdit = user?.role === 'MASTER' || user?.role === 'ADMIN'
-  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
+  const hasThirdPartyFeature = Boolean(user)
 
   useEffect(() => {
     return () => {

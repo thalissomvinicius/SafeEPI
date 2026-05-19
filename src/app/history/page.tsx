@@ -15,7 +15,7 @@ type DeliveryScopeFilter = "own" | "third_party" | "all"
 export default function HistoryPage() {
   const { user } = useAuth()
   const isMaster = user?.role === "MASTER"
-  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
+  const hasThirdPartyFeature = Boolean(user)
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [records, setRecords] = useState<DeliveryWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])

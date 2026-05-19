@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext"
 export default function WorkplacesPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
-  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
+  const hasThirdPartyFeature = Boolean(user)
 
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])

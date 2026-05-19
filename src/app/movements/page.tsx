@@ -44,7 +44,7 @@ export default function MovementsPage() {
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
   const [searchTerm, setSearchTerm] = useState("")
   const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>('own')
-  const hasThirdPartyFeature = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
+  const hasThirdPartyFeature = Boolean(user)
 
   // Auth protection
   useEffect(() => {

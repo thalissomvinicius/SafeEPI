@@ -48,7 +48,7 @@ export default function ThirdPartiesPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
-  const hasAccess = user?.role === "MASTER" || user?.company?.third_parties_enabled === true
+  const hasAccess = Boolean(user)
 
   const filteredThirdParties = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -238,7 +238,7 @@ export default function ThirdPartiesPage() {
         <ShieldAlert className="mb-4 h-14 w-14 text-slate-300" />
         <h2 className="text-xl font-black uppercase tracking-tighter text-slate-700">Aba Terceiros Bloqueada</h2>
         <p className="mt-2 max-w-md text-sm font-medium text-slate-400">
-          O acesso a terceiros precisa ser liberado no painel Master para esta empresa.
+          Faca login para acessar o cadastro de terceiros.
         </p>
       </div>
     )
