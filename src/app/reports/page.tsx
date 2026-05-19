@@ -14,6 +14,10 @@ import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
+type ReportScopeFilter = 'own' | 'third_party' | 'all'
+
+const getDeliveryCost = (delivery: DeliveryWithRelations) =>
+  Number(delivery.quantity || 0) * Number(delivery.ppe?.cost || 0)
 
 export default function ReportsPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
@@ -34,6 +38,7 @@ export default function ReportsPage() {
   const [specificMonth, setSpecificMonth] = useState<string>('')
   const [specificMonthSel, setSpecificMonthSel] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
+  const [reportScopeFilter, setReportScopeFilter] = useState<ReportScopeFilter>('own')
   
   // Computed Data State
   const [allDeliveries, setAllDeliveries] = useState<DeliveryWithRelations[]>([])
@@ -88,6 +93,17 @@ export default function ReportsPage() {
   useEffect(() => {
     if (rawDeliveries.length === 0 && rawPpes.length === 0) return
 
+    const workplaceThirdPartyById = new Map(rawWorkplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
+    const getDeliveryThirdPartyId = (delivery: DeliveryWithRelations) =>
+      delivery.third_party_id ||
+      delivery.employee?.third_party_id ||
+      delivery.workplace?.third_party_id ||
+      workplaceThirdPartyById.get(delivery.workplace_id || "") ||
+      null
+    const matchesScope = (thirdPartyId: string | null | undefined) =>
+      reportScopeFilter === 'all' ||
+      (reportScopeFilter === 'own' ? !thirdPartyId : Boolean(thirdPartyId))
+
     let filteredDeliveries = rawDeliveries
     let filteredTrainings = rawTrainings
     if (dateFilter !== 'all') {
@@ -118,11 +134,14 @@ export default function ReportsPage() {
       }
     }
 
+    filteredDeliveries = filteredDeliveries.filter((delivery) => matchesScope(getDeliveryThirdPartyId(delivery)))
+    filteredTrainings = filteredTrainings.filter((training) => matchesScope(training.third_party_id || null))
+
     // eslint-disable-next-line
     setAllDeliveries(filteredDeliveries)
 
     // 1. Cálculo de Investimento do Período
-    const periodTotal = filteredDeliveries.reduce((acc, d) => acc + (d.ppe?.cost || 0), 0)
+    const periodTotal = filteredDeliveries.reduce((acc, d) => acc + getDeliveryCost(d), 0)
 
     // 2. CAs Críticos (Vencendo nos próximos 90 dias) - Geral
     const criticalCount = rawPpes.filter(p => {
@@ -134,7 +153,7 @@ export default function ReportsPage() {
     const wpStats = rawWorkplaces.map(wp => {
         const total = filteredDeliveries
             .filter(d => d.workplace_id === wp.id)
-            .reduce((acc, d) => acc + (d.ppe?.cost || 0), 0)
+            .reduce((acc, d) => acc + getDeliveryCost(d), 0)
         return { name: wp.name, value: total }
     }).sort((a, b) => b.value - a.value).filter(wp => wp.value > 0) // Hide empty workplaces
 
@@ -162,14 +181,19 @@ export default function ReportsPage() {
       'custom': 'Período Específico',
       'specific_month': 'Mês Selecionado'
     }
+    const scopeLabelMap: Record<ReportScopeFilter, string> = {
+      own: 'Próprios',
+      third_party: 'Terceiros',
+      all: 'Todos'
+    }
 
     setStats([
-      { label: `Custo EPIs (${labelMap[dateFilter]})`, value: `R$ ${periodTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `${filteredDeliveries.length} itens` },
-      { label: `Entregas (${labelMap[dateFilter]})`, value: filteredDeliveries.length.toString(), change: "Validadas" },
+      { label: `Custo EPIs (${labelMap[dateFilter]})`, value: `R$ ${periodTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `${scopeLabelMap[reportScopeFilter]}` },
+      { label: `Entregas (${labelMap[dateFilter]})`, value: filteredDeliveries.length.toString(), change: `${filteredDeliveries.reduce((acc, delivery) => acc + Number(delivery.quantity || 0), 0)} itens` },
       { label: "EPIs em Alerta (C.A.)", value: criticalCount.toString(), change: "Atenção (Geral)" },
-      { label: `Treinamentos (${labelMap[dateFilter]})`, value: filteredTrainings.length.toString(), change: "NR-01/06" },
+      { label: `Treinamentos (${labelMap[dateFilter]})`, value: filteredTrainings.length.toString(), change: scopeLabelMap[reportScopeFilter] },
     ])
-  }, [rawDeliveries, rawPpes, rawTrainings, rawWorkplaces, dateFilter, customStartDate, customEndDate, specificMonth])
+  }, [rawDeliveries, rawPpes, rawTrainings, rawWorkplaces, dateFilter, customStartDate, customEndDate, specificMonth, reportScopeFilter])
 
   if (authLoading || (user && user.role === 'ALMOXARIFE')) {
     return (
@@ -201,6 +225,12 @@ export default function ReportsPage() {
     )
   }
 
+  const reportScopeTitleMap: Record<ReportScopeFilter, string> = {
+    own: 'Colaboradores Próprios',
+    third_party: 'Terceiros',
+    all: 'Todos os Vínculos'
+  }
+
   const handleExportPDF = () => {
     let periodTitle = 'Todo o Histórico'
     if (dateFilter === 'month') periodTitle = 'Neste Mês'
@@ -209,6 +239,7 @@ export default function ReportsPage() {
     if (dateFilter === 'last90') periodTitle = 'Últimos 90 Dias'
     if (dateFilter === 'custom') periodTitle = `Período: ${customStartDate} a ${customEndDate}`
     if (dateFilter === 'specific_month') periodTitle = `Mês Específico: ${specificMonth}`
+    periodTitle = `${periodTitle} · ${reportScopeTitleMap[reportScopeFilter]}`
 
     const pdfBlob = generateGeneralReportPDF({
       stats,
@@ -242,6 +273,26 @@ export default function ReportsPage() {
             <p className="text-slate-500 text-sm mt-1 font-medium italic">Extração de custos operacionais e conformidade normativa.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="grid grid-cols-3 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            {([
+              { value: 'own', label: 'Próprios' },
+              { value: 'third_party', label: 'Terceiros' },
+              { value: 'all', label: 'Todos' },
+            ] as { value: ReportScopeFilter; label: string }[]).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setReportScopeFilter(option.value)}
+                className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+                  reportScopeFilter === option.value
+                    ? 'bg-[#2563EB] text-white shadow-sm shadow-blue-900/20'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Calendar className="h-4 w-4 text-slate-400" />

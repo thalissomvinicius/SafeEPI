@@ -1371,108 +1371,118 @@ export default function EmployeesPage() {
       </div>
   ) : (
             <>
-              <table className="w-full text-sm text-left hidden md:table">
-                  <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
-                  <tr>
-                      <th className="px-6 py-5">Nome do Colaborador</th>
-                      <th className="px-6 py-5">Cargo / Setor</th>
-                      <th className="px-6 py-5">Obra / Canteiro</th>
-                      {hasThirdPartyFeature && <th className="px-6 py-5">Tomador</th>}
-                      <th className="px-6 py-5">Biometria</th>
-                      <th className="px-6 py-5">Status</th>
-                      <th className="px-6 py-5 text-right">Ações</th>
-                  </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
+              <div className="hidden bg-slate-50/70 p-4 md:block">
+                <div className="mb-3 flex items-center justify-between px-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                    {filteredEmployees.length} colaborador(es) encontrados
+                  </p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Visualização compacta
+                  </p>
+                </div>
+
+                <div className="space-y-3">
                   {filteredEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors group">
-                      <td className="px-6 py-5">
-                          <p className="font-bold text-slate-800 uppercase">{emp.full_name}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">{formatCpf(emp.cpf)}</p>
-                      </td>
-                      <td className="px-6 py-5 text-slate-500 font-medium italic">
-                          {getJobTitleName(emp.job_title)} <span className="mx-1 text-slate-200">•</span> {getDepartmentName(emp.department)}
-                      </td>
-                      <td className="px-6 py-5">
-                          <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter">
-                              <HardDrive className="w-3 h-3 text-[#2563EB]" />
-                              {getWorkplaceName(emp.workplace_id)}
+                    <div key={emp.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-base font-black uppercase leading-tight tracking-tight text-slate-900" title={emp.full_name}>{emp.full_name}</p>
+                            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${
+                              emp.active
+                                ? 'border-green-200 bg-green-50 text-green-700'
+                                : 'border-amber-200 bg-amber-50 text-amber-700'
+                            }`}>
+                              {emp.active ? 'Ativo' : 'Inativo'}
+                            </span>
+                            {(() => {
+                              const biometry = getBiometryStatus(emp)
+                              return (
+                                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${biometry.className}`}>
+                                  <Fingerprint className={`h-3 w-3 ${biometry.iconClassName}`} />
+                                  {biometry.label}
+                                </span>
+                              )
+                            })()}
                           </div>
-                      </td>
-                      {hasThirdPartyFeature && (
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter">
-                            <Handshake className="w-3 h-3 text-amber-600" />
-                            {getThirdPartyName(emp.third_party_id || null)}
+                          <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{formatCpf(emp.cpf)}</p>
+                        </div>
+
+                        <div className="grid min-w-0 flex-[2] grid-cols-1 gap-3 lg:grid-cols-3">
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Cargo / setor</p>
+                            <p className="mt-1 text-xs font-black uppercase tracking-tight text-slate-700" title={getJobTitleName(emp.job_title)}>
+                              {getJobTitleName(emp.job_title)}
+                            </p>
+                            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400" title={getDepartmentName(emp.department)}>
+                              {getDepartmentName(emp.department)}
+                            </p>
                           </div>
-                        </td>
-                      )}
-                      <td className="px-6 py-5">
-                          {(() => {
-                            const biometry = getBiometryStatus(emp)
-                            return (
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${biometry.className}`}>
-                                <Fingerprint className={`w-3 h-3 ${biometry.iconClassName}`} />
-                                {biometry.label}
-                              </span>
-                            )
-                          })()}
-                      </td>
-                      <td className="px-6 py-5">
-                          <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-full border ${
-                          emp.active 
-                              ? 'bg-green-50 text-green-700 border-green-200' 
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}>
-                          {emp.active ? 'Ativo' : 'Inativo'}
-                          </span>
-                      </td>
-                      <td className="px-6 py-5 text-right space-x-2 whitespace-nowrap">
+
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Obra / canteiro</p>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-black uppercase tracking-tight text-slate-700">
+                              <HardDrive className="h-3.5 w-3.5 shrink-0 text-[#2563EB]" />
+                              <span className="truncate" title={getWorkplaceName(emp.workplace_id)}>{getWorkplaceName(emp.workplace_id)}</span>
+                            </div>
+                          </div>
+
+                          {hasThirdPartyFeature && (
+                            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Tomador</p>
+                              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-black uppercase tracking-tight text-slate-700">
+                                <Handshake className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                                <span className="truncate" title={getThirdPartyName(emp.third_party_id || null)}>{getThirdPartyName(emp.third_party_id || null)}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
                           {canEdit && (
-                            <button 
+                            <button
                               onClick={() => openEditEmployee(emp)}
-                              className="text-slate-500 hover:bg-slate-100 font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-100 hover:shadow-md"
                             >
-                            Editar
+                              Editar
                             </button>
                           )}
                           {canEdit && !emp.active && (
                             <button
                               onClick={() => void handleActivateEmployee(emp)}
                               disabled={isSaving}
-                              className="text-emerald-700 hover:bg-emerald-50 font-black text-[10px] uppercase tracking-widest border border-emerald-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all disabled:opacity-50"
+                              className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-100 hover:shadow-md disabled:opacity-50"
                             >
                               Ativar
                             </button>
                           )}
-                          <button 
+                          <button
                             onClick={() => openProfile(emp.id)}
-                            className="text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest border border-blue-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
+                            className="rounded-lg border border-[#1D4ED8] bg-[#2563EB] px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/15 transition-all hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md"
                           >
-                          Prontuário
+                            Prontuário
                           </button>
                           {canEdit && (
                             <button
                               onClick={() => setEmployeeToDelete(emp)}
-                              className="inline-flex items-center justify-center text-red-600 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest border border-red-100 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
+                              className="inline-flex items-center justify-center rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-red-600 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-red-100 hover:shadow-md"
                               title="Excluir colaborador"
                               aria-label={`Excluir ${emp.full_name}`}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           )}
-                      </td>
-                      </tr>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                   {filteredEmployees.length === 0 && (
-                      <tr>
-                          <td colSpan={hasThirdPartyFeature ? 7 : 6} className="px-6 py-10 text-center text-slate-400 italic font-medium">
-                              Nenhum colaborador encontrado.
-                          </td>
-                      </tr>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center font-medium italic text-slate-400">
+                      Nenhum colaborador encontrado.
+                    </div>
                   )}
-                  </tbody>
-              </table>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-slate-50/50">
                 {filteredEmployees.map((emp) => (
