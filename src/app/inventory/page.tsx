@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { Package, Plus, History, Search, ArrowUpCircle, ArrowDownCircle, Settings2, Loader2, X } from "lucide-react"
+import { Package, Plus, History, Search, ArrowUpCircle, ArrowDownCircle, Settings2, Loader2, X, FileDown, FileSpreadsheet } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE, StockMovement } from "@/types/database"
 import { format } from "date-fns"
@@ -9,9 +9,13 @@ import { ptBR } from "date-fns/locale"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
+import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
+import { generateInventoryStockReportPDF } from "@/utils/pdfGenerator"
+import { exportInventoryStockToExcel } from "@/utils/excelExporter"
 
 export default function InventoryPage() {
   const { user } = useAuth()
+  const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [ppes, setPpes] = useState<PPE[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,7 +85,44 @@ export default function InventoryPage() {
   }
 
   const filteredPpes = ppes.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const stockReportPpes = filteredPpes.filter(ppe => Number(ppe.current_stock || 0) > 0)
   const recentMovements = movements.slice(0, 5)
+
+  const getStockReportData = () => stockReportPpes.length > 0 ? stockReportPpes : filteredPpes
+
+  const getStockFilterLabel = () => {
+    const count = getStockReportData().length
+    if (searchTerm.trim()) return `Busca: ${searchTerm.trim()} - ${count} item(ns)`
+    return `Itens com saldo em estoque - ${count} item(ns)`
+  }
+
+  const handleExportInventoryPDF = () => {
+    const reportData = getStockReportData()
+    if (reportData.length === 0) {
+      toast.error("Nenhum item de estoque para gerar relatório.")
+      return
+    }
+
+    const blob = generateInventoryStockReportPDF({
+      ppes: reportData,
+      filterLabel: getStockFilterLabel(),
+    })
+
+    openPdfDialog(blob, `Relatorio_Estoque_${new Date().toISOString().slice(0, 10)}.pdf`, {
+      title: "Relatório de estoque pronto",
+      description: "Escolha se deseja abrir o PDF em uma nova aba ou baixar o arquivo.",
+    })
+  }
+
+  const handleExportInventoryExcel = () => {
+    const reportData = getStockReportData()
+    if (reportData.length === 0) {
+      toast.error("Nenhum item de estoque para exportar.")
+      return
+    }
+
+    exportInventoryStockToExcel(reportData, getStockFilterLabel())
+  }
 
   const renderMovementItem = (movement: StockMovement) => (
     <div key={movement.id} className="flex gap-4 items-start group">
@@ -122,14 +163,34 @@ export default function InventoryPage() {
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium italic">Gestão de saldo físico e auditoria de entradas e saídas de EPIs.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          title="Abrir formulário de entrada de estoque"
-          className="w-full md:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xl shadow-blue-900/20 px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-blue-900/15"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Registrar Entrada
-        </button>
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <button
+            type="button"
+            onClick={handleExportInventoryExcel}
+            disabled={loading || filteredPpes.length === 0}
+            className="w-full sm:w-auto border border-slate-200 bg-white px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 rounded-xl flex items-center justify-center gap-2"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            Excel
+          </button>
+          <button
+            type="button"
+            onClick={handleExportInventoryPDF}
+            disabled={loading || filteredPpes.length === 0}
+            className="w-full sm:w-auto border border-red-200 bg-red-50 px-5 py-4 text-xs font-black uppercase tracking-widest text-[#2563EB] shadow-sm transition-all hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 rounded-xl flex items-center justify-center gap-2"
+          >
+            <FileDown className="w-4 h-4" />
+            PDF
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            title="Abrir formulário de entrada de estoque"
+            className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-blue-900/15"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Registrar Entrada
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -366,6 +427,7 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+      {pdfActionDialog}
     </div>
   )
 }

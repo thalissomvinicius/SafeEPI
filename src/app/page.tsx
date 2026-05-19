@@ -1,13 +1,17 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Archive, Boxes } from "lucide-react"
+import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Archive, Boxes, Calendar } from "lucide-react"
 import Link from "next/link"
 import { api } from "@/services/api"
-import { DeliveryWithRelations } from "@/types/database"
+import { DeliveryWithRelations, Employee, PPE, SignedDocument } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts"
 import { formatDeliveryDate, getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
+import { useActiveBrand } from "@/hooks/useActiveBrand"
+import { useAuth } from "@/contexts/AuthContext"
+
+type DashboardDateFilter = "last7" | "month" | "last30" | "custom" | "all"
 
 function DashboardSkeleton() {
   return (
@@ -46,6 +50,13 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
+  const brandColor = activeBrand.primaryColor
+  const [rawEmployees, setRawEmployees] = useState<Employee[]>([])
+  const [rawPpes, setRawPpes] = useState<PPE[]>([])
+  const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [rawDocuments, setRawDocuments] = useState<SignedDocument[]>([])
   const [stats, setStats] = useState({
     deliveries: 0,
     employees: 0,
@@ -56,6 +67,9 @@ export default function Dashboard() {
   const [recentDeliveries, setRecentDeliveries] = useState<DeliveryWithRelations[]>([])
   const [chartData, setChartData] = useState<{name: string, value: number}[]>([])
   const [loading, setLoading] = useState(true)
+  const [dateFilter, setDateFilter] = useState<DashboardDateFilter>("last7")
+  const [customStartDate, setCustomStartDate] = useState("")
+  const [customEndDate, setCustomEndDate] = useState("")
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -68,32 +82,10 @@ export default function Dashboard() {
           api.getSignedDocuments()
         ])
 
-        const criticalCount = ppeData.filter(p => {
-          const diffDays = getDaysUntilDateOnly(p.ca_expiry_date)
-          return diffDays < 90
-        }).length
-
-        setStats({
-          deliveries: deliveryData.length,
-          employees: empData.filter(e => e.active).length,
-          criticalCAs: criticalCount,
-          lowStock: ppeData.filter(p => p.active && (p.current_stock || 0) <= 5).length,
-          signedDocuments: documentData.length
-        })
-
-        // Chart Data (Last 7 Days)
-        const last7Days = [...Array(7)].map((_, i) => {
-          const date = new Date()
-          date.setDate(date.getDate() - (6 - i))
-          const dateStr = date.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric' })
-          const count = deliveryData.filter(d => 
-            parseDeliveryDateTime(d.delivery_date)?.toDateString() === date.toDateString()
-          ).length
-          return { name: dateStr, value: count }
-        })
-        setChartData(last7Days)
-
-        setRecentDeliveries(deliveryData.slice(0, 5))
+        setRawEmployees(empData)
+        setRawPpes(ppeData)
+        setRawDeliveries(deliveryData)
+        setRawDocuments(documentData)
       } catch (err) {
         console.error("Erro dashboard:", err)
       } finally {
@@ -102,6 +94,85 @@ export default function Dashboard() {
     }
     loadDashboardData()
   }, [])
+
+  useEffect(() => {
+    const now = new Date()
+    const getStartDate = () => {
+      if (dateFilter === "last7") {
+        const start = new Date(now)
+        start.setDate(start.getDate() - 6)
+        start.setHours(0, 0, 0, 0)
+        return start
+      }
+      if (dateFilter === "month") {
+        return new Date(now.getFullYear(), now.getMonth(), 1)
+      }
+      if (dateFilter === "last30") {
+        const start = new Date(now)
+        start.setDate(start.getDate() - 29)
+        start.setHours(0, 0, 0, 0)
+        return start
+      }
+      if (dateFilter === "custom" && customStartDate) {
+        return new Date(`${customStartDate}T00:00:00`)
+      }
+      return null
+    }
+    const getEndDate = () => {
+      if (dateFilter === "custom" && customEndDate) return new Date(`${customEndDate}T23:59:59`)
+      return null
+    }
+    const startDate = getStartDate()
+    const endDate = getEndDate()
+    const isInsidePeriod = (value?: string | null) => {
+      if (dateFilter === "all") return true
+      const date = parseDeliveryDateTime(value) || (value ? new Date(value) : null)
+      if (!date || Number.isNaN(date.getTime())) return false
+      if (startDate && date < startDate) return false
+      if (endDate && date > endDate) return false
+      return true
+    }
+
+    const filteredDeliveries = rawDeliveries.filter((delivery) => isInsidePeriod(delivery.delivery_date))
+    const filteredDocuments = rawDocuments.filter((document) => isInsidePeriod(document.created_at))
+    const criticalCount = rawPpes.filter(p => {
+      const diffDays = getDaysUntilDateOnly(p.ca_expiry_date)
+      return diffDays < 90
+    }).length
+
+    setStats({
+      deliveries: filteredDeliveries.length,
+      employees: rawEmployees.filter(e => e.active).length,
+      criticalCAs: criticalCount,
+      lowStock: rawPpes.filter(p => p.active && (p.current_stock || 0) <= 5).length,
+      signedDocuments: filteredDocuments.length
+    })
+
+    const chartStart = startDate || (() => {
+      const start = new Date(now)
+      start.setDate(start.getDate() - 29)
+      start.setHours(0, 0, 0, 0)
+      return start
+    })()
+    const chartEnd = endDate || now
+    const diffDays = Math.max(0, Math.floor((chartEnd.getTime() - chartStart.getTime()) / 86400000))
+    const bucketCount = Math.min(31, diffDays + 1)
+    const firstBucket = new Date(chartEnd)
+    firstBucket.setDate(chartEnd.getDate() - (bucketCount - 1))
+    firstBucket.setHours(0, 0, 0, 0)
+
+    const buckets = [...Array(bucketCount)].map((_, i) => {
+      const date = new Date(firstBucket)
+      date.setDate(firstBucket.getDate() + i)
+      const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      const count = filteredDeliveries.filter(d =>
+        parseDeliveryDateTime(d.delivery_date)?.toDateString() === date.toDateString()
+      ).length
+      return { name: dateStr, value: count }
+    })
+    setChartData(buckets)
+    setRecentDeliveries(filteredDeliveries.slice(0, 5))
+  }, [rawEmployees, rawPpes, rawDeliveries, rawDocuments, dateFilter, customStartDate, customEndDate])
 
   if (loading) return <DashboardSkeleton />
 
@@ -115,7 +186,42 @@ export default function Dashboard() {
           <h1 className="text-3xl sm:text-4xl font-black tracking-tighter text-slate-800 leading-tight">Painel de Risco Operacional</h1>
           <p className="text-sm sm:text-base text-slate-500 font-medium mt-1">Cada entrega registrada. Cada risco sob controle.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative">
+              <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <select
+                value={dateFilter}
+                onChange={(event) => setDateFilter(event.target.value as DashboardDateFilter)}
+                title="Filtrar dashboard por período"
+                className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-9 text-xs font-black uppercase tracking-widest text-slate-600 outline-none transition-colors focus:border-[#2563EB] sm:w-auto"
+              >
+                <option value="last7">Últimos 7 dias</option>
+                <option value="month">Este mês</option>
+                <option value="last30">Últimos 30 dias</option>
+                <option value="custom">Período</option>
+                <option value="all">Todo histórico</option>
+              </select>
+            </div>
+            {dateFilter === "custom" && (
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(event) => setCustomStartDate(event.target.value)}
+                  title="Data inicial"
+                  className="h-12 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]"
+                />
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(event) => setCustomEndDate(event.target.value)}
+                  title="Data final"
+                  className="h-12 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]"
+                />
+              </div>
+            )}
+          </div>
           <Link href="/delivery" className="w-full md:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center">
             Nova Entrega <ArrowRight className="w-4 h-4 ml-2" />
           </Link>
@@ -124,10 +230,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
-          { title: "Entregas Realizadas", value: stats.deliveries, subtitle: "Total no banco de dados", icon: PackageCheck, color: "text-[#2563EB]", bg: "bg-red-50" },
+          { title: "Entregas Realizadas", value: stats.deliveries, subtitle: dateFilter === "all" ? "Todo o histórico" : "No período filtrado", icon: PackageCheck, color: "text-[#2563EB]", bg: "bg-red-50" },
           { title: "Equipe Ativa", value: stats.employees, subtitle: "Colaboradores cadastrados", icon: Users, color: "text-slate-800", bg: "bg-slate-100" },
           { title: "Estoque Baixo", value: stats.lowStock, subtitle: "Itens com 5 ou menos", icon: Boxes, color: "text-blue-700", bg: "bg-blue-50" },
-          { title: "PDFs Auditados", value: stats.signedDocuments, subtitle: "Arquivo juridico ativo", icon: Archive, color: "text-emerald-700", bg: "bg-emerald-50" },
+          { title: "PDFs Auditados", value: stats.signedDocuments, subtitle: dateFilter === "all" ? "Arquivo jurídico ativo" : "No período filtrado", icon: Archive, color: "text-emerald-700", bg: "bg-emerald-50" },
           { title: "CAs em Alerta", value: stats.criticalCAs, subtitle: "Atenção necessária", icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
         ].map((item, idx) => {
           const Icon = item.icon
@@ -153,7 +259,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Atividade de Entregas</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Últimos 7 dias em tempo real</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Período selecionado</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-[#2563EB] rounded-full animate-pulse"></div>
@@ -166,8 +272,8 @@ export default function Dashboard() {
                     <AreaChart data={chartData}>
                         <defs>
                             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#2563EB" stopOpacity={0.1}/>
-                                <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
+                                <stop offset="5%" stopColor={brandColor} stopOpacity={0.1}/>
+                                <stop offset="95%" stopColor={brandColor} stopOpacity={0}/>
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -177,17 +283,18 @@ export default function Dashboard() {
                             tickLine={false} 
                             tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
                             dy={10}
+                            interval="preserveStartEnd"
                         />
                         <YAxis hide />
                         <Tooltip 
                             formatter={(value) => [value ?? 0, "Entregas"]}
                             contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold'}}
-                            cursor={{stroke: '#2563EB', strokeWidth: 2, strokeDasharray: '4 4'}}
+                            cursor={{stroke: brandColor, strokeWidth: 2, strokeDasharray: '4 4'}}
                         />
                         <Area 
                             type="monotone" 
                             dataKey="value" 
-                            stroke="#2563EB" 
+                            stroke={brandColor}
                             strokeWidth={4} 
                             fillOpacity={1} 
                             fill="url(#colorValue)" 

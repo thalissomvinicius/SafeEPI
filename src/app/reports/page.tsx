@@ -12,6 +12,7 @@ import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
 import { DeliveryWithRelations, PPE, Training, Workplace } from "@/types/database"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
+import { useActiveBrand } from "@/hooks/useActiveBrand"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 type ReportScopeFilter = 'own' | 'third_party' | 'all'
@@ -22,6 +23,8 @@ const getDeliveryCost = (delivery: DeliveryWithRelations) =>
 export default function ReportsPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const { user, loading: authLoading } = useAuth()
+  const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
+  const brandColor = activeBrand.primaryColor
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   
@@ -51,7 +54,7 @@ export default function ReportsPage() {
   const [investmentByWorkplace, setInvestmentByWorkplace] = useState<{name: string, value: number}[]>([])
   const [ppeUsageData, setPpeUsageData] = useState<{name: string, value: number}[]>([])
   
-  const COLORS = ['#2563EB', '#1e293b', '#475569', '#64748b', '#94a3b8']
+  const COLORS = [brandColor, '#1e293b', '#475569', '#64748b', '#94a3b8']
 
   // Auth protection
   useEffect(() => {
@@ -455,14 +458,14 @@ export default function ReportsPage() {
                             width={100}
                           />
                           <Tooltip 
-                             cursor={{fill: '#f8fafc'}}
+                             cursor={{fill: `${brandColor}0D`}}
                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
                              formatter={(value: any) => [`${Number(value).toLocaleString('pt-BR')} itens`, 'Quantidade']}
                              contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                           />
                           <Bar 
                             dataKey="value" 
-                            fill="#2563EB" 
+                            fill={brandColor}
                             radius={[0, 10, 10, 0]} 
                             barSize={20}
                             animationDuration={2000}

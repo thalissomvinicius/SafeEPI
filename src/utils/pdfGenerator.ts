@@ -1645,6 +1645,153 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
   return doc.output("blob")
 }
 
+export interface InventoryStockReportData {
+  ppes: PPE[]
+  filterLabel?: string
+}
+
+export function generateInventoryStockReportPDF(data: InventoryStockReportData): Blob {
+  refreshPdfBrand()
+  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const pw = doc.internal.pageSize.getWidth()
+  const ph = doc.internal.pageSize.getHeight()
+  const mx = 14
+  const brandColor = [r, g, b] as [number, number, number]
+  const ink = [15, 23, 42] as [number, number, number]
+  const muted = [100, 116, 139] as [number, number, number]
+  const border = [226, 232, 240] as [number, number, number]
+  const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+  const ppes = [...data.ppes].sort((a, b) => {
+    const stockA = Number(a.current_stock || 0)
+    const stockB = Number(b.current_stock || 0)
+    if ((stockA <= 5) !== (stockB <= 5)) return stockA <= 5 ? -1 : 1
+    return a.name.localeCompare(b.name, "pt-BR")
+  })
+  const totalStock = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0), 0)
+  const totalValue = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0) * Number(ppe.cost || 0), 0)
+  const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length
+  const zeroStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 0).length
+
+  const drawFooter = () => {
+    doc.setDrawColor(...border)
+    doc.setLineWidth(0.2)
+    doc.line(mx, ph - 14, pw - mx, ph - 14)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7)
+    doc.setTextColor(...muted)
+    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio de estoque`, mx, ph - 8)
+    doc.text(`Pagina ${doc.getCurrentPageInfo().pageNumber}`, pw - mx, ph - 8, { align: "right" })
+  }
+
+  doc.setFillColor(248, 250, 252)
+  doc.rect(0, 0, pw, ph, "F")
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
+  doc.setDrawColor(...border)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
+  doc.setFillColor(...brandColor)
+  doc.rect(mx, 12, 4, 36, "F")
+
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8)
+  doc.setTextColor(...muted)
+  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
+    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
+  }
+  doc.setFontSize(18)
+  doc.setTextColor(...ink)
+  doc.text("Relatorio de estoque", mx + 46, 27)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8.5)
+  doc.setTextColor(...muted)
+  doc.text("Saldo fisico atual, status de reposicao e valor estimado em estoque.", mx + 46, 35)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(7.5)
+  doc.setTextColor(...brandColor)
+  doc.text("ALMOXARIFADO", pw - mx - 6, 23, { align: "right" })
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(...muted)
+  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
+  doc.text(data.filterLabel || "Estoque atual", pw - mx - 6, 38, { align: "right" })
+
+  const kpis = [
+    { label: "Itens listados", value: ppes.length, color: brandColor },
+    { label: "Saldo total", value: totalStock, color: [5, 150, 105] as [number, number, number] },
+    { label: "Estoque baixo", value: lowStockCount, color: [217, 119, 6] as [number, number, number] },
+    { label: "Saldo zerado", value: zeroStockCount, color: [220, 38, 38] as [number, number, number] },
+    { label: "Valor estimado", value: currency.format(totalValue), color: [15, 23, 42] as [number, number, number] },
+  ]
+  const cardY = 58
+  const cardW = (pw - mx * 2 - 16) / 5
+  kpis.forEach((kpi, index) => {
+    const x = mx + index * (cardW + 4)
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(x, cardY, cardW, 23, 3, 3, "F")
+    doc.setDrawColor(...border)
+    doc.roundedRect(x, cardY, cardW, 23, 3, 3, "S")
+    doc.setFillColor(...kpi.color)
+    doc.rect(x, cardY, 3, 23, "F")
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(index === 4 ? 11 : 15.5)
+    doc.setTextColor(...kpi.color)
+    doc.text(String(kpi.value), x + 8, cardY + 13)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7.2)
+    doc.setTextColor(...muted)
+    doc.text(kpi.label.toUpperCase(), x + 8, cardY + 19)
+  })
+
+  autoTable(doc, {
+    startY: 92,
+    head: [["Equipamento", "C.A.", "Fabricante", "Saldo", "Status", "Custo Unit.", "Valor Estoque"]],
+    body: ppes.map((ppe) => {
+      const stock = Number(ppe.current_stock || 0)
+      const cost = Number(ppe.cost || 0)
+      return [
+        ppe.name,
+        ppe.ca_number || "N/A",
+        ppe.manufacturer || "-",
+        String(stock),
+        stock <= 5 ? "ESTOQUE BAIXO" : "OK",
+        currency.format(cost),
+        currency.format(stock * cost),
+      ]
+    }),
+    headStyles: { fillColor: [15, 23, 42], fontStyle: "bold", fontSize: 7.4, cellPadding: 3.2, textColor: 255, halign: "center" },
+    bodyStyles: { fontSize: 7, cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 }, textColor: ink },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    columnStyles: {
+      0: { cellWidth: 86, fontStyle: "bold" },
+      1: { cellWidth: 25, halign: "center" },
+      2: { cellWidth: 45 },
+      3: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+      4: { cellWidth: 34, halign: "center", fontStyle: "bold" },
+      5: { cellWidth: 32, halign: "right" },
+      6: { cellWidth: 39, halign: "right", fontStyle: "bold" },
+    },
+    margin: { left: mx, right: mx, bottom: 18 },
+    theme: "grid",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
+    didParseCell: (hookData) => {
+      if (hookData.section !== "body") return
+      if (hookData.column.index === 4) {
+        const lowStock = String(hookData.cell.raw || "") === "ESTOQUE BAIXO"
+        hookData.cell.styles.textColor = lowStock ? [185, 28, 28] : [4, 120, 87]
+        hookData.cell.styles.fillColor = lowStock ? [254, 242, 242] : [236, 253, 245]
+      }
+      if (hookData.column.index === 3 && Number(hookData.cell.raw || 0) <= 5) {
+        hookData.cell.styles.textColor = [185, 28, 28]
+      }
+    },
+    didDrawPage: () => {
+      drawFooter()
+    },
+  })
+
+  return doc.output("blob")
+}
+
 function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, accentColor?: [number, number, number]) {
   doc.setFillColor(226, 232, 240)
   doc.roundedRect(x + 1.5, y + 1.5, w, h, 3, 3, "F")
@@ -1818,7 +1965,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   const kpiW = (pw - 36 - 15) / 4
   const kpiH = 32
   const kpis = [
-    { label: "Total de Entregas", value: String(data.stats.deliveries), color: [37, 99, 235] as [number, number, number] },
+    { label: "Total de Entregas", value: String(data.stats.deliveries), color: [r, g, b] as [number, number, number] },
     { label: "Devoluções", value: String(data.stats.returns), color: [217, 119, 6] as [number, number, number] },
     { label: "Itens Movimentados", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
     { label: "Colaboradores", value: String(data.stats.uniqueEmployees), color: [5, 150, 105] as [number, number, number] },
@@ -1837,10 +1984,10 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc.text(kpi.label.toUpperCase(), cx + kpiW / 2, kpiY + 25, { align: "center" })
   })
 
-  const chartsY = kpiY + kpiH + 12
-  const chartsH = ph - chartsY - 20
+  const chartsY = kpiY + kpiH + 8
+  const chartsH = ph - chartsY - 18
 
-  const leftW = (pw - 36 - 10) * 0.5
+  const leftW = (pw - 36 - 10) * 0.52
   drawCard(doc, 18, chartsY, leftW, chartsH)
 
   doc.setFont("helvetica", "bold")
@@ -1859,9 +2006,9 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   const topEpis = Object.entries(epiCount).sort((a, b) => b[1] - a[1]).slice(0, 7)
   const barMaxVal = topEpis[0]?.[1] || 1
   const barAreaY = chartsY + 20
-  const barAvailH = chartsH - 28
-  const singleBarH = Math.min(barAvailH / Math.max(topEpis.length, 1), 13)
-  const barAreaW = leftW - 80
+  const barAvailH = chartsH - 30
+  const singleBarH = Math.min(barAvailH / Math.max(topEpis.length, 1), 12)
+  const barAreaW = leftW - 84
 
   topEpis.forEach(([name, count], i) => {
     const y = barAreaY + i * singleBarH
@@ -1881,13 +2028,13 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc.setFont("helvetica", "bold")
     doc.setFontSize(7)
     doc.setTextColor(r, g, b)
-    doc.text(String(count), barX + filledW + 4, y + singleBarH / 2)
+    doc.text(String(count), Math.min(barX + filledW + 4, 18 + leftW - 12), y + singleBarH / 2)
   })
 
   const rightX = 18 + leftW + 10
   const rightW = pw - rightX - 18
-  const topCardH = 50
-  const bottomCardH = chartsH - topCardH - 8
+  const topCardH = (chartsH - 8) / 2
+  const bottomCardH = topCardH
 
   drawCard(doc, rightX, chartsY, rightW, topCardH)
   doc.setFont("helvetica", "bold")
@@ -1904,11 +2051,11 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     const retPct = data.stats.returns / total
     const stackW = rightW - 20
     const stackBarY = chartsY + 20
-    const stackBarH = 14
+    const stackBarH = 12
     const delivW = stackW * delivPct
     const retW = stackW * retPct
     if (delivW > 2) {
-      doc.setFillColor(37, 99, 235)
+      doc.setFillColor(r, g, b)
       doc.roundedRect(rightX + 10, stackBarY, delivW, stackBarH, 2, 2, "F")
     }
     if (retW > 2) {
@@ -1923,7 +2070,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
 
     const legY = stackBarY + stackBarH + 8
     const halfW = (rightW - 20) / 2
-    doc.setFillColor(37, 99, 235)
+    doc.setFillColor(r, g, b)
     doc.roundedRect(rightX + 10, legY, 7, 7, 1, 1, "F")
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7.5)
@@ -1949,14 +2096,14 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     const wp = m.workplace?.name || "Geral"
     wpCount[wp] = (wpCount[wp] || 0) + 1
   })
-  const maxWpRows = Math.max(1, Math.floor((bottomCardH - 22) / 11))
+  const maxWpRows = Math.max(1, Math.floor((bottomCardH - 22) / 10))
   const topWp = Object.entries(wpCount).sort((a, b) => b[1] - a[1]).slice(0, Math.min(maxWpRows, 5))
   const wpMaxVal = topWp[0]?.[1] || 1
   const labelW = 50
   const wpBarW = rightW - labelW - 24
 
   topWp.forEach(([wp, count], i) => {
-    const rowY = botY + 20 + i * 11
+    const rowY = botY + 19 + i * 10
     const filledW = (count / wpMaxVal) * wpBarW
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
@@ -1966,13 +2113,13 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc.setFillColor(241, 245, 249)
     doc.roundedRect(rightX + 8 + labelW, rowY, wpBarW, 8, 2, 2, "F")
     if (filledW > 0) {
-      doc.setFillColor(5, 150, 105)
+      doc.setFillColor(r, g, b)
       doc.roundedRect(rightX + 8 + labelW, rowY, filledW, 8, 2, 2, "F")
     }
     doc.setFont("helvetica", "bold")
     doc.setFontSize(7)
-    doc.setTextColor(5, 150, 105)
-    doc.text(String(count), rightX + 10 + labelW + wpBarW + 2, rowY + 5.5)
+    doc.setTextColor(r, g, b)
+    doc.text(String(count), rightX + rightW - 8, rowY + 5.5, { align: "right" })
   })
 
   doc.setFillColor(r, g, b)
@@ -2007,7 +2154,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       String(m.quantity),
       m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
       m.workplace?.name || "Geral",
-      signatureImages.has(m.id) ? "" : "Sem imagem"
+      signatureImages.has(m.id) ? "" : "S/ASSINATURA"
     ]),
     headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7.5, cellPadding: 4 },
     bodyStyles: { fontSize: 7, cellPadding: 3 },

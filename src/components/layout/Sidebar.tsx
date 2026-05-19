@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import Link from "next/link"
 import Image from "next/image"
@@ -26,6 +26,11 @@ const menuItems = [
   { href: "/support", label: "Ajuda / Suporte", icon: HelpCircle, roles: ['ADMIN', 'ALMOXARIFE', 'DIRETORIA'] },
 ]
 
+function formatCnpj(value?: string | null) {
+  const digits = (value || "").replace(/\D/g, "")
+  if (digits.length !== 14) return value || "CNPJ nao informado"
+  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+}
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -34,8 +39,9 @@ export function Sidebar() {
   const brandColor = activeBrand.primaryColor
   const brandLogo = activeBrand.logoUrl || "/logo.png"
   const brandName = activeBrand.name
-  
-  const filteredMenuItems = menuItems.filter(item => 
+  const companyCnpj = user?.company?.cnpj || null
+
+  const filteredMenuItems = menuItems.filter(item =>
     item.roles.includes(user?.role || 'ADMIN') &&
     (item.href !== "/training" || user?.role === "MASTER" || user?.company?.training_enabled !== false)
   )
@@ -52,7 +58,7 @@ export function Sidebar() {
           priority
         />
       </div>
-      
+
       <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto custom-scrollbar">
         {filteredMenuItems.map((item) => {
           const isActive = pathname === item.href
@@ -63,7 +69,7 @@ export function Sidebar() {
               href={item.href}
               style={isActive ? { borderLeftColor: brandColor, color: brandColor, backgroundColor: `${brandColor}0D` } : undefined}
               className={`flex items-center px-3 py-2.5 rounded-lg transition-colors group ${
-                isActive 
+                isActive
                   ? "font-medium border-l-4"
                   : "hover:bg-slate-50 hover:text-slate-900"
               }`}
@@ -75,20 +81,24 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-100 flex flex-col gap-3">
-        <button 
+      <div className="p-4 border-t border-slate-100 flex flex-col gap-3 bg-white">
+        <button
           onClick={logout}
           className="flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-blue-50 rounded-lg transition-colors group uppercase tracking-widest"
         >
           <LogOut className="w-4 h-4 mr-2" />
           Encerrar Sessão
         </button>
-        <div className="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
-          <p>Sistema SESMT Digital</p>
-          <p className="mt-1" style={{ color: brandColor }}>{brandName} v1.0</p>
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-center shadow-sm">
+          <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Sistema SESMT Digital</p>
+          <p className="mt-1 truncate text-[11px] font-black uppercase tracking-widest" style={{ color: brandColor }} title={brandName}>
+            {brandName}
+          </p>
+          <p className="mt-1 font-mono text-[9px] font-bold uppercase tracking-widest text-slate-400">
+            {formatCnpj(companyCnpj)}
+          </p>
         </div>
       </div>
     </aside>
   )
 }
-

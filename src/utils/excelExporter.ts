@@ -1,8 +1,8 @@
 import ExcelJS from "exceljs"
 import { format } from "date-fns"
 import { COMPANY_CONFIG } from "@/config/company"
-import { DeliveryWithRelations } from "@/types/database"
-import { formatDeliveryDate } from "@/lib/dateOnly"
+import { DeliveryWithRelations, PPE } from "@/types/database"
+import { formatDateOnly, formatDeliveryDate } from "@/lib/dateOnly"
 
 type ExcelValue = string | number | null
 type ExcelRow = Record<string, ExcelValue>
@@ -126,4 +126,49 @@ export function exportEmployeeToExcel(
   addReportSheet(workbook, "Prontuario", `Prontuario Individual: ${employeeName}`, rows)
 
   void saveWorkbook(workbook, `Prontuario_${employeeName.replace(/\s+/g, "_")}.xlsx`)
+}
+
+export function exportInventoryStockToExcel(ppes: PPE[], filterLabel = "Estoque atual") {
+  const workbook = new ExcelJS.Workbook()
+  const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+
+  const rows = ppes.map((ppe) => {
+    const stock = Number(ppe.current_stock || 0)
+    const cost = Number(ppe.cost || 0)
+
+    return {
+      EPI: ppe.name,
+      "No. C.A.": ppe.ca_number || "N/A",
+      "Validade C.A.": formatDateOnly(ppe.ca_expiry_date),
+      Fabricante: ppe.manufacturer || "",
+      Saldo: stock,
+      Status: stock <= 5 ? "Estoque baixo" : "OK",
+      "Custo Unitario": currency.format(cost),
+      "Valor em Estoque": currency.format(stock * cost),
+    }
+  })
+
+  addReportSheet(workbook, "Estoque", `Relatorio de Estoque - ${filterLabel}`, rows)
+
+  const summaryRows = [
+    {
+      Indicador: "Itens listados",
+      Valor: ppes.length,
+    },
+    {
+      Indicador: "Saldo total",
+      Valor: ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0), 0),
+    },
+    {
+      Indicador: "Itens com estoque baixo",
+      Valor: ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length,
+    },
+    {
+      Indicador: "Valor estimado",
+      Valor: currency.format(ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0) * Number(ppe.cost || 0), 0)),
+    },
+  ]
+
+  addReportSheet(workbook, "Resumo", "Resumo do Estoque", summaryRows)
+  void saveWorkbook(workbook, `Relatorio_Estoque_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
 }

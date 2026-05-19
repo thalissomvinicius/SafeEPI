@@ -1912,35 +1912,46 @@ export default function EmployeesPage() {
       )}
 
       {isProfileOpen && selectedEmployeeId && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-4 animate-in fade-in duration-300">
+          <div className="my-3 bg-white rounded-[28px] shadow-2xl w-full max-w-6xl max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
             {(() => {
               const emp = employees.find(e => e.id === selectedEmployeeId)
+              const profileDetails = [
+                getJobTitleName(emp?.job_title),
+                `CPF: ${emp?.cpf ? formatCpf(emp.cpf) : "-"}`,
+                `Setor: ${getDepartmentName(emp?.department)}`,
+                `Canteiro: ${getWorkplaceName(emp?.workplace_id || null)}`,
+                ...(hasThirdPartyFeature && emp?.third_party_id ? [`Tomador: ${getThirdPartyName(emp.third_party_id)}`] : []),
+              ]
               return (
                 <>
-                  <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h2 className="font-black text-slate-800 text-2xl tracking-tighter">{emp?.full_name}</h2>
+                  <div className="shrink-0 border-b border-slate-100 bg-slate-50/70 p-4 sm:p-6">
+                    <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h2 className="min-w-0 text-xl sm:text-2xl font-black uppercase leading-tight tracking-tight text-slate-900">{emp?.full_name}</h2>
                         {!emp?.active && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-black uppercase">Desligado</span>}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {profileDetails.map((detail) => (
+                            <span key={detail} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 shadow-sm">
+                              {detail}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <p className="text-slate-500 text-sm font-medium mt-1">
-                        {getJobTitleName(emp?.job_title)} • CPF: {emp?.cpf} • Setor: {getDepartmentName(emp?.department)} • Canteiro: {getWorkplaceName(emp?.workplace_id || null)}
-                        {hasThirdPartyFeature && emp?.third_party_id ? ` • Tomador: ${getThirdPartyName(emp.third_party_id)}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 w-full sm:w-auto">
+                    <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:justify-end">
                       <button 
                         onClick={openTstModal}
                         disabled={loadingHistory || employeeHistory.length === 0}
-                        className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md flex items-center justify-center disabled:opacity-50"
+                        className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md flex items-center justify-center disabled:opacity-50 whitespace-nowrap"
                       >
                         <FileDown className="w-4 h-4 mr-2" /> Ficha NR-06
                       </button>
                       {canEdit && emp && (
                         <button
                           onClick={() => setEmployeeToDelete(emp)}
-                          className="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center"
+                          className="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center whitespace-nowrap"
                         >
                           <Trash2 className="w-4 h-4 mr-2" /> Excluir
                         </button>
@@ -1949,7 +1960,7 @@ export default function EmployeesPage() {
                         <button
                           onClick={() => void handleActivateEmployee(emp)}
                           disabled={isSaving}
-                          className="flex-1 sm:flex-none bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-50"
+                          className="flex-1 sm:flex-none bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-50 whitespace-nowrap"
                         >
                           <ShieldCheck className="w-4 h-4 mr-2" /> Ativar
                         </button>
@@ -1961,6 +1972,7 @@ export default function EmployeesPage() {
                       >
                         <X className="w-5 h-5" />
                       </button>
+                    </div>
                     </div>
                   </div>
 
@@ -1986,12 +1998,12 @@ export default function EmployeesPage() {
                             const exchangeIsPast = exchangeDate ? isPast(exchangeDate) : false
 
                             return (
-                              <div key={delivery.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 group">
-                                <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-black text-slate-800">{delivery.ppe?.name}</span>
-                                    <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono">CA {delivery.ppe?.ca_number}</span>
-                                    <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-bold">Qtd: {delivery.quantity}</span>
+                              <div key={delivery.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center group">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                                    <span className="font-black text-slate-800 uppercase tracking-tight">{delivery.ppe?.name}</span>
+                                    <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono whitespace-nowrap">CA {delivery.ppe?.ca_number || "N/A"}</span>
+                                    <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded font-bold whitespace-nowrap">Qtd: {delivery.quantity}</span>
                                   </div>
                                   <div className="text-xs text-slate-500 font-medium flex flex-wrap gap-x-4 gap-y-1">
                                     <span>Entregue: {formatDeliveryDate(delivery.delivery_date)} {formatDeliveryTime(delivery.delivery_date)}</span>
@@ -2013,13 +2025,13 @@ export default function EmployeesPage() {
                                 {!delivery.returned_at && emp?.active && (
                                   <button
                                     onClick={() => handleReturnItem(delivery.id)}
-                                    className="text-[#2563EB] hover:bg-blue-50 text-[10px] font-black uppercase tracking-widest border border-blue-100 px-4 py-2 rounded-xl transition-all self-start sm:self-auto"
+                                    className="text-[#2563EB] hover:bg-blue-50 text-[10px] font-black uppercase tracking-widest border border-blue-100 px-4 py-2 rounded-xl transition-all justify-self-start lg:justify-self-end whitespace-nowrap"
                                   >
                                     Dar Baixa
                                   </button>
                                 )}
                                 {delivery.returned_at && (
-                                  <span className="flex items-center text-green-600 text-[10px] font-black uppercase tracking-widest self-start sm:self-auto bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
+                                  <span className="flex items-center text-green-600 text-[10px] font-black uppercase tracking-widest justify-self-start lg:justify-self-end bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 whitespace-nowrap">
                                     <ShieldCheck className="w-3 h-3 mr-1" /> Devolvido
                                   </span>
                                 )}
@@ -2038,10 +2050,10 @@ export default function EmployeesPage() {
                   </div>
                   
                   {emp?.active && (
-                    <div className="p-4 border-t border-slate-200 bg-blue-50/50 flex justify-end">
+                    <div className="shrink-0 p-4 border-t border-slate-200 bg-blue-50/50 flex justify-end">
                       <button 
                         onClick={handleTerminateEmployee}
-                        className="text-red-700 hover:bg-red-700 hover:text-white border border-blue-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center"
+                        className="w-full sm:w-auto text-red-700 hover:bg-red-700 hover:text-white border border-blue-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center"
                       >
                         <UserMinus className="w-4 h-4 mr-2" />
                         Desligar Colaborador (Dar baixa em tudo)
@@ -2049,11 +2061,11 @@ export default function EmployeesPage() {
                     </div>
                   )}
                   {emp && !emp.active && canEdit && (
-                    <div className="p-4 border-t border-slate-200 bg-emerald-50/60 flex justify-end">
+                    <div className="shrink-0 p-4 border-t border-slate-200 bg-emerald-50/60 flex justify-end">
                       <button
                         onClick={() => void handleActivateEmployee(emp)}
                         disabled={isSaving}
-                        className="text-emerald-700 hover:bg-emerald-700 hover:text-white border border-emerald-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center disabled:opacity-50"
+                        className="w-full sm:w-auto text-emerald-700 hover:bg-emerald-700 hover:text-white border border-emerald-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center disabled:opacity-50"
                       >
                         <ShieldCheck className="w-4 h-4 mr-2" />
                         Ativar Colaborador
