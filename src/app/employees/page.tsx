@@ -1475,7 +1475,7 @@ export default function EmployeesPage() {
                           )}
                           <button
                             onClick={() => openProfile(emp.id)}
-                            className="rounded-lg border border-[#1D4ED8] bg-[#2563EB] px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/15 transition-all hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md"
+                            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/15 transition-all hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md"
                           >
                             Prontuário
                           </button>
@@ -1568,7 +1568,7 @@ export default function EmployeesPage() {
                         )}
                         <button 
                           onClick={() => openProfile(emp.id)}
-                          className="flex-[2] text-white hover:bg-[#1D4ED8] bg-[#2563EB] font-black text-[10px] uppercase tracking-widest border border-blue-600 py-3 rounded-xl shadow-sm shadow-blue-900/20 transition-all text-center"
+                          className="flex-[2] text-white hover:bg-[#1D4ED8] bg-[#2563EB] font-black text-[10px] uppercase tracking-widest border border-[#2563EB] py-3 rounded-xl shadow-sm shadow-blue-900/20 transition-all text-center"
                         >
                           Prontuário
                         </button>

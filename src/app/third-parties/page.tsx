@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type React from "react"
-import { Building2, CheckCircle2, DollarSign, Edit3, Handshake, Loader2, Mail, MapPin, Package, Phone, Plus, Search, ShieldAlert, Trash2, type LucideIcon } from "lucide-react"
+import { Building2, CheckCircle2, DollarSign, Edit3, Handshake, Loader2, Mail, MapPin, Package, Phone, Plus, Search, ShieldAlert, Trash2, X, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/services/api"
 import type { DeliveryWithRelations, Employee, ThirdParty, Workplace } from "@/types/database"
@@ -47,6 +47,7 @@ export default function ThirdPartiesPage() {
   const [billingFilter, setBillingFilter] = useState("all")
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [isFormOpen, setIsFormOpen] = useState(false)
 
   const hasAccess = Boolean(user)
 
@@ -154,7 +155,18 @@ export default function ThirdPartiesPage() {
     return () => window.clearTimeout(timer)
   }, [authLoading, hasAccess, loadData])
 
-  const clearForm = () => setForm(emptyForm)
+  const clearForm = () => setForm({ ...emptyForm })
+
+  const openNewThirdParty = () => {
+    setForm({ ...emptyForm })
+    setIsFormOpen(true)
+  }
+
+  const closeForm = () => {
+    if (submitting) return
+    setIsFormOpen(false)
+    setForm({ ...emptyForm })
+  }
 
   const editThirdParty = (thirdParty: ThirdParty) => {
     setForm({
@@ -169,6 +181,7 @@ export default function ThirdPartiesPage() {
       notes: thirdParty.notes || "",
       active: thirdParty.active,
     })
+    setIsFormOpen(true)
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -200,8 +213,9 @@ export default function ThirdPartiesPage() {
         toast.success("Terceiro cadastrado.")
       }
 
-      clearForm()
       await loadData()
+      setIsFormOpen(false)
+      clearForm()
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao salvar terceiro."
       toast.error(message)
@@ -259,7 +273,7 @@ export default function ThirdPartiesPage() {
             </p>
           </div>
           <button
-            onClick={clearForm}
+            onClick={openNewThirdParty}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md hover:bg-[#1D4ED8]"
           >
             <Plus className="h-4 w-4" />
@@ -380,7 +394,7 @@ export default function ThirdPartiesPage() {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <div className="grid gap-6">
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-4">
             <div className="relative max-w-md">
@@ -460,7 +474,7 @@ export default function ThirdPartiesPage() {
           </div>
         </section>
 
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-24 xl:self-start">
+        <div className="hidden">
           <div className="mb-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cadastro</p>
             <h2 className="text-base font-black uppercase tracking-tight text-slate-800">
@@ -494,8 +508,88 @@ export default function ThirdPartiesPage() {
               Cancelar edição
             </button>
           )}
-        </form>
+        </div>
       </div>
+
+      {isFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4">
+          <form
+            onSubmit={handleSubmit}
+            className="my-4 flex w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-5 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cadastro de terceiro</p>
+                <h2 className="mt-1 text-xl font-black uppercase tracking-tight text-slate-900">
+                  {form.id ? "Editar terceiro" : "Novo terceiro"}
+                </h2>
+                <p className="mt-1 text-xs font-bold text-slate-400">
+                  {form.id ? "Atualize os dados do tomador selecionado." : "Preencha os dados do tomador para vincular obras e colaboradores."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={submitting}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50"
+                title="Fechar cadastro"
+                aria-label="Fechar cadastro"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Razao social</span>
+                <input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Razao social" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nome fantasia</span>
+                <input value={form.trade_name} onChange={(event) => setForm({ ...form, trade_name: event.target.value })} placeholder="Nome fantasia" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">CNPJ</span>
+                <input value={form.cnpj} onChange={(event) => setForm({ ...form, cnpj: event.target.value })} placeholder="00.000.000/0000-00" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Contato responsavel</span>
+                <input value={form.contact_name} onChange={(event) => setForm({ ...form, contact_name: event.target.value })} placeholder="Nome do responsavel" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Telefone</span>
+                <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Telefone" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">E-mail</span>
+                <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="E-mail" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Endereco</span>
+                <input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Endereco completo" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Observacoes</span>
+                <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Observacoes contratuais ou operacionais" rows={4} className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB] focus:bg-white" />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-700">Terceiro ativo</span>
+                <input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} className="h-5 w-5 accent-[#2563EB]" />
+              </label>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <button type="button" onClick={closeForm} disabled={submitting} className="rounded-xl border border-slate-200 px-5 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button disabled={submitting} className="flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-colors hover:bg-[#1D4ED8] disabled:opacity-60">
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {form.id ? "Salvar alteracoes" : "Salvar terceiro"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

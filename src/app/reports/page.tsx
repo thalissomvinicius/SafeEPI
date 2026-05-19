@@ -153,12 +153,18 @@ export default function ReportsPage() {
     }).length
 
     // 3. Investimento por Canteiro (no período filtrado)
-    const wpStats = rawWorkplaces.map(wp => {
-        const total = filteredDeliveries
-            .filter(d => d.workplace_id === wp.id)
-            .reduce((acc, d) => acc + getDeliveryCost(d), 0)
-        return { name: wp.name, value: total }
-    }).sort((a, b) => b.value - a.value).filter(wp => wp.value > 0) // Hide empty workplaces
+    const workplaceNameById = new Map(rawWorkplaces.map((workplace) => [workplace.id, workplace.name]))
+    const investmentMap = new Map<string, number>()
+    filteredDeliveries.forEach((delivery) => {
+      const workplaceName =
+        delivery.workplace?.name ||
+        workplaceNameById.get(delivery.workplace_id || "") ||
+        "Geral"
+      investmentMap.set(workplaceName, (investmentMap.get(workplaceName) || 0) + getDeliveryCost(delivery))
+    })
+    const wpStats = Array.from(investmentMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
 
     setInvestmentByWorkplace(wpStats)
 
