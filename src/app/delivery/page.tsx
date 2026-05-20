@@ -123,12 +123,10 @@ export default function DeliveryPage() {
   const pendingSignatureSummary = useMemo(() => {
     const pending = pendingDrafts.filter((draft) => draft.status === "pending").length
     const expired = pendingDrafts.filter((draft) => draft.status === "expired").length
-    const completed = pendingDrafts.filter((draft) => draft.status === "completed").length
     return {
       total: pendingDrafts.length,
       pending,
       expired,
-      completed,
     }
   }, [pendingDrafts])
 
@@ -1215,11 +1213,10 @@ export default function DeliveryPage() {
       </div>
 
       {viewMode === "pending" && (
-        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <SignatureSummaryCard label="Total" value={pendingSignatureSummary.total} tone="slate" />
           <SignatureSummaryCard label="Em aberto" value={pendingSignatureSummary.pending} tone="amber" />
           <SignatureSummaryCard label="Expirado" value={pendingSignatureSummary.expired} tone="red" />
-          <SignatureSummaryCard label="Assinado" value={pendingSignatureSummary.completed} tone="green" />
         </div>
       )}
 
@@ -1326,7 +1323,7 @@ export default function DeliveryPage() {
                         {draft.status === "pending" ? `Assinatura do colaborador aguardando ate ${formatRemoteExpiry(draft.expiresAt)}` : `Ultimo prazo: ${formatRemoteExpiry(draft.expiresAt)}`}
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6">
                         <button
                           onClick={() => void copyTextToClipboard(draft.linkUrl).then((copied) => {
                             if (copied) {
@@ -1335,7 +1332,7 @@ export default function DeliveryPage() {
                               toast.warning("Nao foi possivel copiar automaticamente. Abra o link e copie pela barra do navegador.")
                             }
                           })}
-                          className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Clipboard className="w-3.5 h-3.5" /> Copiar
                         </button>
@@ -1343,14 +1340,14 @@ export default function DeliveryPage() {
                           href={draft.linkUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <ExternalLink className="w-3.5 h-3.5" /> Abrir
                         </a>
                         <button
                           onClick={() => void checkPendingDraft(draft)}
                           disabled={isChecking}
-                          className="py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          className="sm:col-span-1 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} /> Checar
                         </button>
@@ -1358,7 +1355,7 @@ export default function DeliveryPage() {
                           <button
                             onClick={() => void reopenExpiredPendingDraft(draft)}
                             disabled={isReopening}
-                            className="py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 shadow-sm font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="sm:col-span-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 shadow-sm font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             {isReopening ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1370,14 +1367,14 @@ export default function DeliveryPage() {
                         ) : (
                           <button
                             onClick={() => restorePendingDraft(draft)}
-                            className="py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                            className="sm:col-span-2 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap"
                           >
                             <Package className="w-3.5 h-3.5" /> {draft.signaturePendingOnly ? "Copiar" : "Reabrir"}
                           </button>
                         )}
                         <button
                           onClick={() => removePendingDraft(draft.token)}
-                          className="py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="sm:col-span-1 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Limpar
                         </button>

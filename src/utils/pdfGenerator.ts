@@ -2033,8 +2033,8 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
 
   const rightX = 18 + leftW + 10
   const rightW = pw - rightX - 18
-  const topCardH = (chartsH - 8) / 2
-  const bottomCardH = topCardH
+  const topCardH = 46
+  const bottomCardH = Math.max(34, chartsH - topCardH - 8)
 
   drawCard(doc, rightX, chartsY, rightW, topCardH)
   doc.setFont("helvetica", "bold")
@@ -2051,7 +2051,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     const retPct = data.stats.returns / total
     const stackW = rightW - 20
     const stackBarY = chartsY + 20
-    const stackBarH = 12
+    const stackBarH = 10
     const delivW = stackW * delivPct
     const retW = stackW * retPct
     if (delivW > 2) {
@@ -2065,20 +2065,20 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(255, 255, 255)
-    if (delivW > 20) doc.text(`${Math.round(delivPct * 100)}%`, rightX + 10 + delivW / 2, stackBarY + 10, { align: "center" })
-    if (retW > 20) doc.text(`${Math.round(retPct * 100)}%`, rightX + 10 + delivW + retW / 2, stackBarY + 10, { align: "center" })
+    if (delivW > 20) doc.text(`${Math.round(delivPct * 100)}%`, rightX + 10 + delivW / 2, stackBarY + 7, { align: "center" })
+    if (retW > 20) doc.text(`${Math.round(retPct * 100)}%`, rightX + 10 + delivW + retW / 2, stackBarY + 7, { align: "center" })
 
-    const legY = stackBarY + stackBarH + 8
+    const legY = stackBarY + stackBarH + 5
     const halfW = (rightW - 20) / 2
     doc.setFillColor(r, g, b)
-    doc.roundedRect(rightX + 10, legY, 7, 7, 1, 1, "F")
+    doc.roundedRect(rightX + 10, legY, 5, 5, 1, 1, "F")
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(7.5)
+    doc.setFontSize(7)
     doc.setTextColor(30, 41, 59)
-    doc.text(`Entregas: ${data.stats.deliveries}`, rightX + 20, legY + 5.5)
+    doc.text(`Entregas: ${data.stats.deliveries}`, rightX + 18, legY + 4.2)
     doc.setFillColor(217, 119, 6)
-    doc.roundedRect(rightX + 10 + halfW, legY, 7, 7, 1, 1, "F")
-    doc.text(`Devoluções: ${data.stats.returns}`, rightX + 20 + halfW, legY + 5.5)
+    doc.roundedRect(rightX + 10 + halfW, legY, 5, 5, 1, 1, "F")
+    doc.text(`Devoluções: ${data.stats.returns}`, rightX + 18 + halfW, legY + 4.2)
   }
 
   const botY = chartsY + topCardH + 8
@@ -2156,20 +2156,23 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       m.workplace?.name || "Geral",
       signatureImages.has(m.id) ? "" : "S/ASSINATURA"
     ]),
-    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7.5, cellPadding: 4 },
-    bodyStyles: { fontSize: 7, cellPadding: 3 },
+    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7, cellPadding: 2.2, valign: "middle" },
+    bodyStyles: { fontSize: 6.6, cellPadding: 2.2, valign: "middle" },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: 10, halign: "center", fontStyle: "bold" },
-      1: { cellWidth: 26 },
+      1: { cellWidth: 27 },
+      2: { cellWidth: 56 },
       3: { cellWidth: 26 },
-      5: { cellWidth: 12, halign: "center" },
+      4: { cellWidth: 64 },
+      5: { cellWidth: 11, halign: "center" },
       6: { cellWidth: 22, halign: "center" },
-      8: { cellWidth: 26, halign: "center" },
+      7: { cellWidth: 18 },
+      8: { cellWidth: 28, halign: "center" },
     },
     margin: { left: 14, right: 14 },
     theme: "grid",
-    styles: { lineColor: [226, 232, 240], lineWidth: 0.3 },
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.3, overflow: "linebreak" },
     didParseCell: (hookData) => {
       if (hookData.column.index === 6 && hookData.section === "body") {
         const val = hookData.cell.raw as string

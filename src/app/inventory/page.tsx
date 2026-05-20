@@ -268,22 +268,22 @@ export default function InventoryPage() {
         </div>
 
         {/* Lado Direito: Histórico de Movimentações */}
-        <div className="space-y-6">
-           <div className="bg-slate-900 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden h-full min-h-[500px]">
+        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+           <div className="bg-slate-900 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden min-h-[420px] lg:max-h-[calc(100dvh-8rem)] flex flex-col">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#2563EB]/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
-              <h3 className="font-black text-white uppercase tracking-tighter text-sm flex items-center gap-2 mb-8 relative z-10">
+              <h3 className="font-black text-white uppercase tracking-tighter text-sm flex items-center gap-2 mb-6 relative z-10 shrink-0">
                  <History className="w-5 h-5 text-[#2563EB]" />
                  Auditoria de Fluxo
               </h3>
 
-              <div className="space-y-6 relative z-10 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-5 relative z-10 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
                 {recentMovements.map(renderMovementItem)}
                 {movements.length === 0 && (
                     <p className="text-slate-600 text-xs text-center py-20 italic">Sem histórico registrado.</p>
                 )}
               </div>
 
-              <div className="mt-8 pt-6 border-t border-slate-800">
+              <div className="mt-5 pt-5 border-t border-slate-800 shrink-0">
                  <button
                    type="button"
                    onClick={() => setIsHistoryModalOpen(true)}
