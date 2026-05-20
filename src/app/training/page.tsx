@@ -1,4 +1,5 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect, useCallback } from "react"
 import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Camera, PenTool, ShieldAlert, Users, Link2, ArrowLeft, Trash2 } from "lucide-react"
@@ -9,6 +10,8 @@ import { toast } from "sonner"
 import { useRef } from "react"
 import SignatureCanvas from "react-signature-canvas"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { BottomSheet } from "@/components/ui/BottomSheet"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { generateTrainingCertificate } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { generateAuditCode } from "@/utils/auditCode"
@@ -848,7 +851,7 @@ export default function TrainingPage() {
 
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 border-b border-slate-200 bg-slate-50/30">
-          <div className="relative max-w-md">
+          <div className="relative w-full md:max-w-md">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
@@ -857,19 +860,62 @@ export default function TrainingPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               title="Buscar treinamento"
               aria-label="Buscar treinamento"
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
+              className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
         </div>
         
-        <div className="overflow-x-auto min-h-[300px]">
+        <div className="min-h-[300px] md:overflow-x-auto">
           {loading ? (
              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                 <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#2563EB]" />
                 <p className="text-sm font-medium italic">Acessando registros do Supabase...</p>
             </div>
           ) : (
-            <table className="w-full text-sm text-left">
+            <>
+            <div className="grid grid-cols-1 gap-4 bg-slate-50/60 p-4 md:hidden">
+              {filteredTrainings.map((rec, i) => {
+                const statusLabel = getTrainingStatusLabel(rec.training_name, rec.expiry_date, rec.status)
+                return (
+                  <MobileTableCard
+                    key={rec.id || i}
+                    title={rec.training_name}
+                    subtitle={rec.employee?.full_name || "Colaborador"}
+                    badge={{
+                      label: statusLabel,
+                      variant: isTrainingValid(rec.training_name, rec.expiry_date, rec.status)
+                        ? "border-green-200 bg-green-50 text-green-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700",
+                    }}
+                    expandable
+                    fields={[
+                      { label: "Data", value: new Date(rec.completion_date).toLocaleDateString() },
+                      { label: "Instrutor", value: rec.instructor_name || "Não informado" },
+                      { label: "Validade", value: getTrainingExpiryDisplay(rec.training_name, rec.expiry_date) },
+                      { label: "Participante", value: rec.employee?.full_name || "-" },
+                    ]}
+                    actions={
+                      <div className="flex w-full gap-2">
+                        <button onClick={() => downloadCertificate(rec)} className="min-h-11 flex-1 rounded-xl border border-blue-100 bg-blue-50 text-[10px] font-black uppercase tracking-widest text-[#2563EB]">
+                          PDF
+                        </button>
+                        {canDeleteCertificate && (
+                          <button onClick={() => requestDeleteCertificate(rec)} className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    }
+                  />
+                )
+              })}
+              {filteredTrainings.length === 0 && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-400 italic">
+                  Nenhum treinamento registrado no banco de dados.
+                </div>
+              )}
+            </div>
+            <table className="hidden w-full text-sm text-left md:table">
               <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                 <tr>
                   <th className="px-6 py-5">Colaborador</th>
@@ -976,6 +1022,7 @@ export default function TrainingPage() {
                 )}
               </tbody>
             </table>
+            </>
           )}
         </div>
       </div>
@@ -988,32 +1035,21 @@ export default function TrainingPage() {
         </p>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="flex justify-between items-center p-6 border-b border-slate-100 shrink-0">
-              <div>
-                  <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">Novo Certificado</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                    Etapa {step} de 4 - {step === 1 ? "Dados do Curso" : step === 2 ? "Selecionar Instrutor" : step === 3 ? "Assinatura do Colaborador" : "Assinatura do Instrutor"}
-                  </p>
-              </div>
-              <button 
-                onClick={() => { setIsModalOpen(false); resetForm(); }} 
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-                aria-label="Fechar modal"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
+      <BottomSheet
+        open={isModalOpen}
+        onClose={() => { setIsModalOpen(false); resetForm(); }}
+        title="Novo Certificado"
+        description={`Etapa ${step} de 4 - ${step === 1 ? "Dados do Curso" : step === 2 ? "Selecionar Instrutor" : step === 3 ? "Assinatura do Colaborador" : "Assinatura do Instrutor"}`}
+        className="md:max-w-md"
+        contentClassName="p-0"
+      >
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {step === 1 && (
                   <form onSubmit={(e) => { e.preventDefault(); setStep(2); }} className="p-8 space-y-5">
                     <div className="space-y-2">
                       <label id="label-colaborador" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador Treinado</label>
                       <select 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
+                        className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
                         value={formData.employee_id}
                         title="Selecionar Colaborador"
                         aria-labelledby="label-colaborador"
@@ -1033,7 +1069,7 @@ export default function TrainingPage() {
                     <div className="space-y-2">
                       <label id="label-treinamento" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo de Treinamento</label>
                       <select 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
+                        className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
                         value={formData.training_name}
                         title="Tipo de Treinamento"
                         aria-labelledby="label-treinamento"
@@ -1051,7 +1087,7 @@ export default function TrainingPage() {
                             placeholder="Digite o nome da Norma ou Treinamento"
                             value={customTrainingName}
                             onChange={(e) => setCustomTrainingName(e.target.value)}
-                            className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
+                            className="min-h-11 w-full mt-2 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold"
                             autoFocus
                           />
                       )}
@@ -1559,12 +1595,15 @@ export default function TrainingPage() {
                   </div>
                 )}
             </div>
-          </div>
-        </div>
-      )}
-      {certificateToDelete && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-red-100">
+      </BottomSheet>
+      <BottomSheet
+        open={Boolean(certificateToDelete)}
+        onClose={() => setCertificateToDelete(null)}
+        className="md:max-w-md"
+        contentClassName="p-0"
+      >
+        {certificateToDelete && (
+          <div className="w-full overflow-hidden rounded-3xl border border-red-100 bg-white shadow-2xl">
             <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
               <div className="p-3 bg-red-100 rounded-2xl shrink-0">
                 <ShieldAlert className="w-6 h-6 text-red-600" />
@@ -1595,18 +1634,18 @@ export default function TrainingPage() {
                 </p>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                 <button
                   onClick={() => setCertificateToDelete(null)}
                   disabled={isDeletingCertificate}
-                  className="flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all disabled:opacity-50"
+                  className="min-h-11 flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => void deleteCertificate()}
                   disabled={isDeletingCertificate}
-                  className="flex-[2] px-4 py-3 text-xs font-black text-white bg-red-600 hover:bg-red-700 rounded-2xl uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60"
+                  className="flex min-h-11 flex-[2] items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:opacity-60"
                 >
                   {isDeletingCertificate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   Excluir Certificado
@@ -1614,8 +1653,8 @@ export default function TrainingPage() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </BottomSheet>
       {pdfActionDialog}
     </div>
   )

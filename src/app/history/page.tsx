@@ -1,7 +1,9 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect } from "react"
 import { ExternalLink, Fingerprint, History, ShieldCheck, Search, Loader2, FileDown, Trash2, AlertTriangle } from "lucide-react"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { api } from "@/services/api"
 import { DeliveryWithRelations, Employee, SignedDocument, Workplace } from "@/types/database"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
@@ -206,6 +208,22 @@ export default function HistoryPage() {
     )
   })
 
+  const activeFilterChips = [
+    ...(searchTerm.trim() ? [{ label: `Busca: ${searchTerm.trim()}`, onRemove: () => setSearchTerm("") }] : []),
+    ...(hasThirdPartyFeature && deliveryScopeFilter !== "own"
+      ? [{
+        label: deliveryScopeFilter === "third_party" ? "Terceiros" : "Todos vínculos",
+        onRemove: () => setDeliveryScopeFilter("own" as DeliveryScopeFilter),
+      }]
+      : []),
+  ]
+
+  const getDeliveryBadge = (rec: DeliveryWithRelations, signedDocument?: SignedDocument) => {
+    if (signedDocument) return { label: "Arquivado", variant: "border-green-200 bg-green-50 text-green-700" }
+    if (rec.signature_url) return { label: "Assinado", variant: "border-amber-200 bg-amber-50 text-amber-700" }
+    return { label: "Pendente", variant: "border-slate-200 bg-slate-50 text-slate-500" }
+  }
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -221,38 +239,110 @@ export default function HistoryPage() {
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 border-b border-slate-200 bg-slate-50/50">
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="relative max-w-md flex-1">
+            <div className="relative w-full md:max-w-md md:flex-1">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Buscar colaborador ou ID da entrega..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
+                className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
               />
             </div>
             {hasThirdPartyFeature && (
               <select
                 value={deliveryScopeFilter}
                 onChange={(event) => setDeliveryScopeFilter(event.target.value as DeliveryScopeFilter)}
-                className="w-full md:w-56 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-[#2563EB] transition-all"
+                className="min-h-11 w-full md:w-56 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-[#2563EB] transition-all"
               >
                 <option value="own">Próprios</option>
                 <option value="third_party">Terceiros</option>
                 <option value="all">Todos vínculos</option>
               </select>
             )}
+            <button
+              type="button"
+              className="min-h-11 w-full rounded-xl bg-[#2563EB] px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/10 md:w-auto"
+            >
+              Filtrar
+            </button>
           </div>
+          {activeFilterChips.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activeFilterChips.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={chip.onRemove}
+                  className="min-h-9 rounded-full border border-blue-100 bg-blue-50 px-3 text-sm font-bold text-[#2563EB]"
+                  aria-label={`Remover filtro ${chip.label}`}
+                >
+                  {chip.label} ×
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         
-        <div className="overflow-x-auto min-h-[300px] flex flex-col">
+        <div className="min-h-[300px] flex flex-col md:overflow-x-auto">
           {loading ? (
              <div className="flex flex-col items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mb-2" />
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Acessando Arquivo Digital...</p>
              </div>
           ) : (
-            <table className="w-full text-sm text-left">
+            <>
+            <div className="grid grid-cols-1 gap-4 bg-slate-50/60 p-4 md:hidden">
+              {filteredRecords.map((rec: DeliveryWithRelations) => {
+                const signedDocument = getSignedDocumentForDelivery(rec.id)
+                return (
+                  <MobileTableCard
+                    key={rec.id}
+                    title={rec.employee?.full_name || "Colaborador nao informado"}
+                    subtitle={rec.ppe?.name || "EPI nao informado"}
+                    badge={getDeliveryBadge(rec, signedDocument)}
+                    expandable
+                    fields={[
+                      { label: "Data", value: `${formatDeliveryDate(rec.delivery_date)} ${formatDeliveryTime(rec.delivery_date)}` },
+                      { label: "Protocolo", value: `#${rec.id.slice(0, 8)}` },
+                      { label: "Quantidade", value: String(rec.quantity) },
+                      { label: "CA", value: rec.ppe?.ca_number || "-" },
+                      { label: "Setor", value: rec.employee?.job_title || rec.workplace?.name || "-" },
+                      { label: "Observações", value: rec.reason || "-" },
+                      { label: "Quem registrou", value: "Sistema SafeEPI" },
+                    ]}
+                    actions={
+                      <div className="flex w-full gap-2">
+                        <button
+                          onClick={() => handleDownloadPDF(rec)}
+                          disabled={downloadingId === rec.id}
+                          className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-[10px] font-black uppercase tracking-widest text-[#2563EB] disabled:opacity-30"
+                        >
+                          {downloadingId === rec.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
+                          PDF
+                        </button>
+                        {isMaster && (
+                          <button
+                            onClick={() => setConfirmDelete(rec)}
+                            disabled={deletingId === rec.id}
+                            className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 disabled:opacity-30"
+                            aria-label="Excluir registro"
+                          >
+                            {deletingId === rec.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
+                        )}
+                      </div>
+                    }
+                  />
+                )
+              })}
+              {filteredRecords.length === 0 && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-400 italic font-medium">
+                  Nenhum registro de entrega encontrado no histórico.
+                </div>
+              )}
+            </div>
+            <table className="hidden w-full text-sm text-left md:table">
                 <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                 <tr>
                     <th className="px-6 py-5">Protocolo</th>
@@ -363,6 +453,7 @@ export default function HistoryPage() {
                 )}
                 </tbody>
             </table>
+            </>
           )}
         </div>
       </div>

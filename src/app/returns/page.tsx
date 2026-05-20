@@ -1,4 +1,5 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
@@ -8,6 +9,7 @@ import { format } from "date-fns"
 import { api } from "@/services/api"
 import { Employee, PPE, DeliveryWithRelations, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateReturnPDF } from "@/utils/pdfGenerator"
 import { formatCpf } from "@/utils/cpf"
@@ -251,7 +253,7 @@ export default function ReturnsPage() {
         <p className="text-slate-400 text-xs font-medium mb-2">Escolha se deseja visualizar ou baixar o recibo em PDF.</p>
         <p className="text-slate-500 mb-8">Baixa e/ou substituição registrada com sucesso.</p>
         
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex w-full max-w-md flex-col gap-4 sm:flex-row">
           {lastPdfUrl && (
             <>
               <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer" className="border border-slate-200 bg-white text-slate-700 px-6 py-3 rounded-xl font-bold flex items-center justify-center">
@@ -262,7 +264,7 @@ export default function ReturnsPage() {
               </a>
             </>
           )}
-          <button onClick={() => { setIsSaved(false); setDeliveryToReturn(null); selectEmployee(selectedEmployee!); }} className="border border-slate-200 px-6 py-3 rounded-xl font-bold">
+          <button onClick={() => { setIsSaved(false); setDeliveryToReturn(null); selectEmployee(selectedEmployee!); }} className="min-h-[52px] w-full border border-slate-200 px-6 py-3 rounded-xl font-bold">
             Nova Baixa
           </button>
         </div>
@@ -292,7 +294,7 @@ export default function ReturnsPage() {
                 placeholder="Buscar colaborador..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:border-[#2563EB] outline-none"
+                className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:border-[#2563EB] outline-none"
               />
             </div>
           </div>
@@ -325,17 +327,38 @@ export default function ReturnsPage() {
                   {activeDeliveries.length === 0 ? (
                     <p className="text-slate-400 text-xs font-bold uppercase">Nenhum EPI pendente de devolução.</p>
                   ) : activeDeliveries.map(delivery => (
-                    <div key={delivery.id} className="border border-slate-200 rounded-2xl p-4 flex justify-between items-center hover:border-slate-300 transition-colors">
+                    <div key={delivery.id}>
+                    <MobileTableCard
+                      title={selectedEmployee.full_name}
+                      subtitle={delivery.ppe?.name || "EPI"}
+                      badge={{ label: `Qtd ${delivery.quantity}`, variant: "border-blue-200 bg-blue-50 text-blue-700" }}
+                      fields={[
+                        { label: "Data", value: formatDeliveryDate(delivery.delivery_date) },
+                        { label: "Quantidade", value: String(delivery.quantity) },
+                        { label: "CA", value: delivery.ppe?.ca_number || "-" },
+                        { label: "Status", value: "Em posse" },
+                      ]}
+                      actions={
+                        <button
+                          onClick={() => handleStartReturn(delivery)}
+                          className="min-h-[52px] w-full rounded-xl bg-slate-800 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-slate-900/10 hover:bg-slate-700"
+                        >
+                          Baixar
+                        </button>
+                      }
+                    />
+                    <div className="hidden justify-between rounded-2xl border border-slate-200 p-4 transition-colors hover:border-slate-300 md:flex md:items-center">
                       <div>
                         <p className="font-bold text-slate-800 text-sm">{delivery.ppe?.name}</p>
                         <p className="text-[10px] text-slate-500 uppercase tracking-widest">Entregue em: {formatDeliveryDate(delivery.delivery_date)}</p>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleStartReturn(delivery)}
-                        className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-slate-900/10"
+                        className="min-h-[52px] rounded-xl bg-slate-800 px-4 py-2 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-slate-900/10 hover:bg-slate-700"
                       >
                         Baixar
                       </button>
+                    </div>
                     </div>
                   ))}
                 </div>
@@ -369,7 +392,7 @@ export default function ReturnsPage() {
                           key={opt.val}
                           type="button"
                           onClick={() => setReturnMotive(opt.val)}
-                          className={`p-3 rounded-2xl border text-xs font-black uppercase tracking-tight transition-all flex flex-col items-center justify-center text-center gap-1 ${returnMotive === opt.val ? 'border-[#2563EB] bg-blue-50 text-[#2563EB] shadow-md shadow-blue-900/10' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
+                          className={`min-h-[52px] w-full p-3 rounded-2xl border text-xs font-black uppercase tracking-tight transition-all flex flex-col items-center justify-center text-center gap-1 ${returnMotive === opt.val ? 'border-[#2563EB] bg-blue-50 text-[#2563EB] shadow-md shadow-blue-900/10' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
                         >
                           <span>{opt.label}</span>
                           <span className={`text-[9px] font-bold ${returnMotive === opt.val ? 'text-blue-300' : 'text-slate-400'}`}>
@@ -391,7 +414,7 @@ export default function ReturnsPage() {
                           placeholder="Busca por CA ou Nome..."
                           value={replacementSearchTerm}
                           onChange={(e) => setReplacementSearchTerm(e.target.value)}
-                          className="w-full bg-white border border-blue-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all font-bold text-sm"
+                          className="min-h-11 w-full bg-white border border-blue-200 text-slate-900 rounded-2xl px-5 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all font-bold text-sm"
                         />
                         
                         <div className="bg-white border border-blue-200 rounded-2xl overflow-hidden shadow-sm">
@@ -431,7 +454,7 @@ export default function ReturnsPage() {
 
                   <button 
                     onClick={() => setStep(2)}
-                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-900/10"
+                    className="min-h-[52px] w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-900/10"
                   >
                     Prosseguir para Assinatura
                   </button>
@@ -480,7 +503,7 @@ export default function ReturnsPage() {
                           if (!sigCanvas.current?.isEmpty()) saveReturn(sigCanvas.current!.getTrimmedCanvas().toDataURL("image/png"))
                           else alert("A assinatura é obrigatória.")
                         }}
-                        className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em]"
+                        className="min-h-[52px] w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em]"
                       >
                         {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Confirmar e Finalizar"}
                       </button>

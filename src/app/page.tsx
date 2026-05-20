@@ -1,4 +1,5 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect } from "react"
 import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Archive, Boxes, Calendar } from "lucide-react"
@@ -24,7 +25,7 @@ function DashboardSkeleton() {
         </div>
         <Skeleton className="h-12 w-40" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
         {[1, 2, 3].map(i => (
           <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -213,20 +214,20 @@ export default function Dashboard() {
               </select>
             </div>
             {dateFilter === "custom" && (
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="date"
                   value={customStartDate}
                   onChange={(event) => setCustomStartDate(event.target.value)}
                   title="Data inicial"
-                  className="h-12 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]"
+                  className="h-12 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]"
                 />
                 <input
                   type="date"
                   value={customEndDate}
                   onChange={(event) => setCustomEndDate(event.target.value)}
                   title="Data final"
-                  className="h-12 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]"
+                  className="h-12 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]"
                 />
               </div>
             )}
@@ -247,15 +248,15 @@ export default function Dashboard() {
         ].map((item, idx) => {
           const Icon = item.icon
           return (
-            <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div key={idx} className="min-w-0 bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-slate-400 font-black text-[10px] uppercase tracking-widest">{item.title}</span>
+                <span className="min-w-0 break-words text-slate-400 font-black text-[10px] uppercase tracking-widest">{item.title}</span>
                 <div className={`p-2 rounded-lg ${item.bg}`}>
                   <Icon className={`w-5 h-5 ${item.color}`} />
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-3xl font-black text-slate-800 tracking-tighter">{item.value}</span>
+                <span className="text-2xl font-bold text-slate-800 tracking-tight">{item.value}</span>
                 <span className="text-xs font-bold text-slate-500 mt-1">{item.subtitle}</span>
               </div>
             </div>
@@ -276,7 +277,7 @@ export default function Dashboard() {
                 </div>
             </div>
             
-            <div className="h-[280px] min-h-[280px] w-full min-w-0">
+            <div className="h-[200px] min-h-[200px] w-full min-w-0 md:h-[280px] md:min-h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                         <defs>
@@ -314,7 +315,7 @@ export default function Dashboard() {
             </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col h-full overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col h-full min-w-0 overflow-hidden">
             <div className="p-5 sm:p-8 border-b border-slate-50 flex justify-between items-center">
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Histórico Local</h3>
                 <ShieldCheck className="w-5 h-5 text-green-500" />
@@ -340,7 +341,7 @@ export default function Dashboard() {
                 </div>
             </div>
             <div className="p-6 bg-slate-50 mt-auto border-t border-slate-100">
-                <Link href="/history" className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest hover:underline flex items-center justify-center">
+                <Link href="/history" className="min-h-11 w-full text-[10px] font-black text-[#2563EB] uppercase tracking-widest hover:underline flex items-center justify-center">
                     Ver auditoria completa <ArrowRight className="w-3 h-3 ml-1" />
                 </Link>
             </div>

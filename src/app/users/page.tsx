@@ -1,4 +1,5 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect, useCallback } from "react"
 import { Shield, UserCog, Mail, Calendar, Loader2, AlertCircle, Plus, Key, Trash2 } from "lucide-react"
@@ -7,6 +8,8 @@ import { Profile } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { BottomSheet } from "@/components/ui/BottomSheet"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 
 export default function UsersPage() {
   const { user: currentUser, loading: authLoading } = useAuth()
@@ -148,13 +151,13 @@ export default function UsersPage() {
           </h1>
           <p className="text-slate-500 font-medium mt-1">Controle de níveis de segurança, senhas e permissões da plataforma.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
             <div className="hidden sm:block bg-blue-50 text-[#2563EB] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-100">
             Acesso Restrito
             </div>
             <button 
                 onClick={openNewUserModal}
-                className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-md flex items-center gap-2"
+                className="min-h-11 w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-md flex items-center justify-center gap-2 sm:w-auto"
             >
                 <Plus className="w-4 h-4" /> Novo Usuário
             </button>
@@ -168,7 +171,47 @@ export default function UsersPage() {
             <p className="text-sm font-bold uppercase tracking-widest italic">Sincronizando Perfis do Auth...</p>
           </div>
         ) : (
-          users.map((user) => (
+          <>
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            {users.map((user) => (
+              <MobileTableCard
+                key={user.id}
+                title={user.full_name || "Usuário Sem Nome"}
+                subtitle={user.email}
+                badge={{ label: user.role || "-", variant: user.role === "ADMIN" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-600" }}
+                expandable
+                fields={[
+                  { label: "Email", value: user.email },
+                  { label: "Empresa", value: user.company_id || masterCompanyId || "-" },
+                  { label: "Cadastro", value: new Date(user.created_at).toLocaleDateString() },
+                  { label: "Role", value: user.role || "-" },
+                ]}
+                actions={
+                  <div className="grid w-full grid-cols-[1fr_auto_auto] gap-2">
+                    <select
+                      value={user.role}
+                      disabled={updatingId === user.id || user.id === currentUser?.id}
+                      onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                      title="Alterar permissão"
+                      className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 disabled:opacity-50"
+                    >
+                      <option value="ADMIN">Administrador</option>
+                      <option value="ALMOXARIFE">Almoxarife</option>
+                      <option value="DIRETORIA">Diretoria</option>
+                    </select>
+                    <button onClick={() => openResetPasswordModal(user)} disabled={updatingId === user.id} className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
+                      <Key className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => handleDelete(user.id)} disabled={updatingId === user.id || user.id === currentUser?.id} className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 disabled:opacity-50">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                }
+              />
+            ))}
+          </div>
+          <div className="hidden grid-cols-1 gap-4 md:grid">
+          {users.map((user) => (
             <div 
               key={user.id} 
               className={`bg-white border ${user.id === currentUser?.id ? 'border-[#2563EB]/30 bg-blue-50/30' : 'border-slate-200'} rounded-2xl p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 shadow-sm hover:shadow-md transition-all group`}
@@ -240,7 +283,9 @@ export default function UsersPage() {
                 )}
               </div>
             </div>
-          ))
+          ))}
+          </div>
+          </>
         )}
       </div>
 
@@ -260,22 +305,13 @@ export default function UsersPage() {
       </div>
 
       {/* Modal de Criação / Edição */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h2 className="text-lg font-black uppercase tracking-tighter text-slate-800 flex items-center gap-2">
-                {formData.id ? <><Key className="w-5 h-5 text-[#2563EB]" /> Redefinir Senha</> : <><UserCog className="w-5 h-5 text-[#2563EB]" /> Novo Usuário</>}
-              </h2>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold p-2"
-              >
-                ×
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      <BottomSheet
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={formData.id ? "Redefinir Senha" : "Novo Usuário"}
+        className="md:max-w-md"
+      >
+            <form onSubmit={handleSubmit} className="space-y-4">
               {!formData.id && (
                 <>
                     <div>
@@ -284,7 +320,7 @@ export default function UsersPage() {
                             type="text" required
                             value={formData.full_name}
                             onChange={e => setFormData({...formData, full_name: e.target.value})}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
+                            className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
                             placeholder="Ex: João Silva"
                         />
                     </div>
@@ -292,9 +328,10 @@ export default function UsersPage() {
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">E-mail de Login</label>
                         <input 
                             type="email" required
+                            inputMode="email"
                             value={formData.email}
                             onChange={e => setFormData({...formData, email: e.target.value})}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
+                            className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
                             placeholder="joao@empresa.com.br"
                         />
                     </div>
@@ -304,7 +341,7 @@ export default function UsersPage() {
                             value={formData.role}
                             title="Nível de Acesso"
                             onChange={e => setFormData({...formData, role: e.target.value})}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm uppercase"
+                            className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm uppercase"
                         >
                             <option value="ADMIN">Administrador</option>
                             <option value="ALMOXARIFE">Almoxarife</option>
@@ -327,14 +364,15 @@ export default function UsersPage() {
                   </label>
                   <input 
                       type="password" required minLength={6}
+                      autoComplete="new-password"
                       value={formData.password}
                       onChange={e => setFormData({...formData, password: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
+                      className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
                       placeholder="Mínimo de 6 caracteres"
                   />
               </div>
 
-              <div className="pt-4 flex gap-3">
+              <div className="pt-4 flex flex-col gap-3 md:flex-row">
                 <button 
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -351,9 +389,7 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </BottomSheet>
     </div>
   )
 }

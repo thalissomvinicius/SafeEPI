@@ -1,10 +1,13 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect } from "react"
-import { Shield, Plus, Search, X, Loader2, Package, Trash2, ShieldAlert, FileText } from "lucide-react"
+import { Shield, Plus, Search, Loader2, Package, Trash2, ShieldAlert, FileText } from "lucide-react"
 import { api } from "@/services/api"
 import { PPE } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { BottomSheet } from "@/components/ui/BottomSheet"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import Link from "next/link"
 import { COMPANY_CONFIG } from "@/config/company"
 import { useAuth } from "@/contexts/AuthContext"
@@ -230,19 +233,19 @@ export default function PpesPage() {
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
         <div className="p-5 border-b border-slate-200 bg-slate-50/30">
-          <div className="relative max-w-md w-full">
+          <div className="relative w-full md:max-w-md">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
               placeholder="Buscar por Nº CA ou Equipamento..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
+              className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
         </div>
 
-        <div className="overflow-x-auto min-h-[200px] flex flex-col">
+        <div className="min-h-[200px] flex flex-col md:overflow-x-auto">
            {loading ? (
               <div className="w-full space-y-4 p-4">
                   {[...Array(5)].map((_, i) => (
@@ -259,7 +262,59 @@ export default function PpesPage() {
                   ))}
               </div>
           ) : (
-            <table className="w-full text-sm text-left">
+            <>
+            <div className="grid grid-cols-1 gap-4 bg-slate-50/60 p-4 md:hidden">
+              {filteredPpes.map((ppe) => {
+                const diffDays = getDaysUntilDateOnly(ppe.ca_expiry_date)
+                const status = diffDays < 0 ? "CA vencido" : diffDays <= 90 ? `Vence em ${diffDays}d` : "Regular"
+                const variant = diffDays < 0
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : diffDays <= 90
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                return (
+                  <MobileTableCard
+                    key={ppe.id}
+                    title={ppe.name}
+                    subtitle={`CA ${ppe.ca_number}`}
+                    badge={{ label: status, variant }}
+                    expandable
+                    fields={[
+                      { label: "Categoria", value: "EPI" },
+                      { label: "Status", value: status },
+                      { label: "Validade", value: formatDateOnly(ppe.ca_expiry_date) },
+                      { label: "Fornecedor", value: ppe.manufacturer || "Genérico" },
+                      { label: "Observações", value: `Saldo ${ppe.current_stock || 0} - R$ ${ppe.cost.toFixed(2)}` },
+                    ]}
+                    actions={
+                      <div className="flex w-full gap-2">
+                        <button
+                          onClick={() => openEditPpe(ppe)}
+                          className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600"
+                        >
+                          Editar
+                        </button>
+                        {canDeletePpe && (
+                          <button
+                            onClick={() => requestDeletePpe(ppe)}
+                            className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600"
+                            aria-label={`Excluir ${ppe.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    }
+                  />
+                )
+              })}
+              {filteredPpes.length === 0 && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-400 italic">
+                  Nenhum EPI cadastrado.
+                </div>
+              )}
+            </div>
+            <table className="hidden w-full text-sm text-left md:table">
                 <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                 <tr>
                     <th className="px-6 py-5">Equipamento</th>
@@ -343,27 +398,20 @@ export default function PpesPage() {
                 )}
                 </tbody>
             </table>
+            </>
           )}
         </div>
       </div>
 
       {/* Modal Adicionar EPI */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
-            <div className="flex justify-between items-center p-5 sm:p-8 border-b border-slate-100">
-              <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl tracking-tighter">{formData.id ? 'Editar EPI' : 'Novo Item SafeEPI'}</h2>
-              <button 
-                onClick={closeEditModal} 
-                title="Fechar modal"
-                aria-label="Fechar modal de cadastro de EPI"
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSavePpe} className="p-5 sm:p-8 space-y-6">
+      <BottomSheet
+        open={isModalOpen}
+        onClose={closeEditModal}
+        title={formData.id ? "Editar EPI" : "Novo Item SafeEPI"}
+        className="md:max-w-md"
+        contentClassName="p-5 sm:p-8"
+      >
+            <form onSubmit={handleSavePpe} className="space-y-6">
               <div className="space-y-2">
                 <label htmlFor="ppe-name" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Equipamento (EPI)</label>
                 <input 
@@ -372,20 +420,21 @@ export default function PpesPage() {
                   type="text" 
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] transition-all font-bold" 
+                  className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] transition-all font-bold" 
                   placeholder="Ex: Óculos de Proteção"
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label htmlFor="ppe-ca" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nº do C.A.</label>
                   <input 
                     id="ppe-ca"
                     type="text" 
+                    inputMode="numeric"
                     value={formData.ca}
                     onChange={(e) => setFormData({...formData, ca: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                     placeholder="Ex: 54321"
                   />
                 </div>
@@ -394,25 +443,27 @@ export default function PpesPage() {
                   <input 
                     id="ppe-cost"
                     type="number" 
+                    inputMode="decimal"
                     step="0.01"
                     value={formData.cost}
                     onChange={(e) => setFormData({...formData, cost: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                     placeholder="0.00"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label htmlFor="ppe-stock" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">{formData.id ? "Saldo Atual (Qtd)" : "Saldo Inicial (Qtd)"}</label>
                   <input 
                     id="ppe-stock"
                     type="number" 
+                    inputMode="numeric"
                     min="0"
                     value={formData.stock}
                     onChange={(e) => setFormData({...formData, stock: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold disabled:opacity-50" 
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold disabled:opacity-50" 
                     placeholder="0"
                     disabled={isStockFieldLocked}
                     title={isStockFieldLocked ? "Somente Master e Admin podem ajustar o saldo pela edição do EPI/CA" : ""}
@@ -425,12 +476,12 @@ export default function PpesPage() {
                     type="date" 
                     value={formData.valCa}
                     onChange={(e) => setFormData({...formData, valCa: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] transition-all font-bold" 
                   />
                 </div>
               </div>
 
-              <div className="pt-6 flex gap-4">
+              <div className="pt-6 flex flex-col gap-3 md:flex-row md:gap-4">
                 <button 
                   type="button" 
                   disabled={isSaving}
@@ -448,12 +499,15 @@ export default function PpesPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-      {ppeToDelete && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-red-100">
+      </BottomSheet>
+      <BottomSheet
+        open={Boolean(ppeToDelete)}
+        onClose={() => setPpeToDelete(null)}
+        className="md:max-w-md"
+        contentClassName="p-0"
+      >
+        {ppeToDelete && (
+          <div className="w-full overflow-hidden rounded-3xl border border-red-100 bg-white shadow-2xl">
             <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
               <div className="p-3 bg-red-100 rounded-2xl shrink-0">
                 <ShieldAlert className="w-6 h-6 text-red-600" />
@@ -484,18 +538,18 @@ export default function PpesPage() {
                 </p>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                 <button
                   onClick={() => setPpeToDelete(null)}
                   disabled={isDeletingPpe}
-                  className="flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all disabled:opacity-50"
+                  className="min-h-11 flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => void deletePpe()}
                   disabled={isDeletingPpe}
-                  className="flex-[2] px-4 py-3 text-xs font-black text-white bg-red-600 hover:bg-red-700 rounded-2xl uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-60"
+                  className="flex min-h-11 flex-[2] items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:opacity-60"
                 >
                   {isDeletingPpe ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   Excluir EPI/CA
@@ -503,8 +557,8 @@ export default function PpesPage() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </BottomSheet>
       {pdfActionDialog}
     </div>
   )

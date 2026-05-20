@@ -1,5 +1,5 @@
-﻿"use client"
-
+// responsive: revisado — mobile-first ✓
+"use client"
 import { HelpCircle, MessageCircle, Phone, PlayCircle, BookOpen } from "lucide-react"
 
 export default function SupportPage() {
@@ -33,7 +33,7 @@ export default function SupportPage() {
               href={whatsappLink} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="w-full bg-white text-[#2563EB] hover:bg-slate-100 px-4 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center transition-all shadow-md"
+              className="min-h-11 w-full bg-white text-[#2563EB] hover:bg-slate-100 px-4 py-3 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center transition-all shadow-md"
             >
               <Phone className="w-5 h-5 mr-2" />
               Chamar no WhatsApp
@@ -55,9 +55,9 @@ export default function SupportPage() {
               Dúvidas Frequentes (FAQ)
             </h2>
 
-            <div className="space-y-6">
+            <div className="space-y-6 text-sm">
               <div className="space-y-2 border-b border-slate-100 pb-4">
-                <h4 className="font-bold text-slate-800 flex items-center">
+                <h4 className="flex items-center text-sm font-bold text-slate-800">
                   <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">1</span>
                   Como fazer uma Nova Entrega de EPI?
                 </h4>
@@ -67,7 +67,7 @@ export default function SupportPage() {
               </div>
 
               <div className="space-y-2 border-b border-slate-100 pb-4">
-                <h4 className="font-bold text-slate-800 flex items-center">
+                <h4 className="flex items-center text-sm font-bold text-slate-800">
                   <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">2</span>
                   O estoque não está baixando, e agora?
                 </h4>
@@ -77,7 +77,7 @@ export default function SupportPage() {
               </div>
 
               <div className="space-y-2 border-b border-slate-100 pb-4">
-                <h4 className="font-bold text-slate-800 flex items-center">
+                <h4 className="flex items-center text-sm font-bold text-slate-800">
                   <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">3</span>
                   Como gerar a Ficha NR-06 (Prontuário)?
                 </h4>
@@ -87,7 +87,7 @@ export default function SupportPage() {
               </div>
 
               <div className="space-y-2">
-                <h4 className="font-bold text-slate-800 flex items-center">
+                <h4 className="flex items-center text-sm font-bold text-slate-800">
                   <span className="w-6 h-6 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center text-xs font-black mr-3">4</span>
                   Como dar baixa / devolução em um EPI?
                 </h4>

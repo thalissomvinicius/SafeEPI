@@ -1,3 +1,4 @@
+// responsive: revisado — mobile-first ✓
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -31,6 +32,7 @@ import { toast } from "sonner"
 import { api, type CompanyWithCounts } from "@/services/api"
 import type { Profile } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 
 type CompanyForm = {
   id?: string
@@ -325,14 +327,14 @@ export default function CompaniesPage() {
 
           <button
             onClick={clearCompanyForm}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[#1D4ED8]"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[#1D4ED8] md:w-auto"
           >
             <Plus className="h-4 w-4" />
             Nova Empresa
           </button>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
           <Metric icon={Building2} label="Empresas" value={totals.companies} />
           <Metric icon={CheckCircle2} label="Ativas" value={totals.activeCompanies} />
           <Metric icon={Users} label="Colaboradores" value={totals.employees} />
@@ -347,10 +349,10 @@ export default function CompaniesPage() {
               <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">Carteira de clientes</h2>
               <p className="text-xs font-medium text-slate-500">Selecione uma empresa para gerenciar marca e acessos.</p>
             </div>
-            <label className="relative block md:w-72">
+            <label className="relative block w-full md:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-bold outline-none focus:border-[#2563EB]"
+                className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-bold outline-none focus:border-[#2563EB]"
                 placeholder="Buscar empresa..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -369,20 +371,56 @@ export default function CompaniesPage() {
               <p className="mt-2 text-sm font-medium text-slate-500">Cadastre ou ajuste a busca para localizar o cliente.</p>
             </div>
           ) : (
-            filteredCompanies.map((company) => (
-              <CompanyCard
-                key={company.id}
-                company={company}
-                active={selectedCompanyId === company.id}
-                onSelect={() => setSelectedCompanyId(company.id)}
-                onEdit={() => editCompany(company)}
-              />
-            ))
+            <>
+              <div className="grid grid-cols-1 gap-3 md:hidden">
+                {filteredCompanies.map((company) => (
+                  <MobileTableCard
+                    key={company.id}
+                    title={company.trade_name || company.name}
+                    subtitle={company.cnpj ? `CNPJ ${company.cnpj}` : company.email || "Empresa sem CNPJ"}
+                    badge={{
+                      label: company.subscription_status === "SUSPENDED" ? "Bloqueada" : company.active ? "Ativa" : "Inativa",
+                      variant: company.subscription_status === "SUSPENDED" ? "bg-red-50 text-red-700" : company.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500",
+                    }}
+                    fields={[
+                      { label: "Plano", value: company.training_enabled ? "Premium" : "Basico" },
+                      { label: "Status", value: company.subscription_status || "ACTIVE" },
+                      { label: "Usuarios", value: String(company.users_count || 0) },
+                      { label: "Colaboradores", value: String(company.employees_count || 0) },
+                      { label: "Email", value: company.email || "-" },
+                      { label: "Telefone", value: company.phone || "-" },
+                    ]}
+                    actions={
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setSelectedCompanyId(company.id)} className="min-h-11 rounded-xl border border-slate-200 text-sm font-bold text-slate-600">
+                          Selecionar
+                        </button>
+                        <button onClick={() => editCompany(company)} className="min-h-11 rounded-xl bg-[#2563EB] text-sm font-bold text-white">
+                          Editar
+                        </button>
+                      </div>
+                    }
+                    expandable
+                  />
+                ))}
+              </div>
+              <div className="hidden space-y-4 md:block">
+                {filteredCompanies.map((company) => (
+                  <CompanyCard
+                    key={company.id}
+                    company={company}
+                    active={selectedCompanyId === company.id}
+                    onSelect={() => setSelectedCompanyId(company.id)}
+                    onEdit={() => editCompany(company)}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </section>
 
         <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-          <form onSubmit={handleCompanySubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <form onSubmit={handleCompanySubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm [&_input]:min-h-11 [&_input]:w-full [&_select]:min-h-11 [&_select]:w-full">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Dados do cliente</p>
@@ -401,10 +439,10 @@ export default function CompaniesPage() {
               <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" required placeholder="Razao social" value={companyForm.name} onChange={(event) => setCompanyForm({ ...companyForm, name: event.target.value })} />
               <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" placeholder="Nome fantasia" value={companyForm.trade_name} onChange={(event) => setCompanyForm({ ...companyForm, trade_name: event.target.value })} />
               <div className="grid gap-3 sm:grid-cols-2">
-                <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" placeholder="CNPJ" value={companyForm.cnpj} onChange={(event) => setCompanyForm({ ...companyForm, cnpj: event.target.value })} />
-                <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" placeholder="Telefone" value={companyForm.phone} onChange={(event) => setCompanyForm({ ...companyForm, phone: event.target.value })} />
+                <input inputMode="numeric" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" placeholder="CNPJ" value={companyForm.cnpj} onChange={(event) => setCompanyForm({ ...companyForm, cnpj: event.target.value })} />
+                <input inputMode="tel" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" placeholder="Telefone" value={companyForm.phone} onChange={(event) => setCompanyForm({ ...companyForm, phone: event.target.value })} />
               </div>
-              <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" type="email" placeholder="E-mail comercial" value={companyForm.email} onChange={(event) => setCompanyForm({ ...companyForm, email: event.target.value })} />
+              <input inputMode="email" className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" type="email" placeholder="E-mail comercial" value={companyForm.email} onChange={(event) => setCompanyForm({ ...companyForm, email: event.target.value })} />
               <input className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]" placeholder="Endereco" value={companyForm.address} onChange={(event) => setCompanyForm({ ...companyForm, address: event.target.value })} />
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -560,10 +598,10 @@ export default function CompaniesPage() {
 
             <form onSubmit={handleUserSubmit} className="grid gap-3">
               <input disabled={!selectedCompanyId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required placeholder="Nome do administrador" value={userForm.full_name} onChange={(event) => setUserForm({ ...userForm, full_name: event.target.value })} />
-              <input disabled={!selectedCompanyId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required type="email" placeholder="E-mail de acesso" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} />
+              <input disabled={!selectedCompanyId} inputMode="email" className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required type="email" placeholder="E-mail de acesso" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} />
               <div className="grid gap-3 sm:grid-cols-[1fr_0.85fr]">
-                <input disabled={!selectedCompanyId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required minLength={6} type="password" placeholder="Senha provisoria" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
-                <select disabled={!selectedCompanyId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#2563EB] disabled:opacity-50" value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value as UserForm["role"] })} title="Nivel de acesso">
+                <input disabled={!selectedCompanyId} autoComplete="new-password" className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required minLength={6} type="password" placeholder="Senha provisoria" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
+                <select disabled={!selectedCompanyId} className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#2563EB] disabled:opacity-50" value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value as UserForm["role"] })} title="Nivel de acesso">
                   <option value="ADMIN">Admin</option>
                   <option value="ALMOXARIFE">Almoxarife</option>
                   <option value="DIRETORIA">Diretoria</option>

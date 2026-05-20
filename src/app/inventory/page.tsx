@@ -1,4 +1,5 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect } from "react"
 import { Package, Plus, History, Search, ArrowUpCircle, ArrowDownCircle, Settings2, Loader2, X, FileDown, FileSpreadsheet } from "lucide-react"
@@ -6,6 +7,7 @@ import { api } from "@/services/api"
 import { PPE, StockMovement } from "@/types/database"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
@@ -87,6 +89,19 @@ export default function InventoryPage() {
   const filteredPpes = ppes.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
   const stockReportPpes = filteredPpes.filter(ppe => Number(ppe.current_stock || 0) > 0)
   const recentMovements = movements.slice(0, 5)
+
+  const getStockBadge = (stock: number) => {
+    if (stock <= 0) return { label: "Zerado", variant: "border-red-200 bg-red-50 text-red-700" }
+    if (stock <= 10) return { label: `${stock} baixo`, variant: "border-amber-200 bg-amber-50 text-amber-700" }
+    return { label: `${stock} ok`, variant: "border-green-200 bg-green-50 text-green-700" }
+  }
+
+  const getRecentMovementsForPpe = (ppeId: string) =>
+    movements
+      .filter((movement) => movement.ppe_id === ppeId)
+      .slice(0, 3)
+      .map((movement) => `${movement.type} ${movement.quantity}`)
+      .join(", ") || "Sem movimentações recentes"
 
   const getStockReportData = () => stockReportPpes.length > 0 ? stockReportPpes : filteredPpes
 
@@ -197,19 +212,19 @@ export default function InventoryPage() {
         {/* Lado Esquerdo: Saldo Atual */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden min-h-[500px]">
-             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm flex items-center gap-2">
                     <Settings2 className="w-4 h-4 text-[#2563EB]" />
                     Saldos Disponíveis
                 </h3>
-                <div className="relative w-48">
+                <div className="relative w-full md:w-48">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
                         type="text" 
                         placeholder="Buscar EPI..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[#2563EB]"
+                        className="min-h-11 w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[#2563EB]"
                     />
                 </div>
              </div>
@@ -228,7 +243,38 @@ export default function InventoryPage() {
                     ))}
                 </div>
              ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="grid grid-cols-1 gap-4 bg-slate-50/60 p-4 md:hidden">
+                    {filteredPpes.map(ppe => (
+                        <MobileTableCard
+                            key={ppe.id}
+                            title={ppe.name}
+                            badge={getStockBadge(Number(ppe.current_stock || 0))}
+                            expandable
+                            fields={[
+                                { label: "CA", value: ppe.ca_number || "-" },
+                                { label: "Saldo", value: <span className="text-lg font-black text-slate-900">{ppe.current_stock}</span> },
+                                { label: "Validade CA", value: ppe.ca_expiry_date ? format(new Date(`${ppe.ca_expiry_date}T12:00:00`), "dd/MM/yyyy", { locale: ptBR }) : "-" },
+                                { label: "Categoria", value: "EPI" },
+                                { label: "Movimentações", value: getRecentMovementsForPpe(ppe.id) },
+                            ]}
+                        />
+                    ))}
+                    {filteredPpes.length === 0 && (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-400 italic font-medium">
+                            Nenhum EPI encontrado.
+                        </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsHistoryModalOpen(true)}
+                      disabled={movements.length === 0}
+                      className="min-h-11 w-full rounded-xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-40"
+                    >
+                      Ver auditoria de fluxo
+                    </button>
+                </div>
+                <div className="hidden overflow-x-auto md:block">
                     <table className="w-full text-sm text-left">
                         <thead className="text-[10px] text-slate-400 uppercase tracking-widest font-black border-b border-slate-50">
                             <tr>
@@ -263,12 +309,13 @@ export default function InventoryPage() {
                         </tbody>
                     </table>
                 </div>
+                </>
              )}
           </div>
         </div>
 
         {/* Lado Direito: Histórico de Movimentações */}
-        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+        <div className="hidden space-y-6 lg:sticky lg:top-6 lg:self-start lg:block">
            <div className="bg-slate-900 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden min-h-[420px] lg:max-h-[calc(100dvh-8rem)] flex flex-col">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#2563EB]/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
               <h3 className="font-black text-white uppercase tracking-tighter text-sm flex items-center gap-2 mb-6 relative z-10 shrink-0">
@@ -298,8 +345,8 @@ export default function InventoryPage() {
       </div>
 
       {isHistoryModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-end justify-center p-0 md:items-center md:p-4 animate-in fade-in duration-300">
+          <div className="bg-slate-950 border border-slate-800 rounded-t-3xl md:rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88dvh] overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200">
             <div className="p-5 sm:p-7 border-b border-slate-800 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Auditoria de Estoque</p>
@@ -318,7 +365,7 @@ export default function InventoryPage() {
               </button>
             </div>
 
-            <div className="p-5 sm:p-7 max-h-[70dvh] overflow-y-auto custom-scrollbar">
+            <div className="p-5 sm:p-7 max-h-[68dvh] overflow-y-auto custom-scrollbar">
               <div className="space-y-6">
                 {movements.map(renderMovementItem)}
                 {movements.length === 0 && (

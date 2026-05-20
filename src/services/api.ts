@@ -246,21 +246,6 @@ function isMissingCatalogTableIssue(error: unknown): boolean {
   );
 }
 
-function isMissingThirdPartiesTableIssue(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError;
-  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
-  return (
-    maybeError.code === "42P01" ||
-    maybeError.code === "PGRST205" ||
-    text.includes("third_parties") && (
-      text.includes("schema cache") ||
-      text.includes("does not exist") ||
-      text.includes("could not find")
-    )
-  );
-}
-
 function isMissingSignedDocumentsTableIssue(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as SupabaseLikeError & { status?: number };

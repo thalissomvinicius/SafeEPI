@@ -1,9 +1,10 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink, FileUp, Download, Handshake } from "lucide-react"
+import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink, FileUp, Download, Handshake, ChevronDown } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
 import ExcelJS from "exceljs"
 import { api } from "@/services/api"
@@ -12,6 +13,7 @@ import { format, addDays, isPast } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateEmployeesReportPDF, generateNR06PDF } from "@/utils/pdfGenerator"
 import { formatCpf, isValidCpf } from "@/utils/cpf"
@@ -174,6 +176,7 @@ export default function EmployeesPage() {
   const [biometryFilter, setBiometryFilter] = useState<"all" | "registered" | "pending">("all")
   const [admissionStartFilter, setAdmissionStartFilter] = useState("")
   const [admissionEndFilter, setAdmissionEndFilter] = useState("")
+  const [areMobileFiltersOpen, setAreMobileFiltersOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isFaceCameraOpen, setIsFaceCameraOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"employees" | "pending">("employees")
@@ -1159,7 +1162,7 @@ export default function EmployeesPage() {
           <select
             value={captureWaitHours}
             onChange={(event) => setCaptureWaitHours(Number(event.target.value))}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#2563EB]"
+            className="min-h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#2563EB]"
             title="Tempo de espera do registro facial"
           >
             <option value={1}>1h</option>
@@ -1292,7 +1295,7 @@ export default function EmployeesPage() {
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
         <div className="p-5 border-b border-slate-200 bg-slate-50/30 space-y-4">
-          <div className="relative max-w-md w-full">
+          <div className="relative w-full md:max-w-md">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
@@ -1301,32 +1304,41 @@ export default function EmployeesPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               title="Buscar colaborador"
               aria-label="Buscar colaborador por nome ou CPF"
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
+              className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-6 xl:grid-cols-7 gap-3">
+          <button
+            type="button"
+            onClick={() => setAreMobileFiltersOpen((current) => !current)}
+            className="flex min-h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-slate-600 md:hidden"
+            aria-expanded={areMobileFiltersOpen}
+          >
+            Filtros
+            <ChevronDown className={`h-4 w-4 transition-transform ${areMobileFiltersOpen ? "rotate-180" : ""}`} />
+          </button>
+          <div className={`${areMobileFiltersOpen ? "grid" : "hidden"} grid-cols-1 gap-3 md:grid md:grid-cols-6 xl:grid-cols-7`}>
             {hasThirdPartyFeature && (
-              <select value={employeeScopeFilter} onChange={(e) => setEmployeeScopeFilter(e.target.value as EmployeeScopeFilter)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+              <select value={employeeScopeFilter} onChange={(e) => setEmployeeScopeFilter(e.target.value as EmployeeScopeFilter)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
                 <option value="own">Proprios</option>
                 <option value="third_party">Terceiros</option>
                 <option value="all">Todos vinculos</option>
               </select>
             )}
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
               <option value="all">Todos status</option>
               <option value="active">Ativos</option>
               <option value="inactive">Inativos</option>
             </select>
-            <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+            <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
               <option value="all">Todos setores</option>
               {departments.map(dept => <option key={dept.id} value={dept.name}>{dept.name}</option>)}
             </select>
-            <select value={workplaceFilter} onChange={(e) => setWorkplaceFilter(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+            <select value={workplaceFilter} onChange={(e) => setWorkplaceFilter(e.target.value)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
               <option value="all">Todas obras</option>
               <option value="none">Sem obra</option>
               {workplaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
-            <select value={biometryFilter} onChange={(e) => setBiometryFilter(e.target.value as typeof biometryFilter)} className="bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
+            <select value={biometryFilter} onChange={(e) => setBiometryFilter(e.target.value as typeof biometryFilter)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
               <option value="all">Biometria geral</option>
               <option value="registered">Cadastrada</option>
               <option value="pending">Pendente</option>
@@ -1337,7 +1349,7 @@ export default function EmployeesPage() {
                 type="date"
                 value={admissionStartFilter}
                 onChange={(e) => setAdmissionStartFilter(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-600 outline-none"
+                className="min-h-8 bg-transparent text-xs font-bold text-slate-600 outline-none"
                 title="Filtrar colaboradores admitidos a partir desta data"
                 aria-label="Admissão de"
               />
@@ -1348,7 +1360,7 @@ export default function EmployeesPage() {
                 type="date"
                 value={admissionEndFilter}
                 onChange={(e) => setAdmissionEndFilter(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-600 outline-none"
+                className="min-h-8 bg-transparent text-xs font-bold text-slate-600 outline-none"
                 title="Filtrar colaboradores admitidos até esta data"
                 aria-label="Admissão até"
               />
@@ -1500,56 +1512,38 @@ export default function EmployeesPage() {
 
               <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-slate-50/50">
                 {filteredEmployees.map((emp) => (
-                  <div key={emp.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 relative overflow-hidden">
-                    <div className="absolute top-4 right-4">
-                        <span className={`px-3 py-1 text-[9px] font-black uppercase rounded-full border ${
-                          emp.active 
-                              ? 'bg-green-50 text-green-700 border-green-200' 
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}>
-                          {emp.active ? 'Ativo' : 'Inativo'}
-                        </span>
-                    </div>
-
-                    <div>
-                      <p className="font-black text-slate-800 text-base uppercase pr-16">{emp.full_name}</p>
-                      <p className="text-xs text-slate-400 font-mono mt-1">{formatCpf(emp.cpf)}</p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <p className="text-sm text-slate-500 font-medium italic">
-                        {getJobTitleName(emp.job_title)}
-                      </p>
-                      <p className="text-xs text-slate-400 font-medium flex items-center">
-                         <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2"></span>
-                         {getDepartmentName(emp.department)}
-                      </p>
-                      <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter pt-1">
-                          <HardDrive className="w-3.5 h-3.5 text-[#2563EB]" />
-                          {getWorkplaceName(emp.workplace_id)}
-                      </div>
-                      {hasThirdPartyFeature && (
-                        <div className="flex items-center gap-1.5 text-slate-600 font-bold text-[11px] uppercase tracking-tighter pt-1">
-                          <Handshake className="w-3.5 h-3.5 text-amber-600" />
-                          {getThirdPartyName(emp.third_party_id || null)}
+                  <MobileTableCard
+                    key={emp.id}
+                    title={emp.full_name}
+                    subtitle={`${getJobTitleName(emp.job_title)} / ${getDepartmentName(emp.department)}`}
+                    badge={{
+                      label: emp.active ? "Ativo" : "Inativo",
+                      variant: emp.active ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-700",
+                    }}
+                    leading={
+                      emp.photo_url ? (
+                        <Image src={emp.photo_url} alt={emp.full_name} width={44} height={44} className="h-11 w-11 rounded-full border-2 border-green-500 object-cover" unoptimized />
+                      ) : (
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-400">
+                          <Users className="h-5 w-5" />
                         </div>
-                      )}
-                      {(() => {
-                        const biometry = getBiometryStatus(emp)
-                        return (
-                          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest mt-2 ${biometry.className}`}>
-                            <Fingerprint className={`w-3 h-3 ${biometry.iconClassName}`} />
-                            {biometry.label}
-                          </div>
-                        )
-                      })()}
-                    </div>
-
-                    <div className="pt-3 flex gap-2 border-t border-slate-100 mt-1">
+                      )
+                    }
+                    expandable
+                    fields={[
+                      { label: "CPF", value: formatCpf(emp.cpf) },
+                      { label: "Admissão", value: emp.admission_date ? format(new Date(`${emp.admission_date}T12:00:00`), "dd/MM/yyyy") : "-" },
+                      { label: "Local", value: getWorkplaceName(emp.workplace_id) },
+                      { label: "EPIs ativos", value: "Ver prontuário" },
+                      ...(hasThirdPartyFeature ? [{ label: "Tomador", value: getThirdPartyName(emp.third_party_id || null) }] : []),
+                      { label: "Biometria", value: getBiometryStatus(emp).label },
+                    ]}
+                    actions={
+                      <div className="flex w-full gap-2">
                         {canEdit && (
-                          <button 
+                          <button
                             onClick={() => openEditEmployee(emp)}
-                            className="flex-1 text-slate-600 hover:bg-slate-100 font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white py-3 rounded-xl shadow-sm transition-all text-center"
+                            className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white text-center text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-100"
                           >
                             Editar
                           </button>
@@ -1558,29 +1552,30 @@ export default function EmployeesPage() {
                           <button
                             onClick={() => void handleActivateEmployee(emp)}
                             disabled={isSaving}
-                            className="flex-1 rounded-xl border border-emerald-100 bg-emerald-50 py-3 text-center text-[10px] font-black uppercase tracking-widest text-emerald-700 transition-all hover:bg-emerald-100 disabled:opacity-50"
+                            className="min-h-11 flex-1 rounded-xl border border-emerald-100 bg-emerald-50 text-center text-[10px] font-black uppercase tracking-widest text-emerald-700 transition-all hover:bg-emerald-100 disabled:opacity-50"
                           >
                             Ativar
                           </button>
                         )}
-                        <button 
+                        <button
                           onClick={() => openProfile(emp.id)}
-                          className="flex-[2] text-white hover:bg-[#1D4ED8] bg-[#2563EB] font-black text-[10px] uppercase tracking-widest border border-[#2563EB] py-3 rounded-xl shadow-sm shadow-blue-900/20 transition-all text-center"
+                          className="min-h-11 flex-[2] rounded-xl border border-[#2563EB] bg-[#2563EB] text-center text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/20 transition-all hover:bg-[#1D4ED8]"
                         >
                           Prontuário
                         </button>
                         {canEdit && (
                           <button
                             onClick={() => setEmployeeToDelete(emp)}
-                            className="flex items-center justify-center rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-red-600 transition-all hover:bg-red-100"
+                            className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition-all hover:bg-red-100"
                             title="Excluir colaborador"
                             aria-label={`Excluir ${emp.full_name}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
-                    </div>
-                  </div>
+                      </div>
+                    }
+                  />
                 ))}
                 {filteredEmployees.length === 0 && (
                   <div className="px-6 py-10 text-center text-slate-400 italic font-medium bg-white rounded-2xl border border-slate-200">
@@ -1652,8 +1647,8 @@ export default function EmployeesPage() {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-4 animate-in fade-in duration-300">
-          <div className="my-3 sm:my-4 bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-t-3xl md:my-4 md:rounded-3xl shadow-2xl w-full max-w-md max-h-[92dvh] md:max-h-[calc(100dvh-2rem)] overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200 flex flex-col">
             <div className="shrink-0 flex justify-between items-center p-5 sm:p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">{formData.id ? 'Editar Colaborador' : `Novo Cadastro ${COMPANY_CONFIG.shortName}`}</h2>
               <button 
@@ -1737,12 +1732,12 @@ export default function EmployeesPage() {
                   type="text" 
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: formatTypingName(e.target.value)})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase" 
+                  className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase" 
                   placeholder="Nome do colaborador"
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between items-center">
                     CPF
@@ -1755,9 +1750,10 @@ export default function EmployeesPage() {
                   </label>
                   <input 
                     type="text" 
+                    inputMode="numeric"
                     value={formData.cpf}
                     onChange={(e) => setFormData({...formData, cpf: formatCpf(e.target.value)})}
-                    className={`w-full bg-slate-50 border ${formData.cpf && !isValidCpf(formData.cpf) ? 'border-red-300 focus:border-red-500' : 'border-slate-200 focus:border-[#2563EB]'} rounded-xl px-4 py-3 text-sm focus:outline-none transition-all font-bold`} 
+                    className={`min-h-11 w-full bg-slate-50 border ${formData.cpf && !isValidCpf(formData.cpf) ? 'border-red-300 focus:border-red-500' : 'border-slate-200 focus:border-[#2563EB]'} rounded-xl px-4 py-3 text-sm focus:outline-none transition-all font-bold`} 
                     placeholder="000.000.000-00"
                     maxLength={14}
                   />
@@ -1768,7 +1764,7 @@ export default function EmployeesPage() {
                     required
                     value={formData.department}
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase"
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase"
                   >
                     <option value="">{departments.length === 0 ? "Cadastre setores" : "Selecione"}</option>
                     {formData.department && !departments.some(dept => dept.name === formData.department) && (
@@ -1787,7 +1783,7 @@ export default function EmployeesPage() {
                   required
                   value={formData.role}
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase"
+                  className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold uppercase"
                 >
                   <option value="">{jobTitles.length === 0 ? "Cadastre cargos" : "Selecione"}</option>
                   {formData.role && !jobTitles.some(job => job.name === formData.role) && (
@@ -1830,7 +1826,7 @@ export default function EmployeesPage() {
                       third_party_id: formData.third_party_id || workplace?.third_party_id || "",
                     })
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
+                  className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
                 >
                   <option value="">Administrativo / Sem Canteiro</option>
                   {workplaces.map(w => (
@@ -1849,7 +1845,7 @@ export default function EmployeesPage() {
                       title="Vincular colaborador a uma empresa terceira"
                       value={formData.third_party_id}
                       onChange={(e) => setFormData({ ...formData, third_party_id: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
+                      className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
                     >
                       <option value="">Colaborador proprio / sem terceiro</option>
                       {thirdParties.filter(thirdParty => thirdParty.active).map(thirdParty => (
@@ -1862,14 +1858,14 @@ export default function EmployeesPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Data de Admissão</label>
                   <input
                     type="date"
                     value={formData.admission_date}
                     onChange={(e) => setFormData({ ...formData, admission_date: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1878,7 +1874,7 @@ export default function EmployeesPage() {
                     type="date"
                     value={formData.termination_date}
                     onChange={(e) => setFormData({ ...formData, termination_date: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-[#2563EB] focus:outline-none transition-all font-bold"
                   />
                 </div>
               </div>
@@ -1909,8 +1905,8 @@ export default function EmployeesPage() {
       )}
 
       {isProfileOpen && selectedEmployeeId && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-4 animate-in fade-in duration-300">
-          <div className="my-3 bg-white rounded-[28px] shadow-2xl w-full max-w-6xl max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-t-[28px] md:my-3 md:rounded-[28px] shadow-2xl w-full max-w-6xl max-h-[92dvh] md:max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200">
             {(() => {
               const emp = employees.find(e => e.id === selectedEmployeeId)
               const profileDetails = [

@@ -1,5 +1,5 @@
+// responsive: revisado — mobile-first ✓
 "use client"
-
 import { useMemo, useState } from "react"
 import type React from "react"
 import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, UserRoundCog } from "lucide-react"
@@ -118,7 +118,7 @@ export default function AccountPage() {
             <button
               type="button"
               onClick={() => setShowPasswords((current) => !current)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 md:w-auto"
             >
               {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               {showPasswords ? "Ocultar senhas" : "Mostrar senhas"}
@@ -184,10 +184,11 @@ function PasswordInput({
       <span className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
       <input
         type={visible ? "text" : "password"}
+        autoComplete="new-password"
         required
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB]"
+        className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-colors focus:border-[#2563EB]"
         placeholder={placeholder}
       />
     </label>

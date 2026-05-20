@@ -1,4 +1,5 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect } from "react"
 import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, Loader2, FileSpreadsheet, Calendar } from "lucide-react"
@@ -281,8 +282,8 @@ export default function ReportsPage() {
             </h1>
             <p className="text-slate-500 text-sm mt-1 font-medium italic">Extração de custos operacionais e conformidade normativa.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <div className="grid grid-cols-3 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="flex flex-col gap-3 w-full sm:w-auto">
+          <div className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
             {([
               { value: 'own', label: 'Próprios' },
               { value: 'third_party', label: 'Terceiros' },
@@ -310,7 +311,7 @@ export default function ReportsPage() {
               title="Filtro de Período"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-              className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 pl-10 pr-8 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB] appearance-none"
+              className="min-h-11 w-full bg-white border border-slate-200 text-slate-700 pl-10 pr-8 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB] appearance-none"
             >
               <option value="month">Neste Mês</option>
               <option value="last30">Últimos 30 Dias</option>
@@ -323,7 +324,7 @@ export default function ReportsPage() {
           </div>
           
           {dateFilter === 'specific_month' && (
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <select
                 id="specific-month-sel-rep"
                 aria-label="Mês"
@@ -333,7 +334,7 @@ export default function ReportsPage() {
                   setSpecificMonthSel(e.target.value)
                   setSpecificMonth(`${specificYearSel}-${e.target.value}`)
                 }}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
+                className="min-h-11 w-full bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               >
                 {['01','02','03','04','05','06','07','08','09','10','11','12'].map((m, i) => (
                   <option key={m} value={m}>{['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][i]}</option>
@@ -348,7 +349,7 @@ export default function ReportsPage() {
                   setSpecificYearSel(e.target.value)
                   setSpecificMonth(`${e.target.value}-${specificMonthSel}`)
                 }}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
+                className="min-h-11 w-full bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               >
                 {[2023,2024,2025,2026,2027].map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -358,13 +359,13 @@ export default function ReportsPage() {
           )}
 
           {dateFilter === 'custom' && (
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input 
                 type="date"
                 title="Data Início"
                 value={customStartDate}
                 onChange={e => setCustomStartDate(e.target.value)}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
+                className="min-h-11 w-full bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               />
               <span className="flex items-center text-slate-400 font-bold">a</span>
               <input 
@@ -372,13 +373,13 @@ export default function ReportsPage() {
                 title="Data Fim"
                 value={customEndDate}
                 onChange={e => setCustomEndDate(e.target.value)}
-                className="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
+                className="min-h-11 w-full bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-xs outline-none focus:border-[#2563EB]"
               />
             </div>
           )}
           <button 
             onClick={handleExportPDF}
-            className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm"
+            className="min-h-11 w-full bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm"
           >
               <Download className="w-4 h-4 mr-2 text-[#2563EB]" />
               Exportar PDF
@@ -386,12 +387,12 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+          <div key={i} className="min-w-0 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{stat.label}</p>
             <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-2xl font-black text-slate-800 tracking-tighter">{stat.value}</span>
+                <span className="break-words text-2xl font-bold text-slate-800 tracking-tight">{stat.value}</span>
                 <span className="text-[10px] font-bold text-[#2563EB] bg-red-50 px-2 py-0.5 rounded">
                     {stat.change}
                 </span>
@@ -412,7 +413,7 @@ export default function ReportsPage() {
                   <PieChartIcon className="w-5 h-5 text-[#2563EB]" />
               </div>
               
-              <div className="h-[300px] min-h-[300px] w-full min-w-0">
+              <div className="aspect-video h-auto min-h-0 w-full min-w-0 md:h-[300px] md:min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie
@@ -450,7 +451,7 @@ export default function ReportsPage() {
                   <BarChartIcon className="w-5 h-5 text-[#2563EB]" />
               </div>
               
-              <div className="h-[300px] min-h-[300px] w-full min-w-0">
+              <div className="aspect-video h-auto min-h-0 w-full min-w-0 md:h-[300px] md:min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={ppeUsageData} layout="vertical">
                           <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />

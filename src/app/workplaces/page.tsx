@@ -1,10 +1,12 @@
-﻿"use client"
+// responsive: revisado — mobile-first ✓
+"use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { HardDrive, Plus, Search, MapPin, User, X, Loader2, CheckCircle2, Trash2, Users, Shield, AlertTriangle, Eye, Handshake } from "lucide-react"
 import { api } from "@/services/api"
 import { Workplace, Employee, DeliveryWithRelations, ThirdParty } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
+import { BottomSheet } from "@/components/ui/BottomSheet"
 
 export default function WorkplacesPage() {
   const { user } = useAuth()
@@ -168,11 +170,11 @@ export default function WorkplacesPage() {
       {/* Cards */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 border-b border-slate-200 bg-slate-50/50">
-          <div className="relative max-w-md">
+          <div className="relative w-full md:max-w-md">
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" placeholder="Buscar por nome ou responsável..."
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all" />
+              className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all" />
           </div>
         </div>
         <div className="p-6">
@@ -241,9 +243,14 @@ export default function WorkplacesPage() {
       </div>
 
       {/* --- MODAL: Ver Detalhes --- */}
-      {detailsWorkplace && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
+      <BottomSheet
+        open={Boolean(detailsWorkplace)}
+        onClose={() => { setDetailsWorkplace(null); setDetailsEmployees([]); setDetailsDeliveries([]) }}
+        className="md:max-w-lg"
+        contentClassName="p-0"
+      >
+        {detailsWorkplace && (
+          <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="bg-[#2563EB]/10 p-3 rounded-2xl">
@@ -334,13 +341,17 @@ export default function WorkplacesPage() {
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </BottomSheet>
 
       {/* --- MODAL: Editar / Adicionar --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
+      <BottomSheet
+        open={isModalOpen}
+        onClose={closeEditModal}
+        className="md:max-w-lg"
+        contentClassName="p-0"
+      >
+          <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex justify-between items-center p-5 sm:p-8 border-b border-slate-50">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl">{formData.id ? 'Editar Ponto Operacional' : 'Novo Ponto Operacional'}</h2>
@@ -350,11 +361,11 @@ export default function WorkplacesPage() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <form onSubmit={handleSaveWorkplace} className="p-5 sm:p-8 space-y-6">
+            <form onSubmit={handleSaveWorkplace} className="space-y-6 p-5 sm:p-8">
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Nome da Obra / Canteiro</label>
                 <input type="text" required placeholder="Ex: Residencial SafeEPI I"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold placeholder:font-normal"
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold placeholder:font-normal"
                   value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
               </div>
               <div className="space-y-2">
@@ -362,7 +373,7 @@ export default function WorkplacesPage() {
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input type="text" placeholder="Nome do encarregado"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold placeholder:font-normal"
+                    className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold placeholder:font-normal"
                     value={formData.manager_name} onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })} />
                 </div>
               </div>
@@ -372,7 +383,7 @@ export default function WorkplacesPage() {
                   <div className="relative">
                     <Handshake className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <select
-                      className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold"
+                      className="min-h-11 w-full appearance-none bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold"
                       value={formData.third_party_id}
                       onChange={(e) => setFormData({ ...formData, third_party_id: e.target.value })}
                     >
@@ -398,11 +409,11 @@ export default function WorkplacesPage() {
               <div className="pt-2 flex flex-col gap-3">
                 <div className="flex gap-4">
                   <button type="button" disabled={isSaving} onClick={closeEditModal}
-                    className="flex-1 px-4 py-4 text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-[0.2em] transition-all">
+                    className="min-h-11 flex-1 px-4 py-4 text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-[0.2em] transition-all">
                     Cancelar
                   </button>
                   <button type="submit" disabled={isSaving}
-                    className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-900/15 flex items-center justify-center">
+                    className="flex min-h-11 flex-[2] items-center justify-center rounded-2xl bg-[#2563EB] px-4 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]">
                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar Obra / Canteiro"}
                   </button>
                 </div>
@@ -416,13 +427,16 @@ export default function WorkplacesPage() {
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </BottomSheet>
 
       {/* --- MODAL: Confirmação de Exclusão --- */}
-      {deleteModal.open && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-2 border-blue-200">
+      <BottomSheet
+        open={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, linkedEmp: 0, linkedDel: 0 })}
+        className="md:max-w-md"
+        contentClassName="p-0"
+      >
+          <div className="w-full overflow-hidden rounded-3xl border-2 border-blue-200 bg-white shadow-2xl">
             <div className="bg-red-50 p-6 border-b border-blue-100 flex items-start gap-4">
               <div className="p-3 bg-red-100 rounded-2xl shrink-0">
                 <AlertTriangle className="w-6 h-6 text-[#2563EB]" />
@@ -454,21 +468,20 @@ export default function WorkplacesPage() {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                 <button onClick={() => setDeleteModal({ open: false, linkedEmp: 0, linkedDel: 0 })}
-                  className="flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all">
+                  className="min-h-11 flex-1 px-4 py-3 text-[10px] font-black text-slate-500 hover:text-slate-700 uppercase tracking-widest border border-slate-200 rounded-2xl transition-all">
                   Cancelar
                 </button>
                 <button onClick={handleConfirmDelete} disabled={isDeleting}
-                  className="flex-[2] px-4 py-3 text-xs font-black text-white bg-[#2563EB] hover:bg-red-700 rounded-2xl uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
+                  className="flex min-h-11 flex-[2] items-center justify-center gap-2 rounded-2xl bg-[#2563EB] px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-red-700">
                   {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   Confirmar Desativação
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+      </BottomSheet>
     </div>
   )
 }

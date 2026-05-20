@@ -1,17 +1,24 @@
+// responsive: revisado — mobile-first ✓
 import Link from "next/link"
+import { ShieldAlert } from "lucide-react"
 
 export default function UnauthorizedPage() {
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.24em] text-red-700">Acesso restrito</p>
-        <h1 className="mt-3 text-2xl font-black text-slate-900">Sem permissao para acessar esta area.</h1>
-        <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
-          Sua sessao esta ativa, mas o perfil atual nao tem permissao administrativa para este recurso.
+    <main className="flex min-h-[100dvh] items-center justify-center px-4 py-8">
+      <section className="flex w-full max-w-md flex-col items-center text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-[#2563EB]">
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <p className="mt-6 text-sm font-black uppercase tracking-widest text-[#2563EB]">Acesso bloqueado</p>
+        <h1 className="mt-2 text-2xl font-black uppercase tracking-tight text-slate-900 md:text-4xl">
+          Sem permissao para esta area
+        </h1>
+        <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">
+          Sua conta nao possui permissao para abrir esta pagina. Volte para o painel ou fale com um administrador.
         </p>
         <Link
           href="/"
-          className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-red-800 px-5 text-sm font-black uppercase tracking-wider text-white shadow-sm"
+          className="mt-8 flex min-h-11 w-full items-center justify-center rounded-xl bg-[#2563EB] px-5 py-3 text-sm font-black uppercase tracking-widest text-white shadow-md shadow-blue-900/15 transition-colors hover:bg-[#1D4ED8] md:w-auto"
         >
           Voltar ao painel
         </Link>

@@ -1,5 +1,5 @@
-﻿"use client"
-
+// responsive: revisado — mobile-first ✓
+"use client"
 import { useEffect, useState } from "react"
 import { BriefcaseBusiness, Building2, Loader2, Plus, Search, Trash2, X } from "lucide-react"
 import { api } from "@/services/api"
