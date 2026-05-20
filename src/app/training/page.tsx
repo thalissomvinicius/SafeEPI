@@ -874,6 +874,37 @@ export default function TrainingPage() {
           ) : (
             <>
             <div className="grid grid-cols-1 gap-4 bg-slate-50/60 p-4 md:hidden">
+              {filteredPendingDrafts.map((draft) => {
+                const status = getDraftVisualStatus(draft)
+                return (
+                  <MobileTableCard
+                    key={draft.key}
+                    title={draft.trainingName}
+                    subtitle={draft.employeeName}
+                    badge={{
+                      label: status === "completed" ? "Assinaturas concluídas" : status === "expired" ? "Link expirado" : "Aguardando assinatura",
+                      variant: status === "completed"
+                        ? "border-green-200 bg-green-50 text-green-700"
+                        : status === "expired"
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-amber-200 bg-amber-50 text-amber-700",
+                    }}
+                    expandable
+                    fields={[
+                      { label: "Data", value: new Date(draft.completionDate).toLocaleDateString() },
+                      { label: "Instrutor", value: draft.instructorName || "Não informado" },
+                      { label: "Validade", value: getTrainingExpiryDisplay(draft.trainingName, draft.expiryDate) },
+                      { label: "Assinatura", value: renderRemoteStatusText(draft.participantStatus || "idle", draft.participantExpiresAt || null, "colaborador") },
+                      { label: "Instrutor", value: renderRemoteStatusText(draft.instructorStatus || "idle", draft.instructorExpiresAt || null, "instrutor") },
+                    ]}
+                    actions={
+                      <button onClick={() => void openPendingDraft(draft)} className="min-h-11 w-full rounded-xl bg-amber-50 text-sm font-black uppercase tracking-widest text-amber-700">
+                        Abrir pendência
+                      </button>
+                    }
+                  />
+                )
+              })}
               {filteredTrainings.map((rec, i) => {
                 const statusLabel = getTrainingStatusLabel(rec.training_name, rec.expiry_date, rec.status)
                 return (
@@ -909,7 +940,7 @@ export default function TrainingPage() {
                   />
                 )
               })}
-              {filteredTrainings.length === 0 && (
+              {filteredPendingDrafts.length === 0 && filteredTrainings.length === 0 && (
                 <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-400 italic">
                   Nenhum treinamento registrado no banco de dados.
                 </div>
@@ -1013,7 +1044,7 @@ export default function TrainingPage() {
                   </tr>
                   )
                 })}
-                {filteredTrainings.length === 0 && (
+                {filteredPendingDrafts.length === 0 && filteredTrainings.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-6 py-10 text-center text-slate-400 italic font-medium">
                         Nenhum treinamento registrado no banco de dados.

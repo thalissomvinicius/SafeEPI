@@ -43,6 +43,7 @@ export default function ReportsPage() {
   const [specificMonthSel, setSpecificMonthSel] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
   const [reportScopeFilter, setReportScopeFilter] = useState<ReportScopeFilter>('own')
+  const [isCompactCharts, setIsCompactCharts] = useState(false)
   
   // Computed Data State
   const [allDeliveries, setAllDeliveries] = useState<DeliveryWithRelations[]>([])
@@ -56,6 +57,13 @@ export default function ReportsPage() {
   const [ppeUsageData, setPpeUsageData] = useState<{name: string, value: number}[]>([])
   
   const COLORS = [brandColor, '#1e293b', '#475569', '#64748b', '#94a3b8']
+
+  useEffect(() => {
+    const updateChartDensity = () => setIsCompactCharts(window.innerWidth < 768)
+    updateChartDensity()
+    window.addEventListener("resize", updateChartDensity)
+    return () => window.removeEventListener("resize", updateChartDensity)
+  }, [])
 
   // Auth protection
   useEffect(() => {
@@ -293,7 +301,7 @@ export default function ReportsPage() {
                 key={option.value}
                 type="button"
                 onClick={() => setReportScopeFilter(option.value)}
-                className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`min-h-11 rounded-lg px-2 py-2 text-[10px] font-black uppercase tracking-normal transition-all sm:px-3 sm:tracking-widest ${
                   reportScopeFilter === option.value
                     ? 'bg-[#2563EB] text-white shadow-sm shadow-blue-900/20'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
@@ -404,25 +412,25 @@ export default function ReportsPage() {
       {/* Seção de Gráficos Analíticos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Gráfico 1: Investimento por Canteiro */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm min-w-0">
-              <div className="flex items-center justify-between mb-8">
-                  <div>
-                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Investimento por Canteiro</h3>
+          <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+              <div className="mb-4 flex items-center justify-between gap-3 sm:mb-8">
+                  <div className="min-w-0">
+                      <h3 className="text-base font-black uppercase tracking-tighter text-slate-800 sm:text-lg">Investimento por Canteiro</h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Distribuição total de custos (R$)</p>
                   </div>
-                  <PieChartIcon className="w-5 h-5 text-[#2563EB]" />
+                  <PieChartIcon className="h-5 w-5 shrink-0 text-[#2563EB]" />
               </div>
               
-              <div className="aspect-video h-auto min-h-0 w-full min-w-0 md:h-[300px] md:min-h-[300px]">
+              <div className="h-[220px] w-full min-w-0 md:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie
                               data={investmentByWorkplace}
                               cx="50%"
-                              cy="50%"
-                              innerRadius={60}
-                              outerRadius={100}
-                              paddingAngle={5}
+                              cy={isCompactCharts ? "45%" : "50%"}
+                              innerRadius={isCompactCharts ? 38 : 60}
+                              outerRadius={isCompactCharts ? 68 : 100}
+                              paddingAngle={isCompactCharts ? 3 : 5}
                               dataKey="value"
                               animationDuration={1500}
                           >
@@ -435,25 +443,25 @@ export default function ReportsPage() {
                             formatter={(value: any) => `R$ ${Number(value).toLocaleString('pt-BR')}`}
                             contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                           />
-                          <Legend verticalAlign="bottom" height={36}/>
+                          <Legend verticalAlign="bottom" height={isCompactCharts ? 28 : 36} wrapperStyle={{ fontSize: isCompactCharts ? 10 : 12 }} />
                       </PieChart>
                   </ResponsiveContainer>
               </div>
           </div>
 
           {/* Gráfico 2: Top 5 EPIs entregues */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-8 shadow-sm min-w-0">
-              <div className="flex items-center justify-between mb-8">
-                  <div>
-                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Top 5 Consumo de EPIs</h3>
+          <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
+              <div className="mb-4 flex items-center justify-between gap-3 sm:mb-8">
+                  <div className="min-w-0">
+                      <h3 className="text-base font-black uppercase tracking-tighter text-slate-800 sm:text-lg">Top 5 Consumo de EPIs</h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Itens mais retirados pela equipe</p>
                   </div>
-                  <BarChartIcon className="w-5 h-5 text-[#2563EB]" />
+                  <BarChartIcon className="h-5 w-5 shrink-0 text-[#2563EB]" />
               </div>
               
-              <div className="aspect-video h-auto min-h-0 w-full min-w-0 md:h-[300px] md:min-h-[300px]">
+              <div className="h-[220px] w-full min-w-0 md:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={ppeUsageData} layout="vertical">
+                      <BarChart data={ppeUsageData} layout="vertical" margin={{ top: 4, right: isCompactCharts ? 8 : 16, bottom: 4, left: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                           <XAxis type="number" hide />
                           <YAxis 
@@ -461,8 +469,8 @@ export default function ReportsPage() {
                             type="category" 
                             axisLine={false} 
                             tickLine={false} 
-                            tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}}
-                            width={100}
+                            tick={{fill: '#64748b', fontSize: isCompactCharts ? 9 : 10, fontWeight: 700}}
+                            width={isCompactCharts ? 72 : 100}
                           />
                           <Tooltip 
                              cursor={{fill: `${brandColor}0D`}}
@@ -474,7 +482,7 @@ export default function ReportsPage() {
                             dataKey="value" 
                             fill={brandColor}
                             radius={[0, 10, 10, 0]} 
-                            barSize={20}
+                            barSize={isCompactCharts ? 14 : 20}
                             animationDuration={2000}
                           />
                       </BarChart>
