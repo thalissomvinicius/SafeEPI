@@ -418,7 +418,7 @@ export default function MovementsPage() {
           <button
             onClick={() => setShowPdfModal(true)}
             title="Gerar relatório em PDF"
-            className="flex-1 md:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+            className="flex-1 md:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20"
           >
             <FileDown className="w-4 h-4" />
             PDF
@@ -703,7 +703,7 @@ export default function MovementsPage() {
                               onClick={() => void handleDeliveryReceiptPDF(move)}
                               disabled={isDownloading}
                               title="Emitir comprovante de entrega do EPI"
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-[#1D4ED8] bg-[#2563EB] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/15 transition-all hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md disabled:opacity-40"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/15 transition-all hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20 disabled:opacity-40"
                             >
                               {isDownloading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />

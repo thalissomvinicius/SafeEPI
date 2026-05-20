@@ -260,13 +260,13 @@ export default function ThirdPartiesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 p-4 pb-24 md:p-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+    <div className="mx-auto max-w-[1440px] space-y-4 p-3 pb-20 md:p-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Tomadores / clientes atendidos</p>
-            <h1 className="mt-1 flex items-center gap-3 text-2xl font-black uppercase tracking-tighter text-slate-800">
-              <Handshake className="h-7 w-7 text-[#2563EB]" />
+            <h1 className="mt-1 flex items-center gap-2 text-2xl font-black uppercase tracking-tighter text-slate-800">
+              <Handshake className="h-6 w-6 text-[#2563EB]" />
               Terceiros
             </h1>
             <p className="mt-1 max-w-2xl text-sm font-medium text-slate-500">
@@ -282,7 +282,7 @@ export default function ThirdPartiesPage() {
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <Metric icon={Building2} label="Cadastrados" value={thirdParties.length} />
           <Metric icon={CheckCircle2} label="Ativos" value={activeCount} />
           <Metric icon={Handshake} label="Colaboradores" value={linkedEmployeesCount} />
@@ -290,12 +290,17 @@ export default function ThirdPartiesPage() {
         </div>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)] xl:items-start">
+      <div className="grid gap-4 xl:grid-cols-[minmax(620px,1fr)_390px] xl:items-start">
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cadastro operacional</p>
-              <h2 className="mt-1 text-base font-black uppercase tracking-tight text-slate-800">Terceiros cadastrados</h2>
+              <h2 className="mt-1 text-base font-black uppercase tracking-tight text-slate-800">
+                Terceiros cadastrados
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-[10px] tracking-widest text-slate-500">
+                  {filteredThirdParties.length}
+                </span>
+              </h2>
             </div>
             <div className="relative w-full sm:max-w-sm">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -310,7 +315,7 @@ export default function ThirdPartiesPage() {
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              <thead className="border-b border-slate-100 bg-slate-50/50 text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">
                 <tr>
                   <th className="px-4 py-3">Terceiro</th>
                   <th className="px-4 py-3">Contato</th>
@@ -322,25 +327,25 @@ export default function ThirdPartiesPage() {
               <tbody className="divide-y divide-slate-50">
                 {filteredThirdParties.map((thirdParty) => (
                   <tr key={thirdParty.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 align-top">
                       <p className="font-black uppercase tracking-tight text-slate-800">{thirdParty.trade_name || thirdParty.name}</p>
                       <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">{thirdParty.name}</p>
                       {thirdParty.cnpj && <p className="mt-0.5 text-[10px] font-bold text-slate-500">CNPJ {thirdParty.cnpj}</p>}
                     </td>
-                    <td className="px-4 py-3 text-xs font-bold text-slate-500">
+                    <td className="px-4 py-3 align-top text-xs font-bold text-slate-500">
                       {thirdParty.contact_name && <p className="text-slate-700">{thirdParty.contact_name}</p>}
                       {thirdParty.email && <p className="mt-1 flex items-center gap-1"><Mail className="h-3 w-3" /> {thirdParty.email}</p>}
                       {thirdParty.phone && <p className="mt-1 flex items-center gap-1"><Phone className="h-3 w-3" /> {thirdParty.phone}</p>}
                     </td>
-                    <td className="max-w-[220px] px-4 py-3 text-xs font-medium text-slate-500">{thirdParty.address || "-"}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="max-w-[220px] px-4 py-3 align-top text-xs font-medium text-slate-500">{thirdParty.address || "-"}</td>
+                    <td className="px-4 py-3 text-center align-top">
                       <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
                         thirdParty.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
                       }`}>
                         {thirdParty.active ? "Ativo" : "Inativo"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 align-top">
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => editThirdParty(thirdParty)}
@@ -375,7 +380,7 @@ export default function ThirdPartiesPage() {
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:sticky xl:top-4">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between xl:flex-col xl:items-stretch">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cobrança de EPIs</p>
             <h2 className="mt-1 text-base font-black uppercase tracking-tight text-slate-800">Relatório de entregas</h2>
@@ -384,7 +389,7 @@ export default function ThirdPartiesPage() {
           <select
             value={billingFilter}
             onChange={(event) => setBillingFilter(event.target.value)}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#2563EB]"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#2563EB]"
             title="Filtrar relatório por terceiro"
           >
             <option value="all">Todos os terceiros</option>
@@ -396,15 +401,15 @@ export default function ThirdPartiesPage() {
           </select>
         </div>
 
-        <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-3 xl:grid-cols-1">
-          <TextMetric icon={Package} label="Itens entregues" value={String(billingItemsCount)} />
-          <TextMetric icon={Building2} label="Registros" value={String(thirdPartyDeliveries.length)} />
-          <TextMetric icon={DollarSign} label="Total para cobrança" value={formatCurrency(totalBillingValue)} />
+        <div className="grid grid-cols-3 gap-2 border-b border-slate-100 p-3">
+          <CompactMetric icon={Package} label="Itens" value={String(billingItemsCount)} />
+          <CompactMetric icon={Building2} label="Registros" value={String(thirdPartyDeliveries.length)} />
+          <CompactMetric icon={DollarSign} label="Valor" value={formatCurrency(totalBillingValue)} />
         </div>
 
         {billingSummary.length > 0 && (
-          <div className="grid gap-3 border-b border-slate-100 p-4">
-            {billingSummary.map((summary) => (
+          <div className="grid gap-2 border-b border-slate-100 p-3">
+            {billingSummary.slice(0, 4).map((summary) => (
               <div key={summary.thirdParty.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <p className="text-sm font-black uppercase tracking-tight text-slate-800">{summary.thirdParty.trade_name || summary.thirdParty.name}</p>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-center">
@@ -426,58 +431,45 @@ export default function ThirdPartiesPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-              <tr>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Terceiro</th>
-                <th className="px-4 py-3">Colaborador</th>
-                <th className="px-4 py-3">EPI / CA</th>
-                <th className="px-4 py-3 text-center">Qtd</th>
-                <th className="px-4 py-3 text-right">Custo Unit.</th>
-                <th className="px-4 py-3 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {thirdPartyDeliveries.slice(0, 80).map(({ delivery, thirdPartyId }) => {
-                const thirdParty = thirdPartyById.get(thirdPartyId)
-                const unitCost = Number(delivery.ppe?.cost || 0)
-                const total = Number(delivery.quantity || 0) * unitCost
+        <div className="max-h-[360px] overflow-y-auto p-3">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Ultimas entregas vinculadas</p>
+          <div className="space-y-2">
+            {thirdPartyDeliveries.slice(0, 12).map(({ delivery, thirdPartyId }) => {
+              const thirdParty = thirdPartyById.get(thirdPartyId)
+              const unitCost = Number(delivery.ppe?.cost || 0)
+              const total = Number(delivery.quantity || 0) * unitCost
 
-                return (
-                  <tr key={delivery.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3 text-xs font-bold text-slate-500">
-                      {new Date(delivery.delivery_date).toLocaleDateString("pt-BR")}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-black uppercase text-slate-700">
-                      {thirdParty?.trade_name || thirdParty?.name || "Terceiro"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-black uppercase text-slate-800">{delivery.employee?.full_name || "Colaborador"}</p>
-                      <p className="mt-1 text-[10px] font-bold text-slate-400">{delivery.employee?.cpf}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-black uppercase text-slate-700">{delivery.ppe?.name || "EPI"}</p>
-                      <p className="mt-1 text-[10px] font-bold text-slate-400">CA {delivery.ppe?.ca_number || "N/A"}</p>
-                    </td>
-                    <td className="px-4 py-3 text-center text-xs font-black text-slate-700">{delivery.quantity}</td>
-                    <td className="px-4 py-3 text-right text-xs font-bold text-slate-500">{formatCurrency(unitCost)}</td>
-                    <td className="px-4 py-3 text-right text-xs font-black text-emerald-700">{formatCurrency(total)}</td>
-                  </tr>
-                )
-              })}
-              {thirdPartyDeliveries.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-xs font-bold uppercase tracking-widest text-slate-400">
-                    Nenhuma entrega vinculada a terceiros.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              return (
+                <article key={delivery.id} className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-black uppercase text-slate-800">
+                        {delivery.employee?.full_name || "Colaborador"}
+                      </p>
+                      <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        {thirdParty?.trade_name || thirdParty?.name || "Terceiro"} - {new Date(delivery.delivery_date).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-xs font-black text-emerald-700">{formatCurrency(total)}</p>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="min-w-0 truncate text-[10px] font-black uppercase text-slate-600">
+                      {delivery.ppe?.name || "EPI"} - CA {delivery.ppe?.ca_number || "N/A"}
+                    </p>
+                    <p className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-500">Qtd {delivery.quantity}</p>
+                  </div>
+                </article>
+              )
+            })}
+            {thirdPartyDeliveries.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-xs font-bold uppercase tracking-widest text-slate-400">
+                Nenhuma entrega vinculada a terceiros.
+              </div>
+            )}
+          </div>
         </div>
-      </section>
+
+        </section>
       </div>
 
 
@@ -574,12 +566,12 @@ function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string;
   )
 }
 
-function TextMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+function CompactMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-      <Icon className="h-4 w-4 text-[#2563EB]" />
-      <p className="mt-2 text-lg font-black text-slate-900">{value}</p>
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+    <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+      <Icon className="h-3.5 w-3.5 text-[#2563EB]" />
+      <p className="mt-2 truncate text-sm font-black text-slate-900" title={value}>{value}</p>
+      <p className="truncate text-[8px] font-black uppercase tracking-widest text-slate-400">{label}</p>
     </div>
   )
 }
