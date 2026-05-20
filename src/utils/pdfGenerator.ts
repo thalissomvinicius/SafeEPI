@@ -122,6 +122,42 @@ function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number)
   doc.text(value || "-", x, y + 5)
 }
 
+function drawManualSignatureLine(
+  doc: jsPDF,
+  centerX: number,
+  lineY: number,
+  width: number,
+  signerName: string,
+  role = "Assinatura manual",
+  note = "Assinar manualmente sobre a linha"
+) {
+  doc.setDrawColor(148, 163, 184)
+  doc.setLineWidth(0.35)
+  doc.line(centerX - width / 2, lineY, centerX + width / 2, lineY)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(7.5)
+  doc.setTextColor(30, 41, 59)
+  doc.text((signerName || "Responsavel pela assinatura").toUpperCase(), centerX, lineY + 5, { align: "center" })
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(6.5)
+  doc.setTextColor(100, 116, 139)
+  doc.text(role, centerX, lineY + 9, { align: "center" })
+  doc.setFontSize(6)
+  doc.setTextColor(148, 163, 184)
+  doc.text(note, centerX, lineY + 13, { align: "center" })
+}
+
+function drawSignatureCellLine(doc: jsPDF, cell: { x: number; y: number; width: number; height: number }) {
+  const lineY = cell.y + cell.height - 5
+  doc.setDrawColor(148, 163, 184)
+  doc.setLineWidth(0.25)
+  doc.line(cell.x + 3, lineY, cell.x + cell.width - 3, lineY)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(5.5)
+  doc.setTextColor(100, 116, 139)
+  doc.text("Assinatura manual", cell.x + cell.width / 2, Math.min(lineY + 3, cell.y + cell.height - 1), { align: "center" })
+}
+
 export interface DeliveryPDFData {
   employeeName: string
   employeeCpf: string
@@ -134,7 +170,7 @@ export interface DeliveryPDFData {
   reason?: string
   items?: { ppeName: string; ppeCaNumber: string; caExpiry?: string; quantity: number; reason: string; autoReturnNote?: string }[]
   authMethod: AuthMethod
-  signatureBase64: string
+  signatureBase64?: string
   photoBase64?: string
   ipAddress?: string
   location?: string
@@ -152,28 +188,11 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     ? data.items
     : [{ ppeName: data.ppeName || "", ppeCaNumber: data.ppeCaNumber || "", caExpiry: data.ppeCaExpiry, quantity: data.quantity || 0, reason: data.reason || "" }]
 
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pageWidth, 40, "F")
+  addPageHeader(doc, "FICHA DE ENTREGA DE EPI", "NR-06 | Certificado de Uso Individual")
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  if (!addPdfLogo(doc, 14, 8, 26, 14)) {
-    doc.text(getPdfCompanyName().toUpperCase(), 14, 15)
-  }
-
-  doc.setFontSize(18)
-  doc.text("FICHA DE ENTREGA DE EPI", pageWidth / 2, 22, { align: "center" })
-
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(9)
-  doc.text("NR-06 | Certificado de Uso Individual", pageWidth / 2, 30, { align: "center" })
-
-  doc.setFontSize(7)
   const today = data.deliveryDate
     ? `${formatDeliveryDate(data.deliveryDate)} ${formatDeliveryTime(data.deliveryDate)}`
     : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
-  doc.text(today, pageWidth - 14, 15, { align: "right" })
 
   let currentY = 50
   doc.setFillColor(255, 255, 255)
@@ -245,11 +264,12 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
 
   currentY += 35
 
-  const hasManualAndPhoto = data.authMethod === 'manual_facial' && Boolean(data.photoBase64)
+  const hasSignature = Boolean(data.signatureBase64)
+  const hasManualAndPhoto = data.authMethod === 'manual_facial' && Boolean(data.photoBase64) && hasSignature
   let isPhoto = data.authMethod === 'facial'
   let imgRatio = 1
 
-  if (data.signatureBase64) {
+  if (hasSignature && data.signatureBase64) {
     try {
       const imgProps = doc.getImageProperties(data.signatureBase64)
       imgRatio = imgProps.width / imgProps.height
@@ -258,7 +278,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     } catch { /* keep declared method */ }
   }
 
-  if (hasManualAndPhoto && data.photoBase64) {
+  if (hasManualAndPhoto && data.photoBase64 && data.signatureBase64) {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
@@ -356,7 +376,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
-    doc.text("ASSINATURA DO COLABORADOR", pageWidth / 2, currentY, { align: "center" })
+    doc.text(hasSignature ? "ASSINATURA DO COLABORADOR" : "ASSINATURA DO COLABORADOR (MANUAL)", pageWidth / 2, currentY, { align: "center" })
 
     const sigBoxW = 100
     const sigBoxH = 30
@@ -366,7 +386,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.setFillColor(252, 252, 252)
     doc.roundedRect(sigBoxX, currentY + 4, sigBoxW, sigBoxH, 2, 2, "FD")
 
-    try {
+    if (data.signatureBase64) try {
       const imgProps = doc.getImageProperties(data.signatureBase64)
       const sigRatio = imgProps.width / imgProps.height
       let drawW = sigBoxW - 8
@@ -380,15 +400,16 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
       doc.addImage(data.signatureBase64, 'PNG', drawX, drawY, drawW, drawH)
     } catch {}
 
-    doc.setDrawColor(200, 200, 200)
-    doc.line(sigBoxX + 10, currentY + sigBoxH + 6, sigBoxX + sigBoxW - 10, currentY + sigBoxH + 6)
+    drawManualSignatureLine(
+      doc,
+      pageWidth / 2,
+      currentY + sigBoxH + 6,
+      sigBoxW - 20,
+      data.employeeName,
+      hasSignature ? "Assinatura digital registrada" : "Assinatura presencial do colaborador"
+    )
 
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(30, 41, 59)
-    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + sigBoxH + 12, { align: "center" })
-
-    currentY += sigBoxH + 22
+    currentY += sigBoxH + 28
   }
 
   doc.setFillColor(252, 252, 252)
@@ -449,7 +470,7 @@ export interface ReturnPDFData {
   newItemName?: string
   newItemCa?: string
   authMethod: AuthMethod
-  signatureBase64: string
+  signatureBase64?: string
   photoBase64?: string
   validationHash?: string
 }
@@ -523,25 +544,27 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   doc.setFillColor(248, 250, 252)
   doc.setDrawColor(226, 232, 240)
   doc.roundedRect(14, sigY, pageWidth - 28, 50, 3, 3, "FD")
+  const hasReturnSignature = Boolean(data.signatureBase64)
   try {
-    if (data.authMethod === 'manual_facial' && data.photoBase64) {
+    if (data.signatureBase64 && data.authMethod === 'manual_facial' && data.photoBase64) {
       doc.addImage(data.photoBase64, 'JPEG', pageWidth / 2 - 48, sigY + 5, 30, 30)
       doc.addImage(data.signatureBase64, 'PNG', pageWidth / 2 - 10, sigY + 8, 70, 24)
-    } else if (data.authMethod === 'facial') {
+    } else if (data.signatureBase64 && data.authMethod === 'facial') {
       doc.addImage(data.signatureBase64, 'JPEG', (pageWidth - 40) / 2, sigY + 3, 40, 40)
-    } else {
+    } else if (data.signatureBase64) {
       doc.addImage(data.signatureBase64, 'PNG', (pageWidth - 80) / 2, sigY + 5, 80, 30)
     }
   } catch { /* */ }
-  doc.setLineWidth(0.5)
-  doc.line(40, sigY + 42, pageWidth - 40, sigY + 42)
-  doc.setFontSize(7.5)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(100, 116, 139)
-  doc.text(data.employeeName.toUpperCase(), pageWidth / 2, sigY + 47, { align: "center" })
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(6.5)
-  doc.text(`${data.authMethod === 'facial' ? 'Biometria Facial' : 'Assinatura Manual'} - ${format(new Date(), "dd/MM/yyyy HH:mm")}`, pageWidth / 2, sigY + 52, { align: "center" })
+  drawManualSignatureLine(
+    doc,
+    pageWidth / 2,
+    sigY + 42,
+    pageWidth - 80,
+    data.employeeName,
+    hasReturnSignature
+      ? `${data.authMethod === 'facial' ? 'Biometria Facial' : 'Assinatura Manual'} - ${format(new Date(), "dd/MM/yyyy HH:mm")}`
+      : "Assinatura presencial do colaborador"
+  )
 
   addPageFooter(doc, hash)
   return doc.output("blob")
@@ -687,13 +710,16 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       if (hookData.section === 'body' && hookData.column.index === 7) {
         const rowIndex = hookData.row.index
         const item = itemsWithSigs[rowIndex]
-        if (!item?.signatureBase64 && !item?.photoBase64) return
-
         const cell = hookData.cell
         const maxW = cell.width - 4
         const maxH = cell.height - 4
         const x = cell.x + 2
         const y = cell.y + 2
+
+        if (!item?.signatureBase64 && !item?.photoBase64) {
+          drawSignatureCellLine(doc, cell)
+          return
+        }
 
         try {
           const drawImageFit = (imageBase64: string, areaX: number, areaY: number, areaW: number, areaH: number) => {
@@ -2154,7 +2180,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       String(m.quantity),
       m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
       m.workplace?.name || "Geral",
-      signatureImages.has(m.id) ? "" : "S/ASSINATURA"
+      ""
     ]),
     headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7, cellPadding: 2.2, valign: "middle" },
     bodyStyles: { fontSize: 6.6, cellPadding: 2.2, valign: "middle" },
@@ -2190,7 +2216,10 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       if (hookData.section !== "body" || hookData.column.index !== 8) return
       const movement = data.movements[hookData.row.index]
       const image = movement ? signatureImages.get(movement.id) : null
-      if (!image) return
+      if (!image) {
+        drawSignatureCellLine(doc, hookData.cell)
+        return
+      }
 
       try {
         const props = doc.getImageProperties(image)
@@ -2209,8 +2238,6 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
 
   const finalY = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY || 150
   const signY = Math.min(ph - 32, finalY + 16)
-  const signX = pw / 2 - 42
-
   if (data.technicianSignatureBase64) {
     try {
       const props = doc.getImageProperties(data.technicianSignatureBase64)
@@ -2221,17 +2248,15 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       doc.addImage(data.technicianSignatureBase64, fmt, pw / 2 - drawW / 2, signY - drawH - 2, drawW, drawH)
     } catch {}
   }
-
-  doc.setDrawColor(148, 163, 184)
-  doc.line(signX, signY, signX + 84, signY)
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(30, 41, 59)
-  doc.text((data.technicianName || "Responsável técnico").toUpperCase(), pw / 2, signY + 5, { align: "center" })
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.setTextColor(100, 116, 139)
-  doc.text(data.technicianRole || "Responsável técnico pelo relatório", pw / 2, signY + 10, { align: "center" })
+  drawManualSignatureLine(
+    doc,
+    pw / 2,
+    signY,
+    84,
+    data.technicianName || "Responsavel tecnico",
+    data.technicianRole || "Responsavel tecnico pelo relatorio",
+    data.technicianSignatureBase64 ? "Assinatura digital registrada" : "Assinar manualmente sobre a linha"
+  )
 
   doc.setFillColor(r, g, b)
   doc.rect(0, ph - 14, pw, 14, "F")
