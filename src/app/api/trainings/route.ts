@@ -55,6 +55,66 @@ function getFullTraining(training: Record<string, unknown>) {
   return payload
 }
 
+type TrainingWithEmployeeCompany = Record<string, unknown> & {
+  company_id?: string | null
+  employee?: {
+    full_name?: string | null
+    cpf?: string | null
+    company_id?: string | null
+  } | null
+}
+
+function stripEmployeeCompanyId(training: TrainingWithEmployeeCompany) {
+  if (!training.employee) return training
+  const employee = {
+    full_name: training.employee.full_name,
+    cpf: training.employee.cpf,
+  }
+  return { ...training, employee }
+}
+
+function belongsToCompany(training: TrainingWithEmployeeCompany, companyId: string) {
+  return training.company_id === companyId || (!training.company_id && training.employee?.company_id === companyId)
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "DIRETORIA"])
+  if (!auth.authorized) {
+    return auth.response
+  }
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
+
+    const query = supabaseAdmin
+      .from("trainings")
+      .select("*, employee:employees!trainings_employee_id_fkey(full_name, cpf, company_id)")
+      .order("completion_date", { ascending: false })
+
+    if (companyId) {
+      query.or(`company_id.eq.${companyId},company_id.is.null`)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error("[API trainings] List error:", error)
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
+    }
+
+    const trainings = (data || []) as TrainingWithEmployeeCompany[]
+    const scopedTrainings = companyId
+      ? trainings.filter((training) => belongsToCompany(training, companyId))
+      : trainings
+
+    return NextResponse.json({ trainings: scopedTrainings.map(stripEmployeeCompanyId) })
+  } catch (err) {
+    console.error("[API trainings] Unexpected list error:", err)
+    return NextResponse.json({ error: "Erro interno ao carregar treinamentos." }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
   if (!auth.authorized) {

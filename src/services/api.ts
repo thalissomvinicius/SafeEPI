@@ -1538,11 +1538,15 @@ export const api = {
   // --- Treinamentos ---
   async getTrainings() {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('trainings').select('*, employee:employees!trainings_employee_id_fkey(full_name, cpf)').order('completion_date', { ascending: false });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) throw error;
-    return data as TrainingWithRelations[];
+    const storedMasterCompanyId = getStoredMasterCompanyId();
+    const params = new URLSearchParams();
+    if (companyId) params.set("company_id", companyId);
+    if (!companyId && storedMasterCompanyId) params.set("company_id", storedMasterCompanyId);
+
+    const response = await fetchWithAuthRetry(`/api/trainings${params.size ? `?${params.toString()}` : ""}`);
+    const result = await readResponseJson<{ error?: string; trainings?: TrainingWithRelations[] }>(response);
+    if (!response.ok) throw new Error(result.error || "Erro ao carregar treinamentos.");
+    return result.trainings || [];
   },
 
   async addTraining(training: Omit<Training, 'id' | 'created_at'>): Promise<AddTrainingResult> {
