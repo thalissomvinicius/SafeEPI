@@ -23,6 +23,9 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
 ]
 
+// A CSP usa nonce por request e fica no middleware.ts em modo Report-Only.
+// O next.config.ts mantem apenas headers estaticos que nao dependem do request.
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
@@ -48,6 +51,10 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
     ]
+  },
+  webpack(config) {
+    config.cache = false
+    return config
   },
 }
 

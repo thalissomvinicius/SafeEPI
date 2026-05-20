@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { normalizeStoragePath, signStorageValue } from "@/lib/privateStorage"
 
 type CompanyPayload = {
   id?: string
@@ -41,6 +42,14 @@ async function getCompanyCounts(companyId: string) {
   return Object.fromEntries(entries)
 }
 
+async function withSignedCompanyLogo<T extends { logo_url?: string | null }>(company: T) {
+  return {
+    ...company,
+    logo_storage_path: company.logo_url || null,
+    logo_url: await signStorageValue(company.logo_url),
+  }
+}
+
 function sanitizeCompanyPayload(payload: CompanyPayload) {
   return {
     name: payload.name?.trim(),
@@ -49,7 +58,7 @@ function sanitizeCompanyPayload(payload: CompanyPayload) {
     email: payload.email?.trim() || null,
     phone: payload.phone?.trim() || null,
     address: payload.address?.trim() || null,
-    logo_url: payload.logo_url?.trim() || null,
+    logo_url: normalizeStoragePath(payload.logo_url) || payload.logo_url?.trim() || null,
     primary_color: payload.primary_color || "#2563EB",
     active: payload.active ?? true,
     training_enabled: payload.training_enabled ?? false,
@@ -91,11 +100,12 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error("[companies][GET] list error:", error)
+      return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }
 
     const companies = await Promise.all(
-      (data || []).map(async (company) => ({
+      (data || []).map(async (company) => withSignedCompanyLogo({
         ...company,
         ...(await getCompanyCounts(company.id)),
       }))
@@ -103,8 +113,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ companies })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erro interno do servidor"
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error("[companies][GET] unexpected error:", err)
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }
 }
 
@@ -134,13 +144,14 @@ export async function POST(request: Request) {
     }
 
     if (result.error) {
-      return NextResponse.json({ error: result.error.message }, { status: 400 })
+      console.error("[companies][POST] insert error:", result.error)
+      return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }
 
-    return NextResponse.json({ company: result.data })
+    return NextResponse.json({ company: await withSignedCompanyLogo(result.data) })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erro interno do servidor"
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error("[companies][POST] unexpected error:", err)
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }
 }
 
@@ -177,12 +188,13 @@ export async function PUT(request: Request) {
     }
 
     if (result.error) {
-      return NextResponse.json({ error: result.error.message }, { status: 400 })
+      console.error("[companies][PUT] update error:", result.error)
+      return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }
 
-    return NextResponse.json({ company: result.data })
+    return NextResponse.json({ company: await withSignedCompanyLogo(result.data) })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erro interno do servidor"
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error("[companies][PUT] unexpected error:", err)
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }
 }

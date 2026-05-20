@@ -205,7 +205,13 @@ export default function MovementsPage() {
       const signedDocument = getSignedDocumentForDelivery(delivery.id)
 
       if (signedDocument?.document_url) {
-        const archivedResponse = await fetch(signedDocument.document_url)
+        const documentUrl = await api.getPrivateAssetUrl(
+          signedDocument.storage_path || signedDocument.document_url,
+          "download",
+          signedDocument.file_name || `Comprovante_${delivery.id.slice(0, 8)}.pdf`,
+        )
+        if (!documentUrl) throw new Error("Nao foi possivel gerar o link seguro do PDF.")
+        const archivedResponse = await fetch(documentUrl)
         const archivedBlob = await archivedResponse.blob()
         openPdfDialog(archivedBlob, signedDocument.file_name || `Comprovante_${delivery.id.slice(0, 8)}.pdf`, {
           title: "Comprovante arquivado",
@@ -215,9 +221,15 @@ export default function MovementsPage() {
         return
       }
 
-      const base64Signature = await urlToBase64(delivery.signature_url)
+      const signatureUrl = await api.getPrivateAssetUrl(delivery.signature_storage_path || delivery.signature_url, "download")
+      const base64Signature = await urlToBase64(signatureUrl || delivery.signature_url)
       const photoBase64 = signedDocument?.photo_evidence_url
-        ? await urlToBase64(signedDocument.photo_evidence_url).catch(() => undefined)
+        ? await urlToBase64(
+          await api.getPrivateAssetUrl(
+            signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url,
+            "download",
+          ) || signedDocument.photo_evidence_url,
+        ).catch(() => undefined)
         : undefined
       const authMethod = signedDocument?.auth_method === "manual_facial" || delivery.auth_method === "manual_facial"
         ? "manual_facial"

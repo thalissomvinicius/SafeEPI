@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>SafeEPI — Sistema SESMT Digital | Proposta Comercial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070B14;
+    --bg-2:#0B1220;
+    --panel:rgba(255,255,255,0.035);
+    --panel-2:rgba(255,255,255,0.06);
+    --border:rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.16);
+    --text:#F8FAFC;
+    --text-2:#94A3B8;
+    --text-3:#64748B;
+    --brand:#2563EB;
+    --brand-2:#3B82F6;
+    --brand-glow:rgba(37,99,235,0.35);
+    --green:#10B981;
+    --green-glow:rgba(16,185,129,0.30);
+    --amber:#F59E0B;
+    --red:#EF4444;
+    --gold:#FBBF24;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    font-weight:400;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    scroll-behavior:smooth;
+  }
+  body{
+    scroll-snap-type:y mandatory;
+    overflow-y:scroll;
+    height:100vh;
+  }
+  /* progress bar */
+  .progress{
+    position:fixed;top:0;left:0;height:3px;background:var(--brand);
+    width:0%;z-index:100;
+    box-shadow:0 0 12px var(--brand-glow);
+    transition:width .25s ease;
+  }
+  /* slide counter */
+  .counter{
+    position:fixed;bottom:16px;right:24px;z-index:90;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--text-3);letter-spacing:.2em;
+    padding:6px 12px;background:rgba(0,0,0,.4);border:1px solid var(--border);
+    backdrop-filter:blur(8px);border-radius:999px;
+  }
+  .nav-hint{
+    position:fixed;bottom:16px;left:24px;z-index:90;
+    font-size:10px;color:var(--text-3);letter-spacing:.2em;text-transform:uppercase;
+    padding:6px 12px;background:rgba(0,0,0,.4);border:1px solid var(--border);
+    backdrop-filter:blur(8px);border-radius:999px;
+    font-weight:600;
+  }
+  .nav-hint kbd{
+    font-family:inherit;background:rgba(255,255,255,.08);padding:1px 5px;
+    border-radius:4px;border:1px solid var(--border-strong);margin:0 2px;
+  }
+  /* slides */
+  .slide{
+    width:100vw;min-height:100vh;
+    scroll-snap-align:start;
+    display:flex;align-items:center;justify-content:center;
+    padding:5vh 6vw;
+    position:relative;
+    overflow:hidden;
+  }
+  .slide-inner{width:100%;max-width:1280px;position:relative;z-index:2}
+  /* backgrounds */
+  .bg-grid::before{
+    content:"";position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size:60px 60px;
+    mask-image:radial-gradient(ellipse at center,black 30%,transparent 75%);
+    -webkit-mask-image:radial-gradient(ellipse at center,black 30%,transparent 75%);
+    z-index:0;
+  }
+  .bg-glow-blue::after{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse 60% 50% at 50% 50%, var(--brand-glow), transparent 70%);
+    z-index:1;pointer-events:none;
+  }
+  .bg-glow-green::after{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse 60% 50% at 50% 50%, var(--green-glow), transparent 70%);
+    z-index:1;pointer-events:none;
+  }
+  .bg-glow-red::after{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse 60% 50% at 50% 50%, rgba(239,68,68,.18), transparent 70%);
+    z-index:1;pointer-events:none;
+  }
+  .bg-glow-amber::after{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse 60% 50% at 50% 50%, rgba(245,158,11,.18), transparent 70%);
+    z-index:1;pointer-events:none;
+  }
+  .bg-vignette::before{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.65) 100%);
+    z-index:1;pointer-events:none;
+  }
+  /* typography */
+  .kicker{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;letter-spacing:.25em;text-transform:uppercase;
+    color:var(--brand-2);font-weight:700;
+    padding:6px 12px;background:rgba(37,99,235,.1);
+    border:1px solid rgba(37,99,235,.25);
+    border-radius:999px;margin-bottom:24px;
+  }
+  .kicker.green{color:var(--green);background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.25)}
+  .kicker.amber{color:var(--amber);background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.25)}
+  .kicker.red{color:var(--red);background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.25)}
+  .kicker-dot{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+  h1.mega{
+    font-size:clamp(48px,7vw,108px);font-weight:900;
+    line-height:.95;letter-spacing:-.04em;
+  }
+  h1.title{
+    font-size:clamp(40px,5.5vw,80px);font-weight:900;
+    line-height:1;letter-spacing:-.035em;
+  }
+  h2.sub{
+    font-size:clamp(28px,3.5vw,52px);font-weight:800;
+    line-height:1.05;letter-spacing:-.025em;
+  }
+  h3.h3{
+    font-size:clamp(20px,2vw,28px);font-weight:700;
+    letter-spacing:-.01em;line-height:1.2;
+  }
+  p.lead{
+    font-size:clamp(16px,1.4vw,22px);color:var(--text-2);
+    font-weight:400;line-height:1.5;max-width:720px;
+  }
+  p.body{font-size:14px;color:var(--text-2);line-height:1.6}
+  .muted{color:var(--text-3)}
+  .grad-text{
+    background:linear-gradient(135deg,var(--brand-2) 0%,#60A5FA 50%,#A78BFA 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .grad-text-green{
+    background:linear-gradient(135deg,var(--green) 0%,#34D399 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .grad-text-amber{
+    background:linear-gradient(135deg,var(--amber) 0%,var(--gold) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .grad-text-red{
+    background:linear-gradient(135deg,var(--red) 0%,#FB923C 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  /* helmet logo */
+  .logo{
+    display:inline-flex;align-items:center;gap:14px;font-weight:900;
+  }
+  .logo-mark{
+    width:44px;height:44px;border-radius:12px;
+    background:linear-gradient(135deg,#1E40AF 0%,#3B82F6 100%);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 24px rgba(37,99,235,.45);
+  }
+  .logo-mark svg{width:24px;height:24px;color:white}
+  .logo-text{font-size:20px;letter-spacing:-.02em}
+  .logo-text span{color:var(--brand-2)}
+  /* cards */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:24px;
+    position:relative;
+    transition:all .3s ease;
+  }
+  .card.solid{background:var(--bg-2)}
+  .card-hover:hover{border-color:var(--border-strong);background:var(--panel-2);transform:translateY(-2px)}
+  /* grid helpers */
+  .grid{display:grid;gap:20px}
+  .g-2{grid-template-columns:1fr 1fr}
+  .g-3{grid-template-columns:repeat(3,1fr)}
+  .g-4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:900px){
+    .g-2,.g-3,.g-4{grid-template-columns:1fr}
+  }
+  /* number callout */
+  .stat-big{
+    font-size:clamp(72px,10vw,160px);
+    font-weight:900;line-height:.9;letter-spacing:-.05em;
+    font-family:'Inter',sans-serif;
+  }
+  .stat-sm{
+    font-size:clamp(32px,4vw,56px);
+    font-weight:900;line-height:.95;letter-spacing:-.03em;
+  }
+  /* icon circles */
+  .icon-circle{
+    width:56px;height:56px;border-radius:14px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.3);
+    flex-shrink:0;
+  }
+  .icon-circle.green{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3)}
+  .icon-circle.amber{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3)}
+  .icon-circle.red{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3)}
+  .icon-circle svg{width:26px;height:26px}
+  /* divider */
+  .div{height:1px;background:var(--border);margin:24px 0}
+  /* check / x */
+  .check{color:var(--green)}.x{color:var(--red)}.dash{color:var(--text-3)}
+  /* anim on visible */
+  .fade-up{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s ease}
+  .slide.active .fade-up{opacity:1;transform:none}
+  .slide.active .fade-up.d1{transition-delay:.08s}
+  .slide.active .fade-up.d2{transition-delay:.18s}
+  .slide.active .fade-up.d3{transition-delay:.28s}
+  .slide.active .fade-up.d4{transition-delay:.38s}
+  .slide.active .fade-up.d5{transition-delay:.48s}
+  .slide.active .fade-up.d6{transition-delay:.58s}
+  /* utility */
+  .row{display:flex;align-items:center;gap:14px}
+  .col{display:flex;flex-direction:column;gap:14px}
+  .between{display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .pill{
+    display:inline-block;padding:4px 10px;border-radius:999px;
+    font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+    background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text-2);
+  }
+  .pill.brand{background:rgba(37,99,235,.12);border-color:rgba(37,99,235,.3);color:var(--brand-2)}
+  .pill.green{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3);color:var(--green)}
+  .pill.red{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:var(--red)}
+  .pill.gold{background:rgba(251,191,36,.14);border-color:rgba(251,191,36,.32);color:var(--gold)}
+
+  /* table */
+  table.compare{
+    width:100%;border-collapse:separate;border-spacing:0;
+    background:var(--bg-2);border:1px solid var(--border);
+    border-radius:16px;overflow:hidden;
+    font-size:14px;
+  }
+  table.compare th,table.compare td{
+    padding:14px 16px;text-align:left;border-bottom:1px solid var(--border);
+  }
+  table.compare th{
+    font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--text-3);background:rgba(255,255,255,.02);
+  }
+  table.compare td.feat{color:var(--text);font-weight:600}
+  table.compare th.us,table.compare td.us{
+    background:linear-gradient(180deg,rgba(37,99,235,.18) 0%,rgba(37,99,235,.06) 100%);
+    color:var(--brand-2);
+  }
+  table.compare th.us{color:white}
+  table.compare tr:last-child td{border-bottom:none}
+  /* price */
+  .price-card{
+    background:linear-gradient(180deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.01) 100%);
+    border:1px solid var(--border);border-radius:24px;
+    padding:36px 32px;position:relative;overflow:hidden;
+  }
+  .price-card.featured{
+    background:linear-gradient(180deg,rgba(37,99,235,.18) 0%,rgba(37,99,235,.04) 100%);
+    border-color:rgba(37,99,235,.45);
+    box-shadow:0 30px 90px -30px rgba(37,99,235,.5);
+  }
+  .price-card .price-value{
+    font-size:84px;font-weight:900;line-height:.9;letter-spacing:-.04em;
+  }
+  .price-card .price-cents{font-size:32px;font-weight:800;color:var(--text-2);}
+  .price-card .price-period{font-size:14px;color:var(--text-3);font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+  .feat-list{display:flex;flex-direction:column;gap:12px;margin-top:24px}
+  .feat-list li{display:flex;align-items:flex-start;gap:10px;list-style:none;font-size:14px;color:var(--text-2);line-height:1.4}
+  .feat-list li svg{flex-shrink:0;margin-top:2px}
+  /* phone mockup */
+  .phone{
+    width:280px;height:560px;
+    background:#000;border-radius:36px;
+    border:8px solid #1A2030;
+    padding:14px;
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05);
+    position:relative;
+  }
+  .phone::before{
+    content:"";position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    width:80px;height:18px;background:#000;border-radius:0 0 14px 14px;z-index:2;
+  }
+  .phone-screen{
+    width:100%;height:100%;background:#0B1220;border-radius:24px;overflow:hidden;
+    display:flex;flex-direction:column;
+    position:relative;
+  }
+  .phone-screen .ph-head{
+    padding:36px 18px 12px;font-size:10px;color:var(--text-3);
+    letter-spacing:.2em;text-transform:uppercase;font-weight:700;
+  }
+  .phone-screen .ph-title{
+    padding:0 18px 14px;font-size:18px;font-weight:800;letter-spacing:-.02em;
+  }
+  .phone-screen .ph-card{
+    margin:0 14px 12px;padding:14px;background:rgba(255,255,255,.05);
+    border-radius:12px;border:1px solid var(--border);
+  }
+  .phone-screen .ph-sig{
+    margin:0 14px;height:120px;background:rgba(255,255,255,.04);
+    border:1px dashed rgba(255,255,255,.15);border-radius:12px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--text-3);font-size:11px;letter-spacing:.15em;
+  }
+  .phone-screen .ph-btn{
+    margin:14px;padding:14px;background:linear-gradient(135deg,#1E40AF,#3B82F6);
+    color:white;font-weight:800;text-align:center;border-radius:12px;font-size:13px;
+    box-shadow:0 10px 30px -10px rgba(37,99,235,.6);
+  }
+  /* arrow */
+  .arrow{
+    display:inline-flex;align-items:center;gap:8px;color:var(--brand-2);
+    font-size:13px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+  }
+  /* cover specific */
+  .cover-glow{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:1200px;height:1200px;border-radius:50%;
+    background:radial-gradient(closest-side,rgba(37,99,235,.22),transparent 70%);
+    filter:blur(20px);z-index:0;pointer-events:none;
+  }
+  .corner-mark{
+    position:absolute;top:32px;left:32px;z-index:5;
+  }
+  .corner-info{
+    position:absolute;top:32px;right:32px;z-index:5;
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;
+    color:var(--text-3);text-transform:uppercase;text-align:right;
+  }
+  /* responsive */
+  @media (max-width:768px){
+    .slide{padding:8vh 6vw}
+    .corner-mark,.corner-info{display:none}
+    .phone{width:240px;height:480px}
+  }
+  /* print to pdf */
+  @media print{
+    body{scroll-snap-type:none;height:auto;overflow:visible}
+    .slide{page-break-after:always;min-height:100vh;height:auto}
+    .progress,.counter,.nav-hint{display:none}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="nav-hint"><kbd>←</kbd> <kbd>→</kbd> Navegar &nbsp;·&nbsp; <kbd>F</kbd> Tela cheia</div>
+<div class="counter" id="counter">01 / 16</div>
+
+<!-- ============ SLIDE 01 — COVER ============ -->
+<section class="slide bg-grid" id="s1">
+  <div class="cover-glow"></div>
+  <div class="corner-mark">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17v-3a10 10 0 0 1 20 0v3"/><path d="M2 17h20"/><path d="M2 17v3a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-3"/></svg>
+      </div>
+      <div class="logo-text">Safe<span>EPI</span></div>
+    </div>
+  </div>
+  <div class="corner-info">
+    Proposta Comercial<br/>Confidencial · 2026
+  </div>
+  <div class="slide-inner" style="text-align:center">
+    <div class="kicker fade-up" style="margin:0 auto 32px;display:inline-flex">
+      <span class="kicker-dot"></span> Sistema SESMT Digital
+    </div>
+    <h1 class="mega fade-up d1">
+      Conformidade NR-06 e NR-31<br/>
+      <span class="grad-text">automatizada, do canteiro ao jurídico.</span>
+    </h1>
+    <p class="lead fade-up d2" style="margin:36px auto 0;text-align:center;font-size:clamp(18px,1.6vw,24px)">
+      Gestão de entrega, devolução, treinamento e auditoria de EPI com biometria facial,
+      assinatura digital remota e hash SHA-256 com valor pericial.
+    </p>
+    <div class="fade-up d3" style="margin-top:48px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <span class="pill brand">NR-06</span>
+      <span class="pill brand">NR-31</span>
+      <span class="pill brand">Trabalho Rural</span>
+      <span class="pill brand">Multi-empresa</span>
+      <span class="pill brand">Multi-canteiro</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 02 — AGENDA ============ -->
+<section class="slide" id="s2">
+  <div class="slide-inner">
+    <div class="kicker fade-up">
+      <span class="kicker-dot"></span> Agenda
+    </div>
+    <h1 class="title fade-up d1" style="margin-bottom:48px">
+      O que você vai ver nesta apresentação<span style="color:var(--brand-2)">.</span>
+    </h1>
+    <div class="grid g-2 fade-up d2">
+      <div class="card card-hover">
+        <div class="row" style="gap:18px;align-items:flex-start">
+          <div style="font-size:48px;font-weight:900;color:var(--brand-2);line-height:1;letter-spacing:-.04em;min-width:80px">01</div>
+          <div>
+            <h3 class="h3">O cenário que está aí, e ninguém viu chegar.</h3>
+            <p class="body" style="margin-top:8px">A nova fiscalização da NR-31 em campo aberto, a responsabilidade solidária entre contratante e terceirizada, e o custo real de uma autuação.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card card-hover">
+        <div class="row" style="gap:18px;align-items:flex-start">
+          <div style="font-size:48px;font-weight:900;color:var(--brand-2);line-height:1;letter-spacing:-.04em;min-width:80px">02</div>
+          <div>
+            <h3 class="h3">SafeEPI: o sistema, em 5 minutos.</h3>
+            <p class="body" style="margin-top:8px">Os três pilares que tornam o SafeEPI um sistema de classe pericial — assinatura remota, biometria e auditoria live.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card card-hover">
+        <div class="row" style="gap:18px;align-items:flex-start">
+          <div style="font-size:48px;font-weight:900;color:var(--brand-2);line-height:1;letter-spacing:-.04em;min-width:80px">03</div>
+          <div>
+            <h3 class="h3">Comparativo direto com o mercado.</h3>
+            <p class="body" style="margin-top:8px">Frente a frente com BeeSafe, Mind4 EPI, SOC EPI e Senior — feature por feature, com honestidade técnica.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card card-hover">
+        <div class="row" style="gap:18px;align-items:flex-start">
+          <div style="font-size:48px;font-weight:900;color:var(--brand-2);line-height:1;letter-spacing:-.04em;min-width:80px">04</div>
+          <div>
+            <h3 class="h3">Investimento, ROI e próximo passo.</h3>
+            <p class="body" style="margin-top:8px">Dois planos comerciais transparentes e a conta que mostra o sistema pagando ele mesmo no primeiro ano.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 03 — O CENÁRIO ============ -->
+<section class="slide bg-grid bg-glow-red" id="s3">
+  <div class="slide-inner">
+    <div class="kicker red fade-up">
+      <span class="kicker-dot"></span> Capítulo 01 · O Cenário
+    </div>
+    <h1 class="title fade-up d1" style="max-width:1000px">
+      A NR-31 mudou.<br/>
+      <span class="grad-text-red">A fiscalização do dendê, também.</span>
+    </h1>
+    <p class="lead fade-up d2" style="margin-top:24px">
+      Plantações de dendê estão sob monitoramento ativo do MTE há mais de uma década por
+      adoecimento ocupacional, queda de cacho e exposição química. Em 2024, o Ministério do
+      Trabalho reforçou a fiscalização de turmas terceirizadas em campo. A prova de entrega
+      e treinamento de EPI deixou de ser papel guardado em pasta — virou exibição obrigatória
+      em fiscalização eletrônica.
+    </p>
+    <div class="grid g-3 fade-up d3" style="margin-top:56px">
+      <div class="card">
+        <div class="pill red" style="margin-bottom:14px">Multa NR-06 · M2/I3</div>
+        <div class="stat-big grad-text-red">R$ 6.708</div>
+        <p class="body muted" style="margin-top:8px"><strong style="color:var(--text)">por trabalhador exposto</strong>, recorrente a cada inspeção. 100 colaboradores sem prova = R$ 670.800 em uma visita.</p>
+      </div>
+      <div class="card">
+        <div class="pill red" style="margin-bottom:14px">NR-31 · Trabalho rural</div>
+        <div class="stat-big grad-text-red">31.20</div>
+        <p class="body muted" style="margin-top:8px"><strong style="color:var(--text)">Item específico para EPI rural.</strong> Exige fornecimento gratuito, treinamento documentado e ficha individual de entrega rastreável.</p>
+      </div>
+      <div class="card">
+        <div class="pill red" style="margin-bottom:14px">Ação trabalhista média</div>
+        <div class="stat-big grad-text-red">R$ 87k</div>
+        <p class="body muted" style="margin-top:8px"><strong style="color:var(--text)">Indenização média por acidente sem prova de EPI</strong> em primeira instância na Justiça do Trabalho do Pará e Bahia (setor agro).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 04 — RESPONSABILIDADE SOLIDÁRIA ============ -->
+<section class="slide bg-glow-amber" id="s4">
+  <div class="slide-inner">
+    <div class="kicker amber fade-up">
+      <span class="kicker-dot"></span> O Detalhe Que Ninguém Te Avisa
+    </div>
+    <div class="grid g-2 fade-up d1" style="grid-template-columns:1fr 1.1fr;align-items:center;gap:48px">
+      <div>
+        <h1 class="title">
+          A contratante é<br/>
+          <span class="grad-text-amber">responsável solidária.</span>
+        </h1>
+        <p class="lead" style="margin-top:24px">
+          A empresa de dendê que terceiriza serviço de colheita responde
+          <strong style="color:var(--text)">junto</strong> com a terceirizada por irregularidade
+          de EPI. CLT art. 455, Lei 6.019/2017 e Súmula 331 do TST.
+        </p>
+        <p class="lead" style="margin-top:18px">
+          Tradução prática: sem prova digital, auditável, exibível em segundos,
+          <strong style="color:var(--amber)">você perde o contrato</strong>.
+          E na renovação anual, a contratante hoje pede SOC ou equivalente.
+        </p>
+      </div>
+      <div class="col fade-up d2">
+        <div class="card" style="border-left:3px solid var(--red)">
+          <div class="row" style="gap:14px;align-items:flex-start">
+            <div class="icon-circle red">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div>
+              <div class="pill red" style="margin-bottom:6px">Cenário A · Fiscalização MTE</div>
+              <p style="font-weight:700;font-size:16px">O auditor pede prova de entrega de bota CA 5264 para os 47 colaboradores do talhão 12.</p>
+              <p class="body" style="margin-top:6px">Você tem 24 horas para apresentar. Em papel, é impossível. Em SafeEPI, são 3 cliques.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--amber)">
+          <div class="row" style="gap:14px;align-items:flex-start">
+            <div class="icon-circle amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <div>
+              <div class="pill gold" style="margin-bottom:6px">Cenário B · Auditoria do cliente</div>
+              <p style="font-weight:700;font-size:16px">A contratante audita semestralmente seus terceirizados. Pede acesso ao histórico de EPI.</p>
+              <p class="body" style="margin-top:6px">Com SafeEPI, você libera um login somente-leitura para o gestor de SST dela. Diferencial competitivo direto.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 05 — COMO É HOJE ============ -->
+<section class="slide" id="s5">
+  <div class="slide-inner">
+    <div class="kicker amber fade-up">
+      <span class="kicker-dot"></span> O Status Quo
+    </div>
+    <h1 class="title fade-up d1">
+      Como funciona hoje<br/>
+      <span style="color:var(--text-3)">em 90% dos terceirizados rurais.</span>
+    </h1>
+    <div class="grid g-3 fade-up d2" style="margin-top:48px">
+      <div class="card" style="background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.18)">
+        <div style="font-size:40px;margin-bottom:14px">📄</div>
+        <h3 class="h3">Ficha de papel</h3>
+        <p class="body" style="margin-top:8px">O capataz leva uma prancheta pro campo. Coleta assinatura com caneta. Volta pro escritório (às vezes). Arquiva em pasta (às vezes).</p>
+        <div class="pill red" style="margin-top:14px">Risco: extravio total</div>
+      </div>
+      <div class="card" style="background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.18)">
+        <div style="font-size:40px;margin-bottom:14px">📊</div>
+        <h3 class="h3">Planilha Excel</h3>
+        <p class="body" style="margin-top:8px">Alguém digita "depois" o que foi entregue. Sem CA real, sem foto, sem assinatura digital. Vale zero em perícia.</p>
+        <div class="pill red" style="margin-top:14px">Risco: sem valor jurídico</div>
+      </div>
+      <div class="card" style="background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.18)">
+        <div style="font-size:40px;margin-bottom:14px">⏳</div>
+        <h3 class="h3">"A gente confia"</h3>
+        <p class="body" style="margin-top:8px">A entrega é verbal. O colaborador some dois meses depois e processa por insalubridade. Não há prova nenhuma.</p>
+        <div class="pill red" style="margin-top:14px">Risco: passivo trabalhista</div>
+      </div>
+    </div>
+    <div class="card fade-up d3" style="margin-top:32px;background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(245,158,11,.06));border-color:rgba(239,68,68,.3)">
+      <div class="row" style="gap:18px">
+        <div class="icon-circle red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div>
+          <h3 class="h3">O resultado: você corre risco que não precisa correr.</h3>
+          <p class="body" style="margin-top:6px;font-size:15px">
+            A operação está rodando — o time veste EPI, o estoque gira, o trabalho acontece. <strong style="color:var(--text)">O problema não é fazer.
+            É <em>provar</em> que fez.</strong> E em fiscalização, "fazer sem poder provar" é exatamente igual a "não fazer".
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 06 — REVEAL ============ -->
+<section class="slide bg-grid bg-glow-blue" id="s6">
+  <div class="cover-glow"></div>
+  <div class="slide-inner" style="text-align:center">
+    <div class="kicker fade-up" style="margin:0 auto 32px;display:inline-flex">
+      <span class="kicker-dot"></span> Capítulo 02 · Apresentamos
+    </div>
+    <div class="logo fade-up d1" style="justify-content:center;margin-bottom:36px">
+      <div class="logo-mark" style="width:72px;height:72px;border-radius:18px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:38px;height:38px"><path d="M2 17v-3a10 10 0 0 1 20 0v3"/><path d="M2 17h20"/><path d="M2 17v3a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-3"/></svg>
+      </div>
+      <div class="logo-text" style="font-size:42px">Safe<span>EPI</span></div>
+    </div>
+    <h1 class="mega fade-up d2" style="max-width:1100px;margin:0 auto">
+      O sistema SESMT digital que<br/>
+      <span class="grad-text">cabe na palma da mão do capataz</span><br/>
+      e sustenta uma perícia em tribunal.
+    </h1>
+    <p class="lead fade-up d3" style="margin:48px auto 0;font-size:clamp(18px,1.6vw,24px)">
+      Web, mobile, multi-empresa, multi-canteiro. Sem app pra instalar. Sem tablet caro.
+      Sem consultoria de implantação de 90 dias.
+    </p>
+  </div>
+</section>
+
+<!-- ============ SLIDE 07 — TOUR ============ -->
+<section class="slide" id="s7">
+  <div class="slide-inner">
+    <div class="kicker fade-up">
+      <span class="kicker-dot"></span> Tour pelo sistema
+    </div>
+    <h1 class="title fade-up d1">8 módulos. Tudo conectado.</h1>
+    <p class="lead fade-up d2" style="margin-top:16px">
+      Cada módulo abaixo conversa com os outros. Estoque debita quando a entrega
+      é registrada. A entrega só existe quando há assinatura. A auditoria mostra
+      tudo em tempo real.
+    </p>
+    <div class="grid g-4 fade-up d3" style="margin-top:40px;gap:14px">
+
+      <div class="card card-hover">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">Nova Entrega</h3>
+        <p class="body" style="margin-top:6px">Carrinho multi-EPI, validação de CA vencido, baixa automática de substituição.</p>
+      </div>
+      <div class="card card-hover">
+        <div class="icon-circle green"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7L9 18l-5-5"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">Estoque</h3>
+        <p class="body" style="margin-top:6px">Entrada, saída, ajuste. Histórico completo de movimentação por EPI e por CA.</p>
+      </div>
+      <div class="card card-hover">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">Obras / Canteiros</h3>
+        <p class="body" style="margin-top:6px">Multi-talhão, multi-frente. Cada colaborador vinculado ao seu canteiro de origem.</p>
+      </div>
+      <div class="card card-hover">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">Colaboradores</h3>
+        <p class="body" style="margin-top:6px">Foto biométrica, admissão, cargo, setor, vinculação ao canteiro. CPF único.</p>
+      </div>
+      <div class="card card-hover">
+        <div class="icon-circle amber"><svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 9.4 8 10 4.5-.6 8-5 8-10V6l-8-4z"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">EPIs e CAs</h3>
+        <p class="body" style="margin-top:6px">Cadastro com CA, validade, vida útil, custo. Alertas automáticos antes do vencimento.</p>
+      </div>
+      <div class="card card-hover">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">Histórico / Auditoria</h3>
+        <p class="body" style="margin-top:6px">Live database. Hash SHA-256 de cada PDF. Pronto pra fiscalização.</p>
+      </div>
+      <div class="card card-hover">
+        <div class="icon-circle"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">Movimentações</h3>
+        <p class="body" style="margin-top:6px">Log de cada SAIDA / ENTRADA / AJUSTE vinculado à entrega que originou.</p>
+      </div>
+      <div class="card card-hover">
+        <div class="icon-circle green"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+        <h3 class="h3" style="margin-top:14px">Treinamentos · NR-06 / NR-31</h3>
+        <p class="body" style="margin-top:6px">Cadastro, validade, certificado em PDF com assinatura digital. Módulo opcional.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 08 — PILAR 1: REMOTA ============ -->
+<section class="slide bg-glow-blue" id="s8">
+  <div class="slide-inner">
+    <div class="grid g-2 fade-up" style="grid-template-columns:1.2fr 1fr;align-items:center;gap:64px">
+      <div>
+        <div class="kicker"><span class="kicker-dot"></span> Pilar 01 · Assinatura Remota</div>
+        <h1 class="title fade-up d1" style="margin-bottom:20px">
+          O colaborador<br/>assina <span class="grad-text">no celular dele</span>.<br/>
+          Sem app.
+        </h1>
+        <p class="lead fade-up d2">
+          Você gera um link. Manda por WhatsApp para o capataz da turma. Ele passa o link para o colaborador
+          — ou abre o celular do próprio colaborador. O cara assina com o dedo, na tela, no campo,
+          e o sistema já registra IP, geolocalização, hora exata e foto biométrica opcional.
+        </p>
+        <div class="fade-up d3" style="margin-top:32px;display:flex;flex-direction:column;gap:14px">
+          <div class="row" style="gap:14px">
+            <div class="icon-circle green"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div><strong>Funciona em qualquer smartphone</strong><br/><span class="body">Android, iPhone, tablet, navegador. Não precisa instalar nada.</span></div>
+          </div>
+          <div class="row" style="gap:14px">
+            <div class="icon-circle green"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div><strong>Link com validade configurável</strong><br/><span class="body">1h, 4h, 24h ou 48h — você escolhe a janela.</span></div>
+          </div>
+          <div class="row" style="gap:14px">
+            <div class="icon-circle green"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div><strong>Status em tempo real</strong><br/><span class="body">A tela "Pendências" atualiza a cada 15s. Você vê o momento em que cada assinatura é colhida.</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="fade-up d4" style="display:flex;justify-content:center">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="ph-head">SafeEPI · Assinatura</div>
+            <div class="ph-title">João da Silva<br/><span style="color:var(--text-3);font-size:11px;font-weight:600">CPF 000.000.000-00</span></div>
+            <div class="ph-card">
+              <div style="font-size:10px;color:var(--text-3);letter-spacing:.15em;font-weight:700">EPI</div>
+              <div style="font-weight:800;font-size:14px;margin-top:2px">BOTA DE SEGURANÇA</div>
+              <div style="font-size:11px;color:var(--text-2);margin-top:2px">CA 5264 · Qtd 1 · Primeira Entrega</div>
+            </div>
+            <div style="margin:0 18px 8px;font-size:10px;color:var(--text-3);letter-spacing:.15em;font-weight:700;text-transform:uppercase">Assine abaixo</div>
+            <div class="ph-sig">
+              <svg width="200" height="60" viewBox="0 0 200 60">
+                <path d="M10 40 Q 30 10, 50 35 T 90 30 Q 110 50, 140 25 T 190 35" stroke="#3B82F6" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="ph-btn">CONFIRMAR RECEBIMENTO</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 09 — BIOMETRIA + SHA-256 ============ -->
+<section class="slide bg-glow-green" id="s9">
+  <div class="slide-inner">
+    <div class="kicker green fade-up"><span class="kicker-dot"></span> Pilar 02 · Perícia Digital</div>
+    <h1 class="title fade-up d1">
+      Cada entrega vira um<br/>
+      <span class="grad-text-green">PDF com hash criptográfico.</span>
+    </h1>
+    <p class="lead fade-up d2" style="margin-top:16px">
+      Ao final de cada entrega, o SafeEPI gera um PDF padronizado contendo a assinatura, a foto biométrica do colaborador,
+      o IP de origem, geolocalização, hora UTC e os dados completos do EPI e do CA. Em cima desse PDF, o sistema calcula um
+      <strong style="color:var(--text)">hash SHA-256</strong> — uma impressão digital matemática única do documento.
+    </p>
+    <div class="grid g-3 fade-up d3" style="margin-top:48px">
+      <div class="card">
+        <div class="icon-circle green" style="margin-bottom:16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+        </div>
+        <h3 class="h3">Identidade verificada</h3>
+        <p class="body" style="margin-top:8px">Biometria facial nativa, comparação contra a foto cadastrada. Funciona no navegador, sem hardware especial.</p>
+      </div>
+      <div class="card">
+        <div class="icon-circle green" style="margin-bottom:16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h3 class="h3">Hash SHA-256 imutável</h3>
+        <p class="body" style="margin-top:8px">Qualquer alteração — uma vírgula, um pixel — quebra o hash. Equivalente a lacre judicial.</p>
+        <code style="display:block;margin-top:14px;padding:10px;background:rgba(0,0,0,.35);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--green);word-break:break-all;border:1px solid var(--border)">2C0DA9 5534CB 8E1F4A...</code>
+      </div>
+      <div class="card">
+        <div class="icon-circle green" style="margin-bottom:16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3 class="h3">Carimbo de tempo confiável</h3>
+        <p class="body" style="margin-top:8px">Hora UTC do servidor, não do dispositivo. Impossível antedatar ou retroceder uma entrega.</p>
+      </div>
+    </div>
+    <p class="lead fade-up d4" style="margin-top:36px;font-size:18px;color:var(--text-2);font-style:italic;border-left:3px solid var(--green);padding-left:20px">
+      "Em ação trabalhista, esse documento serve como meio de prova com valor pericial. Defesa técnica monta um
+      contra-laudo em uma tarde com isso na mão."
+    </p>
+  </div>
+</section>
+
+<!-- ============ SLIDE 10 — PILAR 3 ============ -->
+<section class="slide" id="s10">
+  <div class="slide-inner">
+    <div class="kicker fade-up"><span class="kicker-dot"></span> Pilar 03 · Controle de Acesso</div>
+    <h1 class="title fade-up d1">
+      Auditoria <span class="grad-text">live</span>.<br/>
+      Exclusão controlada por <span class="grad-text">MASTER</span>.
+    </h1>
+    <div class="grid g-2 fade-up d2" style="margin-top:40px;gap:32px;align-items:start">
+      <div>
+        <h3 class="h3" style="margin-bottom:14px;color:var(--brand-2)">4 níveis de permissão</h3>
+        <div class="col">
+          <div class="card row" style="gap:14px;padding:18px">
+            <div class="pill brand">MASTER</div>
+            <div style="font-size:14px;color:var(--text-2)">Único papel com poder de excluir registros e cadastrar empresas. <strong style="color:var(--text)">Auditoria total.</strong></div>
+          </div>
+          <div class="card row" style="gap:14px;padding:18px">
+            <div class="pill">ADMIN</div>
+            <div style="font-size:14px;color:var(--text-2)">Gerencia colaboradores, EPIs, canteiros. Não exclui registro de entrega.</div>
+          </div>
+          <div class="card row" style="gap:14px;padding:18px">
+            <div class="pill">ALMOXARIFE</div>
+            <div style="font-size:14px;color:var(--text-2)">Opera entrega e estoque. Não acessa configurações sensíveis.</div>
+          </div>
+          <div class="card row" style="gap:14px;padding:18px">
+            <div class="pill">DIRETORIA</div>
+            <div style="font-size:14px;color:var(--text-2)">Acesso somente-leitura. Para auditor da contratante, advogado, sócio.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 class="h3" style="margin-bottom:14px;color:var(--brand-2)">Exclusão de entrega errada</h3>
+        <p class="body" style="margin-bottom:18px;font-size:15px">
+          Se você registrou uma entrega errada — colaborador trocado, EPI errado, quantidade errada — somente o
+          usuário <strong style="color:var(--text)">MASTER</strong> pode apagar. Quando apaga:
+        </p>
+        <div class="col" style="gap:10px">
+          <div class="card row" style="gap:12px;padding:14px;background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.2)">
+            <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div style="font-size:13px"><strong>O EPI volta automaticamente ao estoque</strong></div>
+          </div>
+          <div class="card row" style="gap:12px;padding:14px;background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.2)">
+            <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div style="font-size:13px"><strong>A SAIDA original some do log de movimentações</strong></div>
+          </div>
+          <div class="card row" style="gap:12px;padding:14px;background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.2)">
+            <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div style="font-size:13px"><strong>Qualquer ENTRADA de devolução também é removida</strong></div>
+          </div>
+          <div class="card row" style="gap:12px;padding:14px;background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.2)">
+            <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div style="font-size:13px"><strong>O PDF jurídico associado é apagado junto</strong></div>
+          </div>
+        </div>
+        <p class="body muted" style="margin-top:16px;font-size:13px;font-style:italic">
+          Resultado: o estoque volta ao estado real, o log fica limpo. Sem rastro contábil falso.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 11 — NR-06 + NR-31 ============ -->
+<section class="slide" id="s11">
+  <div class="slide-inner">
+    <div class="kicker green fade-up"><span class="kicker-dot"></span> Conformidade Normativa</div>
+    <h1 class="title fade-up d1">SafeEPI cobre, ponto a ponto.</h1>
+    <p class="lead fade-up d2" style="margin-top:14px">Os artigos da NR-06 e da NR-31 que mais caem em fiscalização e suas funções equivalentes no sistema.</p>
+    <div class="grid g-2 fade-up d3" style="margin-top:36px;gap:24px;align-items:start">
+      <div class="card">
+        <div class="between" style="margin-bottom:18px">
+          <h3 class="h3">NR-06</h3>
+          <span class="pill green">EPI · Geral</span>
+        </div>
+        <div class="col" style="gap:12px">
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>6.6.1(h)</strong> · Registro de fornecimento — assinatura digital com hash.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>6.6.1(d)</strong> · Treinamento sobre uso correto — módulo opcional com certificado.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>6.9.1</strong> · CA válido — alerta automático antes do vencimento.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>6.6.1(b)</strong> · Substituição quando danificado — motivo "Dano / Perda / Substituição" rastreado.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>6.5</strong> · Aquisição registrada — entradas no módulo Estoque com nota fiscal opcional.</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="between" style="margin-bottom:18px">
+          <h3 class="h3">NR-31</h3>
+          <span class="pill green">Trabalho Rural</span>
+        </div>
+        <div class="col" style="gap:12px">
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>31.20</strong> · EPI rural gratuito e rastreado por colaborador — cadastro individual com foto.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>31.5.1</strong> · Documentação a disposição do auditor — auditoria live, exportável em PDF.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>31.7</strong> · Treinamento documentado — módulo treinamentos com certificado assinado.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>31.20.2</strong> · Reposição imediata de EPI danificado — fluxo de substituição automatizado.</div></div>
+          <div class="row" style="gap:12px;align-items:flex-start"><div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"/></svg></div><div style="font-size:14px"><strong>31.10</strong> · Permissão de trabalho rural — vínculo colaborador / canteiro / função.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 12 — COMPARATIVO ============ -->
+<section class="slide" id="s12">
+  <div class="slide-inner">
+    <div class="kicker fade-up"><span class="kicker-dot"></span> Capítulo 03 · Comparativo de Mercado</div>
+    <h1 class="title fade-up d1">Frente a frente.</h1>
+    <p class="lead fade-up d2" style="margin-top:14px">Mesma feature, mesmo critério. Sem maquiagem.</p>
+    <div class="fade-up d3" style="margin-top:32px;overflow-x:auto">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th style="min-width:280px">Recurso</th>
+            <th class="us">SafeEPI</th>
+            <th>BeeSafe</th>
+            <th>Mind4 EPI</th>
+            <th>SOC EPI</th>
+            <th>Senior SST</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="feat">Assinatura digital remota por link (sem app)</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="dash">parcial</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Biometria facial nativa no navegador</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="dash">só com tablet dedicado</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Hash SHA-256 com valor pericial</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="dash">parcial</span></td>
+            <td><span class="x">✕</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Cobertura NR-31 (trabalho rural)</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="dash">limitada</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Multi-empresa em uma instância</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Estorno automático de estoque na exclusão</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Auto-refresh em tela de pendências</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+            <td><span class="x">✕</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Setup / implantação</td>
+            <td class="us">24 horas</td>
+            <td>3-5 dias</td>
+            <td>2-4 semanas</td>
+            <td>30-90 dias</td>
+            <td>60-120 dias</td>
+          </tr>
+          <tr>
+            <td class="feat">Suporte direto com o desenvolvedor</td>
+            <td class="us"><span class="check">✓</span></td>
+            <td><span class="x">helpdesk</span></td>
+            <td><span class="x">helpdesk</span></td>
+            <td><span class="x">helpdesk</span></td>
+            <td><span class="x">helpdesk</span></td>
+          </tr>
+          <tr>
+            <td class="feat">Faixa de preço (50 colaboradores)</td>
+            <td class="us"><strong>R$ 150 – 300</strong></td>
+            <td>R$ 350 – 600</td>
+            <td>R$ 500 – 900</td>
+            <td>R$ 800 – 1.500</td>
+            <td>R$ 1.200 – 2.500</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="body muted fade-up d4" style="margin-top:18px;font-size:11px;font-style:italic">
+      Valores estimados de mercado com base em propostas comerciais públicas e cotações 2024-2025. SafeEPI cobra valor fixo, não por colaborador.
+    </p>
+  </div>
+</section>
+
+<!-- ============ SLIDE 13 — PREÇO ============ -->
+<section class="slide bg-glow-blue" id="s13">
+  <div class="slide-inner">
+    <div class="kicker fade-up"><span class="kicker-dot"></span> Capítulo 04 · Investimento</div>
+    <h1 class="title fade-up d1" style="margin-bottom:14px">Dois planos. Valor fechado.</h1>
+    <p class="lead fade-up d2">Sem cobrança por colaborador. Sem taxa de setup. Sem surpresa na renovação.</p>
+    <div class="grid g-2 fade-up d3" style="margin-top:48px;gap:24px">
+      <div class="price-card">
+        <div class="pill" style="margin-bottom:18px">Plano Operação</div>
+        <h2 class="sub" style="font-size:32px">SafeEPI Essencial</h2>
+        <div style="margin-top:24px;display:flex;align-items:flex-end;gap:6px">
+          <span class="muted" style="font-size:22px;font-weight:800">R$</span>
+          <span class="price-value">150</span>
+          <span class="muted" style="margin-bottom:14px;font-size:14px;font-weight:700">,00 / mês</span>
+        </div>
+        <div class="div"></div>
+        <ul class="feat-list">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Colaboradores, EPIs, CAs e canteiros — ilimitado</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Entrega, devolução, baixa parcial e substituição</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Assinatura digital remota e biometria facial</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Auditoria live com hash SHA-256</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Controle de estoque + movimentações</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Suporte direto com o desenvolvedor</li>
+        </ul>
+      </div>
+      <div class="price-card featured">
+        <div style="position:absolute;top:24px;right:24px"><span class="pill brand">⚡ Recomendado</span></div>
+        <div class="pill brand" style="margin-bottom:18px">Plano Completo</div>
+        <h2 class="sub" style="font-size:32px">SafeEPI Pro + Treinamentos</h2>
+        <div style="margin-top:24px;display:flex;align-items:flex-end;gap:6px">
+          <span class="muted" style="font-size:22px;font-weight:800">R$</span>
+          <span class="price-value grad-text">300</span>
+          <span class="muted" style="margin-bottom:14px;font-size:14px;font-weight:700">,00 / mês</span>
+        </div>
+        <div class="div"></div>
+        <ul class="feat-list">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg><strong style="color:var(--text)">Tudo do plano Essencial</strong></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg><strong style="color:var(--text)">Módulo de Treinamentos NR-06 / NR-31</strong></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg><strong style="color:var(--text)">Emissão de certificados em PDF</strong> com assinatura do instrutor e hash</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Validade e alerta automático de reciclagem</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Assinatura remota do colaborador no certificado</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Onboarding individual de cada novo colaborador</li>
+        </ul>
+      </div>
+    </div>
+    <p class="body muted fade-up d4" style="margin-top:24px;font-size:12px;text-align:center">
+      Pagamento mensal, anual com 2 meses de bonificação. Sem fidelidade. Cancele quando quiser.
+    </p>
+  </div>
+</section>
+
+<!-- ============ SLIDE 14 — ROI ============ -->
+<section class="slide bg-glow-amber" id="s14">
+  <div class="slide-inner">
+    <div class="kicker amber fade-up"><span class="kicker-dot"></span> O cálculo que importa</div>
+    <h1 class="title fade-up d1">A conta no guardanapo.</h1>
+    <p class="lead fade-up d2" style="margin-top:14px">
+      Faça você mesmo. Pegue uma multa NR-06 média e compare com 12 meses do SafeEPI.
+    </p>
+    <div class="grid g-3 fade-up d3" style="margin-top:48px;align-items:stretch">
+      <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center">
+        <p class="body" style="margin-bottom:8px">12 meses · Plano Completo</p>
+        <div class="stat-big grad-text">R$ 3.600</div>
+        <p class="body muted" style="margin-top:8px">Investimento total no ano com tudo incluso</p>
+      </div>
+      <div class="card" style="text-align:center;background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.25);display:flex;flex-direction:column;justify-content:center">
+        <p class="body" style="margin-bottom:8px">1 autuação NR-06 · 50 colaboradores</p>
+        <div class="stat-big grad-text-amber">R$ 335k</div>
+        <p class="body muted" style="margin-top:8px">Multa única no menor patamar da tabela</p>
+      </div>
+      <div class="card" style="text-align:center;background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.25);display:flex;flex-direction:column;justify-content:center">
+        <p class="body" style="margin-bottom:8px">1 ação trabalhista · acidente sem prova</p>
+        <div class="stat-big grad-text-red">R$ 87k</div>
+        <p class="body muted" style="margin-top:8px">Indenização média + honorário sucumbencial</p>
+      </div>
+    </div>
+    <div class="card fade-up d4" style="margin-top:36px;background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(37,99,235,.06));border-color:rgba(16,185,129,.3)">
+      <div class="row" style="gap:20px">
+        <div class="icon-circle green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        </div>
+        <div>
+          <h3 class="h3"><span class="grad-text-green">1 multa evitada paga 93 anos de SafeEPI.</span></h3>
+          <p class="body" style="margin-top:6px;font-size:15px">Você não está comprando software. Está comprando a tranquilidade de saber que, quando o auditor bater na porta, o sistema responde por você em 3 cliques.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 15 — POR QUE AGORA ============ -->
+<section class="slide" id="s15">
+  <div class="slide-inner">
+    <div class="kicker green fade-up"><span class="kicker-dot"></span> Por que SafeEPI, por que agora</div>
+    <h1 class="title fade-up d1">Não é mais um SaaS de prateleira.</h1>
+    <div class="grid g-3 fade-up d2" style="margin-top:48px">
+      <div class="card">
+        <div class="icon-circle" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M2 12h20"/></svg></div>
+        <h3 class="h3">Construído sob medida</h3>
+        <p class="body" style="margin-top:8px">SafeEPI é um produto vivo. Você sugere uma melhoria de manhã, ela vira release na semana.</p>
+      </div>
+      <div class="card">
+        <div class="icon-circle green" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <h3 class="h3">Suporte 1:1</h3>
+        <p class="body" style="margin-top:8px">Você fala direto com o desenvolvedor. Sem ticket número 47.832 esperando "próximo nível".</p>
+      </div>
+      <div class="card">
+        <div class="icon-circle amber" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <h3 class="h3">Implantação em 24h</h3>
+        <p class="body" style="margin-top:8px">Você importa colaboradores e EPIs por planilha, configura usuários, começa a operar amanhã.</p>
+      </div>
+      <div class="card">
+        <div class="icon-circle" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <h3 class="h3">Hospedagem segura</h3>
+        <p class="body" style="margin-top:8px">Backend em Supabase (PostgreSQL gerenciado) com RLS, criptografia em trânsito e em repouso.</p>
+      </div>
+      <div class="card">
+        <div class="icon-circle green" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <h3 class="h3">LGPD</h3>
+        <p class="body" style="margin-top:8px">Dados biométricos tratados como categoria sensível. Política e DPA disponíveis.</p>
+      </div>
+      <div class="card">
+        <div class="icon-circle amber" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <h3 class="h3">Garantia de auditoria</h3>
+        <p class="body" style="margin-top:8px">Se a fiscalização chegar e o sistema não responder, devolvemos 100% do investimento do mês.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 16 — CTA ============ -->
+<section class="slide bg-grid bg-glow-blue" id="s16">
+  <div class="cover-glow"></div>
+  <div class="slide-inner" style="text-align:center">
+    <div class="kicker fade-up" style="margin:0 auto 32px;display:inline-flex"><span class="kicker-dot"></span> Próximo Passo</div>
+    <h1 class="mega fade-up d1" style="max-width:1100px;margin:0 auto">
+      Vamos rodar o seu<br/>
+      <span class="grad-text">primeiro talhão piloto na próxima semana.</span>
+    </h1>
+    <p class="lead fade-up d2" style="margin:40px auto 0;font-size:clamp(18px,1.6vw,24px)">
+      14 dias de uso completo, com importação dos seus colaboradores, sem cobrança.
+      Você decide depois.
+    </p>
+
+    <div class="grid g-3 fade-up d3" style="margin-top:56px;text-align:left">
+      <div class="card">
+        <div class="pill brand" style="margin-bottom:12px">Passo 1</div>
+        <h3 class="h3">Reunião de 30 min</h3>
+        <p class="body" style="margin-top:6px">Demo ao vivo do sistema, mapeamento do seu fluxo atual e quais módulos são prioridade pra você.</p>
+      </div>
+      <div class="card">
+        <div class="pill brand" style="margin-bottom:12px">Passo 2</div>
+        <h3 class="h3">Ambiente piloto</h3>
+        <p class="body" style="margin-top:6px">Importação dos seus colaboradores, EPIs e canteiros. Configuração de usuários e roles.</p>
+      </div>
+      <div class="card">
+        <div class="pill brand" style="margin-bottom:12px">Passo 3</div>
+        <h3 class="h3">Treinamento da turma</h3>
+        <p class="body" style="margin-top:6px">1h com a equipe de almoxarifado e RH. Capataz aprende o fluxo de assinatura remota em 5 min.</p>
+      </div>
+    </div>
+
+    <div class="fade-up d4" style="margin-top:64px">
+      <div class="row" style="justify-content:center;gap:24px;flex-wrap:wrap">
+        <div class="logo">
+          <div class="logo-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17v-3a10 10 0 0 1 20 0v3"/><path d="M2 17h20"/><path d="M2 17v3a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-3"/></svg>
+          </div>
+          <div class="logo-text">Safe<span>EPI</span></div>
+        </div>
+        <div style="height:32px;width:1px;background:var(--border)"></div>
+        <div style="text-align:left">
+          <div class="pill" style="margin-bottom:6px">Desenvolvedor & Contato</div>
+          <div style="font-size:20px;font-weight:800">Vinix Dev</div>
+          <div class="body" style="font-size:13px">vinicius@safeepi.com.br · contato direto</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // progress bar + counter
+  const slides = document.querySelectorAll('.slide');
+  const progress = document.getElementById('progress');
+  const counter = document.getElementById('counter');
+  const total = slides.length;
+
+  function pad(n){return String(n).padStart(2,'0')}
+
+  function updateUI(){
+    let activeIdx = 0;
+    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+    const vh = window.innerHeight;
+    slides.forEach((s,i)=>{
+      const rect = s.getBoundingClientRect();
+      if (rect.top < vh*0.4 && rect.bottom > vh*0.4){
+        activeIdx = i;
+      }
+    });
+    slides.forEach((s,i)=>s.classList.toggle('active', i===activeIdx));
+    counter.textContent = pad(activeIdx+1) + ' / ' + pad(total);
+    // progress
+    const max = document.body.scrollHeight - vh;
+    const pct = max > 0 ? Math.min(100, (scrollTop/max)*100) : 0;
+    progress.style.width = pct + '%';
+  }
+  document.addEventListener('scroll', updateUI, {passive:true});
+  window.addEventListener('resize', updateUI);
+  updateUI();
+  setTimeout(updateUI, 50);
+
+  // keyboard nav
+  function goTo(idx){
+    if (idx < 0) idx = 0;
+    if (idx >= total) idx = total-1;
+    slides[idx].scrollIntoView({behavior:'smooth'});
+  }
+  function currentIdx(){
+    const vh = window.innerHeight;
+    for (let i=0;i<slides.length;i++){
+      const r = slides[i].getBoundingClientRect();
+      if (r.top < vh*0.4 && r.bottom > vh*0.4) return i;
+    }
+    return 0;
+  }
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' '){
+      e.preventDefault(); goTo(currentIdx()+1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp'){
+      e.preventDefault(); goTo(currentIdx()-1);
+    } else if (e.key === 'Home'){
+      e.preventDefault(); goTo(0);
+    } else if (e.key === 'End'){
+      e.preventDefault(); goTo(total-1);
+    } else if (e.key.toLowerCase() === 'f'){
+      e.preventDefault();
+      if (!document.fullscreenElement){
+        document.documentElement.requestFullscreen?.();
+      } else {
+        document.exitFullscreen?.();
+      }
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -9,6 +9,7 @@
   workplace_id: string | null;
   termination_date?: string | null;
   photo_url?: string | null;
+  photo_storage_path?: string | null;
   face_descriptor?: number[] | null; // Armazenado como JSONB
   created_at?: string;
 };
@@ -63,6 +64,7 @@ export type Delivery = {
   reason: 'Primeira Entrega' | 'Substituição (Desgaste/Validade)' | 'Perda' | 'Dano';
   quantity: number;
   signature_url: string | null;
+  signature_storage_path?: string | null;
   auth_method?: 'manual' | 'facial' | 'manual_facial';
   ip_address: string | null;
   workplace_id: string | null;
@@ -82,6 +84,7 @@ export type Training = {
   instructor_name?: string | null;
   instructor_role?: string | null;
   signature_url?: string | null;
+  signature_storage_path?: string | null;
   auth_method?: 'manual' | 'facial' | 'manual_facial' | null;
   created_at?: string;
 };
@@ -125,6 +128,8 @@ export type SignedDocument = {
   auth_method: string | null;
   signature_url: string | null;
   photo_evidence_url: string | null;
+  signature_storage_path?: string | null;
+  photo_evidence_storage_path?: string | null;
   ip_address: string | null;
   geo_location: string | null;
   user_agent: string | null;

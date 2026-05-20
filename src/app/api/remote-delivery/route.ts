@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { PRIVATE_STORAGE_BUCKET } from "@/lib/privateStorage"
+import { getClientIp } from "@/lib/getClientIp"
+import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { remoteDeliveryFieldsSchema } from "@/lib/securitySchemas"
+import { isValidationResponse, validateBody } from "@/lib/validateBody"
+import { validateUpload } from "@/lib/validateUpload"
 
 type SupabaseLikeError = {
   code?: string
@@ -159,12 +165,6 @@ function getDeliveryDateFromLinkData(data: unknown) {
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()
 }
 
-function getImageFileExtension(file: File) {
-  if (file.type === "image/jpeg") return "jpg"
-  if (file.type === "image/webp") return "webp"
-  return "png"
-}
-
 export async function POST(req: Request) {
   let claimedLinkId: string | null = null
   let releaseClaimedLink = async () => {}
@@ -201,19 +201,32 @@ export async function POST(req: Request) {
 
     const formData = await req.formData()
 
-    const employee_id = formData.get("employee_id") as string
-    const ppe_id = formData.get("ppe_id") as string
-    const workplace_id = formData.get("workplace_id") as string | null
-    const third_party_id_from_form = formData.get("third_party_id") as string | null
-    const reason = normalizeDeliveryReason((formData.get("reason") as string) || "Primeira Entrega")
-    const quantityRaw = Number(formData.get("quantity"))
-    const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 && quantityRaw <= 1000
-      ? Math.floor(quantityRaw)
-      : 1
-    const ip_address = formData.get("ip_address") as string
-    const auth_method = (formData.get("auth_method") as string) || "manual"
+    const { data: fields } = validateBody(remoteDeliveryFieldsSchema, {
+      employee_id: formData.get("employee_id"),
+      ppe_id: formData.get("ppe_id"),
+      workplace_id: formData.get("workplace_id"),
+      third_party_id: formData.get("third_party_id"),
+      reason: formData.get("reason") || undefined,
+      quantity: formData.get("quantity") || undefined,
+      ip_address: formData.get("ip_address") || undefined,
+      auth_method: formData.get("auth_method") || undefined,
+      token: formData.get("token"),
+    })
+    const employee_id = fields.employee_id
+    const ppe_id = fields.ppe_id
+    const workplace_id = fields.workplace_id || null
+    const third_party_id_from_form = fields.third_party_id || null
+    const reason = normalizeDeliveryReason(fields.reason || "Primeira Entrega")
+    const quantity = fields.quantity
+    const ip_address = fields.ip_address || ""
+    const auth_method = fields.auth_method || "manual"
     const signatureFile = formData.get("signatureFile") as File | null
-    const token = formData.get("token") as string | null
+    const token = fields.token
+    const rateLimitKey = isValidToken(token)
+      ? `remote-delivery:token:${token}`
+      : `remote-delivery:ip:${getClientIp(req)}`
+    const limited = rateLimit(rateLimitKey, 10, 60 * 60 * 1000)
+    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     if (!isValidUuid(employee_id) || !isValidUuid(ppe_id)) {
       return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 })
@@ -228,12 +241,7 @@ export async function POST(req: Request) {
     if (!signatureFile || !(signatureFile instanceof File) || signatureFile.size === 0) {
       return NextResponse.json({ error: "Arquivo de assinatura nao informado." }, { status: 400 })
     }
-    if (signatureFile.size > 3 * 1024 * 1024) {
-      return NextResponse.json({ error: "Arquivo de assinatura excede 3MB." }, { status: 413 })
-    }
-    if (!signatureFile.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Arquivo de assinatura precisa ser uma imagem." }, { status: 400 })
-    }
+    const validatedSignature = await validateUpload(signatureFile, "image")
 
     const { data: link } = await supabaseAdmin
       .from("remote_links")
@@ -282,12 +290,13 @@ export async function POST(req: Request) {
     let signatureUrl: string | null = null
     if (signatureFile.size > 0) {
       const prefix = auth_method === "facial" ? "bio_" : "sig_"
-      const extension = getImageFileExtension(signatureFile)
-      const fileName = `${prefix}${Date.now()}_${employee_id}.${extension}`
+      const extension = validatedSignature.extension
+      const safeCompanyPrefix = companyId || "remote"
+      const fileName = `${safeCompanyPrefix}/signatures/${prefix}${Date.now()}_${employee_id}.${extension}`
       const { error: storageError } = await supabaseAdmin.storage
-        .from("ppe_signatures")
-        .upload(fileName, signatureFile, {
-          contentType: signatureFile.type || "image/png",
+        .from(PRIVATE_STORAGE_BUCKET)
+        .upload(fileName, validatedSignature.buffer, {
+          contentType: validatedSignature.contentType,
           upsert: false,
         })
 
@@ -296,11 +305,7 @@ export async function POST(req: Request) {
         return failAfterClaim({ error: "Falha ao salvar assinatura." }, 500)
       }
 
-      const { data: { publicUrl } } = supabaseAdmin.storage
-        .from("ppe_signatures")
-        .getPublicUrl(fileName)
-
-      signatureUrl = publicUrl
+      signatureUrl = fileName
     }
 
     // Confirma que o ppe pertence à mesma empresa do link.
@@ -558,6 +563,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, data: savedDelivery, autoReturnedDeliveryIds })
   } catch (error: unknown) {
+    if (isValidationResponse(error)) return error
     console.error("[/api/remote-delivery] unexpected error:", error)
     await releaseClaimedLink()
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })

@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("[API employees/update] Insert error:", error)
-      return NextResponse.json({ error: error.message, code: error.code, details: error.details }, { status: 500 })
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     return NextResponse.json({ employee: data?.[0] || null })
@@ -102,7 +102,7 @@ export async function PUT(request: NextRequest) {
 
       if (error) {
         console.error("[API employees/update] Remove photo error:", error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
       }
 
       console.log("[API employees/update] Photo removed. Result:", data)
@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest) {
 
       if (error) {
         console.error("[API employees/update] Update error:", error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
       }
 
       console.log("[API employees/update] Updated. Result count:", data?.length)
@@ -161,7 +161,7 @@ export async function DELETE(request: NextRequest) {
 
     if (employeeError) {
       console.error("[API employees/update] Find employee before delete error:", employeeError)
-      return NextResponse.json({ error: employeeError.message }, { status: 500 })
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     if (!employee) {
@@ -199,7 +199,7 @@ export async function DELETE(request: NextRequest) {
 
         if (fallbackUpdateError) {
           console.error("[API employees/update] Fallback archive update error:", fallbackUpdateError)
-          return NextResponse.json({ error: fallbackUpdateError.message }, { status: 500 })
+          return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
         }
 
         const { error: markerError } = await supabaseAdmin
@@ -241,7 +241,7 @@ export async function DELETE(request: NextRequest) {
       }
 
       console.error("[API employees/update] Soft delete error:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     return NextResponse.json({ employee: data?.[0] || employee })

@@ -108,7 +108,8 @@ export default function ReturnsPage() {
   const getEmployeePhotoBase64 = async () => {
     if (!selectedEmployee?.photo_url) return undefined
     try {
-      const response = await fetch(selectedEmployee.photo_url)
+      const photoUrl = await api.getPrivateAssetUrl(selectedEmployee.photo_storage_path || selectedEmployee.photo_url, "download")
+      const response = await fetch(photoUrl || selectedEmployee.photo_url)
       const blob = await response.blob()
       return await new Promise<string>((resolve) => {
         const reader = new FileReader()

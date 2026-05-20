@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-
-const MAX_SIGNATURE_SIZE = 3 * 1024 * 1024
+import { getSignedUrl, PRIVATE_STORAGE_BUCKET, STORAGE_VIEW_EXPIRES_IN } from "@/lib/privateStorage"
+import { getClientIp } from "@/lib/getClientIp"
+import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { uploadFieldsSchema } from "@/lib/securitySchemas"
+import { isValidationResponse, validateBody } from "@/lib/validateBody"
+import { validateUpload } from "@/lib/validateUpload"
 
 function sanitizePathPart(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80)
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimit(`upload:signature:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+  if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
+
   const auth = await requireAuthorizedUser(request)
   if (!auth.authorized) {
     return auth.response
@@ -17,9 +24,14 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData()
     const signatureFile = formData.get("signatureFile")
-    const employeeId = String(formData.get("employee_id") || "")
-    const authMethod = String(formData.get("auth_method") || "manual")
-    const requestedCompanyId = String(formData.get("company_id") || "")
+    const { data: fields } = validateBody(uploadFieldsSchema, {
+      employee_id: formData.get("employee_id") || undefined,
+      auth_method: formData.get("auth_method") || undefined,
+      company_id: formData.get("company_id") || undefined,
+    })
+    const employeeId = fields.employee_id || ""
+    const authMethod = fields.auth_method || "manual"
+    const requestedCompanyId = fields.company_id || ""
     const companyId = auth.user.role === "MASTER"
       ? requestedCompanyId || "global"
       : auth.user.company_id
@@ -32,41 +44,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Empresa atual nao identificada para salvar assinatura." }, { status: 400 })
     }
 
-    if (signatureFile.size > MAX_SIGNATURE_SIZE) {
-      return NextResponse.json({ error: "Arquivo de assinatura excede 3MB." }, { status: 413 })
-    }
-
-    if (!signatureFile.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Arquivo de assinatura precisa ser uma imagem." }, { status: 400 })
-    }
+    const validatedFile = await validateUpload(signatureFile, "image")
 
     const prefix = authMethod === "facial" ? "bio" : "sig"
     const safeCompanyId = sanitizePathPart(companyId)
     const safeEmployeeId = sanitizePathPart(employeeId || "employee")
-    const extension = signatureFile.type === "image/webp" ? "webp" : signatureFile.type === "image/jpeg" ? "jpg" : "png"
+    const extension = validatedFile.extension
     const fileName = `${safeCompanyId}/${prefix}_${Date.now()}_${safeEmployeeId}.${extension}`
-    const buffer = await signatureFile.arrayBuffer()
 
     const { error: uploadError } = await supabaseAdmin.storage
-      .from("ppe_signatures")
-      .upload(fileName, buffer, {
-        contentType: signatureFile.type || "image/png",
+      .from(PRIVATE_STORAGE_BUCKET)
+      .upload(fileName, validatedFile.buffer, {
+        contentType: validatedFile.contentType,
         upsert: false,
       })
 
     if (uploadError) {
       console.error("[signature-upload] storage error:", uploadError)
-      return NextResponse.json({ error: uploadError.message }, { status: 400 })
+      return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }
 
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from("ppe_signatures")
-      .getPublicUrl(fileName)
+    const signed = await getSignedUrl(PRIVATE_STORAGE_BUCKET, fileName, STORAGE_VIEW_EXPIRES_IN)
 
-    return NextResponse.json({ publicUrl, path: fileName })
+    return NextResponse.json({ signedUrl: signed?.signedUrl || null, publicUrl: signed?.signedUrl || null, path: fileName })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Erro interno ao salvar assinatura."
+    if (isValidationResponse(error)) return error
     console.error("[signature-upload] unexpected error:", error)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }
 }

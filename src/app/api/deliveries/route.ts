@@ -128,10 +128,7 @@ export async function DELETE(request: NextRequest) {
 
     if (fetchError) {
       console.error("[API deliveries] Fetch error:", fetchError)
-      return NextResponse.json(
-        { error: fetchError.message, code: fetchError.code, details: fetchError.details },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     if (!delivery) {
@@ -350,10 +347,7 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteError) {
       console.error("[API deliveries] Delete error:", deleteError)
-      return NextResponse.json(
-        { error: deleteError.message, code: deleteError.code, details: deleteError.details },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     // --- 5. Ajustar current_stock direto (sem criar movement) ---

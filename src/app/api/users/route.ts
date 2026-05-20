@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { ensureSameCompany, getTargetUserCompanyId, requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import type { Profile } from "@/types/database"
+import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { createUserSchema, updateUserSchema } from "@/lib/securitySchemas"
+import { isValidationResponse, validateBody } from "@/lib/validateBody"
 
 type AppRole = Profile["role"]
 
@@ -100,7 +103,8 @@ export async function POST(request: Request) {
   if (!auth.authorized) return auth.response
 
   try {
-    const { email, password, full_name, role, company_id } = await request.json()
+    const { data: validated } = validateBody(createUserSchema, await request.json())
+    const { email, password, full_name, role, company_id } = validated
     const normalizedRole = normalizeCompanyRole(role)
     const targetCompanyId = resolveTargetCompanyId(auth.user, company_id || null)
 
@@ -120,6 +124,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Empresa não informada para este usuário." }, { status: 400 })
     }
 
+    const limited = rateLimit(`users:create:company:${targetCompanyId}`, 10, 60 * 60 * 1000)
+    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -131,7 +138,8 @@ export async function POST(request: Request) {
     })
 
     if (authError) {
-      return NextResponse.json({ error: authError.message }, { status: 400 })
+      console.error("[/api/users][POST] auth create error:", authError)
+      return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }
 
     if (authData.user) {
@@ -170,6 +178,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, user: { id: authData.user?.id, email } })
   } catch (err: unknown) {
+    if (isValidationResponse(err)) return err
     console.error("[/api/users][POST] unexpected error:", err)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
@@ -180,7 +189,8 @@ export async function PUT(request: Request) {
   if (!auth.authorized) return auth.response
 
   try {
-    const { id, password, role, full_name } = await request.json()
+    const { data: validated } = validateBody(updateUserSchema, await request.json())
+    const { id, password, role, full_name } = validated
 
     if (typeof id !== "string" || !id) {
       return NextResponse.json({ error: "Usuário não informado." }, { status: 400 })
@@ -232,6 +242,7 @@ export async function PUT(request: Request) {
     if (Object.keys(authUpdates).length > 0) {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, authUpdates)
       if (authError) {
+        console.error("[/api/users][PUT] auth update error:", authError)
         return NextResponse.json({ error: "Falha ao atualizar credenciais." }, { status: 500 })
       }
     }
@@ -267,6 +278,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
+    if (isValidationResponse(err)) return err
     console.error("[/api/users][PUT] unexpected error:", err)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }

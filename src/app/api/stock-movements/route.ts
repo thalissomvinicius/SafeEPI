@@ -117,7 +117,8 @@ export async function POST(request: NextRequest) {
     const { data: ppe, error: ppeError } = await ppeQuery.maybeSingle()
 
     if (ppeError) {
-      return NextResponse.json({ error: ppeError.message, code: ppeError.code, details: ppeError.details }, { status: 500 })
+      console.error("[API stock-movements] PPE fetch error:", ppeError)
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     if (!ppe) {
@@ -141,7 +142,8 @@ export async function POST(request: NextRequest) {
     const { data, error } = await insertMovement(payload)
 
     if (error) {
-      return NextResponse.json({ error: error.message, code: error.code, details: error.details }, { status: 500 })
+      console.error("[API stock-movements] Insert error:", error)
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     if (stockBefore !== null) {
@@ -153,7 +155,8 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       if (stockAfterError) {
-        return NextResponse.json({ error: stockAfterError.message, code: stockAfterError.code, details: stockAfterError.details }, { status: 500 })
+        console.error("[API stock-movements] Stock after error:", stockAfterError)
+        return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
       }
 
       const stockAfter = parseStock((stockAfterData as { current_stock?: unknown } | null)?.current_stock)
@@ -165,7 +168,8 @@ export async function POST(request: NextRequest) {
           .eq("id", ppeId)
 
         if (updateError) {
-          return NextResponse.json({ error: updateError.message, code: updateError.code, details: updateError.details }, { status: 500 })
+          console.error("[API stock-movements] Stock update error:", updateError)
+          return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
         }
       }
     }

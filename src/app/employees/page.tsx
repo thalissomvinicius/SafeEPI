@@ -411,10 +411,6 @@ export default function EmployeesPage() {
           face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
         }
 
-        if (formData.photo_url && formData.photo_url.startsWith('http')) {
-          updates.photo_url = formData.photo_url
-        }
-
         await api.updateEmployee(formData.id, updates as Partial<Employee>, photoFile)
 
         if (formData.photo_url === null) {
@@ -757,7 +753,8 @@ export default function EmployeesPage() {
     setTstRole(getJobTitleName(emp.job_title || "Técnico de Segurança do Trabalho"))
     if (emp.photo_url) {
       try {
-        const res = await fetch(emp.photo_url)
+        const photoUrl = await api.getPrivateAssetUrl(emp.photo_storage_path || emp.photo_url, "download")
+        const res = await fetch(photoUrl || emp.photo_url)
         const blob = await res.blob()
         const b64 = await new Promise<string>((resolve) => {
           const reader = new FileReader()

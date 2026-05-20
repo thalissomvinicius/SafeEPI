@@ -470,7 +470,8 @@ export default function TrainingPage() {
     setTstRole(emp.job_title || "Técnico de Segurança do Trabalho")
     if (emp.photo_url) {
       try {
-        const res = await fetch(emp.photo_url)
+        const photoUrl = await api.getPrivateAssetUrl(emp.photo_storage_path || emp.photo_url, "download")
+        const res = await fetch(photoUrl || emp.photo_url)
         const blob = await res.blob()
         const b64 = await new Promise<string>((resolve) => {
           const reader = new FileReader()
@@ -518,7 +519,8 @@ export default function TrainingPage() {
 
     if (instructor?.photo_url) {
       try {
-        const res = await fetch(instructor.photo_url)
+        const photoUrl = await api.getPrivateAssetUrl(instructor.photo_storage_path || instructor.photo_url, "download")
+        const res = await fetch(photoUrl || instructor.photo_url)
         const blob = await res.blob()
         const b64 = await new Promise<string>((resolve) => {
           const reader = new FileReader()
@@ -717,7 +719,13 @@ export default function TrainingPage() {
     try {
       const signedDocument = await api.getTrainingCertificateDocument(rec.id)
       if (signedDocument?.document_url) {
-        const response = await fetch(signedDocument.document_url)
+        const documentUrl = await api.getPrivateAssetUrl(
+          signedDocument.storage_path || signedDocument.document_url,
+          "download",
+          signedDocument.file_name || "Certificado.pdf",
+        )
+        if (!documentUrl) throw new Error("Nao foi possivel gerar o link seguro do certificado.")
+        const response = await fetch(documentUrl)
         if (!response.ok) throw new Error("PDF arquivado indisponivel.")
         const archivedPdfBlob = await response.blob()
         openPdfDialog(archivedPdfBlob, signedDocument.file_name || "Certificado.pdf", {

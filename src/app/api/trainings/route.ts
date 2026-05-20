@@ -86,10 +86,7 @@ export async function POST(request: NextRequest) {
 
     if (!isTrainingSchemaCompatibilityIssue(fullResult.error)) {
       console.error("[API trainings] Insert error:", fullResult.error)
-      return NextResponse.json(
-        { error: fullResult.error.message, code: fullResult.error.code, details: fullResult.error.details },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     const fallbackResult = await supabaseAdmin
@@ -120,22 +117,11 @@ export async function POST(request: NextRequest) {
       }
 
       console.error("[API trainings] Legacy insert error:", legacyResult.error)
-      return NextResponse.json(
-        { error: legacyResult.error.message, code: legacyResult.error.code, details: legacyResult.error.details },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     console.error("[API trainings] Fallback insert error:", fallbackResult.error)
-    return NextResponse.json(
-      {
-        error:
-          "A tabela trainings do Supabase ainda nao esta pronta para empresa/instrutor/assinatura. Rode safeepi_multi_company.sql e add_training_instructor.sql, depois recarregue o schema do PostgREST.",
-        code: fallbackResult.error.code,
-        details: fallbackResult.error.details,
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   } catch (err) {
     console.error("[API trainings] Unexpected error:", err)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
@@ -169,7 +155,7 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       console.error("[API trainings] Delete error:", error)
-      return NextResponse.json({ error: error.message, code: error.code, details: error.details }, { status: 500 })
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true })

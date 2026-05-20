@@ -41,7 +41,20 @@ type SignedDocumentUploadTarget = {
   error?: string;
   path?: string;
   token?: string;
+  signedUrl?: string;
   publicUrl?: string;
+};
+
+type PrivateAssetMode = "view" | "download";
+
+type PrivateAssetResponse = {
+  assets?: Array<{
+    key: string;
+    path: string | null;
+    signedUrl: string | null;
+    allowed: boolean;
+  }>;
+  error?: string;
 };
 
 type SupabaseLikeError = {
@@ -213,33 +226,6 @@ function isDuplicateCpfIssue(error: unknown): boolean {
     maybeError.status === 409 ||
     (text.includes("duplicate key") && text.includes("cpf")) ||
     text.includes("employees_cpf_key")
-  );
-}
-
-function isMissingDeliveryReturnMotiveIssue(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError;
-  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
-  return (
-    maybeError.code === "PGRST204" &&
-    text.includes("return_motive")
-  ) || (
-    maybeError.code === "42703" &&
-    text.includes("return_motive")
-  );
-}
-
-function shouldRestockReturnedDelivery(motive: string): boolean {
-  const normalized = motive
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-
-  return !(
-    normalized.includes("perda") ||
-    normalized.includes("extravio") ||
-    normalized.includes("dano") ||
-    normalized.includes("quebra")
   );
 }
 
@@ -441,13 +427,95 @@ async function uploadDeliverySignature(
     method: "POST",
     body: formData,
   });
-  const result = await readResponseJson<{ error?: string; publicUrl?: string }>(response);
+  const result = await readResponseJson<{ error?: string; publicUrl?: string; signedUrl?: string; path?: string }>(response);
 
-  if (!response.ok || !result.publicUrl) {
+  if (!response.ok || !result.path) {
     throw new Error(result.error || "Nao foi possivel salvar a assinatura.");
   }
 
-  return result.publicUrl;
+  return result.path;
+}
+
+function storagePathShadowKey(field: string) {
+  if (field === "document_url") return "storage_path";
+  return field.replace(/_url$/, "_storage_path");
+}
+
+function shouldSignStorageValue(value: unknown): value is string {
+  return typeof value === "string" &&
+    value.trim().length > 0 &&
+    !value.startsWith("data:") &&
+    !value.startsWith("blob:") &&
+    !value.startsWith("/");
+}
+
+async function getPrivateAssetUrl(
+  value?: string | null,
+  mode: PrivateAssetMode = "view",
+  downloadName?: string,
+): Promise<string | null> {
+  if (!value) return null;
+  if (!shouldSignStorageValue(value)) return value;
+
+  const response = await fetchWithAuthRetry("/api/storage/signed-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      assets: [{ key: "asset", path: value, mode, downloadName }],
+    }),
+  });
+
+  const data = await readResponseJson<PrivateAssetResponse>(response);
+  if (!response.ok) throw new Error(data.error || "Nao foi possivel gerar URL temporaria.");
+  return data.assets?.[0]?.signedUrl || null;
+}
+
+async function signStorageFields<T extends Record<string, unknown>>(
+  rows: T[],
+  fields: string[],
+  mode: PrivateAssetMode = "view",
+): Promise<T[]> {
+  const assets: Array<{ key: string; path: string; mode: PrivateAssetMode }> = [];
+
+  rows.forEach((row, rowIndex) => {
+    fields.forEach((field) => {
+      const value = row[field];
+      if (shouldSignStorageValue(value)) {
+        assets.push({ key: `${rowIndex}:${field}`, path: value, mode });
+      }
+    });
+  });
+
+  if (assets.length === 0) return rows;
+
+  const signedByKey = new Map<string, string>();
+  for (let index = 0; index < assets.length; index += 50) {
+    const batch = assets.slice(index, index + 50);
+    const response = await fetchWithAuthRetry("/api/storage/signed-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assets: batch }),
+    });
+    const data = await readResponseJson<PrivateAssetResponse>(response);
+    if (!response.ok) throw new Error(data.error || "Nao foi possivel assinar arquivos privados.");
+    for (const asset of data.assets || []) {
+      if (asset.signedUrl) signedByKey.set(asset.key, asset.signedUrl);
+    }
+  }
+
+  return rows.map((row, rowIndex) => {
+    const next: Record<string, unknown> = { ...row };
+    fields.forEach((field) => {
+      const originalValue = row[field];
+      const shadowKey = storagePathShadowKey(field);
+      if (shouldSignStorageValue(originalValue) && !next[shadowKey]) {
+        next[shadowKey] = originalValue;
+      }
+      const signedUrl = signedByKey.get(`${rowIndex}:${field}`);
+      if (signedUrl) next[field] = signedUrl;
+    });
+    return next as T;
+  });
 }
 
 async function uploadEmployeePhoto(photoFile: File, employeeId?: string): Promise<string> {
@@ -464,13 +532,13 @@ async function uploadEmployeePhoto(photoFile: File, employeeId?: string): Promis
     method: "POST",
     body: formData,
   });
-  const result = await readResponseJson<{ error?: string; publicUrl?: string }>(response);
+  const result = await readResponseJson<{ error?: string; publicUrl?: string; signedUrl?: string; path?: string }>(response);
 
-  if (!response.ok || !result.publicUrl) {
+  if (!response.ok || !result.path) {
     throw new Error(result.error || "Nao foi possivel salvar a foto do colaborador.");
   }
 
-  return result.publicUrl;
+  return result.path;
 }
 
 async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
@@ -528,44 +596,35 @@ async function insertStockOutMovement(
   await insertStockMovementViaApi(payload as Omit<StockMovement, "id" | "created_at" | "ppe">);
 }
 
-async function insertStockInMovement(
-  ppeId: string,
-  quantity: number,
-  motive: string,
-  deliveryId?: string | null,
-): Promise<void> {
-  if (quantity <= 0) return;
-
-  const companyId = await getCurrentCompanyId();
-  const payload: Record<string, unknown> = {
-    ppe_id: ppeId,
-    quantity,
-    type: "ENTRADA",
-    motive,
-    ...(companyId ? { company_id: companyId } : {}),
-    ...(deliveryId ? { delivery_id: deliveryId } : {}),
-  };
-
-  try {
-    await insertStockMovementViaApi(payload as Omit<StockMovement, "id" | "created_at" | "ppe">);
-  } catch (error) {
-    console.warn("Nao foi possivel registrar entrada automatica de devolucao:", error);
-  }
-}
-
 export const api = {
   async getAuthHeaders(): Promise<Record<string, string>> {
     return getSessionAuthHeaders();
   },
 
+  async getPrivateAssetUrl(value?: string | null, mode: PrivateAssetMode = "view", downloadName?: string) {
+    return getPrivateAssetUrl(value, mode, downloadName);
+  },
+
   // --- Autenticação ---
   async login(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
+    const data = await readResponseJson<{ error?: string; session?: Session; user?: Session["user"] }>(response);
+
+    if (!response.ok || !data.session) {
+      throw new Error(data.error || "Falha ao autenticar.");
+    }
+
+    const { data: sessionData, error } = await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+
     if (error) throw error;
-    return data;
+    return sessionData;
   },
 
   async logout() {
@@ -640,7 +699,7 @@ export const api = {
       });
       const uploadTarget = await readResponseJson<SignedDocumentUploadTarget>(uploadTargetResponse);
 
-      if (!uploadTargetResponse.ok || !uploadTarget.path || !uploadTarget.token || !uploadTarget.publicUrl) {
+      if (!uploadTargetResponse.ok || !uploadTarget.path || !uploadTarget.token) {
         throw new Error(uploadTarget.error || "Nao foi possivel preparar upload direto do PDF.");
       }
 
@@ -656,7 +715,7 @@ export const api = {
 
       preuploadedPdf = {
         storagePath: uploadTarget.path,
-        documentUrl: uploadTarget.publicUrl,
+        documentUrl: uploadTarget.path,
       };
     }
 
@@ -708,7 +767,11 @@ export const api = {
       throw error;
     }
 
-    return data as SignedDocument[];
+    return signStorageFields((data || []) as unknown as Record<string, unknown>[], [
+      "document_url",
+      "signature_url",
+      "photo_evidence_url",
+    ]) as Promise<SignedDocument[]>;
   },
 
   async getTrainingCertificateDocument(trainingId: string) {
@@ -722,7 +785,12 @@ export const api = {
       throw error;
     }
 
-    return (data?.[0] || null) as SignedDocument | null;
+    const signed = await signStorageFields((data || []) as unknown as Record<string, unknown>[], [
+      "document_url",
+      "signature_url",
+      "photo_evidence_url",
+    ]);
+    return (signed?.[0] || null) as SignedDocument | null;
   },
 
   async getProfileRole(userId: string) {
@@ -940,43 +1008,51 @@ export const api = {
 
   async addThirdParty(thirdParty: Omit<ThirdParty, 'id' | 'created_at' | 'updated_at'>) {
     const payload = await withCompanyId(thirdParty as Record<string, unknown>);
-    const { data, error } = await withSessionRetry(() =>
-      supabase
-        .from('third_parties')
-        .insert([payload])
-        .select()
-    );
 
-    if (error) {
-      if (isMissingThirdPartiesTableIssue(error)) {
+    const response = await fetchWithAuthRetry("/api/third-parties", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        thirdParty: payload,
+        company_id: payload.company_id || getStoredMasterCompanyId(),
+      }),
+    });
+    const result = await readResponseJson<{ error?: string; thirdParty?: ThirdParty; code?: string }>(response);
+
+    if (!response.ok) {
+      if (result.code === "42P01" || result.code === "PGRST205") {
         throw new Error("A tabela third_parties ainda nao existe no Supabase. Rode o SQL safeepi_third_parties.sql antes de cadastrar terceiros.");
       }
-      throw error;
+      throw new Error(result.error || "Erro ao cadastrar terceiro.");
     }
-    return data[0] as ThirdParty;
+
+    return result.thirdParty as ThirdParty;
   },
 
   async updateThirdParty(id: string, updates: Partial<ThirdParty>) {
-    const { data, error } = await withSessionRetry(() =>
-      supabase
-        .from('third_parties')
-        .update(updates)
-        .eq('id', id)
-        .select()
-    );
+    const response = await fetchWithAuthRetry("/api/third-parties", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, updates, company_id: getStoredMasterCompanyId() }),
+    });
+    const result = await readResponseJson<{ error?: string; thirdParty?: ThirdParty }>(response);
 
-    if (error) throw error;
-    return data[0] as ThirdParty;
+    if (!response.ok) throw new Error(result.error || "Erro ao atualizar terceiro.");
+    return result.thirdParty as ThirdParty;
   },
 
   async deleteThirdParty(id: string) {
-    const { error } = await withSessionRetry(() =>
-      supabase
-        .from('third_parties')
-        .update({ active: false })
-        .eq('id', id)
-    );
-    if (error) throw error;
+    const companyId = await getCurrentCompanyId();
+    const params = new URLSearchParams({ id });
+    if (companyId) params.set("company_id", companyId);
+    const storedMasterCompanyId = getStoredMasterCompanyId();
+    if (!companyId && storedMasterCompanyId) params.set("company_id", storedMasterCompanyId);
+
+    const response = await fetchWithAuthRetry(`/api/third-parties?${params.toString()}`, {
+      method: "DELETE",
+    });
+    const result = await readResponseJson<{ error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || "Erro ao remover terceiro.");
   },
 
   // --- Cargos e Setores ---
@@ -1108,7 +1184,7 @@ export const api = {
       employees = employees.filter(employee => !archivedIds.has(employee.id));
     }
 
-    return employees;
+    return signStorageFields(employees as unknown as Record<string, unknown>[], ["photo_url"]) as Promise<Employee[]>;
   },
 
   async addEmployee(employee: Omit<Employee, 'id' | 'created_at'>, photoFile?: File) {
@@ -1236,16 +1312,15 @@ export const api = {
   },
 
   async updatePpe(id: string, updates: Partial<PPE>) {
-    const { data, error } = await withSessionRetry(() =>
-      supabase
-        .from('ppes')
-        .update(updates)
-        .eq('id', id)
-        .select()
-    );
-    
-    if (error) throw error;
-    return data[0] as PPE;
+    const response = await fetchWithAuthRetry("/api/ppes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, updates, company_id: getStoredMasterCompanyId() }),
+    });
+    const result = await readResponseJson<{ error?: string; ppe?: PPE }>(response);
+
+    if (!response.ok) throw new Error(result.error || "Erro ao atualizar EPI/CA.");
+    return result.ppe as PPE;
   },
 
   async deletePpe(id: string) {
@@ -1304,7 +1379,7 @@ export const api = {
     if (companyId) query = query.eq('company_id', companyId);
     const { data, error } = await withSessionRetry(() => query);
     if (error) throw error;
-    return data as DeliveryWithRelations[];
+    return signStorageFields((data || []) as unknown as Record<string, unknown>[], ["signature_url"]) as Promise<DeliveryWithRelations[]>;
   },
 
   async getEmployeeHistory(employeeId: string) {
@@ -1322,7 +1397,7 @@ export const api = {
     );
     
     if (error) throw error;
-    return data as DeliveryWithRelations[];
+    return signStorageFields((data || []) as unknown as Record<string, unknown>[], ["signature_url"]) as Promise<DeliveryWithRelations[]>;
   },
 
   async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at'>, signatureFile?: File) {
@@ -1439,105 +1514,31 @@ export const api = {
   },
 
   async returnDelivery(deliveryId: string, motive: string) {
-    const { data: deliveryBefore } = await withSessionRetry(() =>
-      supabase
-        .from('deliveries')
-        .select('ppe_id, quantity, returned_quantity, returned_at')
-        .eq('id', deliveryId)
-        .maybeSingle()
-    );
-
-    const alreadyReturned = Number(deliveryBefore?.returned_quantity || 0);
-    const totalQuantity = Number(deliveryBefore?.quantity || 0);
-    const quantityToReturn = deliveryBefore?.returned_at ? 0 : Math.max(0, totalQuantity - alreadyReturned);
-
-    const { error } = await withSessionRetry(() =>
-      supabase
-        .from('deliveries')
-        .update({ returned_at: new Date().toISOString(), return_motive: motive, returned_quantity: totalQuantity })
-        .eq('id', deliveryId)
-    );
-
-    if (!error) {
-      if (deliveryBefore?.ppe_id && quantityToReturn > 0 && shouldRestockReturnedDelivery(motive)) {
-        await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`, deliveryId);
-      }
-      return;
-    }
-
-    if (isMissingDeliveryReturnMotiveIssue(error)) {
-      const { error: fallbackError } = await withSessionRetry(() =>
-        supabase
-          .from('deliveries')
-          .update({ returned_at: new Date().toISOString() })
-          .eq('id', deliveryId)
-      );
-
-      if (!fallbackError) {
-        if (deliveryBefore?.ppe_id && quantityToReturn > 0 && shouldRestockReturnedDelivery(motive)) {
-          await insertStockInMovement(deliveryBefore.ppe_id, quantityToReturn, `Devolucao de EPI (${motive})`, deliveryId);
-        }
-        return;
-      }
-
-      throw fallbackError;
-    }
-
-    throw error;
+    const response = await fetchWithAuthRetry("/api/deliveries/return", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deliveryId, motive, company_id: getStoredMasterCompanyId() }),
+    });
+    const result = await readResponseJson<{ error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || "Erro ao devolver entrega.");
   },
 
   async returnDeliveryQuantity(deliveryId: string, motive: string, quantity: number) {
     if (quantity <= 0) return;
 
-    const { data: delivery, error: fetchError } = await withSessionRetry(() =>
-      supabase
-        .from('deliveries')
-        .select('id, ppe_id, quantity, returned_quantity, returned_at')
-        .eq('id', deliveryId)
-        .maybeSingle()
-    );
-
-    if (fetchError) throw fetchError;
-    if (!delivery) throw new Error("Entrega anterior nao encontrada para baixa parcial.");
-
-    const totalQuantity = Number(delivery.quantity || 0);
-    const alreadyReturned = Number(delivery.returned_quantity || 0);
-    const remaining = Math.max(0, totalQuantity - alreadyReturned);
-    const quantityToReturn = Math.min(quantity, remaining);
-
-    if (quantityToReturn <= 0) return;
-
-    const nextReturnedQuantity = alreadyReturned + quantityToReturn;
-    const shouldClose = nextReturnedQuantity >= totalQuantity;
-    const updatePayload = {
-      returned_quantity: nextReturnedQuantity,
-      return_motive: motive,
-      ...(shouldClose ? { returned_at: new Date().toISOString() } : {}),
-    };
-
-    const { error } = await withSessionRetry(() =>
-      supabase
-        .from('deliveries')
-        .update(updatePayload)
-        .eq('id', deliveryId)
-    );
-
-    if (error) throw error;
-
-    if (shouldRestockReturnedDelivery(motive)) {
-      await insertStockInMovement(delivery.ppe_id, quantityToReturn, `Baixa parcial por substituicao (${motive})`, deliveryId);
-    }
+    const response = await fetchWithAuthRetry("/api/deliveries/return", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deliveryId, motive, quantity, company_id: getStoredMasterCompanyId() }),
+    });
+    const result = await readResponseJson<{ error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || "Erro ao devolver entrega.");
   },
 
   async returnMultipleDeliveries(deliveryIds: string[], motive: string) {
-    const { error } = await withSessionRetry(() =>
-      supabase
-        .from('deliveries')
-        .update({ returned_at: new Date().toISOString(), return_motive: motive })
-        .in('id', deliveryIds)
-    );
-    
-    if (error) throw error;
+    for (const deliveryId of deliveryIds) {
+      await this.returnDelivery(deliveryId, motive);
+    }
   },
 
   // --- Treinamentos ---

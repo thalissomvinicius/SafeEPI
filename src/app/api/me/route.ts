@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getSupabaseAdminConfigError, supabaseAdmin } from "@/lib/supabaseAdmin"
+import { signStorageValue } from "@/lib/privateStorage"
 import type { Company, Profile } from "@/types/database"
 
 type AppRole = Profile["role"]
@@ -110,6 +111,13 @@ export async function GET(request: Request) {
 
   const fullName = profile?.full_name || user.user_metadata?.full_name || user.email || ""
   const email = profile?.email || user.email || null
+  const signedCompany = company
+    ? {
+        ...company,
+        logo_storage_path: company.logo_url || null,
+        logo_url: await signStorageValue(company.logo_url),
+      }
+    : null
 
   // Mantém profiles em sincronia com a fonte autoritativa (membership).
   if (!profile) {
@@ -136,7 +144,7 @@ export async function GET(request: Request) {
       full_name: fullName,
       role,
       company_id: companyId,
-      company,
+      company: signedCompany,
     },
   })
 }

@@ -96,6 +96,7 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     const now = new Date()
     const getStartDate = () => {
       if (dateFilter === "last7") {
@@ -140,13 +141,13 @@ export default function Dashboard() {
       return diffDays < 90
     }).length
 
-    setStats({
+    const nextStats = {
       deliveries: filteredDeliveries.length,
       employees: rawEmployees.filter(e => e.active).length,
       criticalCAs: criticalCount,
       lowStock: rawPpes.filter(p => p.active && (p.current_stock || 0) <= 5).length,
       signedDocuments: filteredDocuments.length
-    })
+    }
 
     const chartStart = startDate || (() => {
       const start = new Date(now)
@@ -170,8 +171,16 @@ export default function Dashboard() {
       ).length
       return { name: dateStr, value: count }
     })
-    setChartData(buckets)
-    setRecentDeliveries(filteredDeliveries.slice(0, 5))
+    queueMicrotask(() => {
+      if (cancelled) return
+      setStats(nextStats)
+      setChartData(buckets)
+      setRecentDeliveries(filteredDeliveries.slice(0, 5))
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [rawEmployees, rawPpes, rawDeliveries, rawDocuments, dateFilter, customStartDate, customEndDate])
 
   if (loading) return <DashboardSkeleton />

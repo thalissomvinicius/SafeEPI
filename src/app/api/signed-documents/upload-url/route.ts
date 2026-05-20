@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { PRIVATE_STORAGE_BUCKET } from "@/lib/privateStorage"
+import { getClientIp } from "@/lib/getClientIp"
+import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { uploadFieldsSchema } from "@/lib/securitySchemas"
+import { isValidationResponse, validateBody } from "@/lib/validateBody"
 
 const VALID_DOCUMENT_TYPES = new Set([
   "delivery",
@@ -17,6 +22,10 @@ function sanitizeFileName(fileName: string) {
     .replace(/[^a-zA-Z0-9_.-]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 140) || "documento_assinado.pdf"
+}
+
+function hasExecutableExtension(fileName: string) {
+  return /\.(exe|sh|js|php|py|bat)$/i.test(fileName)
 }
 
 async function validateRemoteLink(linkToken: string | null, employeeId: string | null) {
@@ -37,11 +46,22 @@ async function validateRemoteLink(linkToken: string | null, employeeId: string |
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimit(`upload:signed-documents-url:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+  if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
+
+  try {
   const formData = await request.formData()
-  const documentType = String(formData.get("document_type") || "")
-  const employeeId = String(formData.get("employee_id") || "") || null
-  const linkToken = String(formData.get("link_token") || "") || null
-  const requestedCompanyId = String(formData.get("company_id") || "") || null
+  const { data: fields } = validateBody(uploadFieldsSchema, {
+    document_type: formData.get("document_type") || undefined,
+    employee_id: formData.get("employee_id") || undefined,
+    link_token: formData.get("link_token") || undefined,
+    company_id: formData.get("company_id") || undefined,
+    file_name: formData.get("file_name") || undefined,
+  })
+  const documentType = fields.document_type || ""
+  const employeeId = fields.employee_id || null
+  const linkToken = fields.link_token || null
+  const requestedCompanyId = fields.company_id || null
 
   if (!VALID_DOCUMENT_TYPES.has(documentType)) {
     return NextResponse.json({ error: "Tipo de documento invalido." }, { status: 400 })
@@ -67,24 +87,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Empresa atual nao identificada para preparar upload." }, { status: 400 })
   }
 
-  const safeFileName = sanitizeFileName(String(formData.get("file_name") || "documento_assinado.pdf"))
-  const storagePath = `signed-documents/${documentType}/${Date.now()}_${safeFileName}`
+  const requestedFileName = fields.file_name || "documento_assinado.pdf"
+  if (hasExecutableExtension(requestedFileName) || !requestedFileName.toLowerCase().endsWith(".pdf")) {
+    return NextResponse.json({ error: "Nome ou extensao de arquivo invalida." }, { status: 400 })
+  }
+
+  const safeFileName = sanitizeFileName(requestedFileName)
+  const storagePath = `signed-documents/${companyId}/${documentType}/${Date.now()}_${safeFileName}`
   const { data, error } = await supabaseAdmin.storage
-    .from("ppe_signatures")
+    .from(PRIVATE_STORAGE_BUCKET)
     .createSignedUploadUrl(storagePath)
 
   if (error || !data) {
-    return NextResponse.json({ error: error?.message || "Nao foi possivel preparar upload do PDF." }, { status: 400 })
+    console.error("[signed-documents/upload-url] signed upload error:", error)
+    return NextResponse.json({ error: "Nao foi possivel preparar upload do PDF." }, { status: 400 })
   }
-
-  const { data: publicUrlData } = supabaseAdmin.storage
-    .from("ppe_signatures")
-    .getPublicUrl(storagePath)
 
   return NextResponse.json({
     path: storagePath,
     token: data.token,
     signedUrl: data.signedUrl,
-    publicUrl: publicUrlData.publicUrl,
   })
+  } catch (error: unknown) {
+    if (isValidationResponse(error)) return error
+    console.error("[signed-documents/upload-url] unexpected error:", error)
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
+  }
 }

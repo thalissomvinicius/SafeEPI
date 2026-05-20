@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { requireAuthorizedUser } from "@/lib/serverAuth"
+import { getSignedUrl, PRIVATE_STORAGE_BUCKET, signStorageValue, STORAGE_VIEW_EXPIRES_IN } from "@/lib/privateStorage"
+import { getClientIp } from "@/lib/getClientIp"
+import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { isValidationResponse } from "@/lib/validateBody"
+import { validateUpload } from "@/lib/validateUpload"
 
 const VALID_DOCUMENT_TYPES = new Set([
   "delivery",
@@ -77,17 +83,33 @@ async function validateRemoteLink(linkToken: string | null, employeeId: string |
   return { ok: true, companyId: link.company_id || null }
 }
 
-function getFileExtension(file: File) {
-  if (file.type === "image/png") return "png"
-  if (file.type === "image/webp") return "webp"
-  return "jpg"
+function isValidPreuploadedPath(path: string, documentType: string) {
+  return (
+    path.startsWith(`signed-documents/${documentType}/`) ||
+    new RegExp(`^signed-documents/[^/]+/${documentType}/`).test(path)
+  ) && !path.includes("..")
 }
 
-function isValidPreuploadedPath(path: string, documentType: string) {
-  return path.startsWith(`signed-documents/${documentType}/`) && !path.includes("..")
+async function withSignedDocumentUrls<T extends {
+  document_url?: string | null
+  storage_path?: string | null
+  signature_url?: string | null
+  photo_evidence_url?: string | null
+}>(document: T) {
+  return {
+    ...document,
+    signature_storage_path: document.signature_url || null,
+    photo_evidence_storage_path: document.photo_evidence_url || null,
+    document_url: await signStorageValue(document.storage_path || document.document_url),
+    signature_url: await signStorageValue(document.signature_url),
+    photo_evidence_url: await signStorageValue(document.photo_evidence_url),
+  }
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimit(`upload:signed-documents:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+  if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
+
   try {
     const formData = await request.formData()
     const pdfFile = formData.get("pdfFile")
@@ -98,6 +120,7 @@ export async function POST(request: Request) {
     const preuploadedDocumentUrl = String(formData.get("document_url") || "")
     const hasPreuploadedPdf = Boolean(preuploadedStoragePath && preuploadedDocumentUrl)
     const createdBy = await resolveUserId(request)
+    const auth = await requireAuthorizedUser(request)
     let remoteCompanyId: string | null = null
 
     if (!VALID_DOCUMENT_TYPES.has(documentType)) {
@@ -118,7 +141,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
       }
       remoteCompanyId = remoteLink.companyId
-    } else if (!createdBy) {
+    } else if (!auth.authorized || !createdBy) {
       return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
     }
 
@@ -133,60 +156,73 @@ export async function POST(request: Request) {
       "documento_assinado.pdf"
     ))
     let storagePath = preuploadedStoragePath
-    let documentUrl = preuploadedDocumentUrl
+    let documentUrl = preuploadedDocumentUrl || preuploadedStoragePath
 
     if (!hasPreuploadedPdf) {
       const uploadFile = pdfFile as File
-      storagePath = `signed-documents/${documentType}/${Date.now()}_${fileName}`
-      const arrayBuffer = await uploadFile.arrayBuffer()
+      const validatedPdf = await validateUpload(uploadFile, "pdf")
+      const targetCompanyPath = remoteCompanyId ||
+        (auth.authorized && auth.user.role === "MASTER"
+          ? String(formData.get("company_id") || "global")
+          : auth.authorized
+            ? auth.user.company_id || "global"
+            : "global")
+      storagePath = `signed-documents/${targetCompanyPath}/${documentType}/${Date.now()}_${fileName}`
 
       const { error: uploadError } = await supabaseAdmin.storage
-        .from("ppe_signatures")
-        .upload(storagePath, arrayBuffer, {
-          contentType: uploadFile.type || "application/pdf",
+        .from(PRIVATE_STORAGE_BUCKET)
+        .upload(storagePath, validatedPdf.buffer, {
+          contentType: validatedPdf.contentType,
           upsert: false,
         })
 
       if (uploadError) {
-        return NextResponse.json({ error: uploadError.message }, { status: 400 })
+        console.error("[signed-documents] pdf upload error:", uploadError)
+        return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
       }
 
-      const { data: publicUrlData } = supabaseAdmin.storage
-        .from("ppe_signatures")
-        .getPublicUrl(storagePath)
-      documentUrl = publicUrlData.publicUrl
+      documentUrl = storagePath
     }
 
     let photoEvidenceUrl = String(formData.get("photo_evidence_url") || "") || null
     let photoEvidenceStoragePath: string | null = null
     const photoEvidenceFile = formData.get("photoEvidenceFile")
     if (photoEvidenceFile instanceof File && photoEvidenceFile.size > 0) {
-      const evidencePath = `signed-documents/evidence/${documentType}/${Date.now()}_${sanitizeFileName(photoEvidenceFile.name || `foto.${getFileExtension(photoEvidenceFile)}`)}`
+      const validatedEvidence = await validateUpload(photoEvidenceFile, "image")
+      const targetCompanyPath = remoteCompanyId ||
+        (auth.authorized && auth.user.role === "MASTER"
+          ? String(formData.get("company_id") || "global")
+          : auth.authorized
+            ? auth.user.company_id || "global"
+            : "global")
+      const evidencePath = `signed-documents/${targetCompanyPath}/evidence/${documentType}/${Date.now()}_${sanitizeFileName(photoEvidenceFile.name || `foto.${validatedEvidence.extension}`)}`
       photoEvidenceStoragePath = evidencePath
-      const evidenceBuffer = await photoEvidenceFile.arrayBuffer()
       const { error: evidenceUploadError } = await supabaseAdmin.storage
-        .from("ppe_signatures")
-        .upload(evidencePath, evidenceBuffer, {
-          contentType: photoEvidenceFile.type || "image/jpeg",
+        .from(PRIVATE_STORAGE_BUCKET)
+        .upload(evidencePath, validatedEvidence.buffer, {
+          contentType: validatedEvidence.contentType,
           upsert: false,
         })
 
       if (evidenceUploadError) {
-        await supabaseAdmin.storage.from("ppe_signatures").remove([storagePath])
-        return NextResponse.json({ error: evidenceUploadError.message }, { status: 400 })
+        console.error("[signed-documents] evidence upload error:", evidenceUploadError)
+        await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath])
+        return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
       }
 
-      const { data: evidencePublicUrlData } = supabaseAdmin.storage
-        .from("ppe_signatures")
-        .getPublicUrl(evidencePath)
-      photoEvidenceUrl = evidencePublicUrlData.publicUrl
+      photoEvidenceUrl = evidencePath
     }
 
     const deliveryIds = parseJsonField<string[]>(formData.get("delivery_ids"), [])
       .filter((id) => typeof id === "string" && id.length > 0)
 
     const metadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
-    const companyId = remoteCompanyId || String(formData.get("company_id") || "") || null
+    const companyId = remoteCompanyId ||
+      (auth.authorized && auth.user.role === "MASTER"
+        ? String(formData.get("company_id") || "") || null
+        : auth.authorized
+          ? auth.user.company_id
+          : null)
     const insertPayload = {
       company_id: companyId,
       document_type: documentType,
@@ -217,19 +253,27 @@ export async function POST(request: Request) {
     if (error) {
       const cleanupPaths = [storagePath, photoEvidenceStoragePath].filter((path): path is string => Boolean(path))
       if (isMissingAuditTable(error)) {
-        await supabaseAdmin.storage.from("ppe_signatures").remove(cleanupPaths)
+        await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove(cleanupPaths)
         return NextResponse.json({
           error: "A tabela signed_documents ainda nao existe no Supabase. Rode o script signed_documents_audit.sql para ativar o arquivo juridico dos PDFs.",
         }, { status: 501 })
       }
 
-      await supabaseAdmin.storage.from("ppe_signatures").remove(cleanupPaths)
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove(cleanupPaths)
+      console.error("[signed-documents] insert error:", error)
+      return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true, document: data })
+    const document = await withSignedDocumentUrls(data)
+    if (document.storage_path && !document.document_url) {
+      const signed = await getSignedUrl(PRIVATE_STORAGE_BUCKET, document.storage_path, STORAGE_VIEW_EXPIRES_IN)
+      document.document_url = signed?.signedUrl || document.storage_path
+    }
+
+    return NextResponse.json({ success: true, document })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Erro interno ao arquivar documento assinado."
-    return NextResponse.json({ error: message }, { status: 500 })
+    if (isValidationResponse(error)) return error
+    console.error("[signed-documents] unexpected error:", error)
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }
 }

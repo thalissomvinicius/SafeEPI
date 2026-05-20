@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { getClientIp } from "@/lib/getClientIp"
+import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
 
@@ -22,6 +24,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { token, signatureBase64, authMethod = "manual", photoBase64 = null } = body
+    const rateLimitKey = isValidToken(token)
+      ? `remote-training-signature:token:${token}`
+      : `remote-training-signature:ip:${getClientIp(request)}`
+    const limited = rateLimit(rateLimitKey, 10, 60 * 60 * 1000)
+    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     if (!isValidToken(token)) {
       return NextResponse.json({ error: "Token inválido." }, { status: 401 })

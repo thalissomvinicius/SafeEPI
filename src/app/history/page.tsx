@@ -84,7 +84,13 @@ export default function HistoryPage() {
       const signedDocument = getSignedDocumentForDelivery(rec.id)
 
       if (signedDocument?.document_url) {
-        const archivedResponse = await fetch(signedDocument.document_url)
+        const documentUrl = await api.getPrivateAssetUrl(
+          signedDocument.storage_path || signedDocument.document_url,
+          "download",
+          signedDocument.file_name || `Comprovante_${rec.id.slice(0, 8)}.pdf`,
+        )
+        if (!documentUrl) throw new Error("Nao foi possivel gerar o link seguro do PDF.")
+        const archivedResponse = await fetch(documentUrl)
         const archivedBlob = await archivedResponse.blob()
         openPdfDialog(archivedBlob, signedDocument.file_name || `Comprovante_${rec.id.slice(0, 8)}.pdf`, {
           title: "Comprovante arquivado",
@@ -95,9 +101,15 @@ export default function HistoryPage() {
       }
       
       // 1. Converter URL da assinatura para Base64 (necessário para jsPDF)
-      const base64Signature = await urlToBase64(rec.signature_url)
+      const signatureUrl = await api.getPrivateAssetUrl(rec.signature_storage_path || rec.signature_url, "download")
+      const base64Signature = await urlToBase64(signatureUrl || rec.signature_url)
       const photoBase64 = signedDocument?.photo_evidence_url
-        ? await urlToBase64(signedDocument.photo_evidence_url).catch(() => undefined)
+        ? await urlToBase64(
+          await api.getPrivateAssetUrl(
+            signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url,
+            "download",
+          ) || signedDocument.photo_evidence_url,
+        ).catch(() => undefined)
         : undefined
       const authMethod = signedDocument?.auth_method === "manual_facial" || rec.auth_method === "manual_facial"
         ? "manual_facial"

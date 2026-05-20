@@ -2,6 +2,10 @@ import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { signStorageValue } from "@/lib/privateStorage"
+import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { remoteLinkCompleteSchema, remoteLinkCreateSchema } from "@/lib/securitySchemas"
+import { isValidationResponse, validateBody } from "@/lib/validateBody"
 
 function resolveCompanyId(authUser: { role: string; company_id: string | null }, requestedCompanyId: unknown) {
   if (authUser.role === "MASTER") return typeof requestedCompanyId === "string" && requestedCompanyId ? requestedCompanyId : null
@@ -15,7 +19,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json()
+    const { data: body } = validateBody(remoteLinkCreateSchema, await request.json())
     const { employee_id, type, data, expires_hours = 24, company_id } = body
     const companyId = resolveCompanyId(auth.user, company_id)
 
@@ -26,6 +30,9 @@ export async function POST(request: NextRequest) {
     if (!companyId) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
     }
+
+    const limited = rateLimit(`remote-links:create:company:${companyId}`, 10, 60 * 60 * 1000)
+    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     const dbType = type === "training_signature" ? "delivery" : type
     const linkData = type === "training_signature"
@@ -65,14 +72,14 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("[remote-links] Create error:", error)
-      return NextResponse.json({ error: error.message, details: error }, { status: 500 })
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
     return NextResponse.json({ link })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erro interno"
+    if (isValidationResponse(err)) return err
     console.error("[remote-links] Unexpected error:", err)
-    return NextResponse.json({ error: "Erro interno", message }, { status: 500 })
+    return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }
 }
 
@@ -153,7 +160,18 @@ export async function GET(request: NextRequest) {
     }
 
     if (link.status === "completed" && includeCompleted) {
-      return NextResponse.json({ link })
+      return NextResponse.json({
+        link: {
+          ...link,
+          employee: link.employee
+            ? {
+                ...link.employee,
+                photo_storage_path: link.employee.photo_url || null,
+                photo_url: await signStorageValue(link.employee.photo_url),
+              }
+            : link.employee,
+        },
+      })
     }
 
     if (new Date(link.expires_at) < new Date()) {
@@ -173,7 +191,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Este link expirou. Solicite um novo link ao responsável.", status: "expired" }, { status: 410 })
     }
 
-    return NextResponse.json({ link })
+    return NextResponse.json({
+      link: {
+        ...link,
+        employee: link.employee
+          ? {
+              ...link.employee,
+              photo_storage_path: link.employee.photo_url || null,
+              photo_url: await signStorageValue(link.employee.photo_url),
+            }
+          : link.employee,
+      },
+    })
   } catch (err) {
     console.error("[remote-links] GET error:", err)
     return NextResponse.json({ error: "Erro interno" }, { status: 500 })
@@ -187,7 +216,7 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const body = await request.json()
+    const { data: body } = validateBody(remoteLinkCompleteSchema, await request.json())
     const { token } = body
 
     if (!token) {
@@ -208,6 +237,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
+    if (isValidationResponse(err)) return err
     console.error("[remote-links] PUT error:", err)
     return NextResponse.json({ error: "Erro interno" }, { status: 500 })
   }
