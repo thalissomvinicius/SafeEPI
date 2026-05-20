@@ -77,6 +77,43 @@ async function insertMovement(payload: Record<string, unknown>) {
     .select()
 }
 
+export async function GET(request: NextRequest) {
+  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
+  if (!auth.authorized) {
+    return auth.response
+  }
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
+
+    if (auth.user.role !== "MASTER" && !companyId) {
+      return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
+    }
+
+    let query = supabaseAdmin
+      .from("stock_movements")
+      .select("*, ppe:ppes(name, active)")
+      .order("created_at", { ascending: false })
+      .limit(500)
+
+    if (companyId) query = query.eq("company_id", companyId)
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error("[API stock-movements] List error:", error)
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
+    }
+
+    const movements = (data || []).filter((movement) => !movement.ppe || movement.ppe.active !== false)
+    return NextResponse.json({ movements })
+  } catch (err) {
+    console.error("[API stock-movements] Unexpected list error:", err)
+    return NextResponse.json({ error: "Erro interno ao carregar auditoria de estoque." }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "ALMOXARIFE"])
   if (!auth.authorized) {

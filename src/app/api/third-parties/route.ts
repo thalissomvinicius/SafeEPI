@@ -26,6 +26,35 @@ function pickThirdPartyPayload(raw: unknown) {
   )
 }
 
+export async function GET(request: NextRequest) {
+  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
+  if (!auth.authorized) return auth.response
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
+
+    let query = supabaseAdmin
+      .from("third_parties")
+      .select("*")
+      .order("name", { ascending: true })
+
+    if (companyId) query = query.eq("company_id", companyId)
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error("[API third-parties] List error:", error)
+      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
+    }
+
+    return NextResponse.json({ thirdParties: data || [] })
+  } catch (err) {
+    console.error("[API third-parties] Unexpected list error:", err)
+    return NextResponse.json({ error: "Erro interno ao carregar terceiros." }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
   if (!auth.authorized) return auth.response

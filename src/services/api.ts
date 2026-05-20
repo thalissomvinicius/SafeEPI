@@ -996,14 +996,17 @@ export const api = {
   // --- Terceiros / Tomadores ---
   async getThirdParties() {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('third_parties').select('*').order('name', { ascending: true });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) {
-      if (isMissingThirdPartiesTableIssue(error)) return [] as ThirdParty[];
-      throw error;
+    const params = new URLSearchParams();
+    if (companyId) params.set("company_id", companyId);
+
+    const response = await fetchWithAuthRetry(`/api/third-parties${params.size ? `?${params.toString()}` : ""}`);
+    const result = await readResponseJson<{ error?: string; thirdParties?: ThirdParty[] }>(response);
+
+    if (!response.ok) {
+      throw new Error(result.error || "Erro ao carregar terceiros.");
     }
-    return data as ThirdParty[];
+
+    return result.thirdParties || [];
   },
 
   async addThirdParty(thirdParty: Omit<ThirdParty, 'id' | 'created_at' | 'updated_at'>) {
@@ -1344,11 +1347,17 @@ export const api = {
   // --- Estoque (Stock Movements) ---
   async getStockMovements() {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('stock_movements').select('*, ppe:ppes(name, active)').order('created_at', { ascending: false });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) throw error;
-    return (data || []).filter((movement) => movement.ppe && movement.ppe.active !== false) as StockMovement[];
+    const params = new URLSearchParams();
+    if (companyId) params.set("company_id", companyId);
+
+    const response = await fetchWithAuthRetry(`/api/stock-movements${params.size ? `?${params.toString()}` : ""}`);
+    const result = await readResponseJson<{ error?: string; movements?: StockMovement[] }>(response);
+
+    if (!response.ok) {
+      throw new Error(result.error || "Erro ao carregar auditoria de estoque.");
+    }
+
+    return result.movements || [];
   },
 
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
