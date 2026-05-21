@@ -63,16 +63,32 @@ const nextConfig: NextConfig = {
         destination: "/ort-wasm-simd-threaded.wasm",
       },
       {
+        source: "/:any*/ort-wasm-simd-threaded.mjs",
+        destination: "/ort-wasm-simd-threaded.mjs",
+      },
+      {
         source: "/:any*/ort-wasm-simd-threaded.jsep.wasm",
         destination: "/ort-wasm-simd-threaded.jsep.wasm",
+      },
+      {
+        source: "/:any*/ort-wasm-simd-threaded.jsep.mjs",
+        destination: "/ort-wasm-simd-threaded.jsep.mjs",
       },
       {
         source: "/:any*/ort-wasm-simd-threaded.jspi.wasm",
         destination: "/ort-wasm-simd-threaded.jspi.wasm",
       },
       {
+        source: "/:any*/ort-wasm-simd-threaded.jspi.mjs",
+        destination: "/ort-wasm-simd-threaded.jspi.mjs",
+      },
+      {
         source: "/:any*/ort-wasm-simd-threaded.asyncify.wasm",
         destination: "/ort-wasm-simd-threaded.asyncify.wasm",
+      },
+      {
+        source: "/:any*/ort-wasm-simd-threaded.asyncify.mjs",
+        destination: "/ort-wasm-simd-threaded.asyncify.mjs",
       },
     ]
   },
@@ -98,6 +114,15 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/:path*.wasm",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/:path*.mjs",
         headers: [
           {
             key: "Cache-Control",
