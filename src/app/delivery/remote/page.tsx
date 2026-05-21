@@ -13,6 +13,7 @@ import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
+import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 
 interface DeliveryData {
   e: string // employee id
@@ -619,7 +620,9 @@ function RemoteDeliveryContent() {
               </div>
               <button onClick={() => {
                 if (sigCanvas.current?.isEmpty()) return alert("Assine antes de confirmar.")
-                saveDelivery(sigCanvas.current!.getTrimmedCanvas().toDataURL())
+                const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)
+                if (!signatureDataUrl) return alert("Nao foi possivel ler a assinatura. Limpe e assine novamente.")
+                saveDelivery(signatureDataUrl)
               }} disabled={isSaving} className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#501010] text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs shadow-lg disabled:opacity-50 flex items-center justify-center">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Recebimento"}
               </button>

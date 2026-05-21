@@ -14,6 +14,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
+import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 
@@ -714,7 +715,11 @@ export default function DeliveryPage() {
       toast.error("A assinatura é obrigatória.")
       return
     }
-    const signatureDataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL("image/png")
+    const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)
+    if (!signatureDataUrl) {
+      toast.error("Nao foi possivel ler a assinatura. Limpe e assine novamente.")
+      return
+    }
     saveDelivery(signatureDataUrl)
   }
 

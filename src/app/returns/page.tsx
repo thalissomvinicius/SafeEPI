@@ -16,6 +16,7 @@ import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { formatDeliveryDate } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
+import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -500,7 +501,8 @@ export default function ReturnsPage() {
                       <button 
                         disabled={isSaving}
                         onClick={() => {
-                          if (!sigCanvas.current?.isEmpty()) saveReturn(sigCanvas.current!.getTrimmedCanvas().toDataURL("image/png"))
+                          const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)
+                          if (signatureDataUrl) saveReturn(signatureDataUrl)
                           else alert("A assinatura é obrigatória.")
                         }}
                         className="min-h-[52px] w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em]"
