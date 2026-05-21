@@ -20,6 +20,7 @@ type DetectionOutput = {
   bbox?: NdArrayLike
   size?: number
 }
+type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness"
 
 interface FaceCameraProps {
   onCapture: (descriptor: number[], imageBase64: string) => void;
@@ -69,6 +70,35 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const COUNTDOWN_SECONDS = 4
   const requiresServerVerification = Boolean(verifyEmployeeId)
   const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
+
+  const withTimeout = useCallback(async <T,>(promise: Promise<T>, label: string, timeoutMs = 30000) => {
+    let timeoutId: number | null = null
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(`${label} nao respondeu em ${Math.round(timeoutMs / 1000)}s.`)), timeoutMs)
+    })
+
+    try {
+      return await Promise.race([promise, timeout])
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [])
+
+  const loadOnnxSession = useCallback(async (modelName: FaceModelName) => {
+    const response = await fetch(`/faceplugin-models/${modelName}.onnx`, { cache: "force-cache" })
+    if (!response.ok) {
+      throw new Error(`Modelo ${modelName}.onnx nao encontrado (${response.status}).`)
+    }
+
+    const buffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    return await withTimeout(
+      ort.InferenceSession.create(bytes, {
+        executionProviders: ["wasm"],
+      }),
+      `Carregamento do modelo ${modelName}`,
+    )
+  }, [withTimeout])
 
   const waitForOpenCv = useCallback(async () => {
     const startedAt = Date.now()
@@ -317,23 +347,23 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
 
         setModelLoadLabel("Detector facial")
         setStatusText("Carregando reconhecimento facial... 30%")
-        detectionSessionRef.current = await faceplugin.loadDetectionModel()
+        detectionSessionRef.current = await loadOnnxSession("fr_detect")
         setModelLoadProgress(42)
 
         setModelLoadLabel("Pontos faciais")
         setStatusText("Carregando reconhecimento facial... 55%")
-        landmarkSessionRef.current = await faceplugin.loadLandmarkModel()
+        landmarkSessionRef.current = await loadOnnxSession("fr_landmark")
         setModelLoadProgress(62)
 
         setModelLoadLabel("Reconhecimento")
         setStatusText("Carregando reconhecimento facial... 78%")
-        featureSessionRef.current = await faceplugin.loadFeatureModel()
+        featureSessionRef.current = await loadOnnxSession("fr_feature")
         setModelLoadProgress(84)
 
         if (shouldRequireLiveness) {
           setModelLoadLabel("Prova de vida")
           setStatusText("Carregando reconhecimento facial... 90%")
-          livenessSessionRef.current = await faceplugin.loadLivenessModel()
+          livenessSessionRef.current = await loadOnnxSession("fr_liveness")
         }
         
         setModelLoadProgress(100)
@@ -346,7 +376,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
     loadModels()
     return () => { stopCamera() }
-  }, [stopCamera, shouldRequireLiveness, waitForOpenCv])
+  }, [loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv])
 
   // -- Start camera when ready --
   useEffect(() => {
