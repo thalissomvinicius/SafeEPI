@@ -48,7 +48,7 @@ async function buildRemoteLinkResponse(link: RemoteLinkRecord) {
     ppeId
       ? supabaseAdmin
           .from("ppes")
-          .select("id, name, ca_number, ca_expiry_date, category, active, company_id")
+          .select("id, name, ca_number, ca_expiry_date, active, company_id")
           .eq("id", ppeId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
