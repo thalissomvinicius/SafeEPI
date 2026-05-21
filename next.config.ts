@@ -44,6 +44,18 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: "/:any*/model/:path*",
+        destination: "/faceplugin-models/:path*",
+      },
+      {
+        source: "/model/:path*",
+        destination: "/faceplugin-models/:path*",
+      },
+    ]
+  },
   async headers() {
     return [
       {

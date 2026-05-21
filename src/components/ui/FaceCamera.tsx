@@ -5,6 +5,10 @@ import { Loader2, Camera, CheckCircle2, ShieldAlert, UserCheck, Info, Timer, Ale
 import { supabase } from "@/lib/supabase"
 // @ts-ignore
 import * as faceplugin from "faceplugin-face-recognition-js"
+import * as ort from "onnxruntime-web"
+
+// Configura o caminho base para carregar os arquivos .wasm copiados para /public
+ort.env.wasm.wasmPaths = "/"
 
 type SuspiciousReason = "repeated_failure" | "low_variance" | "timeout" | "liveness_failed"
 
