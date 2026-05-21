@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useEffect } from "react"
 import { useParams, useSearchParams } from "next/navigation"
@@ -7,7 +7,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { formatCpf } from "@/utils/cpf"
 import Image from "next/image"
 import { Suspense } from "react"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 
 interface LinkData {
   id: string

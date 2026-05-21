@@ -14,7 +14,7 @@ import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateDeliveryPDF, generateMovementsSimplePDF, generateMovementsPresentationPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime, parseLocalDateOnly } from "@/lib/dateOnly"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
@@ -219,7 +219,7 @@ export default function MovementsPage() {
           title: "Comprovante arquivado",
           description: "Este e o PDF juridico original salvo no arquivo digital.",
         })
-        toast.success(`PDF aberto: ${signedDocument.file_name}`)
+        toast.success("PDF aberto", signedDocument.file_name)
         return
       }
 
@@ -264,7 +264,7 @@ export default function MovementsPage() {
         title: "Comprovante pronto",
         description: "Visualize o comprovante em uma nova aba ou baixe o PDF completo.",
       })
-      toast.success(`PDF gerado: ${fileName}`)
+      toast.success("PDF gerado com sucesso", fileName)
     } catch (err) {
       console.error("Erro ao gerar comprovante da movimentação:", err)
       toast.error("Erro ao processar o comprovante PDF.")

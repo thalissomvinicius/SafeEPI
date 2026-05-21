@@ -28,7 +28,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import { api, type CompanyWithCounts } from "@/services/api"
 import type { Profile } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"

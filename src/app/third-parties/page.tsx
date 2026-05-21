@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type React from "react"
 import { Building2, CheckCircle2, DollarSign, Edit3, Handshake, Loader2, Mail, MapPin, Package, Phone, Plus, Search, ShieldAlert, Trash2, X, type LucideIcon } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import { api } from "@/services/api"
 import type { DeliveryWithRelations, Employee, ThirdParty, Workplace } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"

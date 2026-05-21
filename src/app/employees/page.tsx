@@ -19,7 +19,7 @@ import { generateEmployeesReportPDF, generateNR06PDF } from "@/utils/pdfGenerato
 import { formatCpf, isValidCpf } from "@/utils/cpf"
 import { copyTextToClipboard } from "@/utils/clipboard"
 import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime } from "@/lib/dateOnly"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")

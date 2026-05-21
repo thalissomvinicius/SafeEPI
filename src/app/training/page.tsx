@@ -6,7 +6,7 @@ import { CheckCircle2, Award, Calendar, Search, Plus, X, Loader2, FileDown, Came
 import { api } from "@/services/api"
 import { Employee, TrainingWithRelations } from "@/types/database"
 import { format } from "date-fns"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import { useRef } from "react"
 import SignatureCanvas from "react-signature-canvas"
 import { FaceCamera } from "@/components/ui/FaceCamera"

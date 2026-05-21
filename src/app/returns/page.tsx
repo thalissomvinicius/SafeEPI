@@ -15,7 +15,7 @@ import { generateReturnPDF } from "@/utils/pdfGenerator"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { formatDeliveryDate } from "@/lib/dateOnly"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])

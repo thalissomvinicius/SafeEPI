@@ -10,7 +10,7 @@ import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
 import { useAuth } from "@/contexts/AuthContext"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 
 type DeliveryScopeFilter = "own" | "third_party" | "all"
 
@@ -98,7 +98,7 @@ export default function HistoryPage() {
           title: "Comprovante arquivado",
           description: "Este e o PDF juridico original salvo no arquivo digital.",
         })
-        toast.success(`PDF aberto: ${signedDocument.file_name}`)
+        toast.success("PDF aberto", signedDocument.file_name)
         return
       }
       
@@ -147,7 +147,7 @@ export default function HistoryPage() {
         description: "Visualize o comprovante em uma nova aba ou baixe o PDF completo.",
       })
 
-      toast.success(`PDF gerado: ${fileName}`)
+      toast.success("PDF gerado com sucesso", fileName)
     } catch (err) {
       console.error("Erro ao gerar PDF:", err)
       toast.error("Erro ao processar o arquivo PDF.")

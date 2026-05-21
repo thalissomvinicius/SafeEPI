@@ -29,6 +29,7 @@ export const metadata: Metadata = {
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ClientShell } from "@/components/layout/ClientShell";
 import { Toaster } from "sonner";
+import { ToastIcon } from "@/components/ui/ToastIcon";
 import { Analytics } from "@vercel/analytics/next";
 
 export default function RootLayout({
@@ -47,7 +48,19 @@ export default function RootLayout({
             {children}
           </ClientShell>
         </AuthProvider>
-        <Toaster position="top-center" richColors closeButton />
+        <Toaster
+          position="bottom-right"
+          closeButton
+          visibleToasts={4}
+          gap={12}
+          toastOptions={{ duration: 4500 }}
+          icons={{
+            success: <ToastIcon type="success" />,
+            error: <ToastIcon type="error" />,
+            warning: <ToastIcon type="warning" />,
+            info: <ToastIcon type="info" />,
+          }}
+        />
         <Analytics />
       </body>
     </html>

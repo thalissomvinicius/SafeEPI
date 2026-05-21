@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import type React from "react"
 import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, UserRoundCog } from "lucide-react"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 import { api } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
 

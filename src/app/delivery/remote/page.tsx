@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
@@ -12,7 +12,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { toLocalDeliveryDateISOString } from "@/lib/dateOnly"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 
 interface DeliveryData {
   e: string // employee id

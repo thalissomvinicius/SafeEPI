@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { BriefcaseBusiness, Building2, Loader2, Plus, Search, Trash2, X } from "lucide-react"
 import { api } from "@/services/api"
 import { CatalogItem } from "@/types/database"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 
 type CatalogKind = "job" | "department"
 

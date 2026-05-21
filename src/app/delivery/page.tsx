@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import Image from "next/image"
@@ -15,7 +15,7 @@ import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
 import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 
 interface CartItem {
   ppeId: string

@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
@@ -6,7 +6,7 @@ import SignatureCanvas from "react-signature-canvas"
 import { Camera, CheckCircle2, Fingerprint, Loader2, PenTool, ShieldAlert, X } from "lucide-react"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { formatCpf } from "@/utils/cpf"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast"
 
 type RemoteTrainingData = {
   trainingName?: string
