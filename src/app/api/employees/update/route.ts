@@ -46,6 +46,72 @@ function isMissingSoftDeleteColumn(error: unknown) {
   ) && text.includes("deleted_at")
 }
 
+function isMissingThirdPartyColumn(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as SupabaseLikeError
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase()
+
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && text.includes("third_party_id")
+}
+
+function isForeignKeyIssue(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  return (error as SupabaseLikeError).code === "23503"
+}
+
+function cleanEmployeePayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") return {}
+  return Object.fromEntries(
+    Object.entries(payload as Record<string, unknown>).filter(([, value]) => value !== undefined)
+  )
+}
+
+async function validateThirdPartyAccess(thirdPartyId: unknown, companyId: string) {
+  if (!thirdPartyId || typeof thirdPartyId !== "string") return { ok: true as const }
+
+  const { data, error } = await supabaseAdmin
+    .from("third_parties")
+    .select("id")
+    .eq("id", thirdPartyId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[API employees/update] Third-party validation error:", error)
+    return { ok: false as const, response: NextResponse.json({ error: "Erro ao validar terceiro selecionado." }, { status: 500 }) }
+  }
+
+  if (!data) {
+    return { ok: false as const, response: NextResponse.json({ error: "Terceiro selecionado nao pertence a empresa atual." }, { status: 400 }) }
+  }
+
+  return { ok: true as const }
+}
+
+function employeeSchemaErrorResponse(error: unknown) {
+  if (isMissingThirdPartyColumn(error)) {
+    return NextResponse.json({
+      error: "O banco ainda nao tem a coluna employees.third_party_id. Rode a migration database/migrations/safeepi_third_parties.sql no Supabase para vincular colaboradores a terceiros.",
+      code: "EMPLOYEES_THIRD_PARTY_COLUMN_MISSING",
+    }, { status: 501 })
+  }
+
+  if (isForeignKeyIssue(error)) {
+    return NextResponse.json({
+      error: "Terceiro invalido para este colaborador. Recarregue a pagina e selecione um terceiro ativo da empresa atual.",
+      code: "EMPLOYEE_THIRD_PARTY_INVALID",
+    }, { status: 400 })
+  }
+
+  return null
+}
+
 function getLongArchiveExpiry() {
   const expiresAt = new Date()
   expiresAt.setFullYear(expiresAt.getFullYear() + 100)
@@ -71,12 +137,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Dados do colaborador sao obrigatorios." }, { status: 400 })
     }
 
+    const employeePayload = cleanEmployeePayload(employee)
+    const thirdPartyValidation = await validateThirdPartyAccess(employeePayload.third_party_id, companyId)
+    if (!thirdPartyValidation.ok) return thirdPartyValidation.response
+
     const { data, error } = await supabaseAdmin
       .from("employees")
-      .insert([{ ...employee, company_id: companyId }])
+      .insert([{ ...employeePayload, company_id: companyId }])
       .select(EMPLOYEE_PUBLIC_SELECT)
 
     if (error) {
+      const schemaResponse = employeeSchemaErrorResponse(error)
+      if (schemaResponse) return schemaResponse
       console.error("[API employees/update] Insert error:", error)
       return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
@@ -125,14 +197,20 @@ export async function PUT(request: NextRequest) {
     }
 
     if (updates && Object.keys(updates).length > 0) {
+      const cleanUpdates = cleanEmployeePayload(updates)
+      const thirdPartyValidation = await validateThirdPartyAccess(cleanUpdates.third_party_id, companyId)
+      if (!thirdPartyValidation.ok) return thirdPartyValidation.response
+
       const { data, error } = await supabaseAdmin
         .from("employees")
-        .update(updates)
+        .update(cleanUpdates)
         .eq("id", id)
         .eq("company_id", companyId)
         .select(EMPLOYEE_PUBLIC_SELECT)
 
       if (error) {
+        const schemaResponse = employeeSchemaErrorResponse(error)
+        if (schemaResponse) return schemaResponse
         console.error("[API employees/update] Update error:", error)
         return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
       }
