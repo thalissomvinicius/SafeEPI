@@ -20,7 +20,7 @@ type DetectionOutput = {
   bbox?: NdArrayLike
   size?: number
 }
-type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness"
+type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness" | "fr_pose"
 type LivenessStep = "turn-left" | "turn-right" | "center" | "complete"
 
 interface FaceCameraProps {
@@ -46,6 +46,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const landmarkSessionRef = useRef<FacepluginSession | null>(null)
   const featureSessionRef = useRef<FacepluginSession | null>(null)
   const livenessSessionRef = useRef<FacepluginSession | null>(null)
+  const poseSessionRef = useRef<FacepluginSession | null>(null)
   const livenessStepRef = useRef<LivenessStep>("turn-left")
   const firstYawDirectionRef = useRef<-1 | 1 | null>(null)
   const baselineYawRef = useRef<number | null>(null)
@@ -80,6 +81,8 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const COUNTDOWN_SECONDS = 4
   const TURN_THRESHOLD = 0.018
   const CENTER_THRESHOLD = 0.014
+  const POSE_TURN_THRESHOLD = 8
+  const POSE_CENTER_THRESHOLD = 4
   const requiresServerVerification = Boolean(verifyEmployeeId)
   const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
 
@@ -213,13 +216,32 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     return Number.isFinite(yaw) ? yaw : null
   }, [getLandmarkValue])
 
+  const getPoseYaw = useCallback((result: unknown) => {
+    if (!Array.isArray(result)) return null
+    const first = result[0]
+    if (!Array.isArray(first)) return null
+    const yaw = Number(first[4])
+    return Number.isFinite(yaw) ? yaw : null
+  }, [])
+
   const updateLivenessChallenge = useCallback(async (bbox: NdArrayLike | undefined, face: { x: number; width: number }) => {
     if (!shouldRequireLiveness || livenessPassedRef.current) return true
-    if (!videoRef.current || !bbox || !landmarkSessionRef.current) return false
+    if (!videoRef.current || !bbox) return false
 
-    const landmarksResult = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
-    const landmarks = getPrimaryLandmarks(landmarksResult)
-    const yaw = getYawOffset(landmarks, face)
+    let yaw: number | null = null
+    let usingPose = false
+    if (poseSessionRef.current) {
+      const poseResult = await faceplugin.predictPose(poseSessionRef.current, videoRef.current, bbox)
+      yaw = getPoseYaw(poseResult)
+      usingPose = yaw !== null
+    }
+
+    if (yaw === null && landmarkSessionRef.current) {
+      const landmarksResult = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
+      const landmarks = getPrimaryLandmarks(landmarksResult)
+      yaw = getYawOffset(landmarks, face)
+    }
+
     const videoWidth = videoRef.current.videoWidth || 1
     const faceCenter = (face.x + face.width / 2) / videoWidth
     if (yaw === null) {
@@ -242,15 +264,17 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     const baselineCenter = baselineCenterRef.current
     const yawDelta = yaw - baselineYaw
     const centerDelta = faceCenter - baselineCenter
-    const motion = Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
+    const turnThreshold = usingPose ? POSE_TURN_THRESHOLD : TURN_THRESHOLD
+    const centerThreshold = usingPose ? POSE_CENTER_THRESHOLD : CENTER_THRESHOLD
+    const motion = usingPose || Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
     const motionAbs = Math.abs(motion)
 
     const step = livenessStepRef.current
     if (step === "turn-left") {
       setLivenessInstruction("1/3 - Vire levemente o rosto para a esquerda")
       setStatusText("Prova de vida: vire para a esquerda")
-      setLivenessProgress(Math.min(34, 4 + Math.round((motionAbs / TURN_THRESHOLD) * 30)))
-      if (motionAbs >= TURN_THRESHOLD) {
+      setLivenessProgress(Math.min(34, 4 + Math.round((motionAbs / turnThreshold) * 30)))
+      if (motionAbs >= turnThreshold) {
         firstYawDirectionRef.current = motion > 0 ? 1 : -1
         centerHoldRef.current = 0
         setLivenessProgress(35)
@@ -265,9 +289,9 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       setLivenessInstruction("2/3 - Agora vire levemente para a direita")
       setStatusText("Prova de vida: vire para a direita")
       const firstDirection = firstYawDirectionRef.current
-      const oppositeProgress = firstDirection ? Math.max(0, (-motion * firstDirection) / TURN_THRESHOLD) : 0
+      const oppositeProgress = firstDirection ? Math.max(0, (-motion * firstDirection) / turnThreshold) : 0
       setLivenessProgress(Math.min(69, 35 + Math.round(oppositeProgress * 34)))
-      if (firstDirection && motion * firstDirection <= -TURN_THRESHOLD) {
+      if (firstDirection && motion * firstDirection <= -turnThreshold) {
         centerHoldRef.current = 0
         setLivenessProgress(70)
         setLivenessStepValue("center")
@@ -280,13 +304,13 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     if (step === "center") {
       setLivenessInstruction("3/3 - Volte ao centro e fique parado")
       setStatusText("Volte ao centro e fique parado")
-      const centerDistance = Math.max(Math.abs(yawDelta), Math.abs(centerDelta))
-      if (centerDistance <= CENTER_THRESHOLD) {
+      const centerDistance = usingPose ? Math.abs(yawDelta) : Math.max(Math.abs(yawDelta), Math.abs(centerDelta))
+      if (centerDistance <= centerThreshold) {
         centerHoldRef.current += 1
       } else {
         centerHoldRef.current = 0
       }
-      setLivenessProgress(Math.min(99, 70 + Math.round(Math.max(0, 1 - centerDistance / TURN_THRESHOLD) * 25) + centerHoldRef.current * 2))
+      setLivenessProgress(Math.min(99, 70 + Math.round(Math.max(0, 1 - centerDistance / turnThreshold) * 25) + centerHoldRef.current * 2))
       if (centerHoldRef.current >= 2) {
         livenessPassedRef.current = true
         setLivenessProgress(100)
@@ -299,7 +323,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
 
     return true
-  }, [getPrimaryLandmarks, getYawOffset, setLivenessStepValue, shouldRequireLiveness])
+  }, [getPoseYaw, getPrimaryLandmarks, getYawOffset, setLivenessStepValue, shouldRequireLiveness])
 
   const getLivenessScore = useCallback((result: unknown) => {
     if (Array.isArray(result) && Array.isArray(result[0])) {
@@ -513,8 +537,13 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         setModelLoadProgress(84)
 
         if (shouldRequireLiveness) {
+          setModelLoadLabel("Pose facial")
+          setStatusText("Carregando reconhecimento facial... 88%")
+          poseSessionRef.current = await loadOnnxSession("fr_pose")
+          setModelLoadProgress(92)
+
           setModelLoadLabel("Prova de vida")
-          setStatusText("Carregando reconhecimento facial... 90%")
+          setStatusText("Carregando reconhecimento facial... 95%")
           livenessSessionRef.current = await loadOnnxSession("fr_liveness")
         }
         
