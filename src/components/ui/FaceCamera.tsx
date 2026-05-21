@@ -776,11 +776,24 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
           </div>
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
             <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Tempo</p>
-            <p className="text-[9px] text-slate-500 leading-tight">Fique parado ~4s. Haverá contagem regressiva.</p>
+            <p className="text-[9px] text-slate-500 leading-tight">{shouldRequireLiveness ? "Vire para os dois lados e volte ao centro." : "Fique parado ~4s. Havera contagem regressiva."}</p>
           </div>
         </div>
         
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 w-full">
+        {shouldRequireLiveness && (
+          <div className="w-full rounded-xl border border-red-100 bg-red-50 p-3 text-left">
+            <div className="flex items-start gap-2">
+              <ArrowLeftRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-700" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-700">Prova de vida obrigatoria</p>
+                <p className="mt-1 text-[10px] font-medium leading-relaxed text-red-700">
+                  Depois de iniciar a camera, siga as instrucoes: vire para um lado, vire para o outro e volte ao centro para confirmar.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 w-full">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
             <p className="text-[10px] text-amber-800 text-left leading-relaxed">
