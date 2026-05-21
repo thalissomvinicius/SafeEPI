@@ -852,6 +852,7 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   const ink = [15, 23, 42] as [number, number, number]
   const muted = [100, 116, 139] as [number, number, number]
   const border = [226, 232, 240] as [number, number, number]
+  const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 
   const drawFooter = () => {
     doc.setDrawColor(...border)
@@ -951,23 +952,31 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
 
   autoTable(doc, {
     startY: 123,
-    head: [["Data", "Colaborador", "EPI (C.A.)", "Qtd", "Local"]],
-    body: recentDeliveries.length > 0 ? recentDeliveries.map(d => [
-      `${formatDeliveryDate(d.delivery_date)} ${formatDeliveryTime(d.delivery_date)}`,
-      d.employee?.full_name || 'N/A',
-      `${d.ppe?.name || 'N/A'} (${d.ppe?.ca_number || 'N/A'})`,
-      String(d.quantity),
-      d.workplace?.name || 'Sede'
-    ]) : [["-", "Nenhuma transacao encontrada", "-", "-", "-"]],
+    head: [["Data", "Colaborador", "EPI (C.A.)", "Qtd", "Custo Unit.", "Total", "Local"]],
+    body: recentDeliveries.length > 0 ? recentDeliveries.map(d => {
+      const quantity = Number(d.quantity || 0)
+      const unitCost = Number(d.ppe?.cost || 0)
+      return [
+        `${formatDeliveryDate(d.delivery_date)} ${formatDeliveryTime(d.delivery_date)}`,
+        d.employee?.full_name || 'N/A',
+        `${d.ppe?.name || 'N/A'} (${d.ppe?.ca_number || 'N/A'})`,
+        String(d.quantity),
+        currency.format(unitCost),
+        currency.format(quantity * unitCost),
+        d.workplace?.name || 'Sede'
+      ]
+    }) : [["-", "Nenhuma transacao encontrada", "-", "-", "-", "-", "-"]],
     headStyles: { fillColor: [15, 23, 42], fontStyle: "bold", fontSize: 7.4, cellPadding: 3.2, textColor: 255, halign: "center" },
     bodyStyles: { fontSize: 7, cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 }, textColor: ink },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
-      0: { cellWidth: 32, halign: "center" },
-      1: { cellWidth: 70, fontStyle: "bold" },
-      2: { cellWidth: 82 },
-      3: { cellWidth: 18, halign: "center", fontStyle: "bold" },
-      4: { cellWidth: 67 },
+      0: { cellWidth: 28, halign: "center" },
+      1: { cellWidth: 52, fontStyle: "bold" },
+      2: { cellWidth: 64 },
+      3: { cellWidth: 13, halign: "center", fontStyle: "bold" },
+      4: { cellWidth: 24, halign: "right" },
+      5: { cellWidth: 24, halign: "right", fontStyle: "bold" },
+      6: { cellWidth: 64 },
     },
     margin: { left: mx, right: mx, bottom: 18 },
     theme: "grid",
@@ -1383,7 +1392,7 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
 
   const activeCount = data.employees.filter(e => e.active).length
   const inactiveCount = data.employees.length - activeCount
-  const biometricCount = data.employees.filter(e => e.photo_url && e.face_descriptor?.length).length
+  const biometricCount = data.employees.filter(e => e.photo_url).length
   const biometricPendingCount = data.employees.length - biometricCount
   const kpis = [
     { label: "Total", value: data.employees.length, color: brandColor },
@@ -1445,7 +1454,7 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
       emp.admission_date ? format(new Date(`${emp.admission_date}T12:00:00`), "dd/MM/yyyy") : "-",
       emp.termination_date ? format(new Date(`${emp.termination_date}T12:00:00`), "dd/MM/yyyy") : "-",
       emp.active ? "ATIVO" : "INATIVO",
-      emp.photo_url && emp.face_descriptor?.length ? "CADASTRADA" : "PENDENTE",
+      emp.photo_url ? "CADASTRADA" : "PENDENTE",
     ]),
     headStyles: { fillColor: [15, 23, 42], fontStyle: "bold", fontSize: 7.2, cellPadding: 3.1, textColor: 255, halign: "center" },
     bodyStyles: { fontSize: 6.8, cellPadding: { top: 2.6, right: 2.6, bottom: 2.6, left: 2.6 }, textColor: ink },

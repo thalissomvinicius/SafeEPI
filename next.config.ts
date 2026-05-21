@@ -47,6 +47,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/models/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
         source: "/:path*",
         headers: securityHeaders,
       },
@@ -54,6 +63,13 @@ const nextConfig: NextConfig = {
   },
   webpack(config) {
     config.cache = false
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      {
+        module: /@vladmandic[\\/]face-api/,
+        message: /Critical dependency: require function is used/,
+      },
+    ]
     return config
   },
 }

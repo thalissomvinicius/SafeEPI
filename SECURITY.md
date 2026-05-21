@@ -16,11 +16,27 @@ Data da auditoria: 20/05/2026
 
 ## Buckets
 
-| Bucket | Status | Uso |
-| --- | --- | --- |
-| `ppe_signatures` | Privado | Assinaturas, PDFs, fotos, evidencias e documentos NR-06 |
+| Bucket | Conteúdo | Acesso |
+|--------|----------|--------|
+| `ppe_signatures` | assinaturas, PDFs, evidências | service_role + signed URL |
+| `biometric_photos` | fotos faciais de colaboradores | service_role apenas |
 
 Novos buckets com dados pessoais, documentos, assinaturas ou biometria devem nascer privados. O cliente nao deve chamar `getPublicUrl()` para esses arquivos.
+
+## Dados Biométricos — Política de Retenção
+
+**O que é coletado:** foto facial (JPEG) e descritor numérico (128 floats) para verificação de identidade.
+
+**Onde fica:** bucket privado `biometric_photos` (foto) e coluna `face_descriptor` em `employees` (descritor).
+
+**Quem acessa:** apenas API routes server-side com service_role. O descritor nunca é enviado ao cliente.
+
+**Quando é deletado:**
+- Automaticamente ao desativar o colaborador
+- Manualmente por ADMIN/MASTER a qualquer momento
+- Toda deleção é registrada em `biometric_deletion_log`
+
+**Base legal (LGPD):** legítimo interesse para controle de acesso e conformidade NR-06. Dado tratado como dado sensível (Art. 11 LGPD).
 
 ## Rate limiting
 

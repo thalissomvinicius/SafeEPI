@@ -8,9 +8,12 @@ O bucket usado para assinaturas, PDFs, fotos e evidências é:
 
 ```text
 ppe_signatures
+biometric_photos
 ```
 
 Ele deve permanecer **privado**.
+
+Crie o bucket `biometric_photos` (privado) no Supabase Storage antes do primeiro deploy. Ele armazena fotos faciais de colaboradores separadas de assinaturas, PDFs e evidencias operacionais.
 
 Arquivos sensíveis nunca devem ser servidos com `getPublicUrl()`. Use signed URLs geradas por API route server-side.
 
@@ -71,6 +74,7 @@ Operações remotas por token passam por API routes server-side. Não crie polic
 ## Checklist antes de produção
 
 - Bucket `ppe_signatures` privado.
+- Bucket `biometric_photos` privado.
 - RLS aplicado e testado.
 - Usuário MASTER com `app_metadata.role = 'MASTER'`.
 - Signup público do Supabase desativado se o sistema não aceitar cadastro aberto.

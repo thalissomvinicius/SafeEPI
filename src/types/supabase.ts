@@ -10,7 +10,6 @@
   termination_date?: string | null;
   photo_url?: string | null;
   photo_storage_path?: string | null;
-  face_descriptor?: number[] | null; // Armazenado como JSONB
   created_at?: string;
 };
 

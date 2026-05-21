@@ -1721,7 +1721,7 @@ export default function DeliveryPage() {
               {authMethod === 'manual' || authMethod === 'manual_facial' ? (
                 <div className="space-y-4 animate-in fade-in">
                   {authMethod === 'manual_facial' && !capturedPhotoBase64 && (
-                    !selectedEmployee?.face_descriptor ? (
+                    !selectedEmployee?.photo_url ? (
                       <div className="bg-amber-50 border border-amber-200 p-8 rounded-3xl text-center space-y-4">
                         <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
                           <ShieldAlert className="w-8 h-8 text-amber-600" />
@@ -1737,7 +1737,8 @@ export default function DeliveryPage() {
                     ) : (
                       <>
                         <FaceCamera
-                          targetDescriptor={new Float32Array(selectedEmployee.face_descriptor)}
+                          verifyEmployeeId={selectedEmployee.id}
+                          verifyCompanyId={selectedEmployee.company_id}
                           onCapture={(_, img) => setCapturedPhotoBase64(img)}
                           onCancel={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
                         />
@@ -1805,7 +1806,7 @@ export default function DeliveryPage() {
                 </div>
               ) : (
                 <div className="space-y-4 animate-in zoom-in-95">
-                  {!selectedEmployee?.face_descriptor ? (
+                  {!selectedEmployee?.photo_url ? (
                     <div className="bg-amber-50 border border-amber-200 p-8 rounded-3xl text-center space-y-4">
                       <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
                         <ShieldAlert className="w-8 h-8 text-amber-600" />
@@ -1828,7 +1829,8 @@ export default function DeliveryPage() {
                         </div>
                       </div>
                       <FaceCamera 
-                        targetDescriptor={new Float32Array(selectedEmployee.face_descriptor)}
+                        verifyEmployeeId={selectedEmployee.id}
+                        verifyCompanyId={selectedEmployee.company_id}
                         onCapture={handleFaceCapture}
                         onCancel={() => setAuthMethod('manual')}
                       />

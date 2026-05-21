@@ -117,11 +117,6 @@ export default function TrainingPage() {
 
   const getCurrentTrainingWorkload = () => getTrainingWorkloadRule(getFinalTrainingName() || formData.training_name)
 
-  const getTrainedEmployeeDescriptor = () => {
-    const descriptor = getTrainedEmployee()?.face_descriptor
-    return descriptor && descriptor.length > 0 ? new Float32Array(descriptor) : undefined
-  }
-
   const formatRemoteExpiry = (value: string | null) => {
     if (!value) return ""
     return new Date(value).toLocaleString("pt-BR", {
@@ -473,7 +468,7 @@ export default function TrainingPage() {
     setTstRole(emp.job_title || "Técnico de Segurança do Trabalho")
     if (emp.photo_url) {
       try {
-        const photoUrl = await api.getPrivateAssetUrl(emp.photo_storage_path || emp.photo_url, "download")
+        const photoUrl = await api.getPrivateAssetUrl(emp.photo_storage_path || emp.photo_url, "download", undefined, "biometric_photos")
         const res = await fetch(photoUrl || emp.photo_url)
         const blob = await res.blob()
         const b64 = await new Promise<string>((resolve) => {
@@ -522,7 +517,7 @@ export default function TrainingPage() {
 
     if (instructor?.photo_url) {
       try {
-        const photoUrl = await api.getPrivateAssetUrl(instructor.photo_storage_path || instructor.photo_url, "download")
+        const photoUrl = await api.getPrivateAssetUrl(instructor.photo_storage_path || instructor.photo_url, "download", undefined, "biometric_photos")
         const res = await fetch(photoUrl || instructor.photo_url)
         const blob = await res.blob()
         const b64 = await new Promise<string>((resolve) => {
@@ -1230,7 +1225,7 @@ export default function TrainingPage() {
 
                 {step === 3 && tstSelectedEmployee && (
                   <div className="p-8 space-y-5">
-                    {!getTrainedEmployee()?.face_descriptor && !tstSignatureBase64 && !participantBlankSignature && (
+                    {!getTrainedEmployee()?.photo_url && !tstSignatureBase64 && !participantBlankSignature && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
                         <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                         <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest leading-relaxed">
@@ -1283,7 +1278,8 @@ export default function TrainingPage() {
                     {tstAuthMethod === 'manual_facial' && isFaceCameraTstOpen && (
                       <div className="space-y-3">
                         <FaceCamera
-                          targetDescriptor={getTrainedEmployeeDescriptor()}
+                          verifyEmployeeId={getTrainedEmployee()?.id}
+                          verifyCompanyId={getTrainedEmployee()?.company_id}
                           onCapture={(_, img) => { setParticipantBlankSignature(false); setTstPhotoBase64(img); setIsFaceCameraTstOpen(false); }}
                           onCancel={() => { setIsFaceCameraTstOpen(false); setTstAuthMethod('manual'); setTstPhotoBase64(null); }}
                         />
@@ -1456,7 +1452,8 @@ export default function TrainingPage() {
                           </div>
                         ) : (
                           <FaceCamera
-                            targetDescriptor={getTrainedEmployeeDescriptor()}
+                            verifyEmployeeId={getTrainedEmployee()?.id}
+                            verifyCompanyId={getTrainedEmployee()?.company_id}
                             onCapture={(_, img) => { setParticipantBlankSignature(false); setTstSignatureBase64(img); setIsFaceCameraTstOpen(false); }}
                             onCancel={() => { setIsFaceCameraTstOpen(false); setTstAuthMethod('manual'); }}
                           />

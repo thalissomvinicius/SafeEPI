@@ -19,7 +19,6 @@ type RemoteEmployee = {
   full_name: string
   cpf: string
   photo_url: string | null
-  face_descriptor: number[] | null
 }
 
 function RemoteTrainingSignatureContent() {
@@ -189,9 +188,10 @@ function RemoteTrainingSignatureContent() {
 
         {(authMethod === "manual" || authMethod === "manual_facial") ? (
           <div className="space-y-3">
-            {authMethod === "manual_facial" && !capturedPhotoBase64 && employee?.face_descriptor && (
+            {authMethod === "manual_facial" && !capturedPhotoBase64 && employee?.photo_url && (
               <FaceCamera
-                targetDescriptor={new Float32Array(employee.face_descriptor)}
+                verifyEmployeeId={employee.id}
+                verifyToken={token}
                 onCapture={(_, img) => setCapturedPhotoBase64(img)}
                 onCancel={() => setAuthMethod("manual")}
               />
@@ -203,7 +203,7 @@ function RemoteTrainingSignatureContent() {
                 <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">Foto confirmada. Agora assine abaixo para concluir.</p>
               </div>
             )}
-            {authMethod === "manual_facial" && !employee?.face_descriptor && (
+            {authMethod === "manual_facial" && !employee?.photo_url && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center text-xs font-bold text-amber-800">
                 Biometria facial nao cadastrada. Use assinatura manual.
               </div>
@@ -222,7 +222,7 @@ function RemoteTrainingSignatureContent() {
                     toast.error("Assine antes de confirmar.")
                     return
                   }
-                  if (authMethod === "manual_facial" && employee?.face_descriptor && !capturedPhotoBase64) {
+                  if (authMethod === "manual_facial" && employee?.photo_url && !capturedPhotoBase64) {
                     toast.error("Capture a foto antes de confirmar.")
                     return
                   }
@@ -234,9 +234,10 @@ function RemoteTrainingSignatureContent() {
               </button>
             </div>
           </div>
-        ) : employee?.face_descriptor ? (
+        ) : employee?.photo_url ? (
           <FaceCamera
-            targetDescriptor={new Float32Array(employee.face_descriptor)}
+            verifyEmployeeId={employee.id}
+            verifyToken={token}
             onCapture={(_, img) => void saveSignature(img, img)}
             onCancel={() => setAuthMethod("manual")}
           />

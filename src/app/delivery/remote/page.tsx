@@ -36,6 +36,18 @@ interface DeliveryData {
   autoReturnedDeliveryIds?: string[]
 }
 
+type RemoteLinkResponse = {
+  error?: string
+  status?: string
+  link: {
+    token: string
+    data: DeliveryData
+    employee?: Employee | null
+    ppe?: PPE | null
+    workplace?: Workplace | null
+  }
+}
+
 const dataUrlToImageFile = async (dataUrl: string, baseName: string) => {
   const response = await fetch(dataUrl)
   const blob = await response.blob()
@@ -123,12 +135,14 @@ function RemoteDeliveryContent() {
 
       try {
         let decoded: DeliveryData | null = null;
-        let empFromToken = null;
+        let empFromToken: Employee | null = null;
+        let ppeFromToken: PPE | null = null;
+        let workplaceFromToken: Workplace | null = null;
 
         if (t) {
           // Token-based approach
           const res = await fetch(`/api/remote-links?token=${t}`)
-          const data = await res.json()
+          const data = await res.json() as RemoteLinkResponse
           
           if (!res.ok) {
             setErrorMsg(data.error || "Link inválido.")
@@ -137,7 +151,9 @@ function RemoteDeliveryContent() {
           }
           
           decoded = data.link.data as DeliveryData;
-          empFromToken = data.link.employee;
+          empFromToken = data.link.employee || null;
+          ppeFromToken = data.link.ppe || null;
+          workplaceFromToken = data.link.workplace || null;
           setLinkToken(data.link.token);
         } else if (s) {
           // Legacy approach
@@ -150,16 +166,17 @@ function RemoteDeliveryContent() {
 
         setDeliveryData(decoded)
         
+        const needsWorkplaceLookup = Boolean(decoded?.w && !workplaceFromToken)
         const [employees, ppes, workplaces] = await Promise.all([
           !empFromToken ? api.getEmployees() : Promise.resolve([]),
-          api.getPpes(),
-          api.getWorkplaces()
+          !ppeFromToken ? api.getPpes() : Promise.resolve([]),
+          needsWorkplaceLookup ? api.getWorkplaces() : Promise.resolve([])
         ])
         
         const emp = empFromToken || employees.find(e => e.id === decoded!.e)
         const firstItemPpeId = decoded?.items?.[0]?.ppeId || decoded!.p
-        const p = ppes.find(p => p.id === firstItemPpeId)
-        const w = workplaces.find(w => w.id === decoded!.w)
+        const p = ppeFromToken || ppes.find(p => p.id === firstItemPpeId)
+        const w = workplaceFromToken || workplaces.find(w => w.id === decoded!.w)
 
         if (!emp || !p) {
           setErrorMsg("Dados da entrega não encontrados no sistema.")
@@ -560,7 +577,7 @@ function RemoteDeliveryContent() {
           {authMethod === 'manual' || authMethod === 'manual_facial' ? (
             <div className="space-y-3 sm:space-y-4 animate-in fade-in">
               {authMethod === 'manual_facial' && !capturedPhotoBase64 && (
-                !employee?.face_descriptor ? (
+                !employee?.photo_url ? (
                   <div className="bg-amber-50 border border-amber-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl text-center space-y-2 sm:space-y-3">
                     <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8 text-amber-500 mx-auto" />
                     <p className="text-amber-800 font-bold text-xs sm:text-sm">Biometria nao cadastrada</p>
@@ -569,7 +586,9 @@ function RemoteDeliveryContent() {
                   </div>
                 ) : (
                   <FaceCamera
-                    targetDescriptor={new Float32Array(employee.face_descriptor)}
+                    verifyEmployeeId={employee.id}
+                    verifyCompanyId={employee.company_id}
+                    verifyToken={linkToken}
                     onCapture={(_desc, img) => setCapturedPhotoBase64(img)}
                     onCancel={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
                   />
@@ -609,7 +628,7 @@ function RemoteDeliveryContent() {
             </div>
           ) : (
             <div className="space-y-4 animate-in zoom-in-95">
-              {!employee?.face_descriptor ? (
+              {!employee?.photo_url ? (
                 <div className="bg-amber-50 border border-amber-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl text-center space-y-2 sm:space-y-3">
                   <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8 text-amber-500 mx-auto" />
                   <p className="text-amber-800 font-bold text-xs sm:text-sm">Biometria não cadastrada</p>
@@ -618,7 +637,9 @@ function RemoteDeliveryContent() {
                 </div>
               ) : (
                 <FaceCamera 
-                  targetDescriptor={new Float32Array(employee.face_descriptor)}
+                  verifyEmployeeId={employee.id}
+                  verifyCompanyId={employee.company_id}
+                  verifyToken={linkToken}
                   onCapture={(_desc, img) => saveDelivery(img)}
                   onCancel={() => setAuthMethod('manual')}
                 />

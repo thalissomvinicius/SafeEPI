@@ -110,7 +110,7 @@ export default function ReturnsPage() {
   const getEmployeePhotoBase64 = async () => {
     if (!selectedEmployee?.photo_url) return undefined
     try {
-      const photoUrl = await api.getPrivateAssetUrl(selectedEmployee.photo_storage_path || selectedEmployee.photo_url, "download")
+      const photoUrl = await api.getPrivateAssetUrl(selectedEmployee.photo_storage_path || selectedEmployee.photo_url, "download", undefined, "biometric_photos")
       const response = await fetch(photoUrl || selectedEmployee.photo_url)
       const blob = await response.blob()
       return await new Promise<string>((resolve) => {
@@ -510,7 +510,7 @@ export default function ReturnsPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {!selectedEmployee.face_descriptor ? (
+                      {!selectedEmployee.photo_url ? (
                         <div className="bg-amber-50 p-6 rounded-2xl text-center space-y-3 border border-amber-200">
                           <ShieldAlert className="w-8 h-8 text-amber-500 mx-auto" />
                           <p className="text-amber-800 font-bold text-sm">Biometria não cadastrada</p>
@@ -527,7 +527,8 @@ export default function ReturnsPage() {
                             </div>
                           </div>
                           <FaceCamera 
-                            targetDescriptor={new Float32Array(selectedEmployee.face_descriptor)}
+                            verifyEmployeeId={selectedEmployee.id}
+                            verifyCompanyId={selectedEmployee.company_id}
                             onCapture={(desc, img) => saveReturn(img)}
                             onCancel={() => setAuthMethod('manual')}
                           />

@@ -335,6 +335,8 @@ export async function POST(req: Request) {
         auth_method,
         ip_address,
       }
+      if (isValidUuid(third_party_id)) updatePayload.third_party_id = third_party_id
+      if (isValidUuid(workplace_id)) updatePayload.workplace_id = workplace_id
 
       const { data: updatedDeliveries, error: updateError } = await supabaseAdmin
         .from("deliveries")
@@ -343,11 +345,35 @@ export async function POST(req: Request) {
         .select()
 
       if (updateError && isDeliverySchemaCompatibilityIssue(updateError)) {
-        const { data: fallbackUpdated, error: fallbackUpdateError } = await supabaseAdmin
-          .from("deliveries")
-          .update({ signature_url: signatureUrl, ip_address })
-          .in("id", signatureOnlyDeliveryIds)
-          .select()
+        const fallbackPayloads: Record<string, unknown>[] = [
+          {
+            signature_url: signatureUrl,
+            ip_address,
+            ...(isValidUuid(third_party_id) ? { third_party_id } : {}),
+            ...(isValidUuid(workplace_id) ? { workplace_id } : {}),
+          },
+          {
+            signature_url: signatureUrl,
+            ip_address,
+            ...(isValidUuid(third_party_id) ? { third_party_id } : {}),
+          },
+          { signature_url: signatureUrl, ip_address },
+        ]
+        let fallbackUpdated: DeliveryInsertRow[] | null = null
+        let fallbackUpdateError: unknown = null
+
+        for (const payload of fallbackPayloads) {
+          const fallbackResult = await supabaseAdmin
+            .from("deliveries")
+            .update(payload)
+            .in("id", signatureOnlyDeliveryIds)
+            .select()
+
+          fallbackUpdated = fallbackResult.data as DeliveryInsertRow[] | null
+          fallbackUpdateError = fallbackResult.error
+          if (!fallbackUpdateError) break
+          if (!isDeliverySchemaCompatibilityIssue(fallbackUpdateError)) break
+        }
 
         if (fallbackUpdateError) {
           console.error("[/api/remote-delivery] fallback signature update error:", fallbackUpdateError)
@@ -426,22 +452,53 @@ export async function POST(req: Request) {
       if (!error) break
 
       if (isDeliverySchemaCompatibilityIssue(error)) {
-        const fallbackPayload = {
-          ...(companyId ? { company_id: companyId } : {}),
-          employee_id,
-          ppe_id,
-          reason: reasonVariant,
-          quantity,
-          ip_address,
-          signature_url: signatureUrl,
-          delivery_date: insertPayload.delivery_date,
+        const fallbackPayloads: Record<string, unknown>[] = [
+          {
+            ...(companyId ? { company_id: companyId } : {}),
+            employee_id,
+            ppe_id,
+            workplace_id: insertPayload.workplace_id,
+            third_party_id: insertPayload.third_party_id,
+            reason: reasonVariant,
+            quantity,
+            ip_address,
+            signature_url: signatureUrl,
+            delivery_date: insertPayload.delivery_date,
+          },
+          {
+            ...(companyId ? { company_id: companyId } : {}),
+            employee_id,
+            ppe_id,
+            third_party_id: insertPayload.third_party_id,
+            reason: reasonVariant,
+            quantity,
+            ip_address,
+            signature_url: signatureUrl,
+            delivery_date: insertPayload.delivery_date,
+          },
+          {
+            ...(companyId ? { company_id: companyId } : {}),
+            employee_id,
+            ppe_id,
+            reason: reasonVariant,
+            quantity,
+            ip_address,
+            signature_url: signatureUrl,
+            delivery_date: insertPayload.delivery_date,
+          },
+        ]
+
+        for (const fallbackPayload of fallbackPayloads) {
+          const fallbackResult = await supabaseAdmin
+            .from("deliveries")
+            .insert([fallbackPayload])
+            .select()
+          data = fallbackResult.data
+          error = fallbackResult.error
+
+          if (!error) break
+          if (!isDeliverySchemaCompatibilityIssue(error)) break
         }
-        const fallbackResult = await supabaseAdmin
-          .from("deliveries")
-          .insert([fallbackPayload])
-          .select()
-        data = fallbackResult.data
-        error = fallbackResult.error
 
         if (!error) break
       }

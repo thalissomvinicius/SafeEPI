@@ -4,6 +4,23 @@ import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
 const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete"
+const EMPLOYEE_PUBLIC_SELECT = [
+  "id",
+  "company_id",
+  "third_party_id",
+  "full_name",
+  "cpf",
+  "job_title",
+  "department",
+  "admission_date",
+  "active",
+  "workplace_id",
+  "termination_date",
+  "deleted_at",
+  "deleted_by",
+  "photo_url",
+  "created_at",
+].join(",")
 
 type SupabaseLikeError = {
   code?: string
@@ -59,7 +76,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabaseAdmin
       .from("employees")
       .insert([{ ...employee, company_id: companyId }])
-      .select()
+      .select(EMPLOYEE_PUBLIC_SELECT)
 
     if (error) {
       console.error("[API employees/update] Insert error:", error)
@@ -98,7 +115,7 @@ export async function PUT(request: NextRequest) {
         .update({ photo_url: null, face_descriptor: null })
         .eq("id", id)
         .eq("company_id", companyId)
-        .select()
+        .select(EMPLOYEE_PUBLIC_SELECT)
 
       if (error) {
         console.error("[API employees/update] Remove photo error:", error)
@@ -115,7 +132,7 @@ export async function PUT(request: NextRequest) {
         .update(updates)
         .eq("id", id)
         .eq("company_id", companyId)
-        .select()
+        .select(EMPLOYEE_PUBLIC_SELECT)
 
       if (error) {
         console.error("[API employees/update] Update error:", error)

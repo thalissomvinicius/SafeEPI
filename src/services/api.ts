@@ -46,6 +46,7 @@ type SignedDocumentUploadTarget = {
 };
 
 type PrivateAssetMode = "view" | "download";
+const BIOMETRIC_BUCKET = "biometric_photos";
 
 type PrivateAssetResponse = {
   assets?: Array<{
@@ -56,6 +57,28 @@ type PrivateAssetResponse = {
   }>;
   error?: string;
 };
+
+type EmployeeBiometricWrite = {
+  face_descriptor?: number[] | null;
+};
+
+const EMPLOYEE_PUBLIC_SELECT = [
+  "id",
+  "company_id",
+  "third_party_id",
+  "full_name",
+  "cpf",
+  "job_title",
+  "department",
+  "admission_date",
+  "active",
+  "workplace_id",
+  "termination_date",
+  "deleted_at",
+  "deleted_by",
+  "photo_url",
+  "created_at",
+].join(",");
 
 type SupabaseLikeError = {
   code?: string;
@@ -438,6 +461,7 @@ async function getPrivateAssetUrl(
   value?: string | null,
   mode: PrivateAssetMode = "view",
   downloadName?: string,
+  bucket?: string,
 ): Promise<string | null> {
   if (!value) return null;
   if (!shouldSignStorageValue(value)) return value;
@@ -446,7 +470,7 @@ async function getPrivateAssetUrl(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      assets: [{ key: "asset", path: value, mode, downloadName }],
+      assets: [{ key: "asset", path: value, mode, downloadName, bucket }],
     }),
   });
 
@@ -459,14 +483,15 @@ async function signStorageFields<T extends Record<string, unknown>>(
   rows: T[],
   fields: string[],
   mode: PrivateAssetMode = "view",
+  bucket?: string,
 ): Promise<T[]> {
-  const assets: Array<{ key: string; path: string; mode: PrivateAssetMode }> = [];
+  const assets: Array<{ key: string; path: string; mode: PrivateAssetMode; bucket?: string }> = [];
 
   rows.forEach((row, rowIndex) => {
     fields.forEach((field) => {
       const value = row[field];
       if (shouldSignStorageValue(value)) {
-        assets.push({ key: `${rowIndex}:${field}`, path: value, mode });
+        assets.push({ key: `${rowIndex}:${field}`, path: value, mode, bucket });
       }
     });
   });
@@ -586,8 +611,8 @@ export const api = {
     return getSessionAuthHeaders();
   },
 
-  async getPrivateAssetUrl(value?: string | null, mode: PrivateAssetMode = "view", downloadName?: string) {
-    return getPrivateAssetUrl(value, mode, downloadName);
+  async getPrivateAssetUrl(value?: string | null, mode: PrivateAssetMode = "view", downloadName?: string, bucket?: string) {
+    return getPrivateAssetUrl(value, mode, downloadName, bucket);
   },
 
   // --- Autenticação ---
@@ -1155,13 +1180,13 @@ export const api = {
   // --- Colaboradores ---
   async getEmployees() {
     const companyId = await getCurrentCompanyId();
-    let empQuery = supabase.from('employees').select('*').order('full_name', { ascending: true });
+    let empQuery = supabase.from('employees').select(EMPLOYEE_PUBLIC_SELECT).order('full_name', { ascending: true });
     if (companyId) empQuery = empQuery.eq('company_id', companyId);
     const { data, error } = await withSessionRetry(() => empQuery);
     
     if (error) throw error;
 
-    const rows = (data || []) as Employee[];
+    const rows = ((data || []) as unknown) as Employee[];
     const hasSoftDeleteColumn = rows.some((employee) =>
       Object.prototype.hasOwnProperty.call(employee as Record<string, unknown>, "deleted_at")
     );
@@ -1172,10 +1197,10 @@ export const api = {
       employees = employees.filter(employee => !archivedIds.has(employee.id));
     }
 
-    return signStorageFields(employees as unknown as Record<string, unknown>[], ["photo_url"]) as Promise<Employee[]>;
+    return signStorageFields(employees as unknown as Record<string, unknown>[], ["photo_url"], "view", BIOMETRIC_BUCKET) as Promise<Employee[]>;
   },
 
-  async addEmployee(employee: Omit<Employee, 'id' | 'created_at'>, photoFile?: File) {
+  async addEmployee(employee: Omit<Employee, 'id' | 'created_at'> & EmployeeBiometricWrite, photoFile?: File) {
     let photoUrl = employee.photo_url;
     await ensureActiveSession();
 
@@ -1205,7 +1230,7 @@ export const api = {
     return result.employee as Employee;
   },
 
-  async updateEmployee(id: string, updates: Partial<Employee>, photoFile?: File) {
+  async updateEmployee(id: string, updates: Partial<Employee> & EmployeeBiometricWrite, photoFile?: File) {
     const finalUpdates = { ...updates };
     await ensureActiveSession();
 
@@ -1227,6 +1252,14 @@ export const api = {
       }
       throw new Error(result.error || 'Erro ao atualizar colaborador');
     }
+    if (finalUpdates.active === false) {
+      try {
+        await this.deleteEmployeeBiometric(id, "deactivation_cleanup");
+      } catch (error) {
+        console.error("[api.updateEmployee] biometric cleanup after deactivation failed:", error);
+      }
+    }
+
     return result.employee as Employee;
   },
 
@@ -1242,6 +1275,17 @@ export const api = {
     return result.employee as Employee;
   },
 
+  async deleteEmployeeBiometric(id: string, reason = "manual_deletion") {
+    const response = await fetch(`/api/employees/${id}/biometric?reason=${encodeURIComponent(reason)}`, {
+      method: 'DELETE',
+      headers: await this.getAuthHeaders(),
+    });
+
+    const result = await readResponseJson<{ error?: string; success?: boolean }>(response);
+    if (!response.ok) throw new Error(result.error || 'Erro ao remover dados biometricos');
+    return result;
+  },
+
   async deleteEmployee(id: string) {
     const response = await fetch('/api/employees/update', {
       method: 'DELETE',
@@ -1253,6 +1297,12 @@ export const api = {
 
     if (!response.ok) {
       throw new Error(result.error || 'Erro ao excluir colaborador');
+    }
+
+    try {
+      await this.deleteEmployeeBiometric(id, "deactivation_cleanup");
+    } catch (error) {
+      console.error("[api.deleteEmployee] biometric cleanup after delete failed:", error);
     }
 
     return result.employee;
@@ -1274,6 +1324,12 @@ export const api = {
     );
     
     if (error) throw error;
+
+    try {
+      await this.deleteEmployeeBiometric(employeeId, "deactivation_cleanup");
+    } catch (cleanupError) {
+      console.error("[api.terminateEmployee] biometric cleanup after termination failed:", cleanupError);
+    }
   },
 
   // --- EPIs ---
@@ -1451,30 +1507,58 @@ export const api = {
       insertError = firstInsertResult.error;
 
       if (isDeliverySchemaCompatibilityIssue(insertError)) {
-        const fallbackPayload = {
-          ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
-          employee_id: insertPayload.employee_id,
-          ppe_id: insertPayload.ppe_id,
-          reason: insertPayload.reason,
-          quantity: insertPayload.quantity,
-          signature_url: insertPayload.signature_url,
-          ip_address: insertPayload.ip_address,
-          delivery_date: insertPayload.delivery_date,
-        };
+        const fallbackPayloads = [
+          {
+            ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
+            employee_id: insertPayload.employee_id,
+            ppe_id: insertPayload.ppe_id,
+            workplace_id: insertPayload.workplace_id,
+            third_party_id: insertPayload.third_party_id,
+            reason: insertPayload.reason,
+            quantity: insertPayload.quantity,
+            signature_url: insertPayload.signature_url,
+            ip_address: insertPayload.ip_address,
+            delivery_date: insertPayload.delivery_date,
+          },
+          {
+            ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
+            employee_id: insertPayload.employee_id,
+            ppe_id: insertPayload.ppe_id,
+            third_party_id: insertPayload.third_party_id,
+            reason: insertPayload.reason,
+            quantity: insertPayload.quantity,
+            signature_url: insertPayload.signature_url,
+            ip_address: insertPayload.ip_address,
+            delivery_date: insertPayload.delivery_date,
+          },
+          {
+            ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
+            employee_id: insertPayload.employee_id,
+            ppe_id: insertPayload.ppe_id,
+            reason: insertPayload.reason,
+            quantity: insertPayload.quantity,
+            signature_url: insertPayload.signature_url,
+            ip_address: insertPayload.ip_address,
+            delivery_date: insertPayload.delivery_date,
+          },
+        ];
 
-        const fallbackResult = await withSessionRetry(() =>
-          supabase
-            .from('deliveries')
-            .insert([fallbackPayload])
-            .select()
-        );
+        for (const fallbackPayload of fallbackPayloads) {
+          const fallbackResult = await withSessionRetry(() =>
+            supabase
+              .from('deliveries')
+              .insert([fallbackPayload])
+              .select()
+          );
 
-        if (!fallbackResult.error && fallbackResult.data?.[0]) {
-          await syncStockIfNeeded(reasonVariant, fallbackResult.data[0]?.id);
-          return fallbackResult.data[0];
+          if (!fallbackResult.error && fallbackResult.data?.[0]) {
+            await syncStockIfNeeded(reasonVariant, fallbackResult.data[0]?.id);
+            return fallbackResult.data[0];
+          }
+
+          insertError = fallbackResult.error;
+          if (!isDeliverySchemaCompatibilityIssue(insertError)) break;
         }
-
-        insertError = fallbackResult.error;
       }
 
       if (!isDeliveryReasonConstraintIssue(insertError)) break;

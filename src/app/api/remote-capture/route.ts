@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-import { PRIVATE_STORAGE_BUCKET, signStorageValue } from "@/lib/privateStorage"
+import { BIOMETRIC_BUCKET, signStorageValue } from "@/lib/privateStorage"
 import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { remoteCaptureSchema } from "@/lib/securitySchemas"
@@ -8,6 +8,23 @@ import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUploadBuffer } from "@/lib/validateUpload"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const EMPLOYEE_PUBLIC_SELECT = [
+  "id",
+  "company_id",
+  "third_party_id",
+  "full_name",
+  "cpf",
+  "job_title",
+  "department",
+  "admission_date",
+  "active",
+  "workplace_id",
+  "termination_date",
+  "deleted_at",
+  "deleted_by",
+  "photo_url",
+  "created_at",
+].join(",")
 
 function isValidUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_REGEX.test(value)
@@ -100,7 +117,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ...employee,
       photo_storage_path: employee.photo_url || null,
-      photo_url: await signStorageValue(employee.photo_url),
+      photo_url: await signStorageValue(employee.photo_url, { bucket: BIOMETRIC_BUCKET }),
     })
   } catch (error: unknown) {
     console.error("[/api/remote-capture][GET] error:", error)
@@ -163,7 +180,7 @@ export async function POST(request: Request) {
       const companyPrefix = validation.link.company_id || "remote"
       storedPhotoPath = `${companyPrefix}/employees/remote_capture_${Date.now()}_${id}.${imageToUpload.extension}`
       const { error: uploadError } = await supabaseAdmin.storage
-        .from(PRIVATE_STORAGE_BUCKET)
+        .from(BIOMETRIC_BUCKET)
         .upload(storedPhotoPath, imageToUpload.buffer, {
           contentType: imageToUpload.contentType,
           upsert: false,
@@ -179,7 +196,7 @@ export async function POST(request: Request) {
       .from("employees")
       .update({ photo_url: storedPhotoPath, face_descriptor })
       .eq("id", id)
-      .select()
+      .select(EMPLOYEE_PUBLIC_SELECT)
       .single()
 
     if (error) {

@@ -3,6 +3,7 @@ import "server-only"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
 export const PRIVATE_STORAGE_BUCKET = "ppe_signatures"
+export const BIOMETRIC_BUCKET = "biometric_photos"
 export const STORAGE_VIEW_EXPIRES_IN = 60
 export const STORAGE_DOWNLOAD_EXPIRES_IN = 300
 

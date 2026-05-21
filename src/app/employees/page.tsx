@@ -131,23 +131,13 @@ type PendingCaptureDraft = {
 
 const getBiometryStatus = (employee: Employee) => {
   const hasPhoto = Boolean(employee.photo_url)
-  const hasDescriptor = Boolean(employee.face_descriptor?.length)
 
-  if (hasPhoto && hasDescriptor) {
+  if (hasPhoto) {
     return {
       label: "Cadastrada",
       detail: "Foto e face",
       className: "bg-emerald-50 text-emerald-700 border-emerald-200",
       iconClassName: "text-emerald-600",
-    }
-  }
-
-  if (hasPhoto || hasDescriptor) {
-    return {
-      label: "Incompleta",
-      detail: hasPhoto ? "Falta face" : "Falta foto",
-      className: "bg-amber-50 text-amber-700 border-amber-200",
-      iconClassName: "text-amber-600",
     }
   }
 
@@ -360,7 +350,7 @@ export default function EmployeesPage() {
       (employeeScopeFilter === "own" ? !emp.third_party_id : Boolean(emp.third_party_id))
     const matchesDepartment = departmentFilter === "all" || emp.department === departmentFilter
     const matchesWorkplace = workplaceFilter === "all" || (workplaceFilter === "none" ? !emp.workplace_id : emp.workplace_id === workplaceFilter)
-    const hasBiometry = Boolean(emp.photo_url && emp.face_descriptor?.length)
+    const hasBiometry = Boolean(emp.photo_url)
     const matchesBiometry = biometryFilter === "all" || (biometryFilter === "registered" ? hasBiometry : !hasBiometry)
     const admission = emp.admission_date ? new Date(`${emp.admission_date}T12:00:00`) : null
     const matchesAdmissionStart = !admissionStartFilter || (admission && admission >= new Date(`${admissionStartFilter}T00:00:00`))
@@ -467,7 +457,7 @@ export default function EmployeesPage() {
       admission_date: emp.admission_date ? String(emp.admission_date).slice(0, 10) : "",
       termination_date: emp.termination_date ? String(emp.termination_date).slice(0, 10) : "",
       photo_url: emp.photo_url || null,
-      face_descriptor: emp.face_descriptor ? Array.from(emp.face_descriptor) : null
+      face_descriptor: null
     })
     setIsModalOpen(true)
   }
@@ -475,6 +465,30 @@ export default function EmployeesPage() {
   const closeEditModal = () => {
     resetFormData()
     setIsModalOpen(false)
+  }
+
+  const handleRemoveBiometricData = async () => {
+    if (!formData.id || !canEdit) return
+    const confirmed = window.confirm(
+      "Isso removerá a foto e o descritor facial do colaborador permanentemente. Continuar?"
+    )
+    if (!confirmed) return
+
+    try {
+      setIsSaving(true)
+      await api.deleteEmployeeBiometric(formData.id)
+      setFormData(prev => ({ ...prev, photo_url: null, face_descriptor: null }))
+      setEmployees(prev => prev.map(emp =>
+        emp.id === formData.id ? { ...emp, photo_url: null, photo_storage_path: null } : emp
+      ))
+      await loadData()
+      toast.success("Dados biométricos removidos com sucesso.")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao remover dados biométricos."
+      toast.error(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const openProfile = async (empId: string) => {
@@ -756,7 +770,7 @@ export default function EmployeesPage() {
     setTstRole(getJobTitleName(emp.job_title || "Técnico de Segurança do Trabalho"))
     if (emp.photo_url) {
       try {
-        const photoUrl = await api.getPrivateAssetUrl(emp.photo_storage_path || emp.photo_url, "download")
+        const photoUrl = await api.getPrivateAssetUrl(emp.photo_storage_path || emp.photo_url, "download", undefined, "biometric_photos")
         const res = await fetch(photoUrl || emp.photo_url)
         const blob = await res.blob()
         const b64 = await new Promise<string>((resolve) => {
@@ -1663,6 +1677,7 @@ export default function EmployeesPage() {
             {isFaceCameraOpen ? (
               <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
                 <FaceCamera 
+                  requireLiveness={false}
                   onCapture={(desc, img) => {
                     setFormData({ ...formData, face_descriptor: Array.from(desc), photo_url: img });
                     setIsFaceCameraOpen(false);
@@ -1687,13 +1702,29 @@ export default function EmployeesPage() {
                     />
                     <button 
                       type="button" 
-                      onClick={() => setFormData({...formData, photo_url: null, face_descriptor: null})} 
+                      onClick={() => {
+                        if (formData.id && canEdit) {
+                          void handleRemoveBiometricData()
+                          return
+                        }
+                        setFormData({...formData, photo_url: null, face_descriptor: null})
+                      }} 
                       className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
                       title="Remover biometria"
                     >
                       <X className="w-4 h-4" />
                     </button>
                     <span className="block text-center text-[10px] text-green-600 font-bold uppercase mt-2">Biometria Cadastrada</span>
+                    {formData.id && canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveBiometricData()}
+                        disabled={isSaving}
+                        className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 underline-offset-4 transition-colors hover:text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        Remover dados biométricos
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <button 
@@ -2260,6 +2291,7 @@ export default function EmployeesPage() {
                       </div>
                     ) : (
                       <FaceCamera
+                        requireLiveness={false}
                         onCapture={(_, img) => { setTstSignatureBase64(img); setIsFaceCameraTstOpen(false); }}
                         onCancel={() => { setTstAuthMethod('manual'); setIsFaceCameraTstOpen(false); }}
                         cancelLabel="Usar assinatura manual"

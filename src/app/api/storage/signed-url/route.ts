@@ -3,6 +3,7 @@ import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import {
   getSignedUrl,
+  BIOMETRIC_BUCKET,
   normalizeStoragePath,
   PRIVATE_STORAGE_BUCKET,
   STORAGE_DOWNLOAD_EXPIRES_IN,
@@ -42,9 +43,14 @@ async function canSignPath(
   path: string,
   bucket: string,
 ) {
-  if (bucket !== PRIVATE_STORAGE_BUCKET) return user.role === "MASTER"
+  if (bucket !== PRIVATE_STORAGE_BUCKET && bucket !== BIOMETRIC_BUCKET) return user.role === "MASTER"
   if (user.role === "MASTER") return true
   if (!user.company_id) return false
+
+  if (bucket === BIOMETRIC_BUCKET) {
+    if (path.startsWith(`${user.company_id}/`)) return true
+    return pathExistsInTenant(path, user.company_id)
+  }
 
   if (
     path.startsWith(`${user.company_id}/`) ||

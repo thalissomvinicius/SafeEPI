@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-import { getSignedUrl, PRIVATE_STORAGE_BUCKET, STORAGE_VIEW_EXPIRES_IN } from "@/lib/privateStorage"
+import { BIOMETRIC_BUCKET, getSignedUrl, STORAGE_VIEW_EXPIRES_IN } from "@/lib/privateStorage"
 import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { uploadFieldsSchema } from "@/lib/securitySchemas"
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const fileName = `${safeCompanyId}/employees/emp_${Date.now()}_${safeEmployeeId}.${extension}`
 
     const { error: uploadError } = await supabaseAdmin.storage
-      .from(PRIVATE_STORAGE_BUCKET)
+      .from(BIOMETRIC_BUCKET)
       .upload(fileName, validatedFile.buffer, {
         contentType: validatedFile.contentType,
         upsert: false,
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }
 
-    const signed = await getSignedUrl(PRIVATE_STORAGE_BUCKET, fileName, STORAGE_VIEW_EXPIRES_IN)
+    const signed = await getSignedUrl(BIOMETRIC_BUCKET, fileName, STORAGE_VIEW_EXPIRES_IN)
 
     return NextResponse.json({ signedUrl: signed?.signedUrl || null, publicUrl: signed?.signedUrl || null, path: fileName })
   } catch (error: unknown) {

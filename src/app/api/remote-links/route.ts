@@ -2,14 +2,77 @@ import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-import { signStorageValue } from "@/lib/privateStorage"
+import { BIOMETRIC_BUCKET, signStorageValue } from "@/lib/privateStorage"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { remoteLinkCompleteSchema, remoteLinkCreateSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function resolveCompanyId(authUser: { role: string; company_id: string | null }, requestedCompanyId: unknown) {
   if (authUser.role === "MASTER") return typeof requestedCompanyId === "string" && requestedCompanyId ? requestedCompanyId : null
   return authUser.company_id
+}
+
+function getStringFromLinkData(data: unknown, key: string) {
+  if (!data || typeof data !== "object") return ""
+  const value = (data as Record<string, unknown>)[key]
+  return typeof value === "string" ? value : ""
+}
+
+function getFirstPpeIdFromLinkData(data: unknown) {
+  const directPpeId = getStringFromLinkData(data, "p")
+  if (UUID_REGEX.test(directPpeId)) return directPpeId
+
+  if (!data || typeof data !== "object") return ""
+  const items = (data as { items?: unknown }).items
+  if (!Array.isArray(items) || !items[0] || typeof items[0] !== "object") return ""
+  const itemPpeId = (items[0] as { ppeId?: unknown }).ppeId
+  return typeof itemPpeId === "string" && UUID_REGEX.test(itemPpeId) ? itemPpeId : ""
+}
+
+type RemoteLinkRecord = {
+  data?: unknown
+  employee?: {
+    photo_url?: string | null
+    [key: string]: unknown
+  } | null
+  [key: string]: unknown
+}
+
+async function buildRemoteLinkResponse(link: RemoteLinkRecord) {
+  const ppeId = getFirstPpeIdFromLinkData(link.data)
+  const workplaceId = getStringFromLinkData(link.data, "w")
+
+  const [ppeResult, workplaceResult] = await Promise.all([
+    ppeId
+      ? supabaseAdmin
+          .from("ppes")
+          .select("id, name, ca_number, ca_expiry_date, category, active, company_id")
+          .eq("id", ppeId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    UUID_REGEX.test(workplaceId)
+      ? supabaseAdmin
+          .from("workplaces")
+          .select("id, name, address, company_id, third_party_id")
+          .eq("id", workplaceId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  return {
+    ...link,
+    employee: link.employee
+      ? {
+          ...link.employee,
+          photo_storage_path: link.employee.photo_url || null,
+          photo_url: await signStorageValue(link.employee.photo_url, { bucket: BIOMETRIC_BUCKET }),
+        }
+      : link.employee,
+    ppe: ppeResult.data || null,
+    workplace: workplaceResult.data || null,
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -151,7 +214,7 @@ export async function GET(request: NextRequest) {
 
     const { data: link, error } = await supabaseAdmin
       .from("remote_links")
-      .select("*, employee:employees(id, full_name, cpf, photo_url, face_descriptor, job_title, department, workplace_id)")
+      .select("*, employee:employees(id, full_name, cpf, photo_url, job_title, department, workplace_id)")
       .eq("token", token)
       .single()
 
@@ -161,16 +224,7 @@ export async function GET(request: NextRequest) {
 
     if (link.status === "completed" && includeCompleted) {
       return NextResponse.json({
-        link: {
-          ...link,
-          employee: link.employee
-            ? {
-                ...link.employee,
-                photo_storage_path: link.employee.photo_url || null,
-                photo_url: await signStorageValue(link.employee.photo_url),
-              }
-            : link.employee,
-        },
+        link: await buildRemoteLinkResponse(link),
       })
     }
 
@@ -192,16 +246,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      link: {
-        ...link,
-        employee: link.employee
-          ? {
-              ...link.employee,
-              photo_storage_path: link.employee.photo_url || null,
-              photo_url: await signStorageValue(link.employee.photo_url),
-            }
-          : link.employee,
-      },
+      link: await buildRemoteLinkResponse(link),
     })
   } catch (err) {
     console.error("[remote-links] GET error:", err)
