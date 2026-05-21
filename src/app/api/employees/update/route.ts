@@ -16,8 +16,6 @@ const EMPLOYEE_PUBLIC_SELECT = [
   "active",
   "workplace_id",
   "termination_date",
-  "deleted_at",
-  "deleted_by",
   "photo_url",
   "created_at",
 ].join(",")

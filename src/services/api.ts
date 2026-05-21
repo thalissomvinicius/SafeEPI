@@ -62,6 +62,22 @@ type EmployeeBiometricWrite = {
   face_descriptor?: number[] | null;
 };
 
+const EMPLOYEE_BASE_SELECT = [
+  "id",
+  "company_id",
+  "third_party_id",
+  "full_name",
+  "cpf",
+  "job_title",
+  "department",
+  "admission_date",
+  "active",
+  "workplace_id",
+  "termination_date",
+  "photo_url",
+  "created_at",
+].join(",");
+
 const EMPLOYEE_PUBLIC_SELECT = [
   "id",
   "company_id",
@@ -101,6 +117,20 @@ function isJwtExpiredError(error: unknown): boolean {
     message.includes("invalid jwt") ||
     message.includes("unauthorized")
   );
+}
+
+function isMissingEmployeeSoftDeleteColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as SupabaseLikeError;
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
+
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    text.includes("schema cache") ||
+    text.includes("could not find") ||
+    text.includes("column")
+  ) && (text.includes("deleted_at") || text.includes("deleted_by"));
 }
 
 async function ensureActiveSession(): Promise<Session | null> {
@@ -1180,10 +1210,20 @@ export const api = {
   // --- Colaboradores ---
   async getEmployees() {
     const companyId = await getCurrentCompanyId();
-    let empQuery = supabase.from('employees').select(EMPLOYEE_PUBLIC_SELECT).order('full_name', { ascending: true });
-    if (companyId) empQuery = empQuery.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => empQuery);
-    
+    const buildEmployeeQuery = (selectColumns: string) => {
+      let empQuery = supabase.from('employees').select(selectColumns).order('full_name', { ascending: true });
+      if (companyId) empQuery = empQuery.eq('company_id', companyId);
+      return empQuery;
+    };
+
+    let { data, error } = await withSessionRetry(() => buildEmployeeQuery(EMPLOYEE_PUBLIC_SELECT));
+
+    if (error && isMissingEmployeeSoftDeleteColumn(error)) {
+      const fallbackResult = await withSessionRetry(() => buildEmployeeQuery(EMPLOYEE_BASE_SELECT));
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
+
     if (error) throw error;
 
     const rows = ((data || []) as unknown) as Employee[];

@@ -421,8 +421,8 @@ export default function ReportsPage() {
                   <PieChartIcon className="h-5 w-5 shrink-0 text-[#2563EB]" />
               </div>
               
-              <div className="h-[220px] w-full min-w-0 md:h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
+              <div className="min-h-[220px] w-full min-w-0 md:min-h-[300px]">
+                  <ResponsiveContainer width="100%" height={isCompactCharts ? 220 : 300} minWidth={0}>
                       <PieChart>
                           <Pie
                               data={investmentByWorkplace}
@@ -459,8 +459,8 @@ export default function ReportsPage() {
                   <BarChartIcon className="h-5 w-5 shrink-0 text-[#2563EB]" />
               </div>
               
-              <div className="h-[220px] w-full min-w-0 md:h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
+              <div className="min-h-[220px] w-full min-w-0 md:min-h-[300px]">
+                  <ResponsiveContainer width="100%" height={isCompactCharts ? 220 : 300} minWidth={0}>
                       <BarChart data={ppeUsageData} layout="vertical" margin={{ top: 4, right: isCompactCharts ? 8 : 16, bottom: 4, left: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                           <XAxis type="number" hide />
