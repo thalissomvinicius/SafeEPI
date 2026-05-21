@@ -263,7 +263,7 @@ export default function ThirdPartiesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 p-4 pb-24 md:p-6">
+    <div className="mx-auto max-w-[90rem] space-y-5 p-4 pb-24 md:p-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div>
@@ -293,7 +293,7 @@ export default function ThirdPartiesPage() {
         </div>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)] xl:items-start">
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(560px,0.82fr)] 2xl:items-start">
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -415,8 +415,8 @@ export default function ThirdPartiesPage() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:sticky xl:top-4">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between xl:flex-col xl:items-stretch">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm 2xl:sticky 2xl:top-4">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between 2xl:flex-col 2xl:items-stretch">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Cobrança de EPIs</p>
             <h2 className="mt-1 text-base font-black uppercase tracking-tight text-slate-800">Relatório de entregas</h2>
@@ -437,7 +437,7 @@ export default function ThirdPartiesPage() {
           </select>
         </div>
 
-        <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-3 xl:grid-cols-1">
+        <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-3">
           <TextMetric icon={Package} label="Itens entregues" value={String(billingItemsCount)} />
           <TextMetric icon={Building2} label="Registros" value={String(thirdPartyDeliveries.length)} />
           <TextMetric icon={DollarSign} label="Total para cobrança" value={formatCurrency(totalBillingValue)} />
@@ -498,56 +498,60 @@ export default function ThirdPartiesPage() {
           )}
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-              <tr>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Terceiro</th>
-                <th className="px-4 py-3">Colaborador</th>
-                <th className="px-4 py-3">EPI / CA</th>
-                <th className="px-4 py-3 text-center">Qtd</th>
-                <th className="px-4 py-3 text-right">Custo Unit.</th>
-                <th className="px-4 py-3 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {thirdPartyDeliveries.slice(0, 80).map(({ delivery, thirdPartyId }) => {
-                const thirdParty = thirdPartyById.get(thirdPartyId)
-                const unitCost = Number(delivery.ppe?.cost || 0)
-                const total = Number(delivery.quantity || 0) * unitCost
+        <div className="hidden md:block">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Últimas entregas vinculadas</p>
+          </div>
+          <div className="grid gap-3 p-4">
+            {thirdPartyDeliveries.slice(0, 80).map(({ delivery, thirdPartyId }) => {
+              const thirdParty = thirdPartyById.get(thirdPartyId)
+              const unitCost = Number(delivery.ppe?.cost || 0)
+              const total = Number(delivery.quantity || 0) * unitCost
 
-                return (
-                  <tr key={delivery.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3 text-xs font-bold text-slate-500">
-                      {new Date(delivery.delivery_date).toLocaleDateString("pt-BR")}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-black uppercase text-slate-700">
-                      {thirdParty?.trade_name || thirdParty?.name || "Terceiro"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-black uppercase text-slate-800">{delivery.employee?.full_name || "Colaborador"}</p>
-                      <p className="mt-1 text-[10px] font-bold text-slate-400">{delivery.employee?.cpf}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-black uppercase text-slate-700">{delivery.ppe?.name || "EPI"}</p>
-                      <p className="mt-1 text-[10px] font-bold text-slate-400">CA {delivery.ppe?.ca_number || "N/A"}</p>
-                    </td>
-                    <td className="px-4 py-3 text-center text-xs font-black text-slate-700">{delivery.quantity}</td>
-                    <td className="px-4 py-3 text-right text-xs font-bold text-slate-500">{formatCurrency(unitCost)}</td>
-                    <td className="px-4 py-3 text-right text-xs font-black text-emerald-700">{formatCurrency(total)}</td>
-                  </tr>
-                )
-              })}
-              {thirdPartyDeliveries.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-xs font-bold uppercase tracking-widest text-slate-400">
-                    Nenhuma entrega vinculada a terceiros.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              return (
+                <article key={delivery.id} className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(160px,0.8fr)_minmax(130px,0.55fr)] lg:items-center">
+                    <div className="min-w-0">
+                      <p className="text-sm font-black uppercase leading-snug text-slate-800">
+                        {delivery.employee?.full_name || "Colaborador"}
+                      </p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        {delivery.ppe?.name || "EPI"} · CA {delivery.ppe?.ca_number || "N/A"}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Terceiro / data</p>
+                      <p className="mt-1 text-xs font-black uppercase leading-snug text-slate-700">
+                        {thirdParty?.trade_name || thirdParty?.name || "Terceiro"}
+                      </p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        {new Date(delivery.delivery_date).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-center lg:grid-cols-1 lg:text-right">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Qtd</p>
+                        <p className="text-xs font-black text-slate-800">{delivery.quantity}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Unit.</p>
+                        <p className="text-xs font-bold text-slate-600">{formatCurrency(unitCost)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total</p>
+                        <p className="text-sm font-black text-emerald-700">{formatCurrency(total)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+            {thirdPartyDeliveries.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold uppercase tracking-widest text-slate-400">
+                Nenhuma entrega vinculada a terceiros.
+              </div>
+            )}
+          </div>
         </div>
       </section>
       </div>
