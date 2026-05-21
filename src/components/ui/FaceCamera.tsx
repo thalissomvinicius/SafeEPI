@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Loader2, Camera, CheckCircle2, ShieldAlert, UserCheck, Info, Timer, AlertTriangle } from "lucide-react"
+import { Camera, CheckCircle2, ShieldAlert, UserCheck, AlertTriangle } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-// @ts-ignore
 import * as faceplugin from "faceplugin-face-recognition-js"
 import * as ort from "onnxruntime-web"
 
@@ -11,6 +10,16 @@ import * as ort from "onnxruntime-web"
 ort.env.wasm.wasmPaths = "/"
 
 type SuspiciousReason = "repeated_failure" | "low_variance" | "timeout" | "liveness_failed"
+type FacepluginSession = unknown
+type NdArrayLike = {
+  shape?: number[]
+  data?: ArrayLike<number>
+  get?: (...indexes: number[]) => number
+}
+type DetectionOutput = {
+  bbox?: NdArrayLike
+  size?: number
+}
 
 interface FaceCameraProps {
   onCapture: (descriptor: number[], imageBase64: string) => void;
@@ -29,9 +38,12 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const stabilityRef = useRef(0)
   const countdownActiveRef = useRef(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const matchedDescriptorRef = useRef<number[] | null>(null)
   const mismatchRef = useRef(0)
   const verificationPendingRef = useRef(false)
+  const detectionSessionRef = useRef<FacepluginSession | null>(null)
+  const landmarkSessionRef = useRef<FacepluginSession | null>(null)
+  const featureSessionRef = useRef<FacepluginSession | null>(null)
+  const livenessSessionRef = useRef<FacepluginSession | null>(null)
   
   const suspiciousLoggedRef = useRef<Record<SuspiciousReason, boolean>>({
     repeated_failure: false,
@@ -43,11 +55,11 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const [isModelsLoaded, setIsModelsLoaded] = useState(false)
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [statusText, setStatusText] = useState("Carregando inteligência artificial...")
+  const [statusText, setStatusText] = useState("Carregando reconhecimento facial...")
   const [countdown, setCountdown] = useState<number | null>(null)
   const [showInstructions, setShowInstructions] = useState(true)
-  const [stability, setStability] = useState(0)
-  const [isVerified, setIsVerified] = useState(false)
+  const [, setStability] = useState(0)
+  const [, setIsVerified] = useState(false)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [modelLoadProgress, setModelLoadProgress] = useState(0)
@@ -57,6 +69,105 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const COUNTDOWN_SECONDS = 4
   const requiresServerVerification = Boolean(verifyEmployeeId)
   const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
+
+  const waitForOpenCv = useCallback(async () => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 15000) {
+      const cv = (window as unknown as { cv?: { Mat?: unknown; imread?: unknown } }).cv
+      if (cv?.Mat && cv?.imread) return
+      await new Promise(resolve => window.setTimeout(resolve, 120))
+    }
+    throw new Error("OpenCV nao inicializou a tempo.")
+  }, [])
+
+  const getFaceCount = useCallback((bbox?: NdArrayLike) => {
+    if (!bbox) return 0
+    if (Array.isArray(bbox.shape) && typeof bbox.shape[0] === "number") return bbox.shape[0]
+    return bbox.data ? Math.floor(bbox.data.length / 4) : 0
+  }, [])
+
+  const getBoxValue = useCallback((bbox: NdArrayLike, row: number, column: number) => {
+    if (typeof bbox.get === "function") return bbox.get(row, column)
+    return Number(bbox.data?.[row * 4 + column] || 0)
+  }, [])
+
+  const getPrimaryFace = useCallback((bbox?: NdArrayLike) => {
+    const count = getFaceCount(bbox)
+    if (!bbox || count === 0) return null
+
+    let bestIndex = 0
+    let bestArea = 0
+    for (let index = 0; index < count; index += 1) {
+      const x1 = getBoxValue(bbox, index, 0)
+      const y1 = getBoxValue(bbox, index, 1)
+      const x2 = getBoxValue(bbox, index, 2)
+      const y2 = getBoxValue(bbox, index, 3)
+      const area = Math.abs(x2 - x1) * Math.abs(y2 - y1)
+      if (area > bestArea) {
+        bestArea = area
+        bestIndex = index
+      }
+    }
+
+    const x1 = getBoxValue(bbox, bestIndex, 0)
+    const y1 = getBoxValue(bbox, bestIndex, 1)
+    const x2 = getBoxValue(bbox, bestIndex, 2)
+    const y2 = getBoxValue(bbox, bestIndex, 3)
+
+    return {
+      x: x1,
+      y: y1,
+      width: Math.abs(x2 - x1),
+      height: Math.abs(y2 - y1),
+    }
+  }, [getBoxValue, getFaceCount])
+
+  const getLivenessScore = useCallback((result: unknown) => {
+    if (Array.isArray(result) && Array.isArray(result[0])) {
+      const score = Number(result[0][4])
+      return Number.isFinite(score) ? score : 0
+    }
+    if (Array.isArray(result) && typeof result[0] === "number") {
+      const score = Number(result[4] ?? result[0])
+      return Number.isFinite(score) ? score : 0
+    }
+    if (result && typeof result === "object" && "score" in result) {
+      const score = Number((result as { score?: unknown }).score)
+      return Number.isFinite(score) ? score : 0
+    }
+    return 0
+  }, [])
+
+  const arrayBufferViewToNumbers = useCallback((view: ArrayBufferView) => {
+    return Array.from(new Float32Array(view.buffer, view.byteOffset, Math.floor(view.byteLength / Float32Array.BYTES_PER_ELEMENT)))
+  }, [])
+
+  const getFeatureDescriptor = useCallback((result: unknown) => {
+    const candidates: unknown[] = Array.isArray(result) ? result : [result]
+
+    for (const candidate of candidates) {
+      if (!candidate) continue
+      if (ArrayBuffer.isView(candidate)) return arrayBufferViewToNumbers(candidate)
+      if (Array.isArray(candidate) && candidate.every(item => typeof item === "number")) return candidate as number[]
+
+      if (typeof candidate === "object") {
+        const record = candidate as Record<string, unknown>
+        const directData = record.data
+        if (ArrayBuffer.isView(directData)) return arrayBufferViewToNumbers(directData)
+        if (Array.isArray(directData)) return directData.filter((item): item is number => typeof item === "number")
+
+        for (const value of Object.values(record)) {
+          if (value && typeof value === "object" && "data" in value) {
+            const data = (value as { data?: unknown }).data
+            if (ArrayBuffer.isView(data)) return arrayBufferViewToNumbers(data)
+            if (Array.isArray(data)) return data.filter((item): item is number => typeof item === "number")
+          }
+        }
+      }
+    }
+
+    return []
+  }, [arrayBufferViewToNumbers])
 
   const stopCamera = useCallback(() => {
     if (intervalRef.current) {
@@ -198,27 +309,31 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   useEffect(() => {
     const loadModels = async () => {
       try {
-        const publicPath = "/faceplugin-models/"
-        
-        setModelLoadLabel("Detector facial")
+        setModelLoadLabel("Motor de visao")
         setStatusText("Carregando reconhecimento facial... 10%")
-        await faceplugin.loadDetectionModel(publicPath)
-        setModelLoadProgress(20)
+        await faceplugin.load_opencv()
+        await waitForOpenCv()
+        setModelLoadProgress(18)
 
-        setModelLoadLabel("Landmarks")
-        setStatusText("Carregando reconhecimento facial... 40%")
-        await faceplugin.loadLandmarkModel(publicPath)
-        setModelLoadProgress(50)
+        setModelLoadLabel("Detector facial")
+        setStatusText("Carregando reconhecimento facial... 30%")
+        detectionSessionRef.current = await faceplugin.loadDetectionModel()
+        setModelLoadProgress(42)
+
+        setModelLoadLabel("Pontos faciais")
+        setStatusText("Carregando reconhecimento facial... 55%")
+        landmarkSessionRef.current = await faceplugin.loadLandmarkModel()
+        setModelLoadProgress(62)
 
         setModelLoadLabel("Reconhecimento")
-        setStatusText("Carregando reconhecimento facial... 70%")
-        await faceplugin.loadFeatureModel(publicPath)
-        setModelLoadProgress(80)
+        setStatusText("Carregando reconhecimento facial... 78%")
+        featureSessionRef.current = await faceplugin.loadFeatureModel()
+        setModelLoadProgress(84)
 
         if (shouldRequireLiveness) {
-          setModelLoadLabel("Liveness (Vivacidade)")
+          setModelLoadLabel("Prova de vida")
           setStatusText("Carregando reconhecimento facial... 90%")
-          await faceplugin.loadLivenessModel(publicPath)
+          livenessSessionRef.current = await faceplugin.loadLivenessModel()
         }
         
         setModelLoadProgress(100)
@@ -226,12 +341,12 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         setStatusText("Modelos carregados.")
       } catch (err) {
         console.error("Erro ao carregar modelos do Faceplugin:", err)
-        setError("Falha ao carregar inteligência artificial. Verifique os modelos em /public/faceplugin-models.")
+        setError("Falha ao carregar a biometria facial. Verifique os modelos em /public/faceplugin-models e os arquivos OpenCV em /public/js.")
       }
     }
     loadModels()
     return () => { stopCamera() }
-  }, [stopCamera, shouldRequireLiveness])
+  }, [stopCamera, shouldRequireLiveness, waitForOpenCv])
 
   // -- Start camera when ready --
   useEffect(() => {
@@ -252,20 +367,21 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       if (countdownActiveRef.current || verificationPendingRef.current) return
 
       try {
-        const detections = await faceplugin.detectFace(videoRef.current)
+        if (!detectionSessionRef.current) return
+        const detections = await faceplugin.detectFace(detectionSessionRef.current, videoRef.current) as DetectionOutput
         const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true })
+        const face = getPrimaryFace(detections.bbox)
 
-        if (detections && detections.length > 0) {
-          const face = detections[0]
+        if (face) {
           setWarning(null)
           stabilityRef.current += 1
           setStability(stabilityRef.current)
           
-          const box = face.rect
+          const box = face
           const videoW = videoRef.current.videoWidth
           const faceRatio = box.width / videoW
           if (faceRatio < 0.15) {
-            setWarning("Aproxime-se mais da câmera.")
+            setWarning("Aproxime-se mais da camera.")
           }
 
           if (ctx) {
@@ -300,7 +416,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
             ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
             ctx.stroke()
             
-            ctx.strokeStyle = progress >= 1 ? '#22c55e' : '#60a5fa'
+            ctx.strokeStyle = progress >= 1 ? '#22c55e' : '#ef4444'
             ctx.lineWidth = 5
             ctx.lineCap = 'round'
             ctx.beginPath()
@@ -323,7 +439,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
             setStability(0)
             setIsVerified(false)
             if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-            setStatusText(requiresServerVerification ? "Posicione seu rosto para verificação" : "Posicione seu rosto no centro")
+            setStatusText(requiresServerVerification ? "Posicione seu rosto para verificacao" : "Posicione seu rosto no centro")
           }
         }
       } catch (err) {
@@ -351,29 +467,50 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       const doCapture = async () => {
         if (!videoRef.current) return
         try {
-          const detections = await faceplugin.detectFace(videoRef.current)
+          if (!detectionSessionRef.current || !landmarkSessionRef.current || !featureSessionRef.current) {
+            throw new Error("Modelos biometricos ainda nao estao prontos.")
+          }
+
+          const detections = await faceplugin.detectFace(detectionSessionRef.current, videoRef.current) as DetectionOutput
+          const bbox = detections.bbox
+          const face = getPrimaryFace(bbox)
           
-          if (detections && detections.length > 0) {
-            const face = detections[0]
-            const landmarks = await faceplugin.predictLandmark(videoRef.current, face.rect)
+          if (face && bbox) {
+            const landmarks = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
             
             if (shouldRequireLiveness) {
-              const livenessRes = await faceplugin.predictLiveness(videoRef.current, face.rect)
-              if (livenessRes.score < 0.5) {
+              if (!livenessSessionRef.current) {
+                throw new Error("Modelo de prova de vida ainda nao esta pronto.")
+              }
+
+              const livenessRes = await faceplugin.predictLiveness(livenessSessionRef.current, videoRef.current, bbox)
+              const livenessScore = getLivenessScore(livenessRes)
+              if (livenessScore < 0.5) {
                 countdownActiveRef.current = false
                 setCountdown(null)
                 setIsVerified(false)
                 stabilityRef.current = 0
                 setStability(0)
-                setWarning("Rosto ao vivo não detectado. Tente em melhor iluminação ou sem óculos.")
-                setStatusText("Acesso Negado")
+                setWarning("Rosto ao vivo nao detectado. Tente em melhor iluminacao ou sem oculos.")
+                setStatusText("Acesso negado")
                 void logSuspiciousAttempt("liveness_failed", 1)
                 return
               }
             }
 
-            const feature = await faceplugin.extractFeature(videoRef.current, face.rect, landmarks)
-            const descriptorArray = Array.from(feature) as number[]
+            const feature = await faceplugin.extractFeature(featureSessionRef.current, videoRef.current, landmarks)
+            const descriptorArray = getFeatureDescriptor(feature)
+
+            if (descriptorArray.length !== 512 || descriptorArray.some(item => !Number.isFinite(item))) {
+              countdownActiveRef.current = false
+              setCountdown(null)
+              setIsVerified(false)
+              stabilityRef.current = 0
+              setStability(0)
+              setWarning("Descritor facial invalido. Reposicione o rosto e tente novamente.")
+              setStatusText("Captura invalida")
+              return
+            }
 
             if (requiresServerVerification) {
               verificationPendingRef.current = true
@@ -388,10 +525,10 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
                   stabilityRef.current = 0
                   setStability(0)
                   mismatchRef.current += 1
-                  setWarning("Rosto não reconhecido. Verifique se é o colaborador correto.")
-                  setStatusText("Identidade não confirmada.")
+                  setWarning("Rosto nao reconhecido. Verifique se e o colaborador correto.")
+                  setStatusText("Identidade nao confirmada.")
                   if (mismatchRef.current >= 2) {
-                    setError("Rosto não reconhecido. A captura foi interrompida porque o rosto não corresponde à biometria cadastrada.")
+                    setError("Rosto nao reconhecido. A captura foi interrompida porque o rosto nao corresponde a biometria cadastrada.")
                   }
                   if (mismatchRef.current >= 3) {
                     void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
@@ -405,9 +542,9 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
                 setStability(0)
                 mismatchRef.current += 1
                 setWarning(err instanceof Error ? err.message : "Falha ao validar biometria.")
-                setStatusText("Identidade não confirmada.")
+                setStatusText("Identidade nao confirmada.")
                 if (mismatchRef.current >= 2) {
-                  setError("Rosto não reconhecido. A captura foi interrompida porque o rosto não corresponde à biometria cadastrada.")
+                  setError("Rosto nao reconhecido. A captura foi interrompida porque o rosto nao corresponde a biometria cadastrada.")
                 }
                 if (mismatchRef.current >= 3) {
                   void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
@@ -423,7 +560,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
             setCountdown(null)
             stabilityRef.current = 0
             setStability(0)
-            setStatusText("Rosto não detectado no momento da captura. Tente novamente.")
+            setStatusText("Rosto nao detectado no momento da captura. Tente novamente.")
           }
         } catch (err) {
           console.error("Capture Error:", err)
@@ -436,54 +573,53 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       }
       doCapture()
     }
-  }, [countdown, captureSuccess, logSuspiciousAttempt, requiresServerVerification, shouldRequireLiveness, verifyDescriptor])
-
+  }, [countdown, captureSuccess, getFeatureDescriptor, getLivenessScore, getPrimaryFace, logSuspiciousAttempt, requiresServerVerification, shouldRequireLiveness, verifyDescriptor])
   // -- INSTRUCTIONS SCREEN --
   if (showInstructions) {
     return (
       <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center space-y-4 sm:space-y-6 border border-slate-200 shadow-xl shadow-slate-200/50">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#2563EB]/10 rounded-full flex items-center justify-center text-[#2563EB]">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-50 rounded-full flex items-center justify-center text-red-700">
           <UserCheck className="w-8 h-8 sm:w-10 sm:h-10" />
         </div>
         <div className="space-y-1.5">
-          <h3 className="text-slate-800 font-black uppercase tracking-tighter text-base sm:text-xl">Instruções de Biometria</h3>
+          <h3 className="text-slate-800 font-black uppercase tracking-tighter text-base sm:text-xl">Instrucoes de Biometria</h3>
           <p className="text-slate-500 text-[11px] sm:text-xs leading-relaxed max-w-[300px] font-medium">
-            Siga as instruções abaixo para garantir uma captura de qualidade:
+            Siga as instrucoes abaixo para garantir uma captura de qualidade:
           </p>
         </div>
         {!isModelsLoaded && (
-          <div className="w-full rounded-xl border border-blue-100 bg-blue-50 p-3 text-left">
+          <div className="w-full rounded-xl border border-red-100 bg-red-50 p-3 text-left">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+              <span className="text-[10px] font-black uppercase tracking-widest text-red-700">
                 {modelLoadLabel}
               </span>
-              <span className="text-[10px] font-black text-blue-700">
+              <span className="text-[10px] font-black text-red-700">
                 {modelLoadProgress}%
               </span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
               <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                className="h-full rounded-full bg-red-700 transition-all duration-300"
                 style={{ width: `${modelLoadProgress}%` }}
               />
             </div>
-            <p className="mt-2 text-[10px] font-medium text-blue-700">
+            <p className="mt-2 text-[10px] font-medium text-red-700">
               Carregando reconhecimento facial... {modelLoadProgress}%
             </p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full">
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Iluminação</p>
+            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Iluminacao</p>
             <p className="text-[9px] text-slate-500 leading-tight">Fique de frente para a luz. Evite contraluz.</p>
           </div>
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Acessórios</p>
-            <p className="text-[9px] text-slate-500 leading-tight">Remova óculos, chapéus, bonés e protetores.</p>
+            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Acessorios</p>
+            <p className="text-[9px] text-slate-500 leading-tight">Remova oculos, chapeus, bones e protetores.</p>
           </div>
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Posição</p>
-            <p className="text-[9px] text-slate-500 leading-tight">Olhe para a câmera e centralize o rosto.</p>
+            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Posicao</p>
+            <p className="text-[9px] text-slate-500 leading-tight">Olhe para a camera e centralize o rosto.</p>
           </div>
           <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
             <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Tempo</p>
@@ -495,18 +631,18 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
             <p className="text-[10px] text-amber-800 text-left leading-relaxed">
-              <strong className="text-amber-900">Atenção:</strong> O sistema pode recusar a captura se detectar fotos falsas ou iluminação ruim.
+              <strong className="text-amber-900">Atencao:</strong> O sistema pode recusar a captura se detectar fotos falsas ou iluminacao ruim.
             </p>
           </div>
         </div>
 
         <button 
           onClick={() => setShowInstructions(false)}
-          className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#501010] text-white py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg shadow-[#2563EB]/20"
+          className="w-full bg-red-700 hover:bg-red-800 active:bg-[#501010] text-white py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg shadow-red-900/20"
         >
-          Entendi, Iniciar Câmera
+          Entendi, iniciar camera
         </button>
-        <button onClick={onCancel} className="text-[#2563EB] text-[10px] font-bold uppercase hover:underline">{cancelLabel}</button>
+        <button onClick={onCancel} className="text-red-700 text-[10px] font-bold uppercase hover:underline">{cancelLabel}</button>
       </div>
     )
   }
@@ -521,7 +657,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 bg-green-900/90 backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center gap-3 border border-green-600/50">
           <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-green-400 flex-shrink-0" />
           <div>
-            <p className="text-[10px] font-black text-green-400 uppercase tracking-widest">Captura Concluída</p>
+            <p className="text-[10px] font-black text-green-400 uppercase tracking-widest">Captura concluida</p>
             <p className="text-[8px] text-green-300/70 font-bold uppercase tracking-widest">Processando documento...</p>
           </div>
         </div>
@@ -535,7 +671,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       {error ? (
         <div className="text-center p-5 sm:p-6 space-y-3 sm:space-y-4">
           <ShieldAlert className="w-10 h-10 sm:w-12 sm:h-12 text-red-500 mx-auto" />
-          <p className="text-blue-300 font-bold text-[11px] sm:text-xs leading-relaxed max-w-[280px] mx-auto">{error}</p>
+          <p className="text-red-200 font-bold text-[11px] sm:text-xs leading-relaxed max-w-[280px] mx-auto">{error}</p>
           <div className="flex flex-col gap-2">
             <button onClick={() => { mismatchRef.current = 0; setWarning(null); setError(null); startCamera(); }} className="bg-slate-800 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 active:bg-slate-600">Tentar Novamente</button>
             <button onClick={onCancel} className="text-slate-500 text-[10px] font-bold uppercase hover:text-slate-400">Cancelar</button>
@@ -565,7 +701,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
                       Liveness Ativado
                     </p>
                     <p className="mt-0.5 text-xs font-semibold text-white">
-                      Certifique-se de estar visível na câmera.
+                      Certifique-se de estar visivel na camera.
                     </p>
                   </div>
                 </div>
@@ -595,10 +731,10 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
               ) : (
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700 shadow-inner flex-shrink-0">
-                    <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                    <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Status da Câmera</p>
+                    <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Status da camera</p>
                     <p className="text-white text-[11px] sm:text-xs font-bold truncate">
                       {statusText}
                     </p>

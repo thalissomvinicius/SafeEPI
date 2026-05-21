@@ -369,7 +369,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(148, 163, 184)
-    doc.text("Identidade Validada por IA (face-api.js / TensorFlow)", pageWidth / 2, currentY + containerSize + 21, { align: "center" })
+    doc.text("Identidade validada por IA (Faceplugin / ONNX)", pageWidth / 2, currentY + containerSize + 21, { align: "center" })
 
     currentY += containerSize + 30
   } else {

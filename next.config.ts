@@ -55,6 +55,10 @@ const nextConfig: NextConfig = {
         destination: "/faceplugin-models/:path*",
       },
       {
+        source: "/:any*/js/:path*",
+        destination: "/js/:path*",
+      },
+      {
         source: "/:any*/ort-wasm-simd-threaded.wasm",
         destination: "/ort-wasm-simd-threaded.wasm",
       },
@@ -75,7 +79,25 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/models/:path*",
+        source: "/faceplugin-models/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/js/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/:path*.wasm",
         headers: [
           {
             key: "Cache-Control",
@@ -91,13 +113,6 @@ const nextConfig: NextConfig = {
   },
   webpack(config) {
     config.cache = false
-    config.ignoreWarnings = [
-      ...(config.ignoreWarnings || []),
-      {
-        module: /@vladmandic[\\/]face-api/,
-        message: /Critical dependency: require function is used/,
-      },
-    ]
     return config
   },
 }

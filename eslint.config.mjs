@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     ".claude/**",
+    "public/js/**",
+    "scripts/**",
     "apresentacao_safeepi.html",
     "gerar_apresentacao_pptx.js",
   ]),

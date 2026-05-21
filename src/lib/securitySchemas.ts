@@ -34,7 +34,7 @@ export const remoteCaptureSchema = z.object({
   id: uuidSchema,
   token: tokenSchema,
   photo_url: z.string().min(1),
-  face_descriptor: z.array(z.number().finite()).min(1).max(1024),
+  face_descriptor: z.array(z.number().finite()).length(512),
 })
 
 export const remoteDeliveryFieldsSchema = z.object({

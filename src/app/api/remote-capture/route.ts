@@ -139,8 +139,8 @@ export async function POST(request: Request) {
     if (typeof photo_url !== "string" || !photo_url.trim()) {
       return NextResponse.json({ error: "URL da foto é obrigatória." }, { status: 400 })
     }
-    if (!Array.isArray(face_descriptor) || face_descriptor.length === 0) {
-      return NextResponse.json({ error: "Descritor facial é obrigatório." }, { status: 400 })
+    if (!Array.isArray(face_descriptor) || face_descriptor.length !== 512 || face_descriptor.some(value => !Number.isFinite(value))) {
+      return NextResponse.json({ error: "Descritor facial invalido." }, { status: 400 })
     }
     // Token agora é OBRIGATÓRIO — não há mais fallback "sem token".
     if (!isValidToken(token)) {
