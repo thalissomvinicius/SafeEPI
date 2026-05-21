@@ -142,23 +142,61 @@ function RemoteDeliveryContent() {
 
         if (t) {
           // Token-based approach
-          const res = await fetch(`/api/remote-links?token=${t}`)
-          const data = await res.json() as RemoteLinkResponse
-          
-          if (!res.ok) {
-            setErrorMsg(data.error || "Link inválido.")
-            setPhase(data.status === 'completed' ? 'done' : 'error')
+          let res: Response
+          try {
+            res = await fetch(`/api/remote-links?token=${encodeURIComponent(t)}`)
+          } catch (fetchErr) {
+            console.error("[remote] Falha de rede ao buscar o link:", fetchErr)
+            setErrorMsg("Sem conexão com o servidor. Verifique sua internet e tente abrir o link novamente.")
+            setPhase('error')
             return
           }
-          
-          decoded = data.link.data as DeliveryData;
+
+          let data: RemoteLinkResponse | null = null
+          try {
+            data = await res.json() as RemoteLinkResponse
+          } catch (parseErr) {
+            console.error("[remote] Resposta do servidor não é JSON válido:", parseErr, "status:", res.status)
+            setErrorMsg("Resposta inválida do servidor. Tente novamente em instantes.")
+            setPhase('error')
+            return
+          }
+
+          if (!res.ok) {
+            setErrorMsg(data?.error || "Link inválido.")
+            setPhase(data?.status === 'completed' ? 'done' : 'error')
+            return
+          }
+
+          if (!data?.link || typeof data.link !== "object") {
+            console.error("[remote] Resposta do servidor sem o objeto link:", data)
+            setErrorMsg("Link inválido ou expirado.")
+            setPhase('error')
+            return
+          }
+
+          decoded = (data.link.data || null) as DeliveryData | null;
           empFromToken = data.link.employee || null;
           ppeFromToken = data.link.ppe || null;
           workplaceFromToken = data.link.workplace || null;
           setLinkToken(data.link.token);
+
+          if (!decoded) {
+            console.error("[remote] Link sem dados de entrega anexados:", data.link)
+            setErrorMsg("Este link não contém dados de entrega válidos. Solicite um novo link ao gestor.")
+            setPhase('error')
+            return
+          }
         } else if (s) {
           // Legacy approach
-          decoded = JSON.parse(atob(s))
+          try {
+            decoded = JSON.parse(atob(s))
+          } catch (legacyErr) {
+            console.error("[remote] Falha ao decodificar link legado:", legacyErr)
+            setErrorMsg("Este link parece corrompido. Solicite um novo link ao gestor.")
+            setPhase('error')
+            return
+          }
         } else {
           setErrorMsg("Link inválido ou expirado.")
           setPhase('error')
@@ -166,41 +204,47 @@ function RemoteDeliveryContent() {
         }
 
         setDeliveryData(decoded)
-        
-        const needsWorkplaceLookup = Boolean(decoded?.w && !workplaceFromToken)
-        const [employees, ppes, workplaces] = await Promise.all([
-          !empFromToken ? api.getEmployees() : Promise.resolve([]),
-          !ppeFromToken ? api.getPpes() : Promise.resolve([]),
-          needsWorkplaceLookup ? api.getWorkplaces() : Promise.resolve([])
-        ])
-        
-        const emp = empFromToken || employees.find(e => e.id === decoded!.e)
-        const firstItemPpeId = decoded?.items?.[0]?.ppeId || decoded!.p
-        const p = ppeFromToken || ppes.find(p => p.id === firstItemPpeId)
-        const w = workplaceFromToken || workplaces.find(w => w.id === decoded!.w)
 
-        if (!emp || !p) {
-          setErrorMsg("Dados da entrega não encontrados no sistema.")
+        // O servidor (api/remote-links) já anexa employee/ppe/workplace ao token.
+        // Não chamamos api.getEmployees/api.getPpes/api.getWorkplaces aqui porque essa
+        // página é pública (link enviado por WhatsApp/e-mail) e essas APIs exigem auth.
+        const emp = empFromToken
+        const firstItemPpeId = decoded?.items?.[0]?.ppeId || decoded?.p
+        const p = ppeFromToken
+        const w = workplaceFromToken
+
+        if (!emp) {
+          console.error("[remote] Servidor não retornou employee para o token. decoded.e =", decoded?.e)
+          setErrorMsg("Colaborador vinculado a este link não foi encontrado. Solicite um novo link ao gestor.")
           setPhase('error')
-        } else {
-          setEmployee(emp)
-          setPpe(p)
-          setWorkplace(w || null)
-          setDeliveryItems(decoded?.items && decoded.items.length > 0
-            ? decoded.items
-            : [{
-              ppeId: p.id,
-              ppeName: p.name,
-              ppeCaNumber: p.ca_number,
-              ppeCaExpiry: p.ca_expiry_date,
-              quantity: decoded?.q || 1,
-              reason: decoded?.r || "Entrega Remota",
-            }]
-          )
-          setPhase('verify') // Go to identity verification
+          return
         }
-      } catch {
-        setErrorMsg("Erro ao processar o link de assinatura.")
+        if (!p) {
+          console.error("[remote] Servidor não retornou ppe para o token. ppeId esperado =", firstItemPpeId, "decoded =", decoded)
+          setErrorMsg("EPI vinculado a este link não foi encontrado. Solicite um novo link ao gestor.")
+          setPhase('error')
+          return
+        }
+
+        setEmployee(emp)
+        setPpe(p)
+        setWorkplace(w || null)
+        setDeliveryItems(decoded?.items && decoded.items.length > 0
+          ? decoded.items
+          : [{
+            ppeId: p.id,
+            ppeName: p.name,
+            ppeCaNumber: p.ca_number,
+            ppeCaExpiry: p.ca_expiry_date,
+            quantity: decoded?.q || 1,
+            reason: decoded?.r || "Entrega Remota",
+          }]
+        )
+        setPhase('verify') // Go to identity verification
+      } catch (err) {
+        console.error("[remote] Erro inesperado ao processar o link:", err)
+        const message = err instanceof Error ? err.message : "erro desconhecido"
+        setErrorMsg(`Erro ao processar o link de assinatura: ${message}`)
         setPhase('error')
       }
     }
