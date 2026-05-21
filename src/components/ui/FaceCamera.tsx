@@ -410,10 +410,10 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   }, [isModelsLoaded, showInstructions, startCamera])
 
   // -- Face detection loop --
-  const handleVideoPlay = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current)
+  const detectionLoopRef = useRef<() => Promise<void>>(async () => {})
 
-    intervalRef.current = setInterval(async () => {
+  useEffect(() => {
+    detectionLoopRef.current = async () => {
       if (!videoRef.current || !canvasRef.current || !isCameraActive) return
 
       // If countdown is active, STOP detecting - just let the countdown run
@@ -572,6 +572,14 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
           setStatusText(shouldRequireLiveness ? LIVENESS_CHALLENGES[challenge].label : requiresServerVerification ? "Posicione seu rosto para verificação" : "Posicione seu rosto no centro")
         }
       }
+    }
+  })
+
+  const handleVideoPlay = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current)
+
+    intervalRef.current = setInterval(() => {
+      void detectionLoopRef.current()
     }, 300)
 
     return () => {
