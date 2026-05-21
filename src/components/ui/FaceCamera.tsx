@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Camera, CheckCircle2, ShieldAlert, UserCheck, AlertTriangle, ArrowLeftRight } from "lucide-react"
+import { Camera, CheckCircle2, ShieldAlert, UserCheck, AlertTriangle, ArrowLeftRight, ArrowLeft, ArrowRight } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import * as faceplugin from "faceplugin-face-recognition-js"
 import * as ort from "onnxruntime-web"
+import { FaceLandmarker, FilesetResolver, type NormalizedLandmark } from "@mediapipe/tasks-vision"
 
 // Configura o caminho base para carregar os arquivos .wasm copiados para /public
 ort.env.wasm.wasmPaths = "/"
@@ -20,7 +21,11 @@ type DetectionOutput = {
   bbox?: NdArrayLike
   size?: number
 }
-type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness" | "fr_pose"
+type MediaPipeFaceMotion = {
+  yaw: number
+  centerX: number
+}
+type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness"
 type LivenessStep = "turn-left" | "turn-right" | "center" | "complete"
 
 interface FaceCameraProps {
@@ -46,7 +51,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const landmarkSessionRef = useRef<FacepluginSession | null>(null)
   const featureSessionRef = useRef<FacepluginSession | null>(null)
   const livenessSessionRef = useRef<FacepluginSession | null>(null)
-  const poseSessionRef = useRef<FacepluginSession | null>(null)
+  const faceLandmarkerRef = useRef<FaceLandmarker | null>(null)
   const livenessStepRef = useRef<LivenessStep>("turn-left")
   const firstYawDirectionRef = useRef<-1 | 1 | null>(null)
   const baselineYawRef = useRef<number | null>(null)
@@ -75,14 +80,12 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const [modelLoadLabel, setModelLoadLabel] = useState("Inicializando")
   const [livenessStep, setLivenessStep] = useState<LivenessStep>("turn-left")
   const [livenessProgress, setLivenessProgress] = useState(0)
-  const [livenessInstruction, setLivenessInstruction] = useState("Vire levemente o rosto para a esquerda")
+  const [livenessInstruction, setLivenessInstruction] = useState("Vire levemente o rosto para sua esquerda")
   
   const STABILITY_REQUIRED = 8
   const COUNTDOWN_SECONDS = 4
-  const TURN_THRESHOLD = 0.018
-  const CENTER_THRESHOLD = 0.014
-  const POSE_TURN_THRESHOLD = 8
-  const POSE_CENTER_THRESHOLD = 4
+  const TURN_THRESHOLD = 0.05
+  const CENTER_THRESHOLD = 0.035
   const requiresServerVerification = Boolean(verifyEmployeeId)
   const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
 
@@ -99,7 +102,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     livenessPassedRef.current = false
     setLivenessStepValue("turn-left")
     setLivenessProgress(0)
-    setLivenessInstruction("Vire levemente o rosto para a esquerda")
+    setLivenessInstruction("Vire levemente o rosto para sua esquerda")
   }, [setLivenessStepValue])
 
   const withTimeout = useCallback(async <T,>(promise: Promise<T>, label: string, timeoutMs = 30000) => {
@@ -216,12 +219,26 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     return Number.isFinite(yaw) ? yaw : null
   }, [getLandmarkValue])
 
-  const getPoseYaw = useCallback((result: unknown) => {
-    if (!Array.isArray(result)) return null
-    const first = result[0]
-    if (!Array.isArray(first)) return null
-    const yaw = Number(first[4])
-    return Number.isFinite(yaw) ? yaw : null
+  const getMediaPipeFaceMotion = useCallback((landmarks: NormalizedLandmark[]): MediaPipeFaceMotion | null => {
+    const nose = landmarks[1] || landmarks[4]
+    const leftEyeOuter = landmarks[33]
+    const rightEyeOuter = landmarks[263]
+    const leftCheek = landmarks[234]
+    const rightCheek = landmarks[454]
+
+    if (!nose || !leftEyeOuter || !rightEyeOuter) return null
+
+    const eyeDistance = Math.abs(rightEyeOuter.x - leftEyeOuter.x)
+    if (!Number.isFinite(eyeDistance) || eyeDistance < 0.02) return null
+
+    const eyeCenterX = (leftEyeOuter.x + rightEyeOuter.x) / 2
+    const yaw = (nose.x - eyeCenterX) / eyeDistance
+    const centerX = leftCheek && rightCheek
+      ? (leftCheek.x + rightCheek.x) / 2
+      : eyeCenterX
+
+    if (!Number.isFinite(yaw) || !Number.isFinite(centerX)) return null
+    return { yaw, centerX }
   }, [])
 
   const updateLivenessChallenge = useCallback(async (bbox: NdArrayLike | undefined, face: { x: number; width: number }) => {
@@ -229,21 +246,28 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     if (!videoRef.current || !bbox) return false
 
     let yaw: number | null = null
-    let usingPose = false
-    if (poseSessionRef.current) {
-      const poseResult = await faceplugin.predictPose(poseSessionRef.current, videoRef.current, bbox)
-      yaw = getPoseYaw(poseResult)
-      usingPose = yaw !== null
+    let faceCenter = 0
+
+    if (faceLandmarkerRef.current) {
+      const mediaPipeResult = faceLandmarkerRef.current.detectForVideo(videoRef.current, performance.now())
+      const mediaPipeLandmarks = mediaPipeResult.faceLandmarks?.[0]
+      if (mediaPipeLandmarks) {
+        const motion = getMediaPipeFaceMotion(mediaPipeLandmarks)
+        if (motion) {
+          yaw = motion.yaw
+          faceCenter = motion.centerX
+        }
+      }
     }
 
     if (yaw === null && landmarkSessionRef.current) {
       const landmarksResult = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
       const landmarks = getPrimaryLandmarks(landmarksResult)
       yaw = getYawOffset(landmarks, face)
+      const videoWidth = videoRef.current.videoWidth || 1
+      faceCenter = (face.x + face.width / 2) / videoWidth
     }
 
-    const videoWidth = videoRef.current.videoWidth || 1
-    const faceCenter = (face.x + face.width / 2) / videoWidth
     if (yaw === null) {
       setLivenessInstruction("Centralize o rosto para iniciar a prova de vida")
       setStatusText("Centralize o rosto para iniciar")
@@ -254,8 +278,8 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       baselineYawRef.current = yaw
       baselineCenterRef.current = faceCenter
       centerHoldRef.current = 0
-      setLivenessInstruction("1/3 - Vire levemente o rosto para a esquerda")
-      setStatusText("Prova de vida: vire para a esquerda")
+      setLivenessInstruction("1/3 - Vire levemente o rosto para sua esquerda")
+      setStatusText("Prova de vida: vire para sua esquerda")
       setLivenessProgress(4)
       return false
     }
@@ -264,30 +288,30 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     const baselineCenter = baselineCenterRef.current
     const yawDelta = yaw - baselineYaw
     const centerDelta = faceCenter - baselineCenter
-    const turnThreshold = usingPose ? POSE_TURN_THRESHOLD : TURN_THRESHOLD
-    const centerThreshold = usingPose ? POSE_CENTER_THRESHOLD : CENTER_THRESHOLD
-    const motion = usingPose || Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
+    const turnThreshold = TURN_THRESHOLD
+    const centerThreshold = CENTER_THRESHOLD
+    const motion = Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
     const motionAbs = Math.abs(motion)
 
     const step = livenessStepRef.current
     if (step === "turn-left") {
-      setLivenessInstruction("1/3 - Vire levemente o rosto para a esquerda")
-      setStatusText("Prova de vida: vire para a esquerda")
+      setLivenessInstruction("1/3 - Vire levemente o rosto para sua esquerda")
+      setStatusText("Prova de vida: vire para sua esquerda")
       setLivenessProgress(Math.min(34, 4 + Math.round((motionAbs / turnThreshold) * 30)))
       if (motionAbs >= turnThreshold) {
         firstYawDirectionRef.current = motion > 0 ? 1 : -1
         centerHoldRef.current = 0
         setLivenessProgress(35)
         setLivenessStepValue("turn-right")
-        setLivenessInstruction("2/3 - Agora vire levemente para a direita")
-        setStatusText("Esquerda confirmada. Vire para a direita")
+        setLivenessInstruction("2/3 - Agora vire levemente para sua direita")
+        setStatusText("Esquerda confirmada. Vire para sua direita")
       }
       return false
     }
 
     if (step === "turn-right") {
-      setLivenessInstruction("2/3 - Agora vire levemente para a direita")
-      setStatusText("Prova de vida: vire para a direita")
+      setLivenessInstruction("2/3 - Agora vire levemente para sua direita")
+      setStatusText("Prova de vida: vire para sua direita")
       const firstDirection = firstYawDirectionRef.current
       const oppositeProgress = firstDirection ? Math.max(0, (-motion * firstDirection) / turnThreshold) : 0
       setLivenessProgress(Math.min(69, 35 + Math.round(oppositeProgress * 34)))
@@ -304,7 +328,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     if (step === "center") {
       setLivenessInstruction("3/3 - Volte ao centro e fique parado")
       setStatusText("Volte ao centro e fique parado")
-      const centerDistance = usingPose ? Math.abs(yawDelta) : Math.max(Math.abs(yawDelta), Math.abs(centerDelta))
+      const centerDistance = Math.max(Math.abs(yawDelta), Math.abs(centerDelta))
       if (centerDistance <= centerThreshold) {
         centerHoldRef.current += 1
       } else {
@@ -323,7 +347,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
 
     return true
-  }, [getPoseYaw, getPrimaryLandmarks, getYawOffset, setLivenessStepValue, shouldRequireLiveness])
+  }, [getMediaPipeFaceMotion, getPrimaryLandmarks, getYawOffset, setLivenessStepValue, shouldRequireLiveness])
 
   const getLivenessScore = useCallback((result: unknown) => {
     if (Array.isArray(result) && Array.isArray(result[0])) {
@@ -401,7 +425,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         resetLivenessChallenge()
       }
       setIsCameraActive(true)
-      setStatusText(shouldRequireLiveness ? "Prova de vida: vire para a esquerda" : "Posicione seu rosto no centro")
+      setStatusText(shouldRequireLiveness ? "Prova de vida: vire para sua esquerda" : "Posicione seu rosto no centro")
     } catch (err: unknown) {
       console.error("Erro ao acessar câmera:", err)
       const msg = err instanceof DOMException && err.name === "NotAllowedError"
@@ -537,12 +561,29 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         setModelLoadProgress(84)
 
         if (shouldRequireLiveness) {
-          setModelLoadLabel("Pose facial")
+          setModelLoadLabel("Movimento facial")
           setStatusText("Carregando reconhecimento facial... 88%")
-          poseSessionRef.current = await loadOnnxSession("fr_pose")
+          const vision = await withTimeout(
+            FilesetResolver.forVisionTasks("/mediapipe/wasm"),
+            "Carregamento do MediaPipe",
+          )
+          faceLandmarkerRef.current = await withTimeout(
+            FaceLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath: "/mediapipe/models/face_landmarker.task",
+                delegate: "CPU",
+              },
+              runningMode: "VIDEO",
+              numFaces: 1,
+              minFaceDetectionConfidence: 0.5,
+              minFacePresenceConfidence: 0.5,
+              minTrackingConfidence: 0.5,
+            }),
+            "Carregamento do Face Landmarker",
+          )
           setModelLoadProgress(92)
 
-          setModelLoadLabel("Prova de vida")
+          setModelLoadLabel("Anti-spoofing")
           setStatusText("Carregando reconhecimento facial... 95%")
           livenessSessionRef.current = await loadOnnxSession("fr_liveness")
         }
@@ -552,12 +593,16 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         setStatusText("Modelos carregados.")
       } catch (err) {
         console.error("Erro ao carregar modelos do Faceplugin:", err)
-        setError("Falha ao carregar a biometria facial. Verifique os modelos em /public/faceplugin-models e os arquivos OpenCV em /public/js.")
+        setError("Falha ao carregar a biometria facial. Verifique os modelos locais em /public/faceplugin-models, /public/mediapipe e os arquivos OpenCV em /public/js.")
       }
     }
     loadModels()
-    return () => { stopCamera() }
-  }, [loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv])
+    return () => {
+      faceLandmarkerRef.current?.close()
+      faceLandmarkerRef.current = null
+      stopCamera()
+    }
+  }, [loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv, withTimeout])
 
   // -- Start camera when ready --
   useEffect(() => {
@@ -932,7 +977,15 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
                   <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
                     livenessStep === "complete" ? "bg-emerald-500 text-white" : "bg-red-600 text-white"
                   }`}>
-                    {livenessStep === "complete" ? <CheckCircle2 className="h-6 w-6" /> : <ArrowLeftRight className="h-6 w-6" />}
+                    {livenessStep === "complete" ? (
+                      <CheckCircle2 className="h-6 w-6" />
+                    ) : livenessStep === "turn-left" ? (
+                      <ArrowLeft className="h-6 w-6" />
+                    ) : livenessStep === "turn-right" ? (
+                      <ArrowRight className="h-6 w-6" />
+                    ) : (
+                      <Camera className="h-6 w-6" />
+                    )}
                   </div>
                   <div className="flex-1">
                     <p className={`text-[10px] font-black uppercase tracking-widest ${
@@ -1001,7 +1054,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
             <span className="text-[8px] font-bold text-white uppercase tracking-widest">
-              Liveness: Faceplugin SDK
+              Liveness: MediaPipe + Faceplugin
             </span>
           </div>
         </>

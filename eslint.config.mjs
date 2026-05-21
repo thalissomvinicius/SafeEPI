@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     ".claude/**",
     "public/js/**",
+    "public/mediapipe/**",
     "public/ort-wasm*.mjs",
     "scripts/**",
     "apresentacao_safeepi.html",
