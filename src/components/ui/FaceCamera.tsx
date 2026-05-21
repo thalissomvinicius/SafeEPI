@@ -1,39 +1,15 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import * as faceapi from "@vladmandic/face-api"
-import { Loader2, Camera, CheckCircle2, ShieldAlert, UserCheck, Info, Timer, AlertTriangle, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react"
+import { Loader2, Camera, CheckCircle2, ShieldAlert, UserCheck, Info, Timer, AlertTriangle } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+// @ts-ignore
+import * as faceplugin from "faceplugin-face-recognition-js"
 
-type LivenessChallenge = "turn_right" | "turn_left" | "look_up"
-type SuspiciousReason = "repeated_failure" | "low_variance" | "timeout"
-
-const LIVENESS_TIMEOUT_MS = 10_000
-const LOW_VARIANCE_THRESHOLD = 0.001
-const MODEL_STEPS = [
-  { label: "Detector facial", weight: 0.02, load: () => faceapi.nets.tinyFaceDetector.loadFromUri("/models") },
-  { label: "Landmarks", weight: 0.05, load: () => faceapi.nets.faceLandmark68Net.loadFromUri("/models") },
-  { label: "Reconhecimento", weight: 0.93, load: () => faceapi.nets.faceRecognitionNet.loadFromUri("/models") },
-]
-
-const LIVENESS_CHALLENGES: Record<LivenessChallenge, { label: string; Icon: typeof ArrowRight }> = {
-  turn_right: { label: "Vire levemente para a direita", Icon: ArrowRight },
-  turn_left: { label: "Vire levemente para a esquerda", Icon: ArrowLeft },
-  look_up: { label: "Olhe brevemente para cima", Icon: ArrowUp },
-}
-
-function pickChallenge(previous?: LivenessChallenge): LivenessChallenge {
-  const options = (Object.keys(LIVENESS_CHALLENGES) as LivenessChallenge[])
-    .filter(item => item !== previous)
-  return options[Math.floor(Math.random() * options.length)] || "turn_right"
-}
-
-function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
+type SuspiciousReason = "repeated_failure" | "low_variance" | "timeout" | "liveness_failed"
 
 interface FaceCameraProps {
-  onCapture: (descriptor: Float32Array, imageBase64: string) => void;
+  onCapture: (descriptor: number[], imageBase64: string) => void;
   verifyEmployeeId?: string;
   verifyCompanyId?: string | null;
   verifyToken?: string | null;
@@ -47,17 +23,17 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const stabilityRef = useRef(0)
-  const countdownActiveRef = useRef(false) // Prevents detection loop from resetting countdown
+  const countdownActiveRef = useRef(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const matchedDescriptorRef = useRef<Float32Array | null>(null)
+  const matchedDescriptorRef = useRef<number[] | null>(null)
   const mismatchRef = useRef(0)
   const verificationPendingRef = useRef(false)
-  const challengeBaselineRef = useRef<{ eyebrowEyeDistance?: number } | null>(null)
-  const challengeTimeoutCountRef = useRef(0)
+  
   const suspiciousLoggedRef = useRef<Record<SuspiciousReason, boolean>>({
     repeated_failure: false,
     low_variance: false,
     timeout: false,
+    liveness_failed: false,
   })
   
   const [isModelsLoaded, setIsModelsLoaded] = useState(false)
@@ -71,25 +47,12 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [modelLoadProgress, setModelLoadProgress] = useState(0)
-  const [modelLoadLabel, setModelLoadLabel] = useState("Detector facial")
-  const [challenge, setChallenge] = useState<LivenessChallenge>(() => pickChallenge())
-  const [challengeStartedAt, setChallengeStartedAt] = useState(() => Date.now())
-  const [challengeProgress, setChallengeProgress] = useState(100)
-  const [isChallengeComplete, setIsChallengeComplete] = useState(false)
-  const [isCollectingLiveness, setIsCollectingLiveness] = useState(false)
+  const [modelLoadLabel, setModelLoadLabel] = useState("Inicializando")
   
-  const STABILITY_REQUIRED = 8 // ~2.4s at 300ms
+  const STABILITY_REQUIRED = 8
   const COUNTDOWN_SECONDS = 4
   const requiresServerVerification = Boolean(verifyEmployeeId)
   const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
-
-  const getDetectorOptions = useCallback((scoreThresholdOverride?: number) => {
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768
-    return new faceapi.TinyFaceDetectorOptions({
-      inputSize: isMobile ? 224 : 320,
-      scoreThreshold: scoreThresholdOverride ?? (isMobile ? 0.45 : 0.5),
-    })
-  }, [])
 
   const stopCamera = useCallback(() => {
     if (intervalRef.current) {
@@ -117,17 +80,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         streamRef.current = stream
       }
       setIsCameraActive(true)
-      if (shouldRequireLiveness) {
-        const next = pickChallenge(challenge)
-        setChallenge(next)
-        setChallengeStartedAt(Date.now())
-        setChallengeProgress(100)
-        setIsChallengeComplete(false)
-        challengeBaselineRef.current = null
-        setStatusText(LIVENESS_CHALLENGES[next].label)
-      } else {
-        setStatusText("Posicione seu rosto no centro")
-      }
+      setStatusText("Posicione seu rosto no centro")
     } catch (err: unknown) {
       console.error("Erro ao acessar câmera:", err)
       const msg = err instanceof DOMException && err.name === "NotAllowedError"
@@ -137,7 +90,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         : "Erro ao acessar a câmera. Verifique se outro aplicativo está usando a câmera e tente novamente."
       setError(msg)
     }
-  }, [challenge, shouldRequireLiveness])
+  }, [])
 
   const takeSnapshot = useCallback((): string | null => {
     if (!videoRef.current) return null
@@ -164,7 +117,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     return canvas.toDataURL("image/jpeg", 0.92)
   }, [])
 
-  const captureSuccess = useCallback((descriptor: Float32Array) => {
+  const captureSuccess = useCallback((descriptor: number[]) => {
     const base64 = takeSnapshot()
     if (!base64) return
     
@@ -176,21 +129,6 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       onCapture(descriptor, base64)
     }, 600)
   }, [onCapture, stopCamera, takeSnapshot])
-
-  // Liveness básico: detecta movimento e variância natural.
-  // Não substitui SDK especializado (iProov, FaceTec).
-  // Adequado para controle interno NR-06, não para autenticação bancária ou acesso físico crítico.
-  const resetChallenge = useCallback((previous?: LivenessChallenge) => {
-    const next = pickChallenge(previous)
-    setChallenge(next)
-    setChallengeStartedAt(Date.now())
-    setChallengeProgress(100)
-    setIsChallengeComplete(false)
-    challengeBaselineRef.current = null
-    stabilityRef.current = 0
-    setStability(0)
-    setStatusText(LIVENESS_CHALLENGES[next].label)
-  }, [])
 
   const logSuspiciousAttempt = useCallback(async (reason: SuspiciousReason, attempts: number) => {
     if (!verifyEmployeeId || suspiciousLoggedRef.current[reason]) return
@@ -222,128 +160,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
   }, [verifyCompanyId, verifyEmployeeId, verifyToken])
 
-  const detectChallenge = useCallback((detections: {
-    landmarks: { positions: Array<{ x: number; y: number }> }
-    detection: { box: { width: number } }
-  }) => {
-    const points = detections.landmarks.positions
-    const nose = points[30]
-    const leftEyeCorner = points[36]
-    const rightEyeCorner = points[45]
-    const faceWidth = Math.max(detections.detection.box.width, 1)
-    const elapsed = Date.now() - challengeStartedAt
-    const remaining = Math.max(0, 1 - elapsed / LIVENESS_TIMEOUT_MS)
-    setChallengeProgress(Math.round(remaining * 100))
-
-    if (elapsed >= LIVENESS_TIMEOUT_MS) {
-      challengeTimeoutCountRef.current += 1
-      if (challengeTimeoutCountRef.current >= 3) {
-        void logSuspiciousAttempt("timeout", challengeTimeoutCountRef.current)
-      }
-      resetChallenge(challenge)
-      setWarning("Tempo esgotado. Novo desafio gerado.")
-      return
-    }
-
-    if (!nose || !leftEyeCorner || !rightEyeCorner) return
-
-    const eyeCenterX = (leftEyeCorner.x + rightEyeCorner.x) / 2
-    const yawOffset = (nose.x - eyeCenterX) / faceWidth
-
-    const eyebrowPoints = points.slice(17, 27)
-    const eyePoints = points.slice(36, 48)
-    const avgY = (items: Array<{ y: number }>) =>
-      items.reduce((sum, item) => sum + item.y, 0) / Math.max(items.length, 1)
-    const eyebrowEyeDistance = Math.max(avgY(eyePoints) - avgY(eyebrowPoints), 0)
-    if (!challengeBaselineRef.current) {
-      challengeBaselineRef.current = { eyebrowEyeDistance }
-    }
-
-    const pitchBaseline = Math.max(challengeBaselineRef.current.eyebrowEyeDistance || eyebrowEyeDistance, 1)
-    const pitchRatio = eyebrowEyeDistance / pitchBaseline
-    const passed =
-      (challenge === "turn_right" && yawOffset > 0.15) ||
-      (challenge === "turn_left" && yawOffset < -0.15) ||
-      (challenge === "look_up" && pitchRatio > 1.1)
-
-    if (!passed) {
-      setStatusText(LIVENESS_CHALLENGES[challenge].label)
-      return
-    }
-
-    challengeTimeoutCountRef.current = 0
-    setIsChallengeComplete(true)
-    setWarning(null)
-    setStatusText("Movimento confirmado. Estabilizando...")
-    setTimeout(() => {
-      setStatusText("Mantenha o rosto parado para verificação")
-    }, 500)
-  }, [challenge, challengeStartedAt, logSuspiciousAttempt, resetChallenge])
-
-  const averageDescriptors = useCallback((samples: Float32Array[]) => {
-    const length = samples[0]?.length || 0
-    const average = new Float32Array(length)
-    samples.forEach(sample => {
-      for (let index = 0; index < length; index += 1) average[index] += sample[index]
-    })
-    for (let index = 0; index < length; index += 1) average[index] /= samples.length
-    return average
-  }, [])
-
-  const descriptorVariance = useCallback((samples: Float32Array[], average: Float32Array) => {
-    if (samples.length < 2 || average.length === 0) return 0
-    let sum = 0
-    let count = 0
-    samples.forEach(sample => {
-      for (let index = 0; index < average.length; index += 1) {
-        const delta = sample[index] - average[index]
-        sum += delta * delta
-        count += 1
-      }
-    })
-    return sum / Math.max(count, 1)
-  }, [])
-
-  const collectLivenessDescriptor = useCallback(async () => {
-    if (!videoRef.current) return null
-    setIsCollectingLiveness(true)
-    setStatusText("Verificando movimento natural...")
-
-    const samples: Float32Array[] = []
-    for (let index = 0; index < 3; index += 1) {
-      const detection = await faceapi.detectSingleFace(
-        videoRef.current,
-        getDetectorOptions(0.4)
-      ).withFaceLandmarks().withFaceDescriptor()
-
-      if (!detection) {
-        setIsCollectingLiveness(false)
-        setStatusText("Rosto não detectado no momento da verificação. Tente novamente.")
-        return null
-      }
-
-      samples.push(detection.descriptor)
-      if (index < 2) await delay(400)
-    }
-
-    const average = averageDescriptors(samples)
-    const variance = descriptorVariance(samples, average)
-    setIsCollectingLiveness(false)
-
-    if (variance < LOW_VARIANCE_THRESHOLD) {
-      mismatchRef.current += 1
-      setIsVerified(false)
-      setWarning("Movimento natural não detectado. Tente novamente.")
-      setStatusText("Movimento natural não detectado. Tente novamente.")
-      void logSuspiciousAttempt("low_variance", mismatchRef.current || 1)
-      resetChallenge(challenge)
-      return null
-    }
-
-    return average
-  }, [averageDescriptors, challenge, descriptorVariance, getDetectorOptions, logSuspiciousAttempt, resetChallenge])
-
-  const verifyDescriptor = useCallback(async (descriptor: Float32Array) => {
+  const verifyDescriptor = useCallback(async (descriptor: number[]) => {
     if (!verifyEmployeeId) return { match: true, confidence: 1 }
 
     const headers: Record<string, string> = { "Content-Type": "application/json" }
@@ -357,7 +174,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       method: "POST",
       headers,
       body: JSON.stringify({
-        descriptor: Array.from(descriptor),
+        descriptor,
         token: verifyToken || undefined,
       }),
     })
@@ -373,31 +190,44 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
   }, [verifyEmployeeId, verifyToken])
 
-  // -- Load AI Models --
+  // -- Load Faceplugin Models --
   useEffect(() => {
     const loadModels = async () => {
       try {
-        let loadedWeight = 0
-        for (const step of MODEL_STEPS) {
-          setModelLoadLabel(step.label)
-          setStatusText(`Carregando reconhecimento facial... ${Math.round(loadedWeight * 100)}%`)
-          await step.load()
-          loadedWeight += step.weight
-          const progress = Math.min(100, Math.round(loadedWeight * 100))
-          setModelLoadProgress(progress)
-          setStatusText(`Carregando reconhecimento facial... ${progress}%`)
+        const publicPath = "/faceplugin-models/"
+        
+        setModelLoadLabel("Detector facial")
+        setStatusText("Carregando reconhecimento facial... 10%")
+        await faceplugin.loadDetectionModel(publicPath)
+        setModelLoadProgress(20)
+
+        setModelLoadLabel("Landmarks")
+        setStatusText("Carregando reconhecimento facial... 40%")
+        await faceplugin.loadLandmarkModel(publicPath)
+        setModelLoadProgress(50)
+
+        setModelLoadLabel("Reconhecimento")
+        setStatusText("Carregando reconhecimento facial... 70%")
+        await faceplugin.loadFeatureModel(publicPath)
+        setModelLoadProgress(80)
+
+        if (shouldRequireLiveness) {
+          setModelLoadLabel("Liveness (Vivacidade)")
+          setStatusText("Carregando reconhecimento facial... 90%")
+          await faceplugin.loadLivenessModel(publicPath)
         }
-        setIsModelsLoaded(true)
+        
         setModelLoadProgress(100)
+        setIsModelsLoaded(true)
         setStatusText("Modelos carregados.")
       } catch (err) {
-        console.error("Erro ao carregar modelos:", err)
-        setError("Falha ao carregar inteligência artificial. Verifique os modelos em /public/models.")
+        console.error("Erro ao carregar modelos do Faceplugin:", err)
+        setError("Falha ao carregar inteligência artificial. Verifique os modelos em /public/faceplugin-models.")
       }
     }
     loadModels()
     return () => { stopCamera() }
-  }, [stopCamera])
+  }, [stopCamera, shouldRequireLiveness])
 
   // -- Start camera when ready --
   useEffect(() => {
@@ -415,179 +245,100 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   useEffect(() => {
     detectionLoopRef.current = async () => {
       if (!videoRef.current || !canvasRef.current || !isCameraActive) return
+      if (countdownActiveRef.current || verificationPendingRef.current) return
 
-      // If countdown is active, STOP detecting - just let the countdown run
-      if (countdownActiveRef.current) return
+      try {
+        const detections = await faceplugin.detectFace(videoRef.current)
+        const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true })
 
-      const detections = await faceapi.detectSingleFace(
-        videoRef.current, 
-        getDetectorOptions()
-      ).withFaceLandmarks().withFaceDescriptor()
-
-      const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true })
-
-      if (detections) {
-        setWarning(null)
-        stabilityRef.current += 1
-        setStability(stabilityRef.current)
-        
-        // Check face quality - low score can mean obstructions (hat, glasses, etc)
-        const score = detections.detection.score
-        if (score < 0.7) {
-          setWarning("Detecção fraca: remova óculos escuros, bonés ou chapéus.")
-        }
-
-        // Check face size - too small means too far
-        const box = detections.detection.box
-        const videoW = videoRef.current.videoWidth
-        const faceRatio = box.width / videoW
-        if (faceRatio < 0.15) {
-          setWarning("Aproxime-se mais da câmera.")
-        }
-
-        if (shouldRequireLiveness && !isChallengeComplete) {
-          detectChallenge(detections)
-          stabilityRef.current = 0
-          setStability(0)
-          return
-        }
-
-        // Draw detection overlay
-        if (ctx) {
-          const canvas = canvasRef.current
-          const displayWidth = canvas.clientWidth
-          const displayHeight = canvas.clientHeight
-          if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-            canvas.width = displayWidth
-            canvas.height = displayHeight
+        if (detections && detections.length > 0) {
+          const face = detections[0]
+          setWarning(null)
+          stabilityRef.current += 1
+          setStability(stabilityRef.current)
+          
+          const box = face.rect
+          const videoW = videoRef.current.videoWidth
+          const faceRatio = box.width / videoW
+          if (faceRatio < 0.15) {
+            setWarning("Aproxime-se mais da câmera.")
           }
-          ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-          const scale = Math.max(canvas.width / videoRef.current.videoWidth, canvas.height / videoRef.current.videoHeight)
-          const renderedWidth = videoRef.current.videoWidth * scale
-          const renderedHeight = videoRef.current.videoHeight * scale
-          const offsetX = (canvas.width - renderedWidth) / 2
-          const offsetY = (canvas.height - renderedHeight) / 2
-          const rBox = detections.detection.box
-          const boxX = offsetX + rBox.x * scale
-          const boxY = offsetY + rBox.y * scale
-          const boxW = rBox.width * scale
-          const boxH = rBox.height * scale
-          const mirroredX = canvas.width - boxX - boxW
-          const cx = mirroredX + boxW / 2
-          const cy = boxY + boxH / 2
-          const radius = Math.max(boxW, boxH) * 0.62
-          const progress = Math.min(stabilityRef.current / STABILITY_REQUIRED, 1)
-          
-          // Background ring
-          ctx.strokeStyle = 'rgba(255,255,255,0.12)'
-          ctx.lineWidth = 5
-          ctx.beginPath()
-          ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
-          ctx.stroke()
-          
-          // Progress ring
-          ctx.strokeStyle = progress >= 1 ? '#22c55e' : '#60a5fa'
-          ctx.lineWidth = 5
-          ctx.lineCap = 'round'
-          ctx.beginPath()
-          ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + progress * 2 * Math.PI)
-          ctx.stroke()
-          ctx.lineCap = 'butt'
-        }
+          if (ctx) {
+            const canvas = canvasRef.current
+            const displayWidth = canvas.clientWidth
+            const displayHeight = canvas.clientHeight
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+              canvas.width = displayWidth
+              canvas.height = displayHeight
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-        if (stabilityRef.current >= STABILITY_REQUIRED) {
-          if (requiresServerVerification) {
-            if (shouldRequireLiveness) {
-              countdownActiveRef.current = true
-              setStatusText("Desafio concluído! Prepare-se...")
-              setCountdown(COUNTDOWN_SECONDS)
-              return
-            }
-            if (verificationPendingRef.current) return
-            verificationPendingRef.current = true
-            setStatusText("Validando identidade...")
-            try {
-              const result = await verifyDescriptor(detections.descriptor)
-              if (result.match) {
-                setIsVerified(true)
-                matchedDescriptorRef.current = detections.descriptor
-                countdownActiveRef.current = true
-                setStatusText("Identidade confirmada! Prepare-se...")
-                setCountdown(COUNTDOWN_SECONDS)
-              } else {
-                mismatchRef.current += 1
-                setWarning("Rosto não reconhecido. Use o mesmo colaborador cadastrado.")
-                setStatusText("Identidade não confirmada.")
-                if (mismatchRef.current >= 3) {
-                  setError("Rosto não reconhecido. A verificação facial não corresponde à biometria cadastrada para este colaborador.")
-                  void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
-                }
-                stabilityRef.current = Math.max(stabilityRef.current - 4, 0)
-                setStability(stabilityRef.current)
-              }
-            } catch (err) {
-              mismatchRef.current += 1
-              setWarning(err instanceof Error ? err.message : "Falha ao validar biometria.")
-              setStatusText("Identidade não confirmada.")
-              if (mismatchRef.current >= 3) {
-                setError("Rosto não reconhecido. A verificação facial não corresponde à biometria cadastrada para este colaborador.")
-                void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
-              }
-              stabilityRef.current = Math.max(stabilityRef.current - 4, 0)
-              setStability(stabilityRef.current)
-            } finally {
-              verificationPendingRef.current = false
-            }
-          } else {
+            const scale = Math.max(canvas.width / videoRef.current.videoWidth, canvas.height / videoRef.current.videoHeight)
+            const renderedWidth = videoRef.current.videoWidth * scale
+            const renderedHeight = videoRef.current.videoHeight * scale
+            const offsetX = (canvas.width - renderedWidth) / 2
+            const offsetY = (canvas.height - renderedHeight) / 2
+            const rBox = box
+            const boxX = offsetX + rBox.x * scale
+            const boxY = offsetY + rBox.y * scale
+            const boxW = rBox.width * scale
+            const boxH = rBox.height * scale
+            const mirroredX = canvas.width - boxX - boxW
+            const cx = mirroredX + boxW / 2
+            const cy = boxY + boxH / 2
+            const radius = Math.max(boxW, boxH) * 0.62
+            const progress = Math.min(stabilityRef.current / STABILITY_REQUIRED, 1)
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+            ctx.lineWidth = 5
+            ctx.beginPath()
+            ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
+            ctx.stroke()
+            
+            ctx.strokeStyle = progress >= 1 ? '#22c55e' : '#60a5fa'
+            ctx.lineWidth = 5
+            ctx.lineCap = 'round'
+            ctx.beginPath()
+            ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + progress * 2 * Math.PI)
+            ctx.stroke()
+            ctx.lineCap = 'butt'
+          }
+
+          if (stabilityRef.current >= STABILITY_REQUIRED) {
             countdownActiveRef.current = true
-            setStatusText("Rosto detectado! Prepare-se...")
+            setStatusText(shouldRequireLiveness ? "Rosto detectado! Analisando..." : "Rosto detectado! Prepare-se...")
             setCountdown(COUNTDOWN_SECONDS)
+          } else {
+            const pct = Math.round((stabilityRef.current / STABILITY_REQUIRED) * 100)
+            setStatusText(`Mantenha o rosto parado... ${pct}%`)
           }
         } else {
-          const pct = Math.round((stabilityRef.current / STABILITY_REQUIRED) * 100)
-          setStatusText(`Mantenha o rosto parado... ${pct}%`)
-        }
-      } else {
-        // No face - only reset if countdown is NOT active
-        if (!countdownActiveRef.current) {
-          stabilityRef.current = 0
-          setStability(0)
-          setIsVerified(false)
-          if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-          if (shouldRequireLiveness && !isChallengeComplete) {
-            const elapsed = Date.now() - challengeStartedAt
-            const remaining = Math.max(0, 1 - elapsed / LIVENESS_TIMEOUT_MS)
-            setChallengeProgress(Math.round(remaining * 100))
-            if (elapsed >= LIVENESS_TIMEOUT_MS) {
-              challengeTimeoutCountRef.current += 1
-              if (challengeTimeoutCountRef.current >= 3) {
-                void logSuspiciousAttempt("timeout", challengeTimeoutCountRef.current)
-              }
-              resetChallenge(challenge)
-              setWarning("Tempo esgotado. Novo desafio gerado.")
-              return
-            }
+          if (!countdownActiveRef.current) {
+            stabilityRef.current = 0
+            setStability(0)
+            setIsVerified(false)
+            if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+            setStatusText(requiresServerVerification ? "Posicione seu rosto para verificação" : "Posicione seu rosto no centro")
           }
-          setStatusText(shouldRequireLiveness ? LIVENESS_CHALLENGES[challenge].label : requiresServerVerification ? "Posicione seu rosto para verificação" : "Posicione seu rosto no centro")
         }
+      } catch (err) {
+        console.error("Face detection error:", err)
       }
     }
   })
 
   const handleVideoPlay = () => {
     if (intervalRef.current) clearInterval(intervalRef.current)
-
     intervalRef.current = setInterval(() => {
       void detectionLoopRef.current()
     }, 300)
-
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }
 
-  // -- Countdown timer --
+  // -- Countdown timer & Capture Logic --
   useEffect(() => {
     if (countdown !== null && countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
@@ -595,38 +346,61 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     } else if (countdown === 0) {
       const doCapture = async () => {
         if (!videoRef.current) return
-        const d = await faceapi.detectSingleFace(
-          videoRef.current,
-          getDetectorOptions(0.4)
-        ).withFaceLandmarks().withFaceDescriptor()
-
-        if (d) {
-          if (requiresServerVerification) {
-            try {
-              const descriptorForVerification = shouldRequireLiveness
-                ? await collectLivenessDescriptor()
-                : d.descriptor
-
-              if (!descriptorForVerification) {
+        try {
+          const detections = await faceplugin.detectFace(videoRef.current)
+          
+          if (detections && detections.length > 0) {
+            const face = detections[0]
+            const landmarks = await faceplugin.predictLandmark(videoRef.current, face.rect)
+            
+            if (shouldRequireLiveness) {
+              const livenessRes = await faceplugin.predictLiveness(videoRef.current, face.rect)
+              if (livenessRes.score < 0.5) {
                 countdownActiveRef.current = false
                 setCountdown(null)
                 setIsVerified(false)
                 stabilityRef.current = 0
                 setStability(0)
+                setWarning("Rosto ao vivo não detectado. Tente em melhor iluminação ou sem óculos.")
+                setStatusText("Acesso Negado")
+                void logSuspiciousAttempt("liveness_failed", 1)
                 return
               }
+            }
 
-              const result = await verifyDescriptor(descriptorForVerification)
-              if (result.match) {
-                captureSuccess(descriptorForVerification)
-              } else {
+            const feature = await faceplugin.extractFeature(videoRef.current, face.rect, landmarks)
+            const descriptorArray = Array.from(feature) as number[]
+
+            if (requiresServerVerification) {
+              verificationPendingRef.current = true
+              try {
+                const result = await verifyDescriptor(descriptorArray)
+                if (result.match) {
+                  captureSuccess(descriptorArray)
+                } else {
+                  countdownActiveRef.current = false
+                  setCountdown(null)
+                  setIsVerified(false)
+                  stabilityRef.current = 0
+                  setStability(0)
+                  mismatchRef.current += 1
+                  setWarning("Rosto não reconhecido. Verifique se é o colaborador correto.")
+                  setStatusText("Identidade não confirmada.")
+                  if (mismatchRef.current >= 2) {
+                    setError("Rosto não reconhecido. A captura foi interrompida porque o rosto não corresponde à biometria cadastrada.")
+                  }
+                  if (mismatchRef.current >= 3) {
+                    void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
+                  }
+                }
+              } catch (err) {
                 countdownActiveRef.current = false
                 setCountdown(null)
                 setIsVerified(false)
                 stabilityRef.current = 0
                 setStability(0)
                 mismatchRef.current += 1
-                setWarning("Rosto não reconhecido. Verifique se é o colaborador correto.")
+                setWarning(err instanceof Error ? err.message : "Falha ao validar biometria.")
                 setStatusText("Identidade não confirmada.")
                 if (mismatchRef.current >= 2) {
                   setError("Rosto não reconhecido. A captura foi interrompida porque o rosto não corresponde à biometria cadastrada.")
@@ -634,38 +408,31 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
                 if (mismatchRef.current >= 3) {
                   void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
                 }
+              } finally {
+                verificationPendingRef.current = false
               }
-            } catch (err) {
-              countdownActiveRef.current = false
-              setCountdown(null)
-              setIsVerified(false)
-              stabilityRef.current = 0
-              setStability(0)
-              mismatchRef.current += 1
-              setWarning(err instanceof Error ? err.message : "Falha ao validar biometria.")
-              setStatusText("Identidade não confirmada.")
-              if (mismatchRef.current >= 2) {
-                setError("Rosto não reconhecido. A captura foi interrompida porque o rosto não corresponde à biometria cadastrada.")
-              }
-              if (mismatchRef.current >= 3) {
-                void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
-              }
+            } else {
+              captureSuccess(descriptorArray)
             }
           } else {
-              captureSuccess(d.descriptor)
+            countdownActiveRef.current = false
+            setCountdown(null)
+            stabilityRef.current = 0
+            setStability(0)
+            setStatusText("Rosto não detectado no momento da captura. Tente novamente.")
           }
-        } else {
-          // Face lost at capture moment - retry
+        } catch (err) {
+          console.error("Capture Error:", err)
           countdownActiveRef.current = false
           setCountdown(null)
           stabilityRef.current = 0
           setStability(0)
-          setStatusText("Rosto não detectado no momento da captura. Tente novamente.")
+          setWarning("Erro ao processar imagem.")
         }
       }
       doCapture()
     }
-  }, [collectLivenessDescriptor, countdown, captureSuccess, getDetectorOptions, logSuspiciousAttempt, requiresServerVerification, shouldRequireLiveness, verifyDescriptor])
+  }, [countdown, captureSuccess, logSuspiciousAttempt, requiresServerVerification, shouldRequireLiveness, verifyDescriptor])
 
   // -- INSTRUCTIONS SCREEN --
   if (showInstructions) {
@@ -724,7 +491,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
             <p className="text-[10px] text-amber-800 text-left leading-relaxed">
-              <strong className="text-amber-900">Atenção:</strong> O sistema pode recusar a captura se detectar bonés, óculos escuros ou iluminação ruim. Remova todos os acessórios antes de iniciar.
+              <strong className="text-amber-900">Atenção:</strong> O sistema pode recusar a captura se detectar fotos falsas ou iluminação ruim.
             </p>
           </div>
         </div>
@@ -784,133 +551,68 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
 
           {shouldRequireLiveness && isCameraActive && !countdown && (
             <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-30 flex justify-center pointer-events-none">
-              <div className={`w-full max-w-sm rounded-2xl border p-3 sm:p-4 shadow-2xl backdrop-blur-md transition-all ${
-                isChallengeComplete
-                  ? "border-emerald-400/50 bg-emerald-950/85"
-                  : "border-white/15 bg-black/75"
-              }`}>
+              <div className="w-full max-w-sm rounded-2xl border p-3 sm:p-4 shadow-2xl backdrop-blur-md transition-all border-white/15 bg-black/75">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-                    isChallengeComplete ? "bg-emerald-500 text-white" : "bg-white/10 text-white"
-                  }`}>
-                    {isChallengeComplete ? (
-                      <CheckCircle2 className="h-7 w-7 animate-in zoom-in" />
-                    ) : (
-                      (() => {
-                        const ChallengeIcon = LIVENESS_CHALLENGES[challenge].Icon
-                        return <ChallengeIcon className="h-7 w-7" />
-                      })()
-                    )}
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+                    <ShieldAlert className="h-6 w-6 text-white" />
                   </div>
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className={`text-lg font-medium leading-tight ${
-                      isChallengeComplete ? "text-emerald-100" : "text-white"
-                    }`}>
-                      {isCollectingLiveness
-                        ? "Coletando prova de vida..."
-                        : isChallengeComplete
-                          ? "Movimento confirmado"
-                          : LIVENESS_CHALLENGES[challenge].label}
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                      Liveness Ativado
                     </p>
-                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-white/55">
-                      Verificação ao vivo — fotos não são aceitas
+                    <p className="mt-0.5 text-xs font-semibold text-white">
+                      Certifique-se de estar visível na câmera.
                     </p>
                   </div>
                 </div>
-                {!isChallengeComplete && (
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15">
-                    <div
-                      className="h-full rounded-full bg-blue-400 transition-all duration-300"
-                      style={{ width: `${challengeProgress}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Circular guide - fixed size to prevent distortion on mobile */}
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-full border-2 border-dashed border-white/20" />
-          </div>
-
-          {/* Real-time warning (hat, glasses, too far) */}
-          {warning && !countdown && isCameraActive && (
-            <div className="absolute top-12 sm:top-14 left-3 right-3 sm:left-4 sm:right-4 flex justify-center pointer-events-none z-20 animate-in fade-in">
-              <div className="bg-amber-600/95 text-white px-3 py-2 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider flex items-center gap-2 shadow-lg max-w-[90%]">
-                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="leading-tight">{warning}</span>
               </div>
             </div>
           )}
 
-          {/* Countdown overlay */}
           {countdown !== null && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 backdrop-blur-[2px] z-20 gap-3 sm:gap-4">
-              <div className={`w-20 h-20 sm:w-28 sm:h-28 rounded-full border-[5px] sm:border-[6px] flex items-center justify-center shadow-2xl transition-all duration-500 ${
-                isVerified ? 'border-green-500 bg-green-950/80' : 'border-blue-500 bg-white/90'
-              }`}>
-                {countdown > 0 ? (
-                  <span className={`text-4xl sm:text-5xl font-black ${isVerified ? 'text-green-400' : 'text-slate-800'}`}>{countdown}</span>
-                ) : (
-                  <Camera className={`w-8 h-8 sm:w-10 sm:h-10 ${isVerified ? 'text-green-400' : 'text-blue-500'}`} />
-                )}
-              </div>
-              <div className="bg-black/70 px-4 py-1.5 sm:px-5 sm:py-2 rounded-full">
-                <p className="text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                  <Timer className="w-3 h-3" />
-                  {countdown > 0 ? "Fique parado! Capturando em breve..." : "Capturando agora!"}
-                </p>
-              </div>
-              {isVerified && (
-                <div className="bg-green-900/80 px-3 sm:px-4 py-1.5 rounded-full border border-green-600/50">
-                  <p className="text-green-400 text-[8px] font-black uppercase tracking-widest">✓ Identidade Verificada</p>
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-40 animate-in fade-in">
+              <span className="text-[120px] font-black text-white drop-shadow-2xl animate-in zoom-in spin-in-12 duration-300">
+                {countdown}
+              </span>
+            </div>
+          )}
+
+          <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 z-30 pointer-events-none">
+            <div className={`backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 border transition-all ${
+              warning 
+                ? "bg-red-950/90 border-red-500/50" 
+                : "bg-slate-900/80 border-slate-700/50"
+            }`}>
+              {warning ? (
+                <div className="flex items-start gap-2 sm:gap-3 text-red-400">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 mt-0.5 flex-shrink-0" />
+                  <p className="text-[11px] sm:text-xs font-bold leading-relaxed">{warning}</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700 shadow-inner flex-shrink-0">
+                    <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Status da Câmera</p>
+                    <p className="text-white text-[11px] sm:text-xs font-bold truncate">
+                      {statusText}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {/* Bottom status bar */}
-          <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-4 bg-black/80 backdrop-blur-md rounded-xl sm:rounded-2xl p-2.5 sm:p-4 flex items-center justify-between z-10 border border-white/10">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-              {!isCameraActive ? (
-                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 animate-spin flex-shrink-0" />
-              ) : statusText.includes("sucesso") ? (
-                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 flex-shrink-0" />
-              ) : isVerified ? (
-                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 flex-shrink-0" />
-              ) : stability > 0 ? (
-                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 animate-spin flex-shrink-0" />
-              ) : (
-                <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300 animate-pulse flex-shrink-0" />
-              )}
-              <div className="flex flex-col min-w-0">
-                <span className="text-[9px] sm:text-[10px] font-black text-white uppercase tracking-wider leading-none mb-0.5 truncate">{statusText}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none">SafeEPI Digital</span>
-              </div>
-            </div>
-            <button 
-              onClick={() => { stopCamera(); onCancel(); }}
-              className="text-[8px] sm:text-[9px] font-black text-white uppercase tracking-widest border border-white/20 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors flex-shrink-0 ml-2"
-            >
-              Sair
-            </button>
           </div>
-
-          {/* Top hint */}
-          {!shouldRequireLiveness && !countdown && isCameraActive && !warning && (
-            <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 flex justify-center pointer-events-none">
-              <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 sm:gap-2 shadow-lg ${
-                isVerified ? 'bg-green-600/90 text-white' : 'bg-blue-600/90 text-white'
-              }`}>
-                <Info className="w-3 h-3" />
-                {requiresServerVerification 
-                  ? (isVerified ? "Identidade OK - Posicione-se" : "Verificando identidade...")
-                  : "Centralize o rosto e fique parado"
-                }
-              </div>
-            </div>
-          )}
+          
+          <div className="absolute top-2 left-2 pointer-events-none flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-2 py-1 rounded-full border border-white/10">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+            </span>
+            <span className="text-[8px] font-bold text-white uppercase tracking-widest">
+              Liveness: Faceplugin SDK
+            </span>
+          </div>
         </>
       )}
     </div>

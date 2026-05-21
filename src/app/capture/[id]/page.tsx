@@ -47,7 +47,7 @@ function CaptureContent() {
   
   // Preview da foto capturada
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
-  const [capturedDescriptor, setCapturedDescriptor] = useState<Float32Array | null>(null)
+  const [capturedDescriptor, setCapturedDescriptor] = useState<number[] | null>(null)
 
   // -- Auto-scroll to top on state change --
   useEffect(() => {
@@ -106,7 +106,7 @@ function CaptureContent() {
   }
 
   // Captura da foto - mostra preview
-  const handleCapture = (face_descriptor: Float32Array, photo_url: string) => {
+  const handleCapture = (face_descriptor: number[], photo_url: string) => {
     setIsCapturing(false)
     setCapturedPhoto(photo_url)
     setCapturedDescriptor(face_descriptor)

@@ -723,7 +723,7 @@ export default function DeliveryPage() {
     saveDelivery(signatureDataUrl)
   }
 
-  const handleFaceCapture = (descriptor: Float32Array, imageBase64: string) => {
+  const handleFaceCapture = (descriptor: number[], imageBase64: string) => {
     saveDelivery(imageBase64)
   }
 

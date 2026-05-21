@@ -7,9 +7,9 @@ import type { EmployeeBiometric } from "@/types/biometric"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
-const FACE_MATCH_THRESHOLD = 0.55
-const MIN_DESCRIPTOR_LENGTH = 64
-const MAX_DESCRIPTOR_LENGTH = 1024
+const FACE_MATCH_THRESHOLD = 0.8
+const MIN_DESCRIPTOR_LENGTH = 512
+const MAX_DESCRIPTOR_LENGTH = 512
 
 type RouteContext = {
   params: Promise<{ id: string }>
