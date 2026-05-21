@@ -54,6 +54,22 @@ const nextConfig: NextConfig = {
         source: "/model/:path*",
         destination: "/faceplugin-models/:path*",
       },
+      {
+        source: "/:any*/ort-wasm-simd-threaded.wasm",
+        destination: "/ort-wasm-simd-threaded.wasm",
+      },
+      {
+        source: "/:any*/ort-wasm-simd-threaded.jsep.wasm",
+        destination: "/ort-wasm-simd-threaded.jsep.wasm",
+      },
+      {
+        source: "/:any*/ort-wasm-simd-threaded.jspi.wasm",
+        destination: "/ort-wasm-simd-threaded.jspi.wasm",
+      },
+      {
+        source: "/:any*/ort-wasm-simd-threaded.asyncify.wasm",
+        destination: "/ort-wasm-simd-threaded.asyncify.wasm",
+      },
     ]
   },
   async headers() {
