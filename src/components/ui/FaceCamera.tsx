@@ -20,6 +20,12 @@ type DetectionOutput = {
   bbox?: NdArrayLike
   size?: number
 }
+type FaceMotion = {
+  yaw: number
+  center: number
+  turnThreshold: number
+  centerThreshold: number
+}
 type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness"
 type LivenessStep = "turn-left" | "turn-right" | "center" | "complete"
 
@@ -78,8 +84,10 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   
   const STABILITY_REQUIRED = 8
   const COUNTDOWN_SECONDS = 4
-  const FACEPLUGIN_TURN_THRESHOLD = 0.018
-  const FACEPLUGIN_CENTER_THRESHOLD = 0.014
+  const FACE_WIDTH_TURN_THRESHOLD = 0.012
+  const FACE_WIDTH_CENTER_THRESHOLD = 0.01
+  const EYE_DISTANCE_TURN_THRESHOLD = 0.06
+  const EYE_DISTANCE_CENTER_THRESHOLD = 0.045
   const requiresServerVerification = Boolean(verifyEmployeeId)
   const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
 
@@ -180,38 +188,84 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
   }, [getBoxValue, getFaceCount])
 
-  const getPrimaryLandmarks = useCallback((result: unknown) => {
+  const getPrimaryLandmarks = useCallback((result: unknown): number[] | null => {
     const viewToNumbers = (view: ArrayBufferView) => {
-      return Array.from(new Float32Array(view.buffer, view.byteOffset, Math.floor(view.byteLength / Float32Array.BYTES_PER_ELEMENT)))
+      if ("length" in view && typeof view.length === "number") {
+        return Array.from(view as unknown as ArrayLike<number>).filter(Number.isFinite)
+      }
+      return Array.from(new Float32Array(view.buffer, view.byteOffset, Math.floor(view.byteLength / Float32Array.BYTES_PER_ELEMENT))).filter(Number.isFinite)
     }
 
-    if (ArrayBuffer.isView(result)) return viewToNumbers(result)
-    if (Array.isArray(result)) {
-      const first = result[0]
-      if (ArrayBuffer.isView(first)) return viewToNumbers(first)
-      if (Array.isArray(first)) return first.filter((item): item is number => typeof item === "number")
-      if (result.every(item => typeof item === "number")) return result as number[]
+    const parseLandmarks = (value: unknown): number[] | null => {
+      if (ArrayBuffer.isView(value)) return viewToNumbers(value)
+      if (Array.isArray(value)) {
+        const first = value[0]
+        if (ArrayBuffer.isView(first)) return viewToNumbers(first)
+        if (Array.isArray(first)) return parseLandmarks(first)
+        if (value.every(item => typeof item === "number" && Number.isFinite(item))) return value as number[]
+      }
+
+      if (value && typeof value === "object") {
+        const record = value as Record<string, unknown>
+        if (ArrayBuffer.isView(record.data)) return viewToNumbers(record.data)
+        if (Array.isArray(record.data)) return parseLandmarks(record.data)
+
+        for (const nestedValue of Object.values(record)) {
+          const parsed = parseLandmarks(nestedValue)
+          if (parsed && parsed.length >= 10) return parsed
+        }
+      }
+
+      return null
     }
-    return null
+
+    return parseLandmarks(result)
   }, [])
 
   const getLandmarkValue = useCallback((landmarks: ArrayLike<number>, point: number, axis: 0 | 1) => {
     return Number(landmarks[point * 2 + axis])
   }, [])
 
-  const getYawOffset = useCallback((landmarks: ArrayLike<number> | null, face: { x: number; width: number }) => {
-    if (!landmarks || landmarks.length < 136 || face.width <= 0) return null
+  const buildFaceMotion = useCallback((
+    noseX: number,
+    leftEyeX: number,
+    rightEyeX: number,
+    face: { x: number; width: number },
+    videoWidth: number,
+  ): FaceMotion | null => {
+    if (face.width <= 0 || videoWidth <= 0) return null
 
-    const noseX = getLandmarkValue(landmarks, 30, 0)
-    const leftEyeX = (getLandmarkValue(landmarks, 36, 0) + getLandmarkValue(landmarks, 39, 0)) / 2
-    const rightEyeX = (getLandmarkValue(landmarks, 42, 0) + getLandmarkValue(landmarks, 45, 0)) / 2
     const eyeCenterX = (leftEyeX + rightEyeX) / 2
-    const yawByEyes = (noseX - eyeCenterX) / face.width
+    const eyeDistance = Math.abs(rightEyeX - leftEyeX)
+    const yawByEyes = eyeDistance > 2 ? (noseX - eyeCenterX) / eyeDistance : null
     const yawByBox = (noseX - (face.x + face.width / 2)) / face.width
-    const yaw = Math.abs(yawByBox) > Math.abs(yawByEyes) ? yawByBox : yawByEyes
+    const useEyeDistance = yawByEyes !== null && Number.isFinite(yawByEyes) && eyeDistance / face.width > 0.15
+    const yaw = useEyeDistance ? yawByEyes : yawByBox
 
-    return Number.isFinite(yaw) ? yaw : null
-  }, [getLandmarkValue])
+    if (!Number.isFinite(yaw)) return null
+    return {
+      yaw,
+      center: noseX / videoWidth,
+      turnThreshold: useEyeDistance ? EYE_DISTANCE_TURN_THRESHOLD : FACE_WIDTH_TURN_THRESHOLD,
+      centerThreshold: useEyeDistance ? EYE_DISTANCE_CENTER_THRESHOLD : FACE_WIDTH_CENTER_THRESHOLD,
+    }
+  }, [])
+
+  const getFaceMotion = useCallback((landmarks: ArrayLike<number> | null, face: { x: number; width: number }, videoWidth: number) => {
+    if (!landmarks || landmarks.length < 10) return null
+
+    if (landmarks.length >= 136) {
+      const noseX = getLandmarkValue(landmarks, 30, 0)
+      const leftEyeX = (getLandmarkValue(landmarks, 36, 0) + getLandmarkValue(landmarks, 39, 0)) / 2
+      const rightEyeX = (getLandmarkValue(landmarks, 42, 0) + getLandmarkValue(landmarks, 45, 0)) / 2
+      return buildFaceMotion(noseX, leftEyeX, rightEyeX, face, videoWidth)
+    }
+
+    const leftEyeX = Number(landmarks[0])
+    const rightEyeX = Number(landmarks[2])
+    const noseX = Number(landmarks[4])
+    return buildFaceMotion(noseX, leftEyeX, rightEyeX, face, videoWidth)
+  }, [buildFaceMotion, getLandmarkValue])
 
   const updateLivenessChallenge = useCallback(async (bbox: NdArrayLike | undefined, face: { x: number; width: number }) => {
     if (!shouldRequireLiveness || livenessPassedRef.current) return true
@@ -219,13 +273,20 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
 
     let yaw: number | null = null
     let faceCenter = 0
+    let turnThreshold = FACE_WIDTH_TURN_THRESHOLD
+    let centerThreshold = FACE_WIDTH_CENTER_THRESHOLD
 
     if (landmarkSessionRef.current) {
       const landmarksResult = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
       const landmarks = getPrimaryLandmarks(landmarksResult)
-      yaw = getYawOffset(landmarks, face)
       const videoWidth = videoRef.current.videoWidth || 1
-      faceCenter = (face.x + face.width / 2) / videoWidth
+      const motion = getFaceMotion(landmarks, face, videoWidth)
+      yaw = motion?.yaw ?? null
+      faceCenter = motion?.center ?? ((face.x + face.width / 2) / videoWidth)
+      if (motion) {
+        turnThreshold = motion.turnThreshold
+        centerThreshold = motion.centerThreshold
+      }
     }
 
     if (yaw === null) {
@@ -248,8 +309,6 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     const baselineCenter = baselineCenterRef.current
     const yawDelta = yaw - baselineYaw
     const centerDelta = faceCenter - baselineCenter
-    const turnThreshold = FACEPLUGIN_TURN_THRESHOLD
-    const centerThreshold = FACEPLUGIN_CENTER_THRESHOLD
     const motion = Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
     const motionAbs = Math.abs(motion)
 
@@ -307,7 +366,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
 
     return true
-  }, [getPrimaryLandmarks, getYawOffset, setLivenessStepValue, shouldRequireLiveness])
+  }, [getFaceMotion, getPrimaryLandmarks, setLivenessStepValue, shouldRequireLiveness])
 
   const getLivenessScore = useCallback((result: unknown) => {
     if (Array.isArray(result) && Array.isArray(result[0])) {
@@ -907,44 +966,75 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
 
           {shouldRequireLiveness && isCameraActive && !countdown && (
             <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-30 flex justify-center pointer-events-none">
-              <div className={`w-full max-w-sm rounded-2xl border p-3 sm:p-4 shadow-2xl backdrop-blur-md transition-all ${
-                livenessStep === "complete" ? "border-emerald-400/40 bg-emerald-950/80" : "border-white/15 bg-black/75"
+              <div className={`w-full max-w-md rounded-2xl border p-3 shadow-2xl backdrop-blur-md transition-all sm:p-4 ${
+                livenessStep === "complete" ? "border-emerald-200 bg-white/95" : "border-red-100 bg-white/95"
               }`}>
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-                    livenessStep === "complete" ? "bg-emerald-500 text-white" : "bg-red-600 text-white"
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-lg ${
+                    livenessStep === "complete" ? "bg-emerald-600 text-white shadow-emerald-950/20" : "bg-red-700 text-white shadow-red-950/20"
                   }`}>
                     {livenessStep === "complete" ? (
-                      <CheckCircle2 className="h-6 w-6" />
+                      <CheckCircle2 className="h-7 w-7" />
                     ) : livenessStep === "turn-left" ? (
-                      <ArrowLeft className="h-6 w-6" />
+                      <ArrowLeft className="h-7 w-7" />
                     ) : livenessStep === "turn-right" ? (
-                      <ArrowRight className="h-6 w-6" />
+                      <ArrowRight className="h-7 w-7" />
                     ) : (
-                      <Camera className="h-6 w-6" />
+                      <Camera className="h-7 w-7" />
                     )}
                   </div>
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <p className={`text-[10px] font-black uppercase tracking-widest ${
-                      livenessStep === "complete" ? "text-emerald-300" : "text-red-300"
+                      livenessStep === "complete" ? "text-emerald-700" : "text-red-700"
                     }`}>
-                      Prova de vida
+                      {livenessStep === "turn-left" ? "Passo 1 de 3" : livenessStep === "turn-right" ? "Passo 2 de 3" : livenessStep === "center" ? "Passo 3 de 3" : "Confirmado"}
                     </p>
-                    <p className="mt-0.5 text-xs font-semibold text-white">
+                    <p className="mt-1 text-sm font-black leading-tight text-slate-950 sm:text-base">
                       {livenessInstruction}
                     </p>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${livenessStep === "complete" ? "bg-emerald-400" : "bg-red-400"}`}
-                        style={{ width: `${livenessProgress}%` }}
-                      />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-1 text-[8px] font-black uppercase tracking-widest text-white/55">
-                      <span className={livenessProgress >= 35 ? "text-white" : ""}>Esquerda</span>
-                      <span className={livenessProgress >= 70 ? "text-white" : ""}>Direita</span>
-                      <span className={livenessProgress >= 100 ? "text-emerald-300" : ""}>Confirmar</span>
-                    </div>
+                    <p className="mt-1 text-[10px] font-semibold leading-relaxed text-slate-500 sm:text-xs">
+                      Mova apenas o rosto, mantenha o celular parado e siga a ordem indicada.
+                    </p>
                   </div>
+                </div>
+
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${livenessStep === "complete" ? "bg-emerald-500" : "bg-red-700"}`}
+                    style={{ width: `${livenessProgress}%` }}
+                  />
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[
+                    { key: "turn-left", label: "Esquerda", done: livenessProgress >= 35, active: livenessStep === "turn-left" },
+                    { key: "turn-right", label: "Direita", done: livenessProgress >= 70, active: livenessStep === "turn-right" },
+                    { key: "center", label: "Centro", done: livenessProgress >= 100, active: livenessStep === "center" || livenessStep === "complete" },
+                  ].map(step => (
+                    <div
+                      key={step.key}
+                      className={`rounded-xl border px-2 py-2 text-center text-[10px] font-black uppercase tracking-wider transition-all ${
+                        step.done
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : step.active
+                            ? "border-red-200 bg-red-50 text-red-700"
+                            : "border-slate-200 bg-slate-50 text-slate-400"
+                      }`}
+                    >
+                      <div className="mb-1 flex justify-center">
+                        {step.done ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : step.key === "turn-left" ? (
+                          <ArrowLeft className="h-4 w-4" />
+                        ) : step.key === "turn-right" ? (
+                          <ArrowRight className="h-4 w-4" />
+                        ) : (
+                          <Camera className="h-4 w-4" />
+                        )}
+                      </div>
+                      {step.label}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
