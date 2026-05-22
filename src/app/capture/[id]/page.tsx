@@ -122,7 +122,7 @@ function CaptureContent() {
 
   // Confirmar - envia para o banco e desativa o link
   const handleConfirm = async () => {
-    if (!capturedPhoto || !capturedDescriptor) return
+    if (!capturedPhoto) return
     setIsSaving(true)
     
     try {
@@ -132,7 +132,7 @@ function CaptureContent() {
         body: JSON.stringify({
           id: employee!.id,
           photo_url: capturedPhoto,
-          face_descriptor: Array.from(capturedDescriptor),
+          face_descriptor: capturedDescriptor ? Array.from(capturedDescriptor) : [],
           token: linkToken // Passa o token para validação e conclusão no servidor
         })
       })
@@ -201,12 +201,12 @@ function CaptureContent() {
   // -- CÂMERA FULLSCREEN --
   if (isCapturing) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col z-50">
-        <div className="flex items-center justify-between p-3 bg-black/80 z-10">
+      <div className="fixed inset-0 bg-black flex flex-col z-50 overflow-y-auto">
+        <div className="sticky top-0 flex items-center justify-between p-3 bg-black/90 z-10 backdrop-blur">
           <h3 className="text-white font-black uppercase text-xs tracking-widest">Captura Facial</h3>
-          <button onClick={() => setIsCapturing(false)} className="text-white text-xs font-bold bg-white/20 px-3 py-1.5 rounded-full">Cancelar</button>
+          <button onClick={() => setIsCapturing(false)} className="min-h-[40px] text-white text-xs font-bold bg-white/20 px-4 rounded-full">Cancelar</button>
         </div>
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 p-3 sm:p-6">
            <FaceCamera 
               employeeId={employee?.id}
               verifyToken={linkToken}

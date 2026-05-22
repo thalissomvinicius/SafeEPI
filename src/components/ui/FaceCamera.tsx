@@ -398,33 +398,33 @@ export function FaceCamera({
   if (state === "INSTRUCTIONS") {
     return (
       <div className="w-full overflow-hidden rounded-3xl bg-zinc-950 text-white shadow-2xl">
-        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[1.05fr_0.95fr] lg:p-8">
-          <div className="flex min-h-[360px] flex-col justify-between rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-6">
+        <div className="grid gap-4 p-4 sm:gap-6 sm:p-7 lg:grid-cols-[1.05fr_0.95fr] lg:p-8">
+          <div className="flex flex-col justify-between rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:min-h-[320px] sm:p-6">
             <div>
               <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-600/15 text-red-300 ring-1 ring-red-500/20">
                 <ShieldCheck className="h-7 w-7" />
               </div>
               <p className="text-[11px] font-black uppercase tracking-[0.24em] text-red-300">Assinatura facial SafeEPI</p>
-              <h3 className="mt-3 text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">{title}</h3>
+              <h3 className="mt-3 text-xl font-black uppercase tracking-tight text-white sm:text-3xl">{title}</h3>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-300">
                 Se o servico biometrico estiver configurado, a identidade sera validada no servidor. Na Vercel Free, o sistema registra uma evidencia facial auditavel sem travar a operacao.
               </p>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+            <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-100 sm:mt-6 sm:p-4 sm:text-sm">
               <AlertTriangle className="mr-2 inline h-4 w-4 text-amber-300" />
               Evidencia facial nao e reconhecimento biometrico forte. Ela documenta foto, assinatura, data, IP e contexto operacional.
             </div>
           </div>
 
           <div className="flex flex-col justify-between gap-4">
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="grid gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-1">
               {[
                 ["Centralize", "Rosto inteiro dentro do circulo"],
                 ["Boa luz", "Evite contraluz e sombras fortes"],
                 ["Sem bloqueios", "Nao cubra olhos e nariz"],
               ].map(([heading, text]) => (
-                <div key={heading} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <div key={heading} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 sm:p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-white">{heading}</p>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-400">{text}</p>
                 </div>
@@ -456,23 +456,23 @@ export function FaceCamera({
   return (
     <div className="relative w-full overflow-hidden rounded-3xl bg-zinc-950 text-white shadow-2xl">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_15%,rgba(220,38,38,0.18),transparent_34%),radial-gradient(circle_at_80%_90%,rgba(22,163,74,0.14),transparent_38%)]" />
-      <div className="relative grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(300px,420px)_minmax(0,1fr)] lg:p-7">
+      <div className="relative grid gap-4 p-3 sm:gap-5 sm:p-6 lg:grid-cols-[minmax(300px,420px)_minmax(0,1fr)] lg:p-7">
         <section className="flex flex-col items-center">
-          <div className="mb-4 flex w-full items-center justify-between gap-3">
+          <div className="mb-3 flex w-full items-center justify-between gap-3 sm:mb-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-300">{modeLabel}</p>
-              <h3 className="text-lg font-black uppercase tracking-tight text-white">{title}</h3>
+              <h3 className="text-base font-black uppercase tracking-tight text-white sm:text-lg">{title}</h3>
             </div>
             <button
               type="button"
               onClick={handleCancel}
-              className="min-h-[40px] rounded-full bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15"
+              className="min-h-[40px] shrink-0 rounded-full bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15"
             >
               {cancelLabel}
             </button>
           </div>
 
-          <div className="relative aspect-square w-full max-w-[min(78vw,340px)] sm:max-w-[360px] lg:max-w-[380px]">
+          <div className="relative aspect-square w-full max-w-[min(70vw,260px)] sm:max-w-[330px] lg:max-w-[380px]">
             <div className={`absolute inset-0 rounded-full blur-2xl transition ${state === "APPROVED" ? "bg-emerald-500/35" : isEvidenceMode ? "bg-amber-400/25" : "bg-red-600/20"}`} />
             <div className="relative h-full w-full overflow-hidden rounded-full border border-white/15 bg-zinc-900 shadow-2xl">
               <video
@@ -514,7 +514,7 @@ export function FaceCamera({
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Status da captura</p>
-                <p className="text-lg font-semibold leading-snug text-white">{instruction}</p>
+                <p className="text-base font-semibold leading-snug text-white sm:text-lg">{instruction}</p>
               </div>
             </div>
 
@@ -534,7 +534,7 @@ export function FaceCamera({
               />
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4">
               {[
                 ["Foto", isCameraReady ? "ok" : "..."],
                 ["Fluxo", isEvidenceMode ? "auditavel" : "biometria"],
@@ -548,7 +548,7 @@ export function FaceCamera({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="sticky bottom-0 -mx-4 -mb-4 flex flex-col gap-3 border-t border-white/10 bg-zinc-950/95 p-4 backdrop-blur sm:static sm:m-0 sm:border-0 sm:bg-transparent sm:p-0">
             {isEvidenceMode && !isTerminal && (
               <button
                 type="button"

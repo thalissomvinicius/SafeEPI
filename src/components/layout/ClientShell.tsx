@@ -12,8 +12,12 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   // Não renderizar shell de navegação se estiver na tela de login ou se não houver usuário logado (ex. carregando o deslogamento)
   const isLoginPage = pathname === '/login'
+  const isPublicRemotePage =
+    pathname?.startsWith("/delivery/remote") ||
+    pathname?.startsWith("/training/remote") ||
+    pathname?.startsWith("/capture")
 
-  if (isLoginPage || !user) {
+  if (isLoginPage || isPublicRemotePage || !user) {
     return (
       <main className="flex-1 w-full flex flex-col">
         {children}
