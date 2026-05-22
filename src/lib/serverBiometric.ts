@@ -25,7 +25,9 @@ export async function callBiometricService<T>(path: string, formData: FormData):
   const serviceToken = process.env.BIOMETRIC_SERVICE_TOKEN
 
   if (!serviceUrl || !serviceToken) {
-    throw new Error("Servico biometrico nao configurado. Defina BIOMETRIC_SERVICE_URL e BIOMETRIC_SERVICE_TOKEN.")
+    const error = new Error("Servico biometrico nao configurado. Usando evidencia facial local.")
+    error.name = "BIOMETRIC_SERVICE_NOT_CONFIGURED"
+    throw error
   }
 
   const response = await fetch(`${serviceUrl}${path}`, {

@@ -42,9 +42,13 @@ export async function POST(request: Request) {
     return NextResponse.json(response)
   } catch (error) {
     console.error("[/api/biometric/session/start] error:", error)
+    const serviceUnavailable = error instanceof Error && error.name === "BIOMETRIC_SERVICE_NOT_CONFIGURED"
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro ao iniciar sessao biometrica." },
-      { status: 500 },
+      {
+        error: error instanceof Error ? error.message : "Erro ao iniciar sessao biometrica.",
+        code: serviceUnavailable ? "BIOMETRIC_SERVICE_NOT_CONFIGURED" : "BIOMETRIC_SERVICE_ERROR",
+      },
+      { status: serviceUnavailable ? 503 : 500 },
     )
   }
 }

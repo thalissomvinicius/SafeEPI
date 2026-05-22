@@ -139,7 +139,15 @@ export async function POST(request: Request) {
     if (typeof photo_url !== "string" || !photo_url.trim()) {
       return NextResponse.json({ error: "URL da foto é obrigatória." }, { status: 400 })
     }
-    if (!Array.isArray(face_descriptor) || face_descriptor.length !== 512 || face_descriptor.some(value => !Number.isFinite(value))) {
+    const normalizedDescriptor = Array.isArray(face_descriptor) && face_descriptor.length === 512
+      ? face_descriptor
+      : null
+    if (
+      face_descriptor &&
+      (!Array.isArray(face_descriptor) ||
+        (face_descriptor.length !== 0 && face_descriptor.length !== 512) ||
+        face_descriptor.some(value => !Number.isFinite(value)))
+    ) {
       return NextResponse.json({ error: "Descritor facial invalido." }, { status: 400 })
     }
     // Token agora é OBRIGATÓRIO — não há mais fallback "sem token".
@@ -192,7 +200,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("employees")
-      .update({ photo_url: storedPhotoPath, face_descriptor })
+      .update({ photo_url: storedPhotoPath, face_descriptor: normalizedDescriptor })
       .eq("id", id)
       .select(EMPLOYEE_PUBLIC_SELECT)
       .single()

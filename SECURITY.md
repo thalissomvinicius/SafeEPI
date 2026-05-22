@@ -35,6 +35,8 @@ Novos buckets com dados pessoais, documentos, assinaturas ou biometria devem nas
 
 **Como é validado:** o cliente envia frames para `/api/biometric/session/*`; o Next.js autentica o usuário ou token remoto, busca a referência biométrica no servidor e repassa apenas o necessário ao serviço FastAPI. A decisão usa similaridade cosseno, qualidade, anti-spoof passivo, consistência temporal e contexto operacional.
 
+**Modo Evidência Facial (Vercel Free):** se `BIOMETRIC_SERVICE_URL` e `BIOMETRIC_SERVICE_TOKEN` não estiverem configurados, o componente entra automaticamente em modo leve. Nesse modo, nenhuma comparação biométrica é prometida: o sistema captura foto facial, assinatura, data, IP e contexto operacional para auditoria. A operação não fica bloqueada por custo de infraestrutura ou indisponibilidade de IA.
+
 **Quando é deletado:**
 - Automaticamente ao desativar o colaborador
 - Manualmente por ADMIN/MASTER a qualquer momento

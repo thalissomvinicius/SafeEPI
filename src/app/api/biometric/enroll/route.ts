@@ -35,9 +35,13 @@ export async function POST(request: Request) {
     return NextResponse.json(response)
   } catch (error) {
     console.error("[/api/biometric/enroll] error:", error)
+    const serviceUnavailable = error instanceof Error && error.name === "BIOMETRIC_SERVICE_NOT_CONFIGURED"
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro ao gerar cadastro facial." },
-      { status: 500 },
+      {
+        error: error instanceof Error ? error.message : "Erro ao gerar cadastro facial.",
+        code: serviceUnavailable ? "BIOMETRIC_SERVICE_NOT_CONFIGURED" : "BIOMETRIC_SERVICE_ERROR",
+      },
+      { status: serviceUnavailable ? 503 : 500 },
     )
   }
 }

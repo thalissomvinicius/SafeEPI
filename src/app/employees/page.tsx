@@ -401,7 +401,7 @@ export default function EmployeesPage() {
           admission_date: formData.admission_date || null,
           termination_date: formData.termination_date || null,
           active: !formData.termination_date,
-          face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
+          face_descriptor: formData.face_descriptor?.length ? Array.from(formData.face_descriptor) : null
         }
 
         await api.updateEmployee(formData.id, updates as Partial<Employee>, photoFile)
@@ -427,7 +427,7 @@ export default function EmployeesPage() {
           active: !formData.termination_date,
           workplace_id: formData.workplace_id || null,
           photo_url: null,
-          face_descriptor: formData.face_descriptor ? Array.from(formData.face_descriptor) : null
+          face_descriptor: formData.face_descriptor?.length ? Array.from(formData.face_descriptor) : null
         }, photoFile)
         toast.success("Colaborador cadastrado com sucesso!")
         setLoading(true)
