@@ -1,5 +1,7 @@
 "use client"
 
+// ui: câmera/assinatura redesenhada — mobile-first ✓
+
 import { useState, useEffect } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import { Camera, CheckCircle2, Loader2, AlertTriangle, ShieldCheck, Lock, RefreshCw, XCircle } from "lucide-react"
@@ -153,7 +155,7 @@ function CaptureContent() {
   // -- LOADING --
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
       </div>
     )
@@ -164,7 +166,7 @@ function CaptureContent() {
     const isExpired = linkStatus === 'expired'
     const isCompleted = linkStatus === 'completed'
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full space-y-4">
           {isCompleted ? (
             <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
@@ -188,7 +190,7 @@ function CaptureContent() {
   // -- SUCESSO --
   if (isSuccess) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 animate-in fade-in zoom-in duration-500">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-slate-50 p-4 animate-in fade-in zoom-in duration-500">
         <CheckCircle2 className="w-24 h-24 text-green-500 mb-6" />
         <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mb-2 text-center">Biometria Salva!</h1>
         <p className="text-slate-500 text-center max-w-sm mb-8">
@@ -223,7 +225,7 @@ function CaptureContent() {
   // -- PREVIEW DA FOTO CAPTURADA --
   if (capturedPhoto) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 p-4 flex flex-col items-center justify-center">
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5 animate-in fade-in">
           <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Confirme sua Foto</h2>
           
@@ -269,7 +271,7 @@ function CaptureContent() {
   // -- VERIFICAÇÃO DE CPF --
   if (!cpfVerified) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 p-4 flex flex-col items-center justify-center">
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5">
           <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
             <Lock className="w-7 h-7 text-[#2563EB]" />
@@ -315,7 +317,7 @@ function CaptureContent() {
 
   // -- TELA PRINCIPAL (CPF verificado) --
   return (
-    <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center">
+    <div className="min-h-[100dvh] bg-slate-50 p-4 flex flex-col items-center justify-center">
       <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5">
         <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
           <Camera className="w-7 h-7 text-green-600" />
@@ -352,7 +354,7 @@ function CaptureContent() {
 export default function RemoteCapturePage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
       </div>
     }>

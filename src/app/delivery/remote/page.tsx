@@ -1,5 +1,7 @@
 "use client"
 
+// ui: câmera/assinatura redesenhada — mobile-first ✓
+
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
@@ -7,6 +9,7 @@ import { Camera, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenL
 import { api } from "@/services/api"
 import { Delivery, Employee, PPE, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
@@ -449,7 +452,7 @@ function RemoteDeliveryContent() {
   // RENDER: Loading
   // ---------------------------------------
   if (phase === 'loading') return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50">
       <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
       <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Validando Link de Assinatura...</p>
     </div>
@@ -459,7 +462,7 @@ function RemoteDeliveryContent() {
   // RENDER: Error
   // ---------------------------------------
   if (phase === 'error') return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50 p-6 text-center">
       <ShieldAlert className="w-16 h-16 text-red-500 mb-4" />
       <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">{errorMsg}</h2>
       <p className="text-slate-500 mt-2 text-sm">Solicite um novo link ao gestor do SESMT.</p>
@@ -470,7 +473,7 @@ function RemoteDeliveryContent() {
   // RENDER: Done
   // ---------------------------------------
   if (phase === 'done') return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center animate-in zoom-in">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50 p-6 text-center animate-in zoom-in">
       <div className="bg-green-100 p-4 rounded-full mb-6 text-green-600">
         <ShieldCheck className="w-16 h-16" />
       </div>
@@ -669,21 +672,21 @@ function RemoteDeliveryContent() {
               )}
               {(authMethod === 'manual' || capturedPhotoBase64) && (
                 <>
-              <div className="flex justify-between items-center">
+              <div className="hidden justify-between items-center">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assine no espaço abaixo:</label>
                 <button onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-black text-[#2563EB] uppercase italic">Limpar</button>
               </div>
-              <div className="bg-white rounded-xl sm:rounded-2xl border-2 border-slate-100 h-48 sm:h-64 overflow-hidden touch-none">
-                <SignatureCanvas ref={sigCanvas} canvasProps={{ className: 'w-full h-full' }} />
-              </div>
-              <button onClick={() => {
-                if (sigCanvas.current?.isEmpty()) return alert("Assine antes de confirmar.")
-                const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)
-                if (!signatureDataUrl) return alert("Nao foi possivel ler a assinatura. Limpe e assine novamente.")
-                saveDelivery(signatureDataUrl)
-              }} disabled={isSaving} className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#501010] text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs shadow-lg disabled:opacity-50 flex items-center justify-center">
-                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirmar Recebimento"}
-              </button>
+              <SignatureCapture
+                signatureRef={sigCanvas}
+                isSaving={isSaving}
+                confirmLabel="Confirmar recebimento"
+                onConfirm={() => {
+                  if (sigCanvas.current?.isEmpty()) return toast.error("Assine antes de confirmar.")
+                  const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)
+                  if (!signatureDataUrl) return toast.error("Nao foi possivel ler a assinatura. Limpe e assine novamente.")
+                  saveDelivery(signatureDataUrl)
+                }}
+              />
                 </>
               )}
             </div>
@@ -719,7 +722,7 @@ function RemoteDeliveryContent() {
 
 export default function RemoteDeliveryPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-red-600" /></div>}>
+    <Suspense fallback={<div className="flex min-h-[100dvh] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-red-600" /></div>}>
       <RemoteDeliveryContent />
     </Suspense>
   )

@@ -1,5 +1,7 @@
 "use client"
 
+// ui: câmera/assinatura redesenhada — mobile-first ✓
+
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
@@ -9,6 +11,7 @@ import { api, type PendingDeliveryRemoteLink } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
@@ -1774,24 +1777,17 @@ export default function DeliveryPage() {
                   )}
                   {(authMethod === 'manual' || capturedPhotoBase64) && (
                     <>
-                  <div className="flex justify-between items-end px-2">
+                  <div className="hidden justify-between items-end px-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área de Assinatura</label>
                     <button onClick={clearSignature} className="text-[10px] font-black text-[#2563EB] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>
                   </div>
-                  <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-200 shadow-inner h-64 touch-none cursor-crosshair">
-                    <SignatureCanvas 
-                      ref={sigCanvas}
-                      canvasProps={{ className: 'w-full h-full' }}
-                      penColor="#000000"
-                    />
-                  </div>
-                  <button 
-                    disabled={isSaving}
-                    onClick={handleManualSave}
-                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center shadow-lg shadow-blue-900/15 disabled:opacity-50 mt-4"
-                  >
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : `CONFIRMAR ENTREGA (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
-                  </button>
+                  <SignatureCapture
+                    signatureRef={sigCanvas}
+                    isSaving={isSaving}
+                    confirmLabel={`Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
+                    onClear={clearSignature}
+                    onConfirm={handleManualSave}
+                  />
                   <button
                     onClick={generateRemoteLink}
                     disabled={cart.length === 0 || isSaving}

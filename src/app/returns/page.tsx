@@ -1,6 +1,8 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
+// ui: câmera/assinatura redesenhada — mobile-first ✓
+
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import { Camera, Users, AlertTriangle, Search, CheckCircle2, ExternalLink, FileDown, Loader2, ArrowRightLeft, ShieldAlert, Fingerprint, PenLine } from "lucide-react"
@@ -9,6 +11,7 @@ import { format } from "date-fns"
 import { api } from "@/services/api"
 import { Employee, PPE, DeliveryWithRelations, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { COMPANY_CONFIG } from "@/config/company"
 import { generateReturnPDF } from "@/utils/pdfGenerator"
@@ -491,13 +494,21 @@ export default function ReturnsPage() {
                           <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">O recibo vai sair com foto cadastrada e assinatura manual.</p>
                         </div>
                       )}
-                      <div className="flex justify-between items-center">
+                      <div className="hidden justify-between items-center">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assinatura do Colaborador</label>
                         <button onClick={clearSignature} className="text-[10px] font-black text-[#2563EB] uppercase hover:underline">Limpar</button>
                       </div>
-                      <div className="bg-white rounded-3xl overflow-hidden border-2 border-slate-100 shadow-inner h-64 touch-none">
-                        <SignatureCanvas ref={sigCanvas} canvasProps={{ className: 'w-full h-full' }} penColor="#000000" />
-                      </div>
+                      <SignatureCapture
+                        signatureRef={sigCanvas}
+                        isSaving={isSaving}
+                        confirmLabel="Confirmar e finalizar"
+                        onClear={clearSignature}
+                        onConfirm={() => {
+                          const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)
+                          if (signatureDataUrl) saveReturn(signatureDataUrl)
+                          else toast.error("A assinatura e obrigatoria.")
+                        }}
+                      />
                       <button 
                         disabled={isSaving}
                         onClick={() => {
@@ -505,7 +516,7 @@ export default function ReturnsPage() {
                           if (signatureDataUrl) saveReturn(signatureDataUrl)
                           else alert("A assinatura é obrigatória.")
                         }}
-                        className="min-h-[52px] w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em]"
+                        className="hidden min-h-[52px] w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-xl font-black uppercase tracking-[0.2em]"
                       >
                         {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Confirmar e Finalizar"}
                       </button>

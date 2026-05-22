@@ -1,19 +1,14 @@
 "use client"
 
-// responsive: revisado - mobile-first
+// ui: câmera/assinatura redesenhada — mobile-first ✓
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import {
-  Camera,
-  CheckCircle2,
   CircleDot,
-  Fingerprint,
   Info,
   Loader2,
   RotateCcw,
   ShieldCheck,
-  Sparkles,
-  UserRoundCheck,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
@@ -89,13 +84,29 @@ async function getAccessToken() {
   return data.session?.access_token ?? null
 }
 
-async function fetchBiometric<T>(url: string, formData: FormData) {
+async function fetchBiometric<T>(url: string, formData: FormData, timeoutMs = 8000) {
   const token = await getAccessToken()
-  const response = await fetch(url, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body: formData,
-  })
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const requestError = new Error(error instanceof DOMException && error.name === "AbortError"
+      ? "Servico biometrico demorou para responder."
+      : "Falha ao conectar com a biometria facial.") as BiometricFetchError
+    requestError.code = SERVICE_NOT_CONFIGURED
+    requestError.status = 503
+    throw requestError
+  } finally {
+    window.clearTimeout(timeout)
+  }
 
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
@@ -106,6 +117,49 @@ async function fetchBiometric<T>(url: string, formData: FormData) {
   }
 
   return payload as T
+}
+
+function waitForVideoElement(ref: RefObject<HTMLVideoElement | null>, timeoutMs = 3000) {
+  return new Promise<HTMLVideoElement>((resolve, reject) => {
+    const startedAt = Date.now()
+    const tick = () => {
+      if (ref.current) {
+        resolve(ref.current)
+        return
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        reject(new Error("Tela da camera nao ficou pronta. Tente novamente."))
+        return
+      }
+      window.requestAnimationFrame(tick)
+    }
+    tick()
+  })
+}
+
+function waitForLoadedMetadata(video: HTMLVideoElement, timeoutMs = 4000) {
+  if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve()
+
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup()
+      reject(new Error("A camera abriu, mas nao enviou imagem. Feche outros apps que usam camera e tente novamente."))
+    }, timeoutMs)
+
+    const onLoaded = () => {
+      cleanup()
+      resolve()
+    }
+
+    const cleanup = () => {
+      window.clearTimeout(timeout)
+      video.removeEventListener("loadedmetadata", onLoaded)
+      video.removeEventListener("canplay", onLoaded)
+    }
+
+    video.addEventListener("loadedmetadata", onLoaded, { once: true })
+    video.addEventListener("canplay", onLoaded, { once: true })
+  })
 }
 
 function isServiceUnavailable(error: unknown) {
@@ -163,6 +217,7 @@ export function FaceCamera({
   const [isCameraReady, setIsCameraReady] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
   const [isEvidenceMode, setIsEvidenceMode] = useState(false)
+  const [loadingLabel, setLoadingLabel] = useState("Camera")
 
   const mode = verifyEmployeeId ? "verify" : "enroll"
   const targetEmployeeId = verifyEmployeeId || employeeId
@@ -181,6 +236,7 @@ export function FaceCamera({
   const modeLabel = isEvidenceMode ? "Modo Vercel Free" : mode === "verify" ? "Biometria server-side" : "Cadastro facial"
   const scorePercent = scores ? Math.round(scores.final * 100) : null
   const isTerminal = state === "APPROVED" || state === "RETRY" || state === "FALLBACK_REQUIRED" || state === "ERROR"
+  const hasFaceSignal = isCameraReady && (isEvidenceMode || progress >= 45 || state === "APPROVED")
 
   const stopCamera = useCallback(() => {
     runningRef.current = false
@@ -326,6 +382,7 @@ export function FaceCamera({
       finalizingRef.current = false
       setProgress(2)
       setState("REQUESTING_CAMERA")
+      setLoadingLabel("Permissao da camera")
       setInstruction("Solicitando permissao da camera...")
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -338,15 +395,23 @@ export function FaceCamera({
       })
 
       streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
+      setProgress(18)
+      setInstruction("Abrindo imagem da camera...")
+
+      const video = await waitForVideoElement(videoRef)
+      video.srcObject = stream
+      video.muted = true
+      video.playsInline = true
+      await video.play().catch(() => undefined)
+      await waitForLoadedMetadata(video)
 
       setIsCameraReady(true)
+      setProgress(34)
+      setLoadingLabel("Servico biometrico")
+      setInstruction("Preparando verificacao facial...")
 
       try {
-        const session = await fetchBiometric<StartSessionResponse>("/api/biometric/session/start", buildSessionForm())
+        const session = await fetchBiometric<StartSessionResponse>("/api/biometric/session/start", buildSessionForm(), 6000)
         sessionIdRef.current = session.session_id
         runningRef.current = true
         finalizingRef.current = false
@@ -432,131 +497,123 @@ export function FaceCamera({
 
   return (
     <div className="relative w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-xl shadow-slate-200/70">
-      <div className="relative grid gap-3 p-3 sm:gap-5 sm:p-5 lg:grid-cols-[minmax(360px,1fr)_320px] lg:p-6">
-        <section className="flex flex-col items-center rounded-[1.4rem] bg-slate-50 p-3 sm:p-5">
-          <div className="mb-3 flex w-full items-center justify-between gap-3 sm:mb-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-700">{modeLabel}</p>
-              <h3 className="text-sm font-black uppercase tracking-tight text-slate-950 sm:text-lg">{title}</h3>
-            </div>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="min-h-[40px] shrink-0 rounded-full border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-100"
-            >
-              {cancelLabel}
-            </button>
+      <div className="flex min-h-[calc(100dvh-96px)] flex-col gap-3 p-3 sm:min-h-0 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-700">{modeLabel}</p>
+            <h3 className="truncate text-base font-black uppercase tracking-tight text-slate-950 sm:text-lg">{title}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="min-h-[44px] shrink-0 rounded-full border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-100"
+          >
+            {cancelLabel}
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 sm:p-3">
+          <div className="mb-2 rounded-2xl bg-white/90 px-3 py-2 text-center text-sm font-semibold text-slate-800 shadow-sm">
+            {instruction}
           </div>
 
-          <div className="relative aspect-square w-full max-w-[min(82vw,360px)] sm:max-w-[430px] lg:max-w-[500px]">
-            <div className={`absolute inset-0 rounded-full blur-2xl transition ${state === "APPROVED" ? "bg-emerald-400/35" : isEvidenceMode ? "bg-amber-300/30" : "bg-red-300/25"}`} />
-            <div className={`relative h-full w-full overflow-hidden rounded-full border-[6px] bg-slate-900 shadow-2xl transition ${state === "APPROVED" ? "border-emerald-300" : isEvidenceMode ? "border-amber-200" : "border-white"}`}>
-              <video
-                ref={videoRef}
-                muted
-                playsInline
-                autoPlay
-                className={`h-full w-full scale-x-[-1] object-cover transition-opacity duration-300 ${isCameraReady ? "opacity-100" : "opacity-0"}`}
-              />
-              {!isCameraReady && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-200">
-                  <Loader2 className="h-8 w-8 animate-spin text-red-300" />
-                  <span className="text-xs font-bold uppercase tracking-widest">Preparando camera</span>
+          {error && <p className="mb-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-slate-900 shadow-inner sm:aspect-video">
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              autoPlay
+              className={`h-full w-full scale-x-[-1] object-cover transition-opacity duration-300 ${isCameraReady ? "opacity-100" : "opacity-0"}`}
+            />
+
+            {!isCameraReady && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-slate-950 text-white">
+                <Loader2 className="h-8 w-8 animate-spin text-red-300" />
+                <div className="w-full max-w-[260px] px-4 text-center">
+                  <p className="text-sm font-black uppercase tracking-widest">{loadingLabel}</p>
+                  <p className="mt-1 text-sm text-slate-300">{progress}%</p>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full rounded-full bg-red-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                  </div>
                 </div>
-              )}
-              <div className="pointer-events-none absolute inset-5 rounded-full border border-dashed border-white/35" />
-              <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 shadow" />
-            </div>
-            <div className="absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-xs font-bold text-slate-700 shadow-xl backdrop-blur">
-              {state === "APPROVED" ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              ) : isCapturing || state === "REQUESTING_CAMERA" ? (
-                <Loader2 className="h-4 w-4 animate-spin text-red-600" />
-              ) : isEvidenceMode ? (
-                <Camera className="h-4 w-4 text-amber-600" />
-              ) : (
-                <Fingerprint className="h-4 w-4 text-red-700" />
-              )}
-              {scorePercent !== null ? `Confianca ${scorePercent}%` : isEvidenceMode ? "Evidencia facial" : "Sessao segura"}
-            </div>
-          </div>
-        </section>
-
-        <section className="flex min-w-0 flex-col justify-between gap-3 rounded-[1.4rem] border border-slate-200 bg-white p-3 sm:p-5">
-          <div>
-            <div className="mb-3 flex items-center gap-3">
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl sm:h-12 sm:w-12 ${state === "APPROVED" ? "bg-emerald-50 text-emerald-700" : isEvidenceMode ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
-                {state === "APPROVED" ? <UserRoundCheck className="h-6 w-6" /> : isEvidenceMode ? <Camera className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status da captura</p>
-                <p className="text-sm font-semibold leading-snug text-slate-900 sm:text-base">{instruction}</p>
-              </div>
-            </div>
-
-            {isEvidenceMode && (
-              <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 sm:text-sm">
-                <Info className="mr-2 inline h-4 w-4 text-amber-600" />
-                Modo sem IA externa: salva foto facial para auditoria. A entrega continua com assinatura, PDF, IP e data.
               </div>
             )}
 
-            {error && <p className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-
-            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div
-                className={`h-full rounded-full transition-all duration-300 ${state === "APPROVED" ? "bg-emerald-500" : isEvidenceMode ? "bg-amber-400" : "bg-red-700"}`}
-                style={{ width: `${progress}%` }}
+                className={`h-[72%] w-[54%] rounded-[50%] border-2 transition-all duration-300 ${
+                  state === "RETRY" || state === "ERROR"
+                    ? "border-red-400 shadow-[0_0_0_999px_rgba(15,23,42,0.18)]"
+                    : hasFaceSignal
+                      ? "animate-pulse border-emerald-300 shadow-[0_0_26px_rgba(16,185,129,0.55),0_0_0_999px_rgba(15,23,42,0.14)]"
+                      : "border-white/80 shadow-[0_0_0_999px_rgba(15,23,42,0.2)]"
+                }`}
               />
             </div>
 
-            <div className="mt-3 hidden grid-cols-3 gap-2 sm:grid">
-              {[
-                ["Foto", isCameraReady ? "ok" : "..."],
-                ["Fluxo", isEvidenceMode ? "auditavel" : "biometria"],
-                ["Saida", isEvidenceMode ? "sem score" : scorePercent !== null ? `${scorePercent}%` : "..."],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-                  <p className="mt-1 truncate text-xs font-bold text-slate-800">{value}</p>
-                </div>
-              ))}
+            <div className="absolute bottom-3 left-3 right-3 rounded-full bg-white/90 p-1.5 shadow-lg backdrop-blur">
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    state === "RETRY" || state === "ERROR" ? "bg-red-600" : state === "APPROVED" || hasFaceSignal ? "bg-emerald-500" : "bg-red-700"
+                  }`}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="sticky bottom-0 -mx-3 -mb-3 flex flex-col gap-2.5 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:static sm:m-0 sm:border-0 sm:bg-transparent sm:p-0">
-            {isEvidenceMode && !isTerminal && (
-              <button
-                type="button"
-                onClick={() => void captureEvidence()}
-                disabled={!isCameraReady || isCapturing}
-                className="min-h-[52px] w-full rounded-2xl bg-red-700 px-5 py-4 text-sm font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-red-900/20 transition hover:bg-red-800 disabled:opacity-60"
-              >
-                {isCapturing ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : <CircleDot className="mr-2 inline h-4 w-4" />}
-                Tirar foto
-              </button>
-            )}
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 text-sm shadow-sm">
+            <span className="font-semibold text-slate-700">
+              {scorePercent !== null ? `Confianca ${scorePercent}%` : isEvidenceMode ? "Foto auditavel" : "Verificacao ativa"}
+            </span>
+            <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-widest ${hasFaceSignal ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+              {hasFaceSignal ? "ao vivo" : "aguarde"}
+            </span>
+          </div>
 
-            {isTerminal && state !== "APPROVED" && (
-              <button
-                type="button"
-                onClick={retry}
-                className="min-h-[48px] w-full rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-slate-800"
-              >
-                <RotateCcw className="mr-2 inline h-4 w-4" />
-                Tentar novamente
-              </button>
-            )}
+          {isEvidenceMode && (
+            <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-800">
+              <Info className="mr-2 inline h-4 w-4 text-amber-600" />
+              Salvaremos uma foto facial para auditoria junto da assinatura, IP e data.
+            </div>
+          )}
+        </div>
 
+        <div className="sticky bottom-0 -mx-3 mt-auto flex flex-col gap-2.5 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+          {isEvidenceMode && !isTerminal && (
             <button
               type="button"
-              onClick={handleCancel}
-              className="min-h-[44px] w-full rounded-2xl border border-slate-200 px-5 py-3 text-xs font-bold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+              onClick={() => void captureEvidence()}
+              disabled={!isCameraReady || isCapturing}
+              className="min-h-[56px] w-full rounded-2xl bg-red-700 px-5 py-4 text-sm font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-red-900/20 transition hover:bg-red-800 disabled:opacity-60"
             >
-              {isEvidenceMode ? "Usar assinatura manual" : "Usar fallback auditavel"}
+              {isCapturing ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : <CircleDot className="mr-2 inline h-4 w-4" />}
+              Capturar foto
             </button>
-          </div>
-        </section>
+          )}
+
+          {isTerminal && state !== "APPROVED" && (
+            <button
+              type="button"
+              onClick={retry}
+              className="min-h-[52px] w-full rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-slate-800"
+            >
+              <RotateCcw className="mr-2 inline h-4 w-4" />
+              Tentar novamente
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="min-h-[44px] w-full rounded-2xl border border-slate-200 px-5 py-3 text-xs font-bold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+          >
+            {isEvidenceMode ? "Usar assinatura manual" : "Usar fallback auditavel"}
+          </button>
+        </div>
 
         <canvas ref={canvasRef} className="hidden" />
       </div>

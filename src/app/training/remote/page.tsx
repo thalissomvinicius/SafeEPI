@@ -1,10 +1,13 @@
 "use client"
 
+// ui: câmera/assinatura redesenhada — mobile-first ✓
+
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, CheckCircle2, Fingerprint, Loader2, PenTool, ShieldAlert, X } from "lucide-react"
+import { Camera, CheckCircle2, Fingerprint, Loader2, PenTool, ShieldAlert } from "lucide-react"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { formatCpf } from "@/utils/cpf"
 import { toast } from "@/lib/toast"
 
@@ -104,7 +107,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "loading") {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
       </div>
     )
@@ -112,7 +115,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "error") {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center text-center">
+      <div className="min-h-[100dvh] bg-slate-50 p-4 flex items-center justify-center text-center">
         <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md shadow-xl">
           <ShieldAlert className="w-14 h-14 text-red-500 mx-auto mb-4" />
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Link indisponivel</h1>
@@ -124,7 +127,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "done") {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center text-center">
+      <div className="min-h-[100dvh] bg-slate-50 p-4 flex items-center justify-center text-center">
         <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md shadow-xl">
           <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Assinatura registrada</h1>
@@ -136,7 +139,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "verify") {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 p-3 flex items-center justify-center">
         <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-xl space-y-5">
           <div className="text-center">
             <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Assinatura de Treinamento</h1>
@@ -167,8 +170,8 @@ function RemoteTrainingSignatureContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-lg w-full shadow-xl space-y-5">
+    <div className="min-h-[100dvh] bg-slate-50 p-3 sm:p-4 flex items-center justify-center">
+      <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 max-w-lg w-full shadow-xl space-y-4 sm:space-y-5">
         <div className="text-center">
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Assine o treinamento</h1>
           <p className="text-xs text-slate-500 mt-1">{employee?.full_name}</p>
@@ -208,31 +211,22 @@ function RemoteTrainingSignatureContent() {
                 Biometria facial nao cadastrada. Use assinatura manual.
               </div>
             )}
-            <div className="border-2 border-dashed border-slate-200 rounded-xl overflow-hidden bg-slate-50 h-48">
-              <SignatureCanvas ref={sigCanvas} canvasProps={{ className: "w-full h-full touch-none" }} penColor="#1e293b" />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => sigCanvas.current?.clear()} className="px-5 py-3 rounded-xl border border-slate-200 text-slate-500 font-black uppercase tracking-widest text-[10px]">
-                <X className="w-4 h-4 inline mr-1" /> Limpar
-              </button>
-              <button
-                disabled={isSaving}
-                onClick={() => {
-                  if (sigCanvas.current?.isEmpty()) {
-                    toast.error("Assine antes de confirmar.")
-                    return
-                  }
-                  if (authMethod === "manual_facial" && employee?.photo_url && !capturedPhotoBase64) {
-                    toast.error("Capture a foto antes de confirmar.")
-                    return
-                  }
-                  void saveSignature(sigCanvas.current!.toDataURL("image/png"), capturedPhotoBase64)
-                }}
-                className="flex-1 py-3 rounded-xl bg-[#2563EB] text-white font-black uppercase tracking-widest text-[10px] disabled:opacity-50"
-              >
-                {isSaving ? "Salvando..." : "Confirmar assinatura"}
-              </button>
-            </div>
+            <SignatureCapture
+              signatureRef={sigCanvas}
+              isSaving={isSaving}
+              confirmLabel="Confirmar assinatura"
+              onConfirm={() => {
+                if (sigCanvas.current?.isEmpty()) {
+                  toast.error("Assine antes de confirmar.")
+                  return
+                }
+                if (authMethod === "manual_facial" && employee?.photo_url && !capturedPhotoBase64) {
+                  toast.error("Capture a foto antes de confirmar.")
+                  return
+                }
+                void saveSignature(sigCanvas.current!.toDataURL("image/png"), capturedPhotoBase64)
+              }}
+            />
           </div>
         ) : employee?.photo_url ? (
           <FaceCamera
@@ -254,7 +248,7 @@ function RemoteTrainingSignatureContent() {
 
 export default function RemoteTrainingSignaturePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" /></div>}>
+    <Suspense fallback={<div className="min-h-[100dvh] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" /></div>}>
       <RemoteTrainingSignatureContent />
     </Suspense>
   )
