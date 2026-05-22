@@ -7,7 +7,8 @@ import { remoteCaptureSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUploadBuffer } from "@/lib/validateUpload"
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const TOKEN_REGEX = /^[0-9a-f]{64}$/i
 const EMPLOYEE_PUBLIC_SELECT = [
   "id",
   "company_id",
@@ -29,8 +30,7 @@ function isValidUuid(value: unknown): value is string {
 }
 
 function isValidToken(value: unknown): value is string {
-  // Tokens gerados por crypto.randomBytes(32).toString("hex") = 64 hex chars.
-  return typeof value === "string" && /^[0-9a-f]{64}$/i.test(value)
+  return typeof value === "string" && TOKEN_REGEX.test(value)
 }
 
 function dataUrlToBuffer(dataUrl: string) {
@@ -41,11 +41,36 @@ function dataUrlToBuffer(dataUrl: string) {
   return { buffer, contentType: validated.contentType, extension: validated.extension }
 }
 
-/**
- * Valida o link remoto e retorna o registro se válido.
- * Critérios: token existe, type bate, não expirado, status pending,
- * employee_id bate com o solicitado.
- */
+async function uploadBiometricPhoto(path: string, image: NonNullable<ReturnType<typeof dataUrlToBuffer>>) {
+  const uploadOptions = {
+    contentType: image.contentType,
+    upsert: false,
+  }
+
+  let result = await supabaseAdmin.storage.from(BIOMETRIC_BUCKET).upload(path, image.buffer, uploadOptions)
+  if (!result.error) return { ok: true as const }
+
+  const message = String(result.error.message || "").toLowerCase()
+  const missingBucket = message.includes("bucket") && (message.includes("not found") || message.includes("does not exist"))
+
+  if (missingBucket) {
+    const { error: createError } = await supabaseAdmin.storage.createBucket(BIOMETRIC_BUCKET, {
+      public: false,
+    })
+
+    const createMessage = String(createError?.message || "").toLowerCase()
+    if (createError && !createMessage.includes("already exists")) {
+      console.error("[/api/remote-capture][POST] create biometric bucket error:", createError)
+      return { ok: false as const, error: createError }
+    }
+
+    result = await supabaseAdmin.storage.from(BIOMETRIC_BUCKET).upload(path, image.buffer, uploadOptions)
+  }
+
+  if (result.error) return { ok: false as const, error: result.error }
+  return { ok: true as const }
+}
+
 async function loadValidLink(token: string, expectedEmployeeId: string, expectedType: string) {
   const { data: link } = await supabaseAdmin
     .from("remote_links")
@@ -53,9 +78,9 @@ async function loadValidLink(token: string, expectedEmployeeId: string, expected
     .eq("token", token)
     .maybeSingle()
 
-  if (!link) return { ok: false as const, status: 404, error: "Link não encontrado." }
+  if (!link) return { ok: false as const, status: 404, error: "Link nao encontrado." }
   if (link.employee_id !== expectedEmployeeId) {
-    return { ok: false as const, status: 403, error: "Link não corresponde ao colaborador." }
+    return { ok: false as const, status: 403, error: "Link nao corresponde ao colaborador." }
   }
 
   const linkType = link.type === "delivery" && link.data?.remoteType
@@ -63,14 +88,14 @@ async function loadValidLink(token: string, expectedEmployeeId: string, expected
     : link.type
 
   if (linkType !== expectedType) {
-    return { ok: false as const, status: 403, error: "Tipo de link incompatível." }
+    return { ok: false as const, status: 403, error: "Tipo de link incompativel." }
   }
   if (new Date(link.expires_at) < new Date()) {
     await supabaseAdmin.from("remote_links").update({ status: "expired" }).eq("id", link.id)
     return { ok: false as const, status: 410, error: "Este link expirou." }
   }
   if (link.status !== "pending") {
-    return { ok: false as const, status: 410, error: "Este link já foi utilizado." }
+    return { ok: false as const, status: 410, error: "Este link ja foi utilizado." }
   }
 
   return { ok: true as const, link }
@@ -88,11 +113,10 @@ export async function GET(request: Request) {
     if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     if (!isValidUuid(id)) {
-      return NextResponse.json({ error: "ID do colaborador inválido." }, { status: 400 })
+      return NextResponse.json({ error: "ID do colaborador invalido." }, { status: 400 })
     }
-    // Token agora é OBRIGATÓRIO em GET — antes qualquer um podia enumerar PII.
     if (!isValidToken(token)) {
-      return NextResponse.json({ error: "Token inválido." }, { status: 401 })
+      return NextResponse.json({ error: "Token invalido." }, { status: 401 })
     }
 
     const validation = await loadValidLink(token, id, "capture")
@@ -107,11 +131,9 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     if (error || !employee) {
-      return NextResponse.json({ error: "Colaborador não encontrado." }, { status: 404 })
+      return NextResponse.json({ error: "Colaborador nao encontrado." }, { status: 404 })
     }
 
-    // CPF NÃO é mais retornado no fluxo público — apenas o necessário para
-    // exibir nome e foto no formulário de captura.
     return NextResponse.json({
       ...employee,
       photo_storage_path: employee.photo_url || null,
@@ -134,11 +156,15 @@ export async function POST(request: Request) {
     if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     if (!isValidUuid(id)) {
-      return NextResponse.json({ error: "ID do colaborador inválido." }, { status: 400 })
+      return NextResponse.json({ error: "ID do colaborador invalido." }, { status: 400 })
     }
     if (typeof photo_url !== "string" || !photo_url.trim()) {
-      return NextResponse.json({ error: "URL da foto é obrigatória." }, { status: 400 })
+      return NextResponse.json({ error: "URL da foto e obrigatoria." }, { status: 400 })
     }
+    if (!isValidToken(token)) {
+      return NextResponse.json({ error: "Token invalido." }, { status: 401 })
+    }
+
     const normalizedDescriptor = Array.isArray(face_descriptor) && face_descriptor.length === 512
       ? face_descriptor
       : null
@@ -149,10 +175,6 @@ export async function POST(request: Request) {
         face_descriptor.some(value => !Number.isFinite(value)))
     ) {
       return NextResponse.json({ error: "Descritor facial invalido." }, { status: 400 })
-    }
-    // Token agora é OBRIGATÓRIO — não há mais fallback "sem token".
-    if (!isValidToken(token)) {
-      return NextResponse.json({ error: "Token inválido." }, { status: 401 })
     }
 
     const validation = await loadValidLink(token, id, "capture")
@@ -168,7 +190,18 @@ export async function POST(request: Request) {
       }
     }
 
-    // Atomic: marca como completed APENAS se ainda for pending.
+    let storedPhotoPath = photo_url
+    if (imageToUpload) {
+      const companyPrefix = validation.link.company_id || "remote"
+      storedPhotoPath = `${companyPrefix}/employees/remote_capture_${Date.now()}_${id}.${imageToUpload.extension}`
+      const uploadResult = await uploadBiometricPhoto(storedPhotoPath, imageToUpload)
+
+      if (!uploadResult.ok) {
+        console.error("[/api/remote-capture][POST] storage error:", uploadResult.error)
+        return NextResponse.json({ error: "Falha ao salvar foto. Tente novamente." }, { status: 500 })
+      }
+    }
+
     const { data: claimed, error: claimError } = await supabaseAdmin
       .from("remote_links")
       .update({ status: "completed", completed_at: new Date().toISOString() })
@@ -178,24 +211,10 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (claimError || !claimed) {
-      return NextResponse.json({ error: "Link já consumido por outra requisição." }, { status: 409 })
-    }
-
-    let storedPhotoPath = photo_url
-    if (imageToUpload) {
-      const companyPrefix = validation.link.company_id || "remote"
-      storedPhotoPath = `${companyPrefix}/employees/remote_capture_${Date.now()}_${id}.${imageToUpload.extension}`
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from(BIOMETRIC_BUCKET)
-        .upload(storedPhotoPath, imageToUpload.buffer, {
-          contentType: imageToUpload.contentType,
-          upsert: false,
-        })
-
-      if (uploadError) {
-        console.error("[/api/remote-capture][POST] storage error:", uploadError)
-        return NextResponse.json({ error: "Falha ao salvar foto." }, { status: 500 })
+      if (imageToUpload && storedPhotoPath) {
+        await supabaseAdmin.storage.from(BIOMETRIC_BUCKET).remove([storedPhotoPath])
       }
+      return NextResponse.json({ error: "Link ja consumido por outra requisicao." }, { status: 409 })
     }
 
     const { data, error } = await supabaseAdmin
