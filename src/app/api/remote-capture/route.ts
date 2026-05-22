@@ -7,7 +7,7 @@ import { remoteCaptureSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUploadBuffer } from "@/lib/validateUpload"
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
 const EMPLOYEE_PUBLIC_SELECT = [
   "id",
