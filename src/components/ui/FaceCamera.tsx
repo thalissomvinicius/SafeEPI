@@ -84,8 +84,10 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   
   const STABILITY_REQUIRED = 8
   const COUNTDOWN_SECONDS = 4
-  const TURN_THRESHOLD = 0.05
-  const CENTER_THRESHOLD = 0.035
+  const MEDIAPIPE_TURN_THRESHOLD = 0.05
+  const MEDIAPIPE_CENTER_THRESHOLD = 0.035
+  const FACEPLUGIN_TURN_THRESHOLD = 0.018
+  const FACEPLUGIN_CENTER_THRESHOLD = 0.014
   const requiresServerVerification = Boolean(verifyEmployeeId)
   const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
 
@@ -131,6 +133,45 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         executionProviders: ["wasm"],
       }),
       `Carregamento do modelo ${modelName}`,
+    )
+  }, [withTimeout])
+
+  const loadMediaPipeLandmarker = useCallback(async () => {
+    const vision = await withTimeout(
+      FilesetResolver.forVisionTasks("/mediapipe/wasm", false),
+      "Carregamento do runtime MediaPipe",
+      10000,
+    )
+
+    const modelResponse = await withTimeout(
+      fetch("/mediapipe/models/face_landmarker.task", { cache: "force-cache" }),
+      "Download do modelo MediaPipe",
+      10000,
+    )
+    if (!modelResponse.ok) {
+      throw new Error(`Modelo MediaPipe nao encontrado (${modelResponse.status}).`)
+    }
+
+    const modelBuffer = new Uint8Array(await withTimeout(
+      modelResponse.arrayBuffer(),
+      "Leitura do modelo MediaPipe",
+      10000,
+    ))
+
+    return await withTimeout(
+      FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetBuffer: modelBuffer,
+          delegate: "CPU",
+        },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        minFaceDetectionConfidence: 0.5,
+        minFacePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      }),
+      "Carregamento do Face Landmarker",
+      10000,
     )
   }, [withTimeout])
 
@@ -247,6 +288,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
 
     let yaw: number | null = null
     let faceCenter = 0
+    let motionSource: "mediapipe" | "faceplugin" = "faceplugin"
 
     if (faceLandmarkerRef.current) {
       const mediaPipeResult = faceLandmarkerRef.current.detectForVideo(videoRef.current, performance.now())
@@ -256,6 +298,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         if (motion) {
           yaw = motion.yaw
           faceCenter = motion.centerX
+          motionSource = "mediapipe"
         }
       }
     }
@@ -288,8 +331,8 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     const baselineCenter = baselineCenterRef.current
     const yawDelta = yaw - baselineYaw
     const centerDelta = faceCenter - baselineCenter
-    const turnThreshold = TURN_THRESHOLD
-    const centerThreshold = CENTER_THRESHOLD
+    const turnThreshold = motionSource === "mediapipe" ? MEDIAPIPE_TURN_THRESHOLD : FACEPLUGIN_TURN_THRESHOLD
+    const centerThreshold = motionSource === "mediapipe" ? MEDIAPIPE_CENTER_THRESHOLD : FACEPLUGIN_CENTER_THRESHOLD
     const motion = Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
     const motionAbs = Math.abs(motion)
 
@@ -563,24 +606,13 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         if (shouldRequireLiveness) {
           setModelLoadLabel("Movimento facial")
           setStatusText("Carregando reconhecimento facial... 88%")
-          const vision = await withTimeout(
-            FilesetResolver.forVisionTasks("/mediapipe/wasm"),
-            "Carregamento do MediaPipe",
-          )
-          faceLandmarkerRef.current = await withTimeout(
-            FaceLandmarker.createFromOptions(vision, {
-              baseOptions: {
-                modelAssetPath: "/mediapipe/models/face_landmarker.task",
-                delegate: "CPU",
-              },
-              runningMode: "VIDEO",
-              numFaces: 1,
-              minFaceDetectionConfidence: 0.5,
-              minFacePresenceConfidence: 0.5,
-              minTrackingConfidence: 0.5,
-            }),
-            "Carregamento do Face Landmarker",
-          )
+          setModelLoadProgress(88)
+          try {
+            faceLandmarkerRef.current = await loadMediaPipeLandmarker()
+          } catch (mediaPipeError) {
+            console.warn("[FaceCamera] MediaPipe indisponivel, usando fallback do Faceplugin:", mediaPipeError)
+            faceLandmarkerRef.current = null
+          }
           setModelLoadProgress(92)
 
           setModelLoadLabel("Anti-spoofing")
@@ -602,7 +634,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
       faceLandmarkerRef.current = null
       stopCamera()
     }
-  }, [loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv, withTimeout])
+  }, [loadMediaPipeLandmarker, loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv])
 
   // -- Start camera when ready --
   useEffect(() => {
