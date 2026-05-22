@@ -201,10 +201,10 @@ function CaptureContent() {
   // -- CÂMERA FULLSCREEN --
   if (isCapturing) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col z-50 overflow-y-auto">
-        <div className="sticky top-0 flex items-center justify-between p-3 bg-black/90 z-10 backdrop-blur">
-          <h3 className="text-white font-black uppercase text-xs tracking-widest">Captura Facial</h3>
-          <button onClick={() => setIsCapturing(false)} className="min-h-[40px] text-white text-xs font-bold bg-white/20 px-4 rounded-full">Cancelar</button>
+      <div className="fixed inset-0 bg-slate-50 flex flex-col z-50 overflow-y-auto">
+        <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white/95 p-3 z-10 backdrop-blur">
+          <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest">Captura Facial</h3>
+          <button onClick={() => setIsCapturing(false)} className="min-h-[40px] text-slate-700 text-xs font-bold bg-slate-100 px-4 rounded-full">Cancelar</button>
         </div>
         <div className="flex-1 min-h-0 p-3 sm:p-6">
            <FaceCamera 

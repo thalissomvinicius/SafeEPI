@@ -497,16 +497,23 @@ function RemoteDeliveryContent() {
   // RENDER: Identity Verification (CPF)
   // ---------------------------------------
   if (phase === 'verify') return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
+    <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4">
+      <div className="w-full max-w-md space-y-3 sm:space-y-6">
+        <div className="text-center space-y-1.5">
           <div className="inline-block bg-[#2563EB] text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">Verificação de Identidade</div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirme seus Dados</h1>
           <p className="text-slate-500 text-xs sm:text-sm">Para sua segurança, informe seus dados pessoais antes de assinar.</p>
         </div>
 
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-5">
-          <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100">
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-4 sm:space-y-5">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 sm:hidden">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Itens pendentes</p>
+            <p className="mt-1 text-sm font-black text-slate-900">
+              {deliveryItems.length || 1} item{(deliveryItems.length || 1) !== 1 ? "s" : ""} para assinatura
+            </p>
+          </div>
+
+          <div className="hidden bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100 sm:block">
             <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Item(ns) pendente(s) de assinatura:</p>
             <div className="space-y-2">
               {(deliveryItems.length > 0 ? deliveryItems : []).map((item) => (
@@ -521,7 +528,7 @@ function RemoteDeliveryContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3">
+          <div className="hidden items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3 sm:flex">
             <Lock className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <p className="text-[10px] sm:text-[11px] text-blue-700 leading-tight">
               Informe seu <strong>CPF</strong> para confirmar sua identidade e liberar a assinatura.
@@ -570,7 +577,7 @@ function RemoteDeliveryContent() {
           </button>
         </div>
 
-        <p className="text-center text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">
+        <p className="hidden text-center text-[9px] sm:block sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">
           Segurança Certificada - {COMPANY_CONFIG.systemName}
         </p>
       </div>
@@ -581,16 +588,23 @@ function RemoteDeliveryContent() {
   // RENDER: Signing Area (after CPF verified)
   // ---------------------------------------
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pt-8 sm:pt-12">
-      <div className="w-full max-w-lg space-y-4 sm:space-y-6">
-        <div className="text-center space-y-2">
+    <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center p-3 pt-4 sm:p-4 sm:pt-12">
+      <div className="w-full max-w-lg space-y-3 sm:space-y-6">
+        <div className="text-center space-y-1.5">
           <div className="inline-block bg-green-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">✓ Identidade Verificada</div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirmação de Recebimento</h1>
-          <p className="text-slate-500 text-xs sm:text-sm font-medium">{employee?.full_name} - {COMPANY_CONFIG.name}</p>
+          <p className="text-slate-500 text-xs sm:text-sm font-medium">{employee?.full_name}</p>
         </div>
 
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-4 sm:space-y-6">
-          <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100">
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-3 sm:space-y-6">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 sm:hidden">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recebimento</p>
+            <p className="mt-1 text-sm font-black text-slate-900">
+              {deliveryItems.length} item{deliveryItems.length !== 1 ? "s" : ""} para confirmar
+            </p>
+          </div>
+
+          <div className="hidden bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100 sm:block">
             <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Item(ns) a ser assinado(s):</p>
             <div className="space-y-2">
               {deliveryItems.map((item) => (
