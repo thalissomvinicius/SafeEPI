@@ -5,7 +5,6 @@ import { Camera, CheckCircle2, ShieldAlert, UserCheck, AlertTriangle, ArrowLeftR
 import { supabase } from "@/lib/supabase"
 import * as faceplugin from "faceplugin-face-recognition-js"
 import * as ort from "onnxruntime-web"
-import { FaceLandmarker, FilesetResolver, type NormalizedLandmark } from "@mediapipe/tasks-vision"
 
 // Configura o caminho base para carregar os arquivos .wasm copiados para /public
 ort.env.wasm.wasmPaths = "/"
@@ -20,10 +19,6 @@ type NdArrayLike = {
 type DetectionOutput = {
   bbox?: NdArrayLike
   size?: number
-}
-type MediaPipeFaceMotion = {
-  yaw: number
-  centerX: number
 }
 type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness"
 type LivenessStep = "turn-left" | "turn-right" | "center" | "complete"
@@ -51,7 +46,6 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   const landmarkSessionRef = useRef<FacepluginSession | null>(null)
   const featureSessionRef = useRef<FacepluginSession | null>(null)
   const livenessSessionRef = useRef<FacepluginSession | null>(null)
-  const faceLandmarkerRef = useRef<FaceLandmarker | null>(null)
   const livenessStepRef = useRef<LivenessStep>("turn-left")
   const firstYawDirectionRef = useRef<-1 | 1 | null>(null)
   const baselineYawRef = useRef<number | null>(null)
@@ -84,8 +78,6 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
   
   const STABILITY_REQUIRED = 8
   const COUNTDOWN_SECONDS = 4
-  const MEDIAPIPE_TURN_THRESHOLD = 0.05
-  const MEDIAPIPE_CENTER_THRESHOLD = 0.035
   const FACEPLUGIN_TURN_THRESHOLD = 0.018
   const FACEPLUGIN_CENTER_THRESHOLD = 0.014
   const requiresServerVerification = Boolean(verifyEmployeeId)
@@ -133,45 +125,6 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         executionProviders: ["wasm"],
       }),
       `Carregamento do modelo ${modelName}`,
-    )
-  }, [withTimeout])
-
-  const loadMediaPipeLandmarker = useCallback(async () => {
-    const vision = await withTimeout(
-      FilesetResolver.forVisionTasks("/mediapipe/wasm", false),
-      "Carregamento do runtime MediaPipe",
-      10000,
-    )
-
-    const modelResponse = await withTimeout(
-      fetch("/mediapipe/models/face_landmarker.task", { cache: "force-cache" }),
-      "Download do modelo MediaPipe",
-      10000,
-    )
-    if (!modelResponse.ok) {
-      throw new Error(`Modelo MediaPipe nao encontrado (${modelResponse.status}).`)
-    }
-
-    const modelBuffer = new Uint8Array(await withTimeout(
-      modelResponse.arrayBuffer(),
-      "Leitura do modelo MediaPipe",
-      10000,
-    ))
-
-    return await withTimeout(
-      FaceLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetBuffer: modelBuffer,
-          delegate: "CPU",
-        },
-        runningMode: "VIDEO",
-        numFaces: 1,
-        minFaceDetectionConfidence: 0.5,
-        minFacePresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      }),
-      "Carregamento do Face Landmarker",
-      10000,
     )
   }, [withTimeout])
 
@@ -260,50 +213,14 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     return Number.isFinite(yaw) ? yaw : null
   }, [getLandmarkValue])
 
-  const getMediaPipeFaceMotion = useCallback((landmarks: NormalizedLandmark[]): MediaPipeFaceMotion | null => {
-    const nose = landmarks[1] || landmarks[4]
-    const leftEyeOuter = landmarks[33]
-    const rightEyeOuter = landmarks[263]
-    const leftCheek = landmarks[234]
-    const rightCheek = landmarks[454]
-
-    if (!nose || !leftEyeOuter || !rightEyeOuter) return null
-
-    const eyeDistance = Math.abs(rightEyeOuter.x - leftEyeOuter.x)
-    if (!Number.isFinite(eyeDistance) || eyeDistance < 0.02) return null
-
-    const eyeCenterX = (leftEyeOuter.x + rightEyeOuter.x) / 2
-    const yaw = (nose.x - eyeCenterX) / eyeDistance
-    const centerX = leftCheek && rightCheek
-      ? (leftCheek.x + rightCheek.x) / 2
-      : eyeCenterX
-
-    if (!Number.isFinite(yaw) || !Number.isFinite(centerX)) return null
-    return { yaw, centerX }
-  }, [])
-
   const updateLivenessChallenge = useCallback(async (bbox: NdArrayLike | undefined, face: { x: number; width: number }) => {
     if (!shouldRequireLiveness || livenessPassedRef.current) return true
     if (!videoRef.current || !bbox) return false
 
     let yaw: number | null = null
     let faceCenter = 0
-    let motionSource: "mediapipe" | "faceplugin" = "faceplugin"
 
-    if (faceLandmarkerRef.current) {
-      const mediaPipeResult = faceLandmarkerRef.current.detectForVideo(videoRef.current, performance.now())
-      const mediaPipeLandmarks = mediaPipeResult.faceLandmarks?.[0]
-      if (mediaPipeLandmarks) {
-        const motion = getMediaPipeFaceMotion(mediaPipeLandmarks)
-        if (motion) {
-          yaw = motion.yaw
-          faceCenter = motion.centerX
-          motionSource = "mediapipe"
-        }
-      }
-    }
-
-    if (yaw === null && landmarkSessionRef.current) {
+    if (landmarkSessionRef.current) {
       const landmarksResult = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
       const landmarks = getPrimaryLandmarks(landmarksResult)
       yaw = getYawOffset(landmarks, face)
@@ -331,8 +248,8 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     const baselineCenter = baselineCenterRef.current
     const yawDelta = yaw - baselineYaw
     const centerDelta = faceCenter - baselineCenter
-    const turnThreshold = motionSource === "mediapipe" ? MEDIAPIPE_TURN_THRESHOLD : FACEPLUGIN_TURN_THRESHOLD
-    const centerThreshold = motionSource === "mediapipe" ? MEDIAPIPE_CENTER_THRESHOLD : FACEPLUGIN_CENTER_THRESHOLD
+    const turnThreshold = FACEPLUGIN_TURN_THRESHOLD
+    const centerThreshold = FACEPLUGIN_CENTER_THRESHOLD
     const motion = Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
     const motionAbs = Math.abs(motion)
 
@@ -390,7 +307,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
     }
 
     return true
-  }, [getMediaPipeFaceMotion, getPrimaryLandmarks, getYawOffset, setLivenessStepValue, shouldRequireLiveness])
+  }, [getPrimaryLandmarks, getYawOffset, setLivenessStepValue, shouldRequireLiveness])
 
   const getLivenessScore = useCallback((result: unknown) => {
     if (Array.isArray(result) && Array.isArray(result[0])) {
@@ -604,19 +521,9 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         setModelLoadProgress(84)
 
         if (shouldRequireLiveness) {
-          setModelLoadLabel("Movimento facial")
-          setStatusText("Carregando reconhecimento facial... 88%")
-          setModelLoadProgress(88)
-          try {
-            faceLandmarkerRef.current = await loadMediaPipeLandmarker()
-          } catch (mediaPipeError) {
-            console.warn("[FaceCamera] MediaPipe indisponivel, usando fallback do Faceplugin:", mediaPipeError)
-            faceLandmarkerRef.current = null
-          }
-          setModelLoadProgress(92)
-
           setModelLoadLabel("Anti-spoofing")
-          setStatusText("Carregando reconhecimento facial... 95%")
+          setStatusText("Carregando reconhecimento facial... 92%")
+          setModelLoadProgress(92)
           livenessSessionRef.current = await loadOnnxSession("fr_liveness")
         }
         
@@ -625,16 +532,14 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
         setStatusText("Modelos carregados.")
       } catch (err) {
         console.error("Erro ao carregar modelos do Faceplugin:", err)
-        setError("Falha ao carregar a biometria facial. Verifique os modelos locais em /public/faceplugin-models, /public/mediapipe e os arquivos OpenCV em /public/js.")
+        setError("Falha ao carregar a biometria facial. Verifique os modelos locais em /public/faceplugin-models e os arquivos OpenCV em /public/js.")
       }
     }
     loadModels()
     return () => {
-      faceLandmarkerRef.current?.close()
-      faceLandmarkerRef.current = null
       stopCamera()
     }
-  }, [loadMediaPipeLandmarker, loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv])
+  }, [loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv])
 
   // -- Start camera when ready --
   useEffect(() => {
@@ -1086,7 +991,7 @@ export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verif
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
             <span className="text-[8px] font-bold text-white uppercase tracking-widest">
-              Liveness: MediaPipe + Faceplugin
+              Liveness: movimento facial
             </span>
           </div>
         </>
