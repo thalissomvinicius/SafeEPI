@@ -222,6 +222,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Link não encontrado ou inválido.", status: "invalid" }, { status: 404 })
     }
 
+    const completedCaptureWithoutPhoto = link.status === "completed" && link.type === "capture" && !link.employee?.photo_url
+
     if (link.status === "completed" && includeCompleted) {
       return NextResponse.json({
         link: await buildRemoteLinkResponse(link),
@@ -237,7 +239,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Este link expirou. Solicite um novo link ao responsável.", status: "expired" }, { status: 410 })
     }
 
-    if (link.status === "completed" && !includeCompleted) {
+    if (link.status === "completed" && !includeCompleted && !completedCaptureWithoutPhoto) {
       return NextResponse.json({ error: "Este link já foi utilizado.", status: "completed" }, { status: 410 })
     }
 

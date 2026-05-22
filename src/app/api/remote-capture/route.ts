@@ -95,6 +95,16 @@ async function loadValidLink(token: string, expectedEmployeeId: string, expected
     return { ok: false as const, status: 410, error: "Este link expirou." }
   }
   if (link.status !== "pending") {
+    if (expectedType === "capture" && link.status === "completed") {
+      const { data: employee } = await supabaseAdmin
+        .from("employees")
+        .select("photo_url")
+        .eq("id", expectedEmployeeId)
+        .maybeSingle()
+
+      if (!employee?.photo_url) return { ok: true as const, link }
+    }
+
     return { ok: false as const, status: 410, error: "Este link ja foi utilizado." }
   }
 
@@ -202,21 +212,6 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: claimed, error: claimError } = await supabaseAdmin
-      .from("remote_links")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", validation.link.id)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle()
-
-    if (claimError || !claimed) {
-      if (imageToUpload && storedPhotoPath) {
-        await supabaseAdmin.storage.from(BIOMETRIC_BUCKET).remove([storedPhotoPath])
-      }
-      return NextResponse.json({ error: "Link ja consumido por outra requisicao." }, { status: 409 })
-    }
-
     const { data, error } = await supabaseAdmin
       .from("employees")
       .update({ photo_url: storedPhotoPath, face_descriptor: normalizedDescriptor })
@@ -226,7 +221,27 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error("[/api/remote-capture][POST] update error:", error)
+      if (imageToUpload && storedPhotoPath) {
+        await supabaseAdmin.storage.from(BIOMETRIC_BUCKET).remove([storedPhotoPath])
+      }
       return NextResponse.json({ error: "Falha ao atualizar dados." }, { status: 500 })
+    }
+
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from("remote_links")
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", validation.link.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle()
+
+    if (claimError || !claimed) {
+      console.error("[/api/remote-capture][POST] completion error:", claimError)
+      return NextResponse.json({
+        success: true,
+        warning: "Foto salva, mas o status do link nao foi concluido automaticamente.",
+        employee: data,
+      })
     }
 
     return NextResponse.json({ success: true, employee: data })
