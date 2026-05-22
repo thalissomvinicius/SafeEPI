@@ -2,6 +2,18 @@
 
 O SafeEPI usa Supabase para Auth, Postgres, RLS e Storage.
 
+## Biometria server-side
+
+A biometria facial nova não roda modelos no navegador. O Next.js captura frames, autentica a sessão/token e chama um serviço FastAPI interno configurado por:
+
+```env
+BIOMETRIC_SERVICE_URL=
+BIOMETRIC_SERVICE_TOKEN=
+SAFE_EPI_BIOMETRIC_SERVICE_TOKEN=
+```
+
+O serviço FastAPI usa InsightFace/ArcFace para embeddings 512d e mantém a engine de qualidade, consistência temporal e decisão de risco fora do cliente. Execute a migration `biometric_identity_platform.sql` para preparar as tabelas dedicadas `biometric_profiles`, `biometric_sessions` e `biometric_audit_log`.
+
 ## Buckets
 
 O bucket usado para assinaturas, PDFs, fotos e evidências é:
@@ -58,6 +70,9 @@ Ordem recomendada para uma base nova:
 19. `safeepi_security_hardening.sql`
 20. `rls_audit.sql`
 21. `rls_remote_links_fix.sql`
+22. `biometric_retention.sql`
+23. `biometric_suspicious_log.sql`
+24. `biometric_identity_platform.sql`
 
 Depois de mudanças estruturais, execute:
 

@@ -1,1091 +1,488 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
-import { Camera, CheckCircle2, ShieldAlert, UserCheck, AlertTriangle, ArrowLeftRight, ArrowLeft, ArrowRight } from "lucide-react"
+// responsive: revisado — mobile-first ✓
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  AlertTriangle,
+  Camera,
+  CheckCircle2,
+  Loader2,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+  UserRoundCheck,
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import * as faceplugin from "faceplugin-face-recognition-js"
-import * as ort from "onnxruntime-web"
 
-// Configura o caminho base para carregar os arquivos .wasm copiados para /public
-ort.env.wasm.wasmPaths = "/"
+type BiometricDecision = "pending" | "approved" | "retry" | "fallback"
+type BiometricState =
+  | "INSTRUCTIONS"
+  | "REQUESTING_CAMERA"
+  | "WAIT_FACE"
+  | "QUALITY_CHECK"
+  | "CENTER"
+  | "TURN_LEFT"
+  | "TURN_RIGHT"
+  | "MOVE_NEAR"
+  | "MOVE_FAR"
+  | "BLINK"
+  | "VERIFYING"
+  | "APPROVED"
+  | "RETRY"
+  | "FALLBACK_REQUIRED"
+  | "ERROR"
 
-type SuspiciousReason = "repeated_failure" | "low_variance" | "timeout" | "liveness_failed"
-type FacepluginSession = unknown
-type NdArrayLike = {
-  shape?: number[]
-  data?: ArrayLike<number>
-  get?: (...indexes: number[]) => number
+type ScoreBundle = {
+  spoof: number
+  quality: number
+  consistency: number
+  challenge: number
+  context: number
+  final: number
 }
-type DetectionOutput = {
-  bbox?: NdArrayLike
-  size?: number
+
+type StartSessionResponse = {
+  session_id: string
+  state: BiometricState
+  decision: BiometricDecision
+  instruction: string
+  progress: number
+  challenge_sequence: string[]
+  frame_interval_ms: number
 }
-type FaceMotion = {
-  yaw: number
-  center: number
-  turnThreshold: number
-  centerThreshold: number
+
+type FrameResponse = {
+  session_id: string
+  state: BiometricState
+  decision: BiometricDecision
+  instruction: string
+  progress: number
+  frame_interval_ms: number
+  reason?: string | null
+  embedding?: number[] | null
+  scores?: ScoreBundle | null
 }
-type FaceModelName = "fr_detect" | "fr_landmark" | "fr_feature" | "fr_liveness"
-type LivenessStep = "turn-left" | "turn-right" | "center" | "complete"
 
 interface FaceCameraProps {
-  onCapture: (descriptor: number[], imageBase64: string) => void;
-  verifyEmployeeId?: string;
-  verifyCompanyId?: string | null;
-  verifyToken?: string | null;
-  requireLiveness?: boolean;
-  onCancel: () => void;
-  cancelLabel?: string;
+  onCapture: (descriptor: number[], imageBase64: string) => void
+  employeeId?: string
+  verifyEmployeeId?: string
+  verifyCompanyId?: string | null
+  verifyToken?: string | null
+  requireLiveness?: boolean
+  onCancel: () => void
+  cancelLabel?: string
 }
 
-export function FaceCamera({ onCapture, verifyEmployeeId, verifyCompanyId, verifyToken, requireLiveness, onCancel, cancelLabel = "Voltar para assinatura manual" }: FaceCameraProps) {
+const MIN_FRAME_INTERVAL_MS = 200
+const DEFAULT_FRAME_INTERVAL_MS = 500
+
+async function getAccessToken() {
+  const { data } = await supabase.auth.getSession()
+  return data.session?.access_token ?? null
+}
+
+async function fetchBiometric<T>(url: string, formData: FormData) {
+  const token = await getAccessToken()
+  const response = await fetch(url, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    const message = payload?.error || payload?.detail || "Falha na biometria facial."
+    throw new Error(message)
+  }
+
+  return payload as T
+}
+
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: "image/webp" | "image/jpeg", quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob)
+      else reject(new Error("Nao foi possivel gerar a imagem da camera."))
+    }, type, quality)
+  })
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error("Nao foi possivel ler a imagem capturada."))
+    reader.readAsDataURL(blob)
+  })
+}
+
+export function FaceCamera({
+  onCapture,
+  employeeId,
+  verifyEmployeeId,
+  verifyCompanyId,
+  verifyToken,
+  requireLiveness,
+  onCancel,
+  cancelLabel = "Voltar para assinatura manual",
+}: FaceCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const stabilityRef = useRef(0)
-  const countdownActiveRef = useRef(false)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const mismatchRef = useRef(0)
-  const verificationPendingRef = useRef(false)
-  const detectionSessionRef = useRef<FacepluginSession | null>(null)
-  const landmarkSessionRef = useRef<FacepluginSession | null>(null)
-  const featureSessionRef = useRef<FacepluginSession | null>(null)
-  const livenessSessionRef = useRef<FacepluginSession | null>(null)
-  const livenessStepRef = useRef<LivenessStep>("turn-left")
-  const firstYawDirectionRef = useRef<-1 | 1 | null>(null)
-  const baselineYawRef = useRef<number | null>(null)
-  const baselineCenterRef = useRef<number | null>(null)
-  const centerHoldRef = useRef(0)
-  const livenessPassedRef = useRef(false)
-  
-  const suspiciousLoggedRef = useRef<Record<SuspiciousReason, boolean>>({
-    repeated_failure: false,
-    low_variance: false,
-    timeout: false,
-    liveness_failed: false,
-  })
-  
-  const [isModelsLoaded, setIsModelsLoaded] = useState(false)
-  const [isCameraActive, setIsCameraActive] = useState(false)
+  const sessionIdRef = useRef<string | null>(null)
+  const timerRef = useRef<number | null>(null)
+  const scheduleFrameRef = useRef<(delayMs: number) => void>(() => {})
+  const runningRef = useRef(false)
+  const finalizingRef = useRef(false)
+  const lastFrameBlobRef = useRef<Blob | null>(null)
+
+  const [state, setState] = useState<BiometricState>("INSTRUCTIONS")
+  const [instruction, setInstruction] = useState("Siga as instrucoes para confirmar sua identidade")
+  const [progress, setProgress] = useState(0)
+  const [scores, setScores] = useState<ScoreBundle | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [statusText, setStatusText] = useState("Carregando reconhecimento facial...")
-  const [countdown, setCountdown] = useState<number | null>(null)
-  const [showInstructions, setShowInstructions] = useState(true)
-  const [, setStability] = useState(0)
-  const [, setIsVerified] = useState(false)
-  const [capturedImage, setCapturedImage] = useState<string | null>(null)
-  const [warning, setWarning] = useState<string | null>(null)
-  const [modelLoadProgress, setModelLoadProgress] = useState(0)
-  const [modelLoadLabel, setModelLoadLabel] = useState("Inicializando")
-  const [livenessStep, setLivenessStep] = useState<LivenessStep>("turn-left")
-  const [livenessProgress, setLivenessProgress] = useState(0)
-  const [livenessInstruction, setLivenessInstruction] = useState("Vire levemente o rosto para sua esquerda")
-  
-  const STABILITY_REQUIRED = 8
-  const COUNTDOWN_SECONDS = 4
-  const FACE_WIDTH_TURN_THRESHOLD = 0.012
-  const FACE_WIDTH_CENTER_THRESHOLD = 0.01
-  const EYE_DISTANCE_TURN_THRESHOLD = 0.06
-  const EYE_DISTANCE_CENTER_THRESHOLD = 0.045
-  const requiresServerVerification = Boolean(verifyEmployeeId)
-  const shouldRequireLiveness = requireLiveness ?? requiresServerVerification
+  const [isCameraReady, setIsCameraReady] = useState(false)
+  const [isCapturing, setIsCapturing] = useState(false)
 
-  const setLivenessStepValue = useCallback((step: LivenessStep) => {
-    livenessStepRef.current = step
-    setLivenessStep(step)
-  }, [])
+  const mode = verifyEmployeeId ? "verify" : "enroll"
+  const targetEmployeeId = verifyEmployeeId || employeeId
+  const shouldRequireLiveness = requireLiveness ?? Boolean(verifyEmployeeId)
 
-  const resetLivenessChallenge = useCallback(() => {
-    firstYawDirectionRef.current = null
-    baselineYawRef.current = null
-    baselineCenterRef.current = null
-    centerHoldRef.current = 0
-    livenessPassedRef.current = false
-    setLivenessStepValue("turn-left")
-    setLivenessProgress(0)
-    setLivenessInstruction("Vire levemente o rosto para sua esquerda")
-  }, [setLivenessStepValue])
-
-  const withTimeout = useCallback(async <T,>(promise: Promise<T>, label: string, timeoutMs = 30000) => {
-    let timeoutId: number | null = null
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = window.setTimeout(() => reject(new Error(`${label} nao respondeu em ${Math.round(timeoutMs / 1000)}s.`)), timeoutMs)
-    })
-
-    try {
-      return await Promise.race([promise, timeout])
-    } finally {
-      if (timeoutId) window.clearTimeout(timeoutId)
-    }
-  }, [])
-
-  const loadOnnxSession = useCallback(async (modelName: FaceModelName) => {
-    const response = await fetch(`/faceplugin-models/${modelName}.onnx`, { cache: "force-cache" })
-    if (!response.ok) {
-      throw new Error(`Modelo ${modelName}.onnx nao encontrado (${response.status}).`)
-    }
-
-    const buffer = await response.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    return await withTimeout(
-      ort.InferenceSession.create(bytes, {
-        executionProviders: ["wasm"],
-      }),
-      `Carregamento do modelo ${modelName}`,
-    )
-  }, [withTimeout])
-
-  const waitForOpenCv = useCallback(async () => {
-    const startedAt = Date.now()
-    while (Date.now() - startedAt < 15000) {
-      const cv = (window as unknown as { cv?: { Mat?: unknown; imread?: unknown } }).cv
-      if (cv?.Mat && cv?.imread) return
-      await new Promise(resolve => window.setTimeout(resolve, 120))
-    }
-    throw new Error("OpenCV nao inicializou a tempo.")
-  }, [])
-
-  const getFaceCount = useCallback((bbox?: NdArrayLike) => {
-    if (!bbox) return 0
-    if (Array.isArray(bbox.shape) && typeof bbox.shape[0] === "number") return bbox.shape[0]
-    return bbox.data ? Math.floor(bbox.data.length / 4) : 0
-  }, [])
-
-  const getBoxValue = useCallback((bbox: NdArrayLike, row: number, column: number) => {
-    if (typeof bbox.get === "function") return bbox.get(row, column)
-    return Number(bbox.data?.[row * 4 + column] || 0)
-  }, [])
-
-  const getPrimaryFace = useCallback((bbox?: NdArrayLike) => {
-    const count = getFaceCount(bbox)
-    if (!bbox || count === 0) return null
-
-    let bestIndex = 0
-    let bestArea = 0
-    for (let index = 0; index < count; index += 1) {
-      const x1 = getBoxValue(bbox, index, 0)
-      const y1 = getBoxValue(bbox, index, 1)
-      const x2 = getBoxValue(bbox, index, 2)
-      const y2 = getBoxValue(bbox, index, 3)
-      const area = Math.abs(x2 - x1) * Math.abs(y2 - y1)
-      if (area > bestArea) {
-        bestArea = area
-        bestIndex = index
-      }
-    }
-
-    const x1 = getBoxValue(bbox, bestIndex, 0)
-    const y1 = getBoxValue(bbox, bestIndex, 1)
-    const x2 = getBoxValue(bbox, bestIndex, 2)
-    const y2 = getBoxValue(bbox, bestIndex, 3)
-
-    return {
-      x: x1,
-      y: y1,
-      width: Math.abs(x2 - x1),
-      height: Math.abs(y2 - y1),
-    }
-  }, [getBoxValue, getFaceCount])
-
-  const getPrimaryLandmarks = useCallback((result: unknown): number[] | null => {
-    const viewToNumbers = (view: ArrayBufferView) => {
-      if ("length" in view && typeof view.length === "number") {
-        return Array.from(view as unknown as ArrayLike<number>).filter(Number.isFinite)
-      }
-      return Array.from(new Float32Array(view.buffer, view.byteOffset, Math.floor(view.byteLength / Float32Array.BYTES_PER_ELEMENT))).filter(Number.isFinite)
-    }
-
-    const parseLandmarks = (value: unknown): number[] | null => {
-      if (ArrayBuffer.isView(value)) return viewToNumbers(value)
-      if (Array.isArray(value)) {
-        const first = value[0]
-        if (ArrayBuffer.isView(first)) return viewToNumbers(first)
-        if (Array.isArray(first)) return parseLandmarks(first)
-        if (value.every(item => typeof item === "number" && Number.isFinite(item))) return value as number[]
-      }
-
-      if (value && typeof value === "object") {
-        const record = value as Record<string, unknown>
-        if (ArrayBuffer.isView(record.data)) return viewToNumbers(record.data)
-        if (Array.isArray(record.data)) return parseLandmarks(record.data)
-
-        for (const nestedValue of Object.values(record)) {
-          const parsed = parseLandmarks(nestedValue)
-          if (parsed && parsed.length >= 10) return parsed
-        }
-      }
-
-      return null
-    }
-
-    return parseLandmarks(result)
-  }, [])
-
-  const getLandmarkValue = useCallback((landmarks: ArrayLike<number>, point: number, axis: 0 | 1) => {
-    return Number(landmarks[point * 2 + axis])
-  }, [])
-
-  const buildFaceMotion = useCallback((
-    noseX: number,
-    leftEyeX: number,
-    rightEyeX: number,
-    face: { x: number; width: number },
-    videoWidth: number,
-  ): FaceMotion | null => {
-    if (face.width <= 0 || videoWidth <= 0) return null
-
-    const eyeCenterX = (leftEyeX + rightEyeX) / 2
-    const eyeDistance = Math.abs(rightEyeX - leftEyeX)
-    const yawByEyes = eyeDistance > 2 ? (noseX - eyeCenterX) / eyeDistance : null
-    const yawByBox = (noseX - (face.x + face.width / 2)) / face.width
-    const useEyeDistance = yawByEyes !== null && Number.isFinite(yawByEyes) && eyeDistance / face.width > 0.15
-    const yaw = useEyeDistance ? yawByEyes : yawByBox
-
-    if (!Number.isFinite(yaw)) return null
-    return {
-      yaw,
-      center: noseX / videoWidth,
-      turnThreshold: useEyeDistance ? EYE_DISTANCE_TURN_THRESHOLD : FACE_WIDTH_TURN_THRESHOLD,
-      centerThreshold: useEyeDistance ? EYE_DISTANCE_CENTER_THRESHOLD : FACE_WIDTH_CENTER_THRESHOLD,
-    }
-  }, [])
-
-  const getFaceMotion = useCallback((landmarks: ArrayLike<number> | null, face: { x: number; width: number }, videoWidth: number) => {
-    if (!landmarks || landmarks.length < 10) return null
-
-    if (landmarks.length >= 136) {
-      const noseX = getLandmarkValue(landmarks, 30, 0)
-      const leftEyeX = (getLandmarkValue(landmarks, 36, 0) + getLandmarkValue(landmarks, 39, 0)) / 2
-      const rightEyeX = (getLandmarkValue(landmarks, 42, 0) + getLandmarkValue(landmarks, 45, 0)) / 2
-      return buildFaceMotion(noseX, leftEyeX, rightEyeX, face, videoWidth)
-    }
-
-    const leftEyeX = Number(landmarks[0])
-    const rightEyeX = Number(landmarks[2])
-    const noseX = Number(landmarks[4])
-    return buildFaceMotion(noseX, leftEyeX, rightEyeX, face, videoWidth)
-  }, [buildFaceMotion, getLandmarkValue])
-
-  const updateLivenessChallenge = useCallback(async (bbox: NdArrayLike | undefined, face: { x: number; width: number }) => {
-    if (!shouldRequireLiveness || livenessPassedRef.current) return true
-    if (!videoRef.current || !bbox) return false
-
-    let yaw: number | null = null
-    let faceCenter = 0
-    let turnThreshold = FACE_WIDTH_TURN_THRESHOLD
-    let centerThreshold = FACE_WIDTH_CENTER_THRESHOLD
-
-    if (landmarkSessionRef.current) {
-      const landmarksResult = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
-      const landmarks = getPrimaryLandmarks(landmarksResult)
-      const videoWidth = videoRef.current.videoWidth || 1
-      const motion = getFaceMotion(landmarks, face, videoWidth)
-      yaw = motion?.yaw ?? null
-      faceCenter = motion?.center ?? ((face.x + face.width / 2) / videoWidth)
-      if (motion) {
-        turnThreshold = motion.turnThreshold
-        centerThreshold = motion.centerThreshold
-      }
-    }
-
-    if (yaw === null) {
-      setLivenessInstruction("Centralize o rosto para iniciar a prova de vida")
-      setStatusText("Centralize o rosto para iniciar")
-      return false
-    }
-
-    if (baselineYawRef.current === null || baselineCenterRef.current === null) {
-      baselineYawRef.current = yaw
-      baselineCenterRef.current = faceCenter
-      centerHoldRef.current = 0
-      setLivenessInstruction("1/3 - Vire levemente o rosto para sua esquerda")
-      setStatusText("Prova de vida: vire para sua esquerda")
-      setLivenessProgress(4)
-      return false
-    }
-
-    const baselineYaw = baselineYawRef.current
-    const baselineCenter = baselineCenterRef.current
-    const yawDelta = yaw - baselineYaw
-    const centerDelta = faceCenter - baselineCenter
-    const motion = Math.abs(yawDelta) >= Math.abs(centerDelta) ? yawDelta : centerDelta
-    const motionAbs = Math.abs(motion)
-
-    const step = livenessStepRef.current
-    if (step === "turn-left") {
-      setLivenessInstruction("1/3 - Vire levemente o rosto para sua esquerda")
-      setStatusText("Prova de vida: vire para sua esquerda")
-      setLivenessProgress(Math.min(34, 4 + Math.round((motionAbs / turnThreshold) * 30)))
-      if (motionAbs >= turnThreshold) {
-        firstYawDirectionRef.current = motion > 0 ? 1 : -1
-        centerHoldRef.current = 0
-        setLivenessProgress(35)
-        setLivenessStepValue("turn-right")
-        setLivenessInstruction("2/3 - Agora vire levemente para sua direita")
-        setStatusText("Esquerda confirmada. Vire para sua direita")
-      }
-      return false
-    }
-
-    if (step === "turn-right") {
-      setLivenessInstruction("2/3 - Agora vire levemente para sua direita")
-      setStatusText("Prova de vida: vire para sua direita")
-      const firstDirection = firstYawDirectionRef.current
-      const oppositeProgress = firstDirection ? Math.max(0, (-motion * firstDirection) / turnThreshold) : 0
-      setLivenessProgress(Math.min(69, 35 + Math.round(oppositeProgress * 34)))
-      if (firstDirection && motion * firstDirection <= -turnThreshold) {
-        centerHoldRef.current = 0
-        setLivenessProgress(70)
-        setLivenessStepValue("center")
-        setLivenessInstruction("3/3 - Volte ao centro e fique parado")
-        setStatusText("Direita confirmada. Volte ao centro")
-      }
-      return false
-    }
-
-    if (step === "center") {
-      setLivenessInstruction("3/3 - Volte ao centro e fique parado")
-      setStatusText("Volte ao centro e fique parado")
-      const centerDistance = Math.max(Math.abs(yawDelta), Math.abs(centerDelta))
-      if (centerDistance <= centerThreshold) {
-        centerHoldRef.current += 1
-      } else {
-        centerHoldRef.current = 0
-      }
-      setLivenessProgress(Math.min(99, 70 + Math.round(Math.max(0, 1 - centerDistance / turnThreshold) * 25) + centerHoldRef.current * 2))
-      if (centerHoldRef.current >= 2) {
-        livenessPassedRef.current = true
-        setLivenessProgress(100)
-        setLivenessStepValue("complete")
-        setLivenessInstruction("Movimento confirmado. Mantenha o rosto parado")
-        setStatusText("Prova de vida confirmada")
-        return true
-      }
-      return false
-    }
-
-    return true
-  }, [getFaceMotion, getPrimaryLandmarks, setLivenessStepValue, shouldRequireLiveness])
-
-  const getLivenessScore = useCallback((result: unknown) => {
-    if (Array.isArray(result) && Array.isArray(result[0])) {
-      const score = Number(result[0][4])
-      return Number.isFinite(score) ? score : 0
-    }
-    if (Array.isArray(result) && typeof result[0] === "number") {
-      const score = Number(result[4] ?? result[0])
-      return Number.isFinite(score) ? score : 0
-    }
-    if (result && typeof result === "object" && "score" in result) {
-      const score = Number((result as { score?: unknown }).score)
-      return Number.isFinite(score) ? score : 0
-    }
-    return 0
-  }, [])
-
-  const arrayBufferViewToNumbers = useCallback((view: ArrayBufferView) => {
-    return Array.from(new Float32Array(view.buffer, view.byteOffset, Math.floor(view.byteLength / Float32Array.BYTES_PER_ELEMENT)))
-  }, [])
-
-  const getFeatureDescriptor = useCallback((result: unknown) => {
-    const candidates: unknown[] = Array.isArray(result) ? result : [result]
-
-    for (const candidate of candidates) {
-      if (!candidate) continue
-      if (ArrayBuffer.isView(candidate)) return arrayBufferViewToNumbers(candidate)
-      if (Array.isArray(candidate) && candidate.every(item => typeof item === "number")) return candidate as number[]
-
-      if (typeof candidate === "object") {
-        const record = candidate as Record<string, unknown>
-        const directData = record.data
-        if (ArrayBuffer.isView(directData)) return arrayBufferViewToNumbers(directData)
-        if (Array.isArray(directData)) return directData.filter((item): item is number => typeof item === "number")
-
-        for (const value of Object.values(record)) {
-          if (value && typeof value === "object" && "data" in value) {
-            const data = (value as { data?: unknown }).data
-            if (ArrayBuffer.isView(data)) return arrayBufferViewToNumbers(data)
-            if (Array.isArray(data)) return data.filter((item): item is number => typeof item === "number")
-          }
-        }
-      }
-    }
-
-    return []
-  }, [arrayBufferViewToNumbers])
+  const title = useMemo(() => {
+    if (state === "APPROVED") return "Identidade confirmada"
+    if (state === "RETRY") return "Vamos tentar de novo"
+    if (state === "FALLBACK_REQUIRED") return "Valide por outro metodo"
+    if (state === "ERROR") return "Camera indisponivel"
+    if (mode === "verify") return "Verificacao facial"
+    return "Cadastro facial"
+  }, [mode, state])
 
   const stopCamera = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
+    runningRef.current = false
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-    setIsCameraActive(false)
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    setIsCameraReady(false)
   }, [])
+
+  useEffect(() => stopCamera, [stopCamera])
+
+  const captureFrame = useCallback(async (maxWidth = 720) => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) {
+      throw new Error("Camera ainda nao esta pronta.")
+    }
+
+    const scale = Math.min(1, maxWidth / video.videoWidth)
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
+
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("Canvas da camera indisponivel.")
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    try {
+      return await canvasToBlob(canvas, "image/webp", 0.82)
+    } catch {
+      return await canvasToBlob(canvas, "image/jpeg", 0.84)
+    }
+  }, [])
+
+  const buildSessionForm = useCallback(() => {
+    const formData = new FormData()
+    formData.set("mode", mode)
+    formData.set("require_liveness", shouldRequireLiveness ? "true" : "false")
+    if (targetEmployeeId) formData.set("employee_id", targetEmployeeId)
+    if (verifyCompanyId) formData.set("company_id", verifyCompanyId)
+    if (verifyToken) formData.set("token", verifyToken)
+    return formData
+  }, [mode, shouldRequireLiveness, targetEmployeeId, verifyCompanyId, verifyToken])
+
+  const buildFrameForm = useCallback((blob: Blob) => {
+    const formData = new FormData()
+    if (sessionIdRef.current) formData.set("session_id", sessionIdRef.current)
+    formData.set("frame", blob, `safeepi-biometric-${Date.now()}.webp`)
+    formData.set("mode", mode)
+    formData.set("require_liveness", shouldRequireLiveness ? "true" : "false")
+    if (targetEmployeeId) formData.set("employee_id", targetEmployeeId)
+    if (verifyCompanyId) formData.set("company_id", verifyCompanyId)
+    if (verifyToken) formData.set("token", verifyToken)
+    return formData
+  }, [mode, shouldRequireLiveness, targetEmployeeId, verifyCompanyId, verifyToken])
+
+  const finalizeCapture = useCallback(async (embedding: number[] | null | undefined) => {
+    if (finalizingRef.current) return
+    finalizingRef.current = true
+    setState("APPROVED")
+    setInstruction("Tudo certo. Finalizando captura...")
+    setProgress(100)
+
+    const blob = lastFrameBlobRef.current ?? await captureFrame(960)
+    const imageBase64 = await blobToDataUrl(blob)
+    stopCamera()
+    onCapture(embedding ?? [], imageBase64)
+  }, [captureFrame, onCapture, stopCamera])
+
+  const scheduleFrame = useCallback((delayMs: number) => {
+    if (!runningRef.current || finalizingRef.current) return
+    const safeDelay = Math.max(MIN_FRAME_INTERVAL_MS, delayMs || DEFAULT_FRAME_INTERVAL_MS)
+    timerRef.current = window.setTimeout(async () => {
+      if (!runningRef.current || finalizingRef.current) return
+      try {
+        setIsCapturing(true)
+        const blob = await captureFrame()
+        lastFrameBlobRef.current = blob
+        const response = await fetchBiometric<FrameResponse>("/api/biometric/session/frame", buildFrameForm(blob))
+
+        setState(response.state)
+        setInstruction(response.instruction)
+        setProgress(clampProgress(response.progress))
+        setScores(response.scores ?? null)
+        setError(null)
+
+        if (response.decision === "approved") {
+          await finalizeCapture(response.embedding)
+          return
+        }
+
+        if (response.decision === "fallback" || response.state === "FALLBACK_REQUIRED") {
+          runningRef.current = false
+          setState("FALLBACK_REQUIRED")
+          setProgress(clampProgress(response.progress || 70))
+          return
+        }
+
+        if (response.decision === "retry" || response.state === "RETRY") {
+          runningRef.current = false
+          setState("RETRY")
+          setProgress(clampProgress(response.progress || 60))
+          return
+        }
+
+        scheduleFrameRef.current(response.frame_interval_ms)
+      } catch (err) {
+        runningRef.current = false
+        setState("ERROR")
+        setError(err instanceof Error ? err.message : "Falha ao processar a biometria.")
+      } finally {
+        setIsCapturing(false)
+      }
+    }, safeDelay)
+  }, [buildFrameForm, captureFrame, finalizeCapture])
+
+  useEffect(() => {
+    scheduleFrameRef.current = scheduleFrame
+  }, [scheduleFrame])
 
   const startCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: { ideal: 1280 }, 
-          height: { ideal: 720 }, 
-          facingMode: "user" 
-        } 
+      setError(null)
+      setProgress(2)
+      setState("REQUESTING_CAMERA")
+      setInstruction("Solicitando permissao da camera...")
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 960 },
+          height: { ideal: 1280 },
+        },
+        audio: false,
       })
+
+      streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        streamRef.current = stream
+        await videoRef.current.play()
       }
-      if (shouldRequireLiveness) {
-        resetLivenessChallenge()
-      }
-      setIsCameraActive(true)
-      setStatusText(shouldRequireLiveness ? "Prova de vida: vire para sua esquerda" : "Posicione seu rosto no centro")
-    } catch (err: unknown) {
-      console.error("Erro ao acessar câmera:", err)
-      const msg = err instanceof DOMException && err.name === "NotAllowedError"
-        ? "Permissão da câmera foi negada. Acesse as configurações do navegador e permita o uso da câmera para este site."
-        : err instanceof DOMException && err.name === "NotFoundError"
-        ? "Nenhuma câmera foi encontrada neste dispositivo. Conecte uma webcam ou libere a câmera do celular."
-        : "Erro ao acessar a câmera. Verifique se outro aplicativo está usando a câmera e tente novamente."
-      setError(msg)
-    }
-  }, [resetLivenessChallenge, shouldRequireLiveness])
 
-  const takeSnapshot = useCallback((): string | null => {
-    if (!videoRef.current) return null
-    const video = videoRef.current
-    const vw = video.videoWidth
-    const vh = video.videoHeight
-    
-    const size = Math.min(vw, vh)
-    const sx = (vw - size) / 2
-    const sy = (vh - size) / 2
-    
-    const canvas = document.createElement("canvas")
-    canvas.width = 600
-    canvas.height = 600
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })
-    if (!ctx) return null
-    
-    ctx.save()
-    ctx.translate(600, 0)
-    ctx.scale(-1, 1)
-    ctx.drawImage(video, sx, sy, size, size, 0, 0, 600, 600)
-    ctx.restore()
-    
-    return canvas.toDataURL("image/jpeg", 0.92)
-  }, [])
+      const session = await fetchBiometric<StartSessionResponse>("/api/biometric/session/start", buildSessionForm())
+      sessionIdRef.current = session.session_id
+      runningRef.current = true
+      finalizingRef.current = false
 
-  const captureSuccess = useCallback((descriptor: number[]) => {
-    const base64 = takeSnapshot()
-    if (!base64) return
-    
-    setStatusText("✓ Captura realizada com sucesso!")
-    setCapturedImage(base64)
-    stopCamera()
-    
-    setTimeout(() => {
-      onCapture(descriptor, base64)
-    }, 600)
-  }, [onCapture, stopCamera, takeSnapshot])
-
-  const logSuspiciousAttempt = useCallback(async (reason: SuspiciousReason, attempts: number) => {
-    if (!verifyEmployeeId || suspiciousLoggedRef.current[reason]) return
-    suspiciousLoggedRef.current[reason] = true
-
-    const headers: Record<string, string> = { "Content-Type": "application/json" }
-    if (!verifyToken) {
-      const { data } = await supabase.auth.getSession()
-      const accessToken = data.session?.access_token
-      if (accessToken) headers.Authorization = `Bearer ${accessToken}`
-    }
-
-    try {
-      await fetch("/api/biometric/suspicious-attempt", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          employee_id: verifyEmployeeId,
-          company_id: verifyCompanyId || null,
-          attempts,
-          reason,
-          ip: "",
-          timestamp: new Date().toISOString(),
-          token: verifyToken || undefined,
-        }),
-      })
+      setIsCameraReady(true)
+      setState(session.state)
+      setInstruction(session.instruction)
+      setProgress(clampProgress(session.progress))
+      scheduleFrame(session.frame_interval_ms)
     } catch (err) {
-      console.error("[FaceCamera] suspicious attempt log failed:", err)
-    }
-  }, [verifyCompanyId, verifyEmployeeId, verifyToken])
-
-  const verifyDescriptor = useCallback(async (descriptor: number[]) => {
-    if (!verifyEmployeeId) return { match: true, confidence: 1 }
-
-    const headers: Record<string, string> = { "Content-Type": "application/json" }
-    if (!verifyToken) {
-      const { data } = await supabase.auth.getSession()
-      const accessToken = data.session?.access_token
-      if (accessToken) headers.Authorization = `Bearer ${accessToken}`
-    }
-
-    const response = await fetch(`/api/employees/${verifyEmployeeId}/biometric-verify`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        descriptor,
-        token: verifyToken || undefined,
-      }),
-    })
-
-    const payload = await response.json().catch(() => null) as { match?: boolean; confidence?: number; error?: string } | null
-    if (!response.ok) {
-      throw new Error(payload?.error || "Falha ao validar biometria.")
-    }
-
-    return {
-      match: Boolean(payload?.match),
-      confidence: typeof payload?.confidence === "number" ? payload.confidence : 0,
-    }
-  }, [verifyEmployeeId, verifyToken])
-
-  // -- Load Faceplugin Models --
-  useEffect(() => {
-    const loadModels = async () => {
-      try {
-        setModelLoadLabel("Motor de visao")
-        setStatusText("Carregando reconhecimento facial... 10%")
-        await faceplugin.load_opencv()
-        await waitForOpenCv()
-        setModelLoadProgress(18)
-
-        setModelLoadLabel("Detector facial")
-        setStatusText("Carregando reconhecimento facial... 30%")
-        detectionSessionRef.current = await loadOnnxSession("fr_detect")
-        setModelLoadProgress(42)
-
-        setModelLoadLabel("Pontos faciais")
-        setStatusText("Carregando reconhecimento facial... 55%")
-        landmarkSessionRef.current = await loadOnnxSession("fr_landmark")
-        setModelLoadProgress(62)
-
-        setModelLoadLabel("Reconhecimento")
-        setStatusText("Carregando reconhecimento facial... 78%")
-        featureSessionRef.current = await loadOnnxSession("fr_feature")
-        setModelLoadProgress(84)
-
-        if (shouldRequireLiveness) {
-          setModelLoadLabel("Anti-spoofing")
-          setStatusText("Carregando reconhecimento facial... 92%")
-          setModelLoadProgress(92)
-          livenessSessionRef.current = await loadOnnxSession("fr_liveness")
-        }
-        
-        setModelLoadProgress(100)
-        setIsModelsLoaded(true)
-        setStatusText("Modelos carregados.")
-      } catch (err) {
-        console.error("Erro ao carregar modelos do Faceplugin:", err)
-        setError("Falha ao carregar a biometria facial. Verifique os modelos locais em /public/faceplugin-models e os arquivos OpenCV em /public/js.")
-      }
-    }
-    loadModels()
-    return () => {
       stopCamera()
+      setState("ERROR")
+      setError(err instanceof Error ? err.message : "Nao foi possivel iniciar a camera.")
+      setInstruction("Verifique a permissao da camera e tente novamente")
     }
-  }, [loadOnnxSession, stopCamera, shouldRequireLiveness, waitForOpenCv])
+  }, [buildSessionForm, scheduleFrame, stopCamera])
 
-  // -- Start camera when ready --
-  useEffect(() => {
-    if (isModelsLoaded && !showInstructions) {
-      const timer = setTimeout(() => {
-        void startCamera()
-      }, 0)
-      return () => clearTimeout(timer)
-    }
-  }, [isModelsLoaded, showInstructions, startCamera])
+  const retry = useCallback(() => {
+    stopCamera()
+    sessionIdRef.current = null
+    lastFrameBlobRef.current = null
+    finalizingRef.current = false
+    setScores(null)
+    void startCamera()
+  }, [startCamera, stopCamera])
 
-  // -- Face detection loop --
-  const detectionLoopRef = useRef<() => Promise<void>>(async () => {})
+  const handleCancel = useCallback(() => {
+    stopCamera()
+    onCancel()
+  }, [onCancel, stopCamera])
 
-  useEffect(() => {
-    detectionLoopRef.current = async () => {
-      if (!videoRef.current || !canvasRef.current || !isCameraActive) return
-      if (countdownActiveRef.current || verificationPendingRef.current) return
+  const scorePercent = scores ? Math.round(scores.final * 100) : null
+  const isTerminal = state === "APPROVED" || state === "RETRY" || state === "FALLBACK_REQUIRED" || state === "ERROR"
 
-      try {
-        if (!detectionSessionRef.current) return
-        const detections = await faceplugin.detectFace(detectionSessionRef.current, videoRef.current) as DetectionOutput
-        const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true })
-        const face = getPrimaryFace(detections.bbox)
-
-        if (face) {
-          setWarning(null)
-          const box = face
-          const videoW = videoRef.current.videoWidth
-          const faceRatio = box.width / videoW
-          if (faceRatio < 0.15) {
-            setWarning("Aproxime-se mais da camera.")
-          }
-
-          const livenessReady = await updateLivenessChallenge(detections.bbox, face)
-          if (shouldRequireLiveness && !livenessReady) {
-            stabilityRef.current = 0
-            setStability(0)
-          } else {
-            stabilityRef.current += 1
-            setStability(stabilityRef.current)
-          }
-
-          if (ctx) {
-            const canvas = canvasRef.current
-            const displayWidth = canvas.clientWidth
-            const displayHeight = canvas.clientHeight
-            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-              canvas.width = displayWidth
-              canvas.height = displayHeight
-            }
-            ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-            const scale = Math.max(canvas.width / videoRef.current.videoWidth, canvas.height / videoRef.current.videoHeight)
-            const renderedWidth = videoRef.current.videoWidth * scale
-            const renderedHeight = videoRef.current.videoHeight * scale
-            const offsetX = (canvas.width - renderedWidth) / 2
-            const offsetY = (canvas.height - renderedHeight) / 2
-            const rBox = box
-            const boxX = offsetX + rBox.x * scale
-            const boxY = offsetY + rBox.y * scale
-            const boxW = rBox.width * scale
-            const boxH = rBox.height * scale
-            const mirroredX = canvas.width - boxX - boxW
-            const cx = mirroredX + boxW / 2
-            const cy = boxY + boxH / 2
-            const radius = Math.max(boxW, boxH) * 0.62
-            const progress = shouldRequireLiveness && !livenessReady
-              ? Math.min(livenessProgress / 100, 1)
-              : Math.min(stabilityRef.current / STABILITY_REQUIRED, 1)
-            
-            ctx.strokeStyle = 'rgba(255,255,255,0.12)'
-            ctx.lineWidth = 5
-            ctx.beginPath()
-            ctx.arc(cx, cy, radius, 0, 2 * Math.PI)
-            ctx.stroke()
-            
-            ctx.strokeStyle = progress >= 1 ? '#22c55e' : '#ef4444'
-            ctx.lineWidth = 5
-            ctx.lineCap = 'round'
-            ctx.beginPath()
-            ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + progress * 2 * Math.PI)
-            ctx.stroke()
-            ctx.lineCap = 'butt'
-          }
-
-          if (shouldRequireLiveness && !livenessReady) return
-
-          if (stabilityRef.current >= STABILITY_REQUIRED) {
-            countdownActiveRef.current = true
-            setStatusText(shouldRequireLiveness ? "Rosto detectado! Analisando..." : "Rosto detectado! Prepare-se...")
-            setCountdown(COUNTDOWN_SECONDS)
-          } else {
-            const pct = Math.round((stabilityRef.current / STABILITY_REQUIRED) * 100)
-            setStatusText(`Mantenha o rosto parado... ${pct}%`)
-          }
-        } else {
-          if (!countdownActiveRef.current) {
-            stabilityRef.current = 0
-            setStability(0)
-            setIsVerified(false)
-            if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-            setStatusText(requiresServerVerification ? "Posicione seu rosto para verificacao" : "Posicione seu rosto no centro")
-          }
-        }
-      } catch (err) {
-        console.error("Face detection error:", err)
-      }
-    }
-  })
-
-  const handleVideoPlay = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    intervalRef.current = setInterval(() => {
-      void detectionLoopRef.current()
-    }, 300)
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }
-
-  // -- Countdown timer & Capture Logic --
-  useEffect(() => {
-    if (countdown !== null && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
-      return () => clearTimeout(timer)
-    } else if (countdown === 0) {
-      const doCapture = async () => {
-        if (!videoRef.current) return
-        try {
-          if (!detectionSessionRef.current || !landmarkSessionRef.current || !featureSessionRef.current) {
-            throw new Error("Modelos biometricos ainda nao estao prontos.")
-          }
-
-          const detections = await faceplugin.detectFace(detectionSessionRef.current, videoRef.current) as DetectionOutput
-          const bbox = detections.bbox
-          const face = getPrimaryFace(bbox)
-          
-          if (face && bbox) {
-            const landmarks = await faceplugin.predictLandmark(landmarkSessionRef.current, videoRef.current, bbox)
-            
-            if (shouldRequireLiveness) {
-              if (!livenessSessionRef.current) {
-                throw new Error("Modelo de prova de vida ainda nao esta pronto.")
-              }
-
-              const livenessRes = await faceplugin.predictLiveness(livenessSessionRef.current, videoRef.current, bbox)
-              const livenessScore = getLivenessScore(livenessRes)
-              if (livenessScore < 0.5) {
-                countdownActiveRef.current = false
-                setCountdown(null)
-                setIsVerified(false)
-                stabilityRef.current = 0
-                setStability(0)
-                setWarning("Rosto ao vivo nao detectado. Tente em melhor iluminacao ou sem oculos.")
-                setStatusText("Acesso negado")
-                void logSuspiciousAttempt("liveness_failed", 1)
-                return
-              }
-            }
-
-            const feature = await faceplugin.extractFeature(featureSessionRef.current, videoRef.current, landmarks)
-            const descriptorArray = getFeatureDescriptor(feature)
-
-            if (descriptorArray.length !== 512 || descriptorArray.some(item => !Number.isFinite(item))) {
-              countdownActiveRef.current = false
-              setCountdown(null)
-              setIsVerified(false)
-              stabilityRef.current = 0
-              setStability(0)
-              setWarning("Descritor facial invalido. Reposicione o rosto e tente novamente.")
-              setStatusText("Captura invalida")
-              return
-            }
-
-            if (requiresServerVerification) {
-              verificationPendingRef.current = true
-              try {
-                const result = await verifyDescriptor(descriptorArray)
-                if (result.match) {
-                  captureSuccess(descriptorArray)
-                } else {
-                  countdownActiveRef.current = false
-                  setCountdown(null)
-                  setIsVerified(false)
-                  stabilityRef.current = 0
-                  setStability(0)
-                  mismatchRef.current += 1
-                  setWarning("Rosto nao reconhecido. Verifique se e o colaborador correto.")
-                  setStatusText("Identidade nao confirmada.")
-                  if (mismatchRef.current >= 2) {
-                    setError("Rosto nao reconhecido. A captura foi interrompida porque o rosto nao corresponde a biometria cadastrada.")
-                  }
-                  if (mismatchRef.current >= 3) {
-                    void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
-                  }
-                }
-              } catch (err) {
-                countdownActiveRef.current = false
-                setCountdown(null)
-                setIsVerified(false)
-                stabilityRef.current = 0
-                setStability(0)
-                mismatchRef.current += 1
-                setWarning(err instanceof Error ? err.message : "Falha ao validar biometria.")
-                setStatusText("Identidade nao confirmada.")
-                if (mismatchRef.current >= 2) {
-                  setError("Rosto nao reconhecido. A captura foi interrompida porque o rosto nao corresponde a biometria cadastrada.")
-                }
-                if (mismatchRef.current >= 3) {
-                  void logSuspiciousAttempt("repeated_failure", mismatchRef.current)
-                }
-              } finally {
-                verificationPendingRef.current = false
-              }
-            } else {
-              captureSuccess(descriptorArray)
-            }
-          } else {
-            countdownActiveRef.current = false
-            setCountdown(null)
-            stabilityRef.current = 0
-            setStability(0)
-            setStatusText("Rosto nao detectado no momento da captura. Tente novamente.")
-          }
-        } catch (err) {
-          console.error("Capture Error:", err)
-          countdownActiveRef.current = false
-          setCountdown(null)
-          stabilityRef.current = 0
-          setStability(0)
-          setWarning("Erro ao processar imagem.")
-        }
-      }
-      doCapture()
-    }
-  }, [countdown, captureSuccess, getFeatureDescriptor, getLivenessScore, getPrimaryFace, logSuspiciousAttempt, requiresServerVerification, shouldRequireLiveness, verifyDescriptor])
-  // -- INSTRUCTIONS SCREEN --
-  if (showInstructions) {
+  if (state === "INSTRUCTIONS") {
     return (
-      <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center space-y-4 sm:space-y-6 border border-slate-200 shadow-xl shadow-slate-200/50">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-50 rounded-full flex items-center justify-center text-red-700">
-          <UserCheck className="w-8 h-8 sm:w-10 sm:h-10" />
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="text-slate-800 font-black uppercase tracking-tighter text-base sm:text-xl">Instrucoes de Biometria</h3>
-          <p className="text-slate-500 text-[11px] sm:text-xs leading-relaxed max-w-[300px] font-medium">
-            Siga as instrucoes abaixo para garantir uma captura de qualidade:
-          </p>
-        </div>
-        {!isModelsLoaded && (
-          <div className="w-full rounded-xl border border-red-100 bg-red-50 p-3 text-left">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-red-700">
-                {modelLoadLabel}
-              </span>
-              <span className="text-[10px] font-black text-red-700">
-                {modelLoadProgress}%
-              </span>
+      <div className="w-full overflow-hidden rounded-3xl bg-zinc-950 text-white shadow-2xl">
+        <div className="px-5 py-6 sm:px-8 sm:py-8">
+          <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-600/15 text-red-400 ring-1 ring-red-500/20">
+              <ShieldCheck className="h-8 w-8" />
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
-              <div
-                className="h-full rounded-full bg-red-700 transition-all duration-300"
-                style={{ width: `${modelLoadProgress}%` }}
-              />
-            </div>
-            <p className="mt-2 text-[10px] font-medium text-red-700">
-              Carregando reconhecimento facial... {modelLoadProgress}%
+            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-red-300">Assinatura facial SafeEPI</p>
+            <h3 className="mt-2 text-xl font-black uppercase tracking-tight text-white">{title}</h3>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-300">
+              A camera envia fotos compactadas para validacao segura no servidor. Mantenha o rosto centralizado, em boa luz e sem cobrir os olhos.
             </p>
           </div>
-        )}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full">
-          <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Iluminacao</p>
-            <p className="text-[9px] text-slate-500 leading-tight">Fique de frente para a luz. Evite contraluz.</p>
-          </div>
-          <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Acessorios</p>
-            <p className="text-[9px] text-slate-500 leading-tight">Remova oculos, chapeus, bones e protetores.</p>
-          </div>
-          <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Posicao</p>
-            <p className="text-[9px] text-slate-500 leading-tight">Olhe para a camera e centralize o rosto.</p>
-          </div>
-          <div className="bg-slate-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-            <p className="text-[10px] font-black text-slate-700 uppercase mb-1">Tempo</p>
-            <p className="text-[9px] text-slate-500 leading-tight">{shouldRequireLiveness ? "Vire para os dois lados e volte ao centro." : "Fique parado ~4s. Havera contagem regressiva."}</p>
-          </div>
-        </div>
-        
-        {shouldRequireLiveness && (
-          <div className="w-full rounded-xl border border-red-100 bg-red-50 p-3 text-left">
-            <div className="flex items-start gap-2">
-              <ArrowLeftRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-700" />
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-700">Prova de vida obrigatoria</p>
-                <p className="mt-1 text-[10px] font-medium leading-relaxed text-red-700">
-                  Depois de iniciar a camera, siga as instrucoes: vire primeiro para a esquerda, depois para a direita e volte ao centro para confirmar.
-                </p>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {[
+              ["Centralize", "Olhe para a camera"],
+              ["Boa luz", "Evite contraluz forte"],
+              ["Sem bloqueios", "Retire o que cobrir olhos e rosto"],
+            ].map(([heading, text]) => (
+              <div key={heading} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center">
+                <p className="text-xs font-bold uppercase tracking-widest text-white">{heading}</p>
+                <p className="mt-1 text-xs text-zinc-400">{text}</p>
               </div>
-            </div>
+            ))}
           </div>
-        )}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 w-full">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-[10px] text-amber-800 text-left leading-relaxed">
-              <strong className="text-amber-900">Atencao:</strong> O sistema pode recusar a captura se detectar fotos falsas ou iluminacao ruim.
-            </p>
+
+          <div className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-xs text-amber-100">
+            <AlertTriangle className="mr-2 inline h-4 w-4 text-amber-300" />
+            Validade operacional: se a biometria falhar por camera, luz ou internet, use o fallback auditavel.
           </div>
-        </div>
 
-        <button 
-          onClick={() => setShowInstructions(false)}
-          className="w-full bg-red-700 hover:bg-red-800 active:bg-[#501010] text-white py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg shadow-red-900/20"
-        >
-          Entendi, iniciar camera
-        </button>
-        <button onClick={onCancel} className="text-red-700 text-[10px] font-bold uppercase hover:underline">{cancelLabel}</button>
-      </div>
-    )
-  }
-
-  // -- CAPTURED IMAGE PREVIEW --
-  if (capturedImage) {
-    return (
-      <div className="bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden relative flex items-center justify-center border-4 border-green-600 min-h-[360px] sm:min-h-[420px]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={capturedImage} alt="Foto capturada" className="max-h-[70dvh] w-auto max-w-full object-contain" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 bg-green-900/90 backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center gap-3 border border-green-600/50">
-          <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-green-400 flex-shrink-0" />
-          <div>
-            <p className="text-[10px] font-black text-green-400 uppercase tracking-widest">Captura concluida</p>
-            <p className="text-[8px] text-green-300/70 font-bold uppercase tracking-widest">Processando documento...</p>
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => void startCamera()}
+              className="min-h-[52px] w-full rounded-2xl bg-red-600 px-5 py-4 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-red-950/30 transition hover:bg-red-700 active:scale-[0.99]"
+            >
+              Entendi, iniciar camera
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="min-h-[44px] w-full rounded-2xl px-5 py-3 text-xs font-bold uppercase tracking-widest text-zinc-300 transition hover:bg-white/5 hover:text-white"
+            >
+              {cancelLabel}
+            </button>
           </div>
         </div>
       </div>
     )
   }
 
-  // -- CAMERA VIEW --
   return (
-    <div className="bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden relative shadow-inner flex items-center justify-center border-2 sm:border-4 border-slate-800 face-camera-container">
-      {error ? (
-        <div className="text-center p-5 sm:p-6 space-y-3 sm:space-y-4">
-          <ShieldAlert className="w-10 h-10 sm:w-12 sm:h-12 text-red-500 mx-auto" />
-          <p className="text-red-200 font-bold text-[11px] sm:text-xs leading-relaxed max-w-[280px] mx-auto">{error}</p>
-          <div className="flex flex-col gap-2">
-            <button onClick={() => { mismatchRef.current = 0; setWarning(null); setError(null); startCamera(); }} className="bg-slate-800 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 active:bg-slate-600">Tentar Novamente</button>
-            <button onClick={onCancel} className="text-slate-500 text-[10px] font-bold uppercase hover:text-slate-400">Cancelar</button>
+    <div className="relative w-full overflow-hidden rounded-3xl bg-zinc-950 text-white shadow-2xl">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(22,163,74,0.18),transparent_38%),radial-gradient(circle_at_50%_90%,rgba(220,38,38,0.14),transparent_42%)]" />
+      <div className="relative p-4 sm:p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-300">SafeEPI biometria</p>
+            <h3 className="text-base font-black uppercase tracking-tight text-white">{title}</h3>
           </div>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="min-h-[40px] rounded-full bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15"
+          >
+            {cancelLabel}
+          </button>
         </div>
-      ) : (
-        <>
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            muted 
-            playsInline 
-            onPlay={handleVideoPlay}
-            className={`w-full h-full object-cover transition-opacity duration-500 scale-x-[-1] face-camera-video ${!isCameraActive ? 'opacity-0' : 'opacity-100'}`}
-          />
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none face-camera-mirror" />
 
-          {shouldRequireLiveness && isCameraActive && !countdown && (
-            <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-30 flex justify-center pointer-events-none">
-              <div className={`w-full max-w-md rounded-2xl border p-3 shadow-2xl backdrop-blur-md transition-all sm:p-4 ${
-                livenessStep === "complete" ? "border-emerald-200 bg-white/95" : "border-red-100 bg-white/95"
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-lg ${
-                    livenessStep === "complete" ? "bg-emerald-600 text-white shadow-emerald-950/20" : "bg-red-700 text-white shadow-red-950/20"
-                  }`}>
-                    {livenessStep === "complete" ? (
-                      <CheckCircle2 className="h-7 w-7" />
-                    ) : livenessStep === "turn-left" ? (
-                      <ArrowLeft className="h-7 w-7" />
-                    ) : livenessStep === "turn-right" ? (
-                      <ArrowRight className="h-7 w-7" />
-                    ) : (
-                      <Camera className="h-7 w-7" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${
-                      livenessStep === "complete" ? "text-emerald-700" : "text-red-700"
-                    }`}>
-                      {livenessStep === "turn-left" ? "Passo 1 de 3" : livenessStep === "turn-right" ? "Passo 2 de 3" : livenessStep === "center" ? "Passo 3 de 3" : "Confirmado"}
-                    </p>
-                    <p className="mt-1 text-sm font-black leading-tight text-slate-950 sm:text-base">
-                      {livenessInstruction}
-                    </p>
-                    <p className="mt-1 text-[10px] font-semibold leading-relaxed text-slate-500 sm:text-xs">
-                      Mova apenas o rosto, mantenha o celular parado e siga a ordem indicada.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${livenessStep === "complete" ? "bg-emerald-500" : "bg-red-700"}`}
-                    style={{ width: `${livenessProgress}%` }}
-                  />
-                </div>
-
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {[
-                    { key: "turn-left", label: "Esquerda", done: livenessProgress >= 35, active: livenessStep === "turn-left" },
-                    { key: "turn-right", label: "Direita", done: livenessProgress >= 70, active: livenessStep === "turn-right" },
-                    { key: "center", label: "Centro", done: livenessProgress >= 100, active: livenessStep === "center" || livenessStep === "complete" },
-                  ].map(step => (
-                    <div
-                      key={step.key}
-                      className={`rounded-xl border px-2 py-2 text-center text-[10px] font-black uppercase tracking-wider transition-all ${
-                        step.done
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : step.active
-                            ? "border-red-200 bg-red-50 text-red-700"
-                            : "border-slate-200 bg-slate-50 text-slate-400"
-                      }`}
-                    >
-                      <div className="mb-1 flex justify-center">
-                        {step.done ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : step.key === "turn-left" ? (
-                          <ArrowLeft className="h-4 w-4" />
-                        ) : step.key === "turn-right" ? (
-                          <ArrowRight className="h-4 w-4" />
-                        ) : (
-                          <Camera className="h-4 w-4" />
-                        )}
-                      </div>
-                      {step.label}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {countdown !== null && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-40 animate-in fade-in">
-              <span className="text-[120px] font-black text-white drop-shadow-2xl animate-in zoom-in spin-in-12 duration-300">
-                {countdown}
-              </span>
-            </div>
-          )}
-
-          <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 z-30 pointer-events-none">
-            <div className={`backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 border transition-all ${
-              warning 
-                ? "bg-red-950/90 border-red-500/50" 
-                : "bg-slate-900/80 border-slate-700/50"
-            }`}>
-              {warning ? (
-                <div className="flex items-start gap-2 sm:gap-3 text-red-400">
-                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 mt-0.5 flex-shrink-0" />
-                  <p className="text-[11px] sm:text-xs font-bold leading-relaxed">{warning}</p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700 shadow-inner flex-shrink-0">
-                    <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Status da camera</p>
-                    <p className="text-white text-[11px] sm:text-xs font-bold truncate">
-                      {statusText}
-                    </p>
-                  </div>
+        <div className="mx-auto flex max-w-md flex-col items-center">
+          <div className="relative aspect-square w-full max-w-[320px]">
+            <div className={`absolute inset-0 rounded-full blur-2xl transition ${state === "APPROVED" ? "bg-emerald-500/35" : "bg-red-600/20"}`} />
+            <div className="relative h-full w-full overflow-hidden rounded-full border border-white/15 bg-zinc-900 shadow-2xl">
+              <video
+                ref={videoRef}
+                muted
+                playsInline
+                autoPlay
+                className={`h-full w-full scale-x-[-1] object-cover transition-opacity duration-300 ${isCameraReady ? "opacity-100" : "opacity-0"}`}
+              />
+              {!isCameraReady && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-zinc-300">
+                  <Loader2 className="h-8 w-8 animate-spin text-red-400" />
+                  <span className="text-xs font-bold uppercase tracking-widest">Preparando camera</span>
                 </div>
               )}
+              <div className="pointer-events-none absolute inset-4 rounded-full border border-dashed border-white/20" />
+            </div>
+            <div className="absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-zinc-950/90 px-4 py-2 text-xs font-bold text-zinc-200 shadow-xl backdrop-blur">
+              {state === "APPROVED" ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              ) : isCapturing || state === "REQUESTING_CAMERA" ? (
+                <Loader2 className="h-4 w-4 animate-spin text-red-300" />
+              ) : (
+                <Camera className="h-4 w-4 text-red-300" />
+              )}
+              {scorePercent !== null ? `Confianca ${scorePercent}%` : "Sessao segura"}
             </div>
           </div>
-          
-          <div className="absolute top-2 left-2 pointer-events-none flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-2 py-1 rounded-full border border-white/10">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-            </span>
-            <span className="text-[8px] font-bold text-white uppercase tracking-widest">
-              Liveness: movimento facial
-            </span>
+
+          <div className="mt-8 w-full rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-center">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-red-300">
+              {state === "APPROVED" ? <UserRoundCheck className="h-6 w-6 text-emerald-400" /> : <Sparkles className="h-6 w-6" />}
+            </div>
+            <p className={`text-lg font-semibold ${state === "APPROVED" ? "text-emerald-300" : "text-white"}`}>
+              {instruction}
+            </p>
+            {error && <p className="mt-2 text-sm text-red-200">{error}</p>}
+            <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${state === "APPROVED" ? "bg-emerald-400" : "bg-red-500"}`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
-        </>
-      )}
+
+          {isTerminal && state !== "APPROVED" && (
+            <div className="mt-4 flex w-full flex-col gap-3">
+              <button
+                type="button"
+                onClick={retry}
+                className="min-h-[48px] w-full rounded-2xl bg-white px-5 py-3 text-sm font-black uppercase tracking-widest text-zinc-950 transition hover:bg-zinc-100"
+              >
+                <RotateCcw className="mr-2 inline h-4 w-4" />
+                Tentar novamente
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="min-h-[44px] w-full rounded-2xl border border-white/10 px-5 py-3 text-xs font-bold uppercase tracking-widest text-zinc-300 transition hover:bg-white/5 hover:text-white"
+              >
+                Usar fallback auditavel
+              </button>
+            </div>
+          )}
+        </div>
+
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
     </div>
   )
 }

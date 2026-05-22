@@ -208,6 +208,8 @@ function CaptureContent() {
         </div>
         <div className="flex-1 min-h-0">
            <FaceCamera 
+              employeeId={employee?.id}
+              verifyToken={linkToken}
               requireLiveness
               onCapture={handleCapture}
               onCancel={() => setIsCapturing(false)}

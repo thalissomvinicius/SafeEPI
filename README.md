@@ -53,7 +53,7 @@ Cada ferramenta escolhida por um motivo.
 | ⚡ | Next.js 16 + TypeScript | Tela rápida, API no mesmo projeto e menos espaço para erro bobo |
 | 🗄️ | Supabase | Auth, Postgres, RLS e Storage no lugar certo |
 | 🎨 | Tailwind + shadcn/ui | Interface firme para rotina de SESMT, sem carnaval visual |
-| 🤖 | face-api.js | Biometria facial no fluxo de assinatura e captura |
+| 🤖 | FastAPI + InsightFace | Biometria facial server-side, sem IA pesada no navegador |
 | 📄 | jsPDF | PDF auditável na hora, sem depender de editor externo |
 | 🔒 | Zod + lru-cache | Entrada validada e abuso segurado antes de bater no banco |
 

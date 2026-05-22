@@ -7,7 +7,7 @@ import type { EmployeeBiometric } from "@/types/biometric"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
-const FACE_MATCH_THRESHOLD = 0.8
+const FACE_MATCH_THRESHOLD = 0.4
 const MIN_DESCRIPTOR_LENGTH = 512
 const MAX_DESCRIPTOR_LENGTH = 512
 
@@ -32,21 +32,25 @@ function isValidDescriptor(value: unknown): value is number[] {
   )
 }
 
-function euclideanDistance(current: number[], stored: number[]) {
+function cosineSimilarity(current: number[], stored: number[]) {
   const length = Math.min(current.length, stored.length)
-  if (length === 0) return Number.POSITIVE_INFINITY
+  if (length === 0) return 0
 
-  let sum = 0
+  let dot = 0
+  let currentNorm = 0
+  let storedNorm = 0
   for (let index = 0; index < length; index += 1) {
-    const delta = current[index] - stored[index]
-    sum += delta * delta
+    dot += current[index] * stored[index]
+    currentNorm += current[index] * current[index]
+    storedNorm += stored[index] * stored[index]
   }
-  return Math.sqrt(sum)
+  const denominator = Math.sqrt(currentNorm) * Math.sqrt(storedNorm)
+  return denominator ? dot / denominator : 0
 }
 
-function confidenceFromDistance(distance: number) {
-  if (!Number.isFinite(distance)) return 0
-  return Math.max(0, Math.min(1, 1 - distance / FACE_MATCH_THRESHOLD))
+function confidenceFromSimilarity(similarity: number) {
+  if (!Number.isFinite(similarity)) return 0
+  return Math.max(0, Math.min(1, similarity))
 }
 
 async function validateRemoteToken(token: string, employeeId: string) {
@@ -119,12 +123,12 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ match: false, confidence: 0 })
     }
 
-    const distance = euclideanDistance(descriptor, employee.face_descriptor)
-    const match = distance < FACE_MATCH_THRESHOLD
+    const similarity = cosineSimilarity(descriptor, employee.face_descriptor)
+    const match = similarity >= FACE_MATCH_THRESHOLD
 
     return NextResponse.json({
       match,
-      confidence: confidenceFromDistance(distance),
+      confidence: confidenceFromSimilarity(similarity),
     })
   } catch (error) {
     console.error("[biometric-verify] unexpected error:", error)

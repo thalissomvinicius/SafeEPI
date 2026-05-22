@@ -23,13 +23,17 @@ Data da auditoria: 20/05/2026
 
 Novos buckets com dados pessoais, documentos, assinaturas ou biometria devem nascer privados. O cliente nao deve chamar `getPublicUrl()` para esses arquivos.
 
-## Dados Biométricos — Política de Retenção
+## Dados Biométricos — Arquitetura e Política de Retenção
 
-**O que é coletado:** foto facial (JPEG) e descritor numérico (128 floats) para verificação de identidade.
+**Arquitetura atual:** o navegador apenas abre a câmera, captura frames WebP compactados e envia para APIs server-side. O processamento facial pesado fica fora do browser em um serviço FastAPI com InsightFace/ArcFace, RetinaFace e engine de risco. Não há Faceplugin, ONNX Runtime Web, OpenCV.js ou modelos faciais carregados no celular.
 
-**Onde fica:** bucket privado `biometric_photos` (foto) e coluna `face_descriptor` em `employees` (descritor).
+**O que é coletado:** foto facial de referência/evidência e descritor numérico ArcFace de 512 dimensões para verificação de identidade.
+
+**Onde fica:** bucket privado `biometric_photos` (foto) e, durante a transição, coluna `face_descriptor` em `employees` (descritor legado). A migration `biometric_identity_platform.sql` cria `biometric_profiles` para mover o perfil biométrico para uma tabela dedicada.
 
 **Quem acessa:** apenas API routes server-side com service_role. O descritor nunca é enviado ao cliente.
+
+**Como é validado:** o cliente envia frames para `/api/biometric/session/*`; o Next.js autentica o usuário ou token remoto, busca a referência biométrica no servidor e repassa apenas o necessário ao serviço FastAPI. A decisão usa similaridade cosseno, qualidade, anti-spoof passivo, consistência temporal e contexto operacional.
 
 **Quando é deletado:**
 - Automaticamente ao desativar o colaborador
@@ -37,6 +41,8 @@ Novos buckets com dados pessoais, documentos, assinaturas ou biometria devem nas
 - Toda deleção é registrada em `biometric_deletion_log`
 
 **Base legal (LGPD):** legítimo interesse para controle de acesso e conformidade NR-06. Dado tratado como dado sensível (Art. 11 LGPD).
+
+**Limite honesto:** o anti-spoof atual possui ponto de extensão para MiniFASNet/SilentFace. Sem esse modelo licenciado/implantado, a engine usa qualidade, temporalidade e consistência como mitigação operacional, mas não deve ser tratada como KYC bancário completo.
 
 ## Rate limiting
 
