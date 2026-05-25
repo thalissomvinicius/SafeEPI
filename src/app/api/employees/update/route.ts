@@ -65,6 +65,13 @@ function isForeignKeyIssue(error: unknown) {
   return (error as SupabaseLikeError).code === "23503"
 }
 
+function isUniqueIssue(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as SupabaseLikeError
+  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase()
+  return maybeError.code === "23505" || (text.includes("duplicate key") && text.includes("cpf"))
+}
+
 function cleanEmployeePayload(payload: unknown) {
   if (!payload || typeof payload !== "object") return {}
   return Object.fromEntries(
@@ -118,6 +125,58 @@ function getLongArchiveExpiry() {
   return expiresAt.toISOString()
 }
 
+async function findExistingEmployeeByCpf(companyId: string, cpf: unknown) {
+  if (!cpf || typeof cpf !== "string") return { data: null, error: null }
+
+  const baseQuery = supabaseAdmin
+    .from("employees")
+    .select("id, full_name, active, termination_date, deleted_at")
+    .eq("company_id", companyId)
+    .eq("cpf", cpf)
+    .maybeSingle()
+
+  const result = await baseQuery
+  if (!isMissingSoftDeleteColumn(result.error)) return result
+
+  return supabaseAdmin
+    .from("employees")
+    .select("id, full_name, active, termination_date")
+    .eq("company_id", companyId)
+    .eq("cpf", cpf)
+    .maybeSingle()
+}
+
+async function reviveEmployeeFromPayload(id: string, companyId: string, employeePayload: Record<string, unknown>) {
+  const revivePayload = {
+    ...employeePayload,
+    active: employeePayload.active !== false,
+    termination_date: employeePayload.termination_date || null,
+    deleted_at: null,
+    deleted_by: null,
+  }
+
+  let result = await supabaseAdmin
+    .from("employees")
+    .update(revivePayload)
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .select(EMPLOYEE_PUBLIC_SELECT)
+
+  if (isMissingSoftDeleteColumn(result.error)) {
+    const fallbackPayload: Record<string, unknown> = { ...revivePayload }
+    delete fallbackPayload.deleted_at
+    delete fallbackPayload.deleted_by
+    result = await supabaseAdmin
+      .from("employees")
+      .update(fallbackPayload)
+      .eq("id", id)
+      .eq("company_id", companyId)
+      .select(EMPLOYEE_PUBLIC_SELECT)
+  }
+
+  return result
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
   if (!auth.authorized) {
@@ -141,6 +200,40 @@ export async function POST(request: NextRequest) {
     const thirdPartyValidation = await validateThirdPartyAccess(employeePayload.third_party_id, companyId)
     if (!thirdPartyValidation.ok) return thirdPartyValidation.response
 
+    const existingEmployeeResult = await findExistingEmployeeByCpf(companyId, employeePayload.cpf)
+    if (existingEmployeeResult.error) {
+      console.error("[API employees/update] Existing CPF lookup error:", existingEmployeeResult.error)
+      return NextResponse.json({ error: "Erro ao validar CPF do colaborador." }, { status: 500 })
+    }
+
+    if (existingEmployeeResult.data) {
+      const existingEmployee = existingEmployeeResult.data as {
+        id: string
+        active?: boolean | null
+        deleted_at?: string | null
+      }
+
+      if (existingEmployee.active && !existingEmployee.deleted_at) {
+        return NextResponse.json({
+          error: "Este CPF ja esta cadastrado em um colaborador ativo. Abra o cadastro existente para editar.",
+          code: "23505",
+        }, { status: 409 })
+      }
+
+      const reviveResult = await reviveEmployeeFromPayload(existingEmployee.id, companyId, employeePayload)
+      if (reviveResult.error) {
+        const schemaResponse = employeeSchemaErrorResponse(reviveResult.error)
+        if (schemaResponse) return schemaResponse
+        console.error("[API employees/update] Revive archived employee error:", reviveResult.error)
+        return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        employee: reviveResult.data?.[0] || null,
+        restored: true,
+      })
+    }
+
     const { data, error } = await supabaseAdmin
       .from("employees")
       .insert([{ ...employeePayload, company_id: companyId }])
@@ -149,6 +242,12 @@ export async function POST(request: NextRequest) {
     if (error) {
       const schemaResponse = employeeSchemaErrorResponse(error)
       if (schemaResponse) return schemaResponse
+      if (isUniqueIssue(error)) {
+        return NextResponse.json({
+          error: "Este CPF ja esta cadastrado. Abra o cadastro existente para editar os dados do colaborador.",
+          code: "23505",
+        }, { status: 409 })
+      }
       console.error("[API employees/update] Insert error:", error)
       return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }

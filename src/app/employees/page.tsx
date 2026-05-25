@@ -1732,8 +1732,8 @@ export default function EmployeesPage() {
                 />
               </div>
             ) : (
-            <form onSubmit={handleSaveEmployee} className="min-h-0 flex flex-col">
-              <div className="min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
+            <form onSubmit={handleSaveEmployee} className="min-h-0 flex flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
               <div className="flex flex-col items-center mb-4">
                 {formData.photo_url ? (
                   <div className="relative">
@@ -1957,19 +1957,19 @@ export default function EmployeesPage() {
 
               </div>
 
-              <div className="shrink-0 flex gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:px-6">
+              <div className="sticky bottom-0 z-10 shrink-0 flex gap-3 border-t border-slate-100 bg-white/95 px-5 py-4 shadow-[0_-12px_28px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
                 <button 
                   type="button" 
                   disabled={isSaving}
                   onClick={closeEditModal}
-                  className="flex-1 px-4 py-4 text-xs font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest transition-all"
+                  className="min-h-[52px] flex-1 rounded-xl px-4 py-4 text-xs font-black text-slate-500 hover:bg-slate-50 hover:text-slate-700 uppercase tracking-widest transition-all"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-1 px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl shadow-lg shadow-blue-900/10 uppercase tracking-widest transition-all flex items-center justify-center"
+                  className="min-h-[52px] flex-1 px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl shadow-lg shadow-blue-900/10 uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-60"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar Cadastro"}
                 </button>

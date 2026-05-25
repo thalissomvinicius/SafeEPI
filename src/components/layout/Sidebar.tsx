@@ -56,6 +56,7 @@ export function Sidebar() {
           height={80}
           className="h-20 w-auto max-w-[190px] object-contain"
           priority
+          unoptimized={brandLogo.startsWith("http")}
         />
       </div>
 
