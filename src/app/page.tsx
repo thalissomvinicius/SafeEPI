@@ -144,7 +144,7 @@ export default function Dashboard() {
 
     const nextStats = {
       deliveries: filteredDeliveries.length,
-      employees: rawEmployees.filter(e => e.active).length,
+      employees: rawEmployees.filter(e => e.active && !e.third_party_id).length,
       criticalCAs: criticalCount,
       lowStock: rawPpes.filter(p => p.active && (p.current_stock || 0) <= 5).length,
       signedDocuments: filteredDocuments.length
@@ -241,7 +241,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
           { title: "Entregas Realizadas", value: stats.deliveries, subtitle: dateFilter === "all" ? "Todo o histórico" : "No período filtrado", icon: PackageCheck, color: "text-[#2563EB]", bg: "bg-red-50" },
-          { title: "Equipe Ativa", value: stats.employees, subtitle: "Colaboradores cadastrados", icon: Users, color: "text-slate-800", bg: "bg-slate-100" },
+          { title: "Equipe Ativa", value: stats.employees, subtitle: "Colaboradores proprios", icon: Users, color: "text-slate-800", bg: "bg-slate-100" },
           { title: "Estoque Baixo", value: stats.lowStock, subtitle: "Itens com 5 ou menos", icon: Boxes, color: "text-blue-700", bg: "bg-blue-50" },
           { title: "PDFs Auditados", value: stats.signedDocuments, subtitle: dateFilter === "all" ? "Arquivo jurídico ativo" : "No período filtrado", icon: Archive, color: "text-emerald-700", bg: "bg-emerald-50" },
           { title: "CAs em Alerta", value: stats.criticalCAs, subtitle: "Atenção necessária", icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },

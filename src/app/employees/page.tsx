@@ -975,11 +975,31 @@ export default function EmployeesPage() {
   const importPercent = importProgress?.total
     ? Math.min(100, Math.round((importProgress.processed / importProgress.total) * 100))
     : 0
-  const activeEmployeesCount = employees.filter(emp => emp.active).length
-  const totalEmployeesCount = employees.length
+  const ownEmployeesCount = employees.filter(emp => !emp.third_party_id).length
+  const thirdPartyEmployeesCount = employees.filter(emp => Boolean(emp.third_party_id)).length
+  const ownActiveEmployeesCount = employees.filter(emp => emp.active && !emp.third_party_id).length
+  const thirdPartyActiveEmployeesCount = employees.filter(emp => emp.active && Boolean(emp.third_party_id)).length
+  const scopedEmployeesForStats = hasThirdPartyFeature
+    ? employees.filter(emp => (
+      employeeScopeFilter === "all" ||
+      (employeeScopeFilter === "own" ? !emp.third_party_id : Boolean(emp.third_party_id))
+    ))
+    : employees
+  const activeEmployeesCount = scopedEmployeesForStats.filter(emp => emp.active).length
+  const totalEmployeesCount = scopedEmployeesForStats.length
   const activeEmployeesPercent = totalEmployeesCount > 0
     ? Math.round((activeEmployeesCount / totalEmployeesCount) * 100)
     : 0
+  const scopeTitle = employeeScopeFilter === "third_party"
+    ? "Terceiros ativos"
+    : employeeScopeFilter === "all"
+      ? "Colaboradores ativos"
+      : "Proprios ativos"
+  const scopeDescription = employeeScopeFilter === "third_party"
+    ? "colaborador(es) terceiro(s) no filtro atual."
+    : employeeScopeFilter === "all"
+      ? "colaborador(es) cadastrado(s) nesta empresa."
+      : "colaborador(es) proprio(s) no filtro atual."
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in relative">
@@ -1052,7 +1072,7 @@ export default function EmployeesPage() {
               <Users className="h-7 w-7" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Colaboradores ativos</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{scopeTitle}</p>
               {loading ? (
                 <div className="mt-3 space-y-3">
                   <div className="h-8 w-36 animate-pulse rounded-xl bg-slate-100" />
@@ -1069,14 +1089,38 @@ export default function EmployeesPage() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs font-bold text-slate-500">
-                    {totalEmployeesCount} colaborador(es) cadastrado(s) nesta empresa.
+                    {totalEmployeesCount} {scopeDescription}
                   </p>
                 </>
               )}
             </div>
           </div>
 
-          <div className="w-full rounded-2xl bg-slate-50 p-4 sm:max-w-xs">
+          <div className="w-full space-y-3 sm:max-w-md">
+            {hasThirdPartyFeature && (
+              <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
+                {[
+                  { value: "own" as const, label: "Proprios", count: ownEmployeesCount, active: ownActiveEmployeesCount },
+                  { value: "third_party" as const, label: "Terceiros", count: thirdPartyEmployeesCount, active: thirdPartyActiveEmployeesCount },
+                  { value: "all" as const, label: "Todos", count: employees.length, active: employees.filter(emp => emp.active).length },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setEmployeeScopeFilter(item.value)}
+                    className={`min-h-[52px] rounded-xl px-2 py-2 text-left transition-all ${
+                      employeeScopeFilter === item.value
+                        ? "bg-white text-[#2563EB] shadow-sm ring-1 ring-slate-200"
+                        : "text-slate-500 hover:bg-white/70"
+                    }`}
+                  >
+                    <span className="block text-[9px] font-black uppercase tracking-widest">{item.label}</span>
+                    <span className="mt-1 block text-sm font-black">{item.active}/{item.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="rounded-2xl bg-slate-50 p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quadro ativo</span>
               {loading ? (
@@ -1093,7 +1137,8 @@ export default function EmployeesPage() {
             </div>
             <div className="mt-3 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
               <span>{loading ? "Atualizando dados" : `${totalEmployeesCount - activeEmployeesCount} inativo(s)`}</span>
-              <span>SafeEPI</span>
+              <span>{employeeScopeFilter === "third_party" ? "Terceiros" : employeeScopeFilter === "all" ? "Todos" : "Proprios"}</span>
+            </div>
             </div>
           </div>
         </div>
@@ -1333,9 +1378,9 @@ export default function EmployeesPage() {
           <div className={`${areMobileFiltersOpen ? "grid" : "hidden"} grid-cols-1 gap-3 md:grid md:grid-cols-6 xl:grid-cols-7`}>
             {hasThirdPartyFeature && (
               <select value={employeeScopeFilter} onChange={(e) => setEmployeeScopeFilter(e.target.value as EmployeeScopeFilter)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
-                <option value="own">Proprios</option>
-                <option value="third_party">Terceiros</option>
-                <option value="all">Todos vinculos</option>
+                <option value="own">Somente proprios</option>
+                <option value="third_party">Somente terceiros</option>
+                <option value="all">Todos</option>
               </select>
             )}
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
