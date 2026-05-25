@@ -13,6 +13,7 @@ import { useActiveBrand } from "@/hooks/useActiveBrand"
 import { useAuth } from "@/contexts/AuthContext"
 
 type DashboardDateFilter = "last7" | "month" | "last30" | "custom" | "all"
+type DashboardEmployeeScope = "own" | "third_party" | "all"
 
 function DashboardSkeleton() {
   return (
@@ -69,6 +70,7 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState<{name: string, value: number}[]>([])
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState<DashboardDateFilter>("last7")
+  const [employeeScope, setEmployeeScope] = useState<DashboardEmployeeScope>("own")
   const [customStartDate, setCustomStartDate] = useState("")
   const [customEndDate, setCustomEndDate] = useState("")
 
@@ -141,10 +143,15 @@ export default function Dashboard() {
       const diffDays = getDaysUntilDateOnly(p.ca_expiry_date)
       return diffDays < 90
     }).length
+    const scopedEmployees = rawEmployees.filter((employee) => {
+      if (employeeScope === "all") return true
+      if (employeeScope === "third_party") return Boolean(employee.third_party_id)
+      return !employee.third_party_id
+    })
 
     const nextStats = {
       deliveries: filteredDeliveries.length,
-      employees: rawEmployees.filter(e => e.active && !e.third_party_id).length,
+      employees: scopedEmployees.filter(e => e.active).length,
       criticalCAs: criticalCount,
       lowStock: rawPpes.filter(p => p.active && (p.current_stock || 0) <= 5).length,
       signedDocuments: filteredDocuments.length
@@ -182,9 +189,15 @@ export default function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [rawEmployees, rawPpes, rawDeliveries, rawDocuments, dateFilter, customStartDate, customEndDate])
+  }, [rawEmployees, rawPpes, rawDeliveries, rawDocuments, dateFilter, customStartDate, customEndDate, employeeScope])
 
   if (loading) return <DashboardSkeleton />
+
+  const activeOwnEmployees = rawEmployees.filter(employee => employee.active && !employee.third_party_id).length
+  const activeThirdPartyEmployees = rawEmployees.filter(employee => employee.active && Boolean(employee.third_party_id)).length
+  const activeAllEmployees = rawEmployees.filter(employee => employee.active).length
+  const employeeCardTitle = employeeScope === "third_party" ? "Terceiros Ativos" : employeeScope === "all" ? "Equipe Total" : "Equipe Ativa"
+  const employeeCardSubtitle = employeeScope === "third_party" ? "Colaboradores terceiros" : employeeScope === "all" ? "Proprios + terceiros" : "Colaboradores proprios"
 
   return (
     <div className="p-4 sm:p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
@@ -241,7 +254,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
           { title: "Entregas Realizadas", value: stats.deliveries, subtitle: dateFilter === "all" ? "Todo o histórico" : "No período filtrado", icon: PackageCheck, color: "text-[#2563EB]", bg: "bg-red-50" },
-          { title: "Equipe Ativa", value: stats.employees, subtitle: "Colaboradores proprios", icon: Users, color: "text-slate-800", bg: "bg-slate-100" },
+          { title: employeeCardTitle, value: stats.employees, subtitle: employeeCardSubtitle, icon: Users, color: "text-slate-800", bg: "bg-slate-100", employeeScopeCard: true },
           { title: "Estoque Baixo", value: stats.lowStock, subtitle: "Itens com 5 ou menos", icon: Boxes, color: "text-blue-700", bg: "bg-blue-50" },
           { title: "PDFs Auditados", value: stats.signedDocuments, subtitle: dateFilter === "all" ? "Arquivo jurídico ativo" : "No período filtrado", icon: Archive, color: "text-emerald-700", bg: "bg-emerald-50" },
           { title: "CAs em Alerta", value: stats.criticalCAs, subtitle: "Atenção necessária", icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
@@ -259,6 +272,30 @@ export default function Dashboard() {
                 <span className="text-2xl font-bold text-slate-800 tracking-tight">{item.value}</span>
                 <span className="text-xs font-bold text-slate-500 mt-1">{item.subtitle}</span>
               </div>
+              {item.employeeScopeCard && (
+                <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-50 p-1">
+                  {[
+                    { value: "own" as const, label: "Proprios", count: activeOwnEmployees },
+                    { value: "third_party" as const, label: "Terceiros", count: activeThirdPartyEmployees },
+                    { value: "all" as const, label: "Todos", count: activeAllEmployees },
+                  ].map((scope) => (
+                    <button
+                      key={scope.value}
+                      type="button"
+                      onClick={() => setEmployeeScope(scope.value)}
+                      className={`min-h-[44px] rounded-lg px-2 py-1 text-center transition-all ${
+                        employeeScope === scope.value
+                          ? "bg-white text-[#2563EB] shadow-sm ring-1 ring-slate-200"
+                          : "text-slate-500 hover:bg-white/70"
+                      }`}
+                      title={`Exibir ${scope.label.toLowerCase()}`}
+                    >
+                      <span className="block text-[9px] font-black uppercase tracking-widest">{scope.label}</span>
+                      <span className="block text-xs font-black">{scope.count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
