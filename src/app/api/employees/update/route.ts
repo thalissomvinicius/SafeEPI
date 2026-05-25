@@ -177,6 +177,21 @@ async function reviveEmployeeFromPayload(id: string, companyId: string, employee
   return result
 }
 
+async function clearEmployeeArchiveMarkers(employeeId: string, companyId: string) {
+  const { error } = await supabaseAdmin
+    .from("remote_links")
+    .delete()
+    .eq("employee_id", employeeId)
+    .eq("company_id", companyId)
+    .eq("type", "capture")
+    .eq("status", "completed")
+    .filter("data->>safeepi_purpose", "eq", EMPLOYEE_ARCHIVE_MARKER)
+
+  if (error) {
+    console.warn("[API employees/update] Could not clear archive markers:", error)
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
   if (!auth.authorized) {
@@ -227,6 +242,8 @@ export async function POST(request: NextRequest) {
         console.error("[API employees/update] Revive archived employee error:", reviveResult.error)
         return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
       }
+
+      await clearEmployeeArchiveMarkers(existingEmployee.id, companyId)
 
       return NextResponse.json({
         employee: reviveResult.data?.[0] || null,

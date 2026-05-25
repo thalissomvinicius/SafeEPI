@@ -286,6 +286,9 @@ function isMissingSignedDocumentsTableIssue(error: unknown): boolean {
 type RemoteLinkArchiveMarker = {
   employee_id: string | null;
   data: unknown;
+  employee?: {
+    active?: boolean | null;
+  } | null;
 };
 
 export type PendingDeliveryRemoteLink = {
@@ -317,7 +320,7 @@ function isEmployeeArchiveMarkerData(data: unknown): boolean {
 async function getArchivedEmployeeIds(companyId: string | null): Promise<Set<string>> {
   let query = supabase
     .from("remote_links")
-    .select("employee_id, data")
+    .select("employee_id, data, employee:employees(active)")
     .eq("type", "capture")
     .eq("status", "completed");
 
@@ -332,7 +335,7 @@ async function getArchivedEmployeeIds(companyId: string | null): Promise<Set<str
 
   return new Set(
     ((data || []) as RemoteLinkArchiveMarker[])
-      .filter((link) => link.employee_id && isEmployeeArchiveMarkerData(link.data))
+      .filter((link) => link.employee_id && isEmployeeArchiveMarkerData(link.data) && link.employee?.active !== true)
       .map((link) => link.employee_id as string),
   );
 }
