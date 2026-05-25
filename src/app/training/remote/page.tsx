@@ -107,7 +107,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "loading") {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center">
+      <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
       </div>
     )
@@ -115,7 +115,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "error") {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 p-4 flex items-center justify-center text-center">
+      <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 p-4 flex items-center justify-center text-center">
         <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md shadow-xl">
           <ShieldAlert className="w-14 h-14 text-red-500 mx-auto mb-4" />
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Link indisponivel</h1>
@@ -127,7 +127,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "done") {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 p-4 flex items-center justify-center text-center">
+      <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 p-4 flex items-center justify-center text-center">
         <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md shadow-xl">
           <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Assinatura registrada</h1>
@@ -139,7 +139,7 @@ function RemoteTrainingSignatureContent() {
 
   if (phase === "verify") {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 p-3 flex items-center justify-center">
+      <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 p-3 flex items-center justify-center">
         <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-xl space-y-5">
           <div className="text-center">
             <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Assinatura de Treinamento</h1>
@@ -170,21 +170,21 @@ function RemoteTrainingSignatureContent() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 p-3 sm:p-4 flex items-center justify-center">
-      <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 max-w-lg w-full shadow-xl space-y-4 sm:space-y-5">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 p-3 sm:p-4 flex items-center justify-center">
+      <div className="w-full min-w-0 max-w-lg space-y-4 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-xl sm:space-y-5 sm:p-6">
         <div className="text-center">
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Assine o treinamento</h1>
           <p className="text-xs text-slate-500 mt-1">{employee?.full_name}</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
-          <button onClick={() => setAuthMethod("manual")} className={`py-3 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${authMethod === "manual" ? "bg-white text-slate-800 shadow" : "text-slate-400"}`}>
+        <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+          <button onClick={() => setAuthMethod("manual")} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-[10px] font-black uppercase tracking-wide ${authMethod === "manual" ? "bg-white text-slate-800 shadow" : "text-slate-400"}`}>
             <PenTool className="w-4 h-4" /> Manual
           </button>
-          <button onClick={() => { setAuthMethod("manual_facial"); setCapturedPhotoBase64(null); }} className={`py-3 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${authMethod === "manual_facial" ? "bg-white text-emerald-700 shadow" : "text-slate-400"}`}>
+          <button onClick={() => { setAuthMethod("manual_facial"); setCapturedPhotoBase64(null); }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-[10px] font-black uppercase tracking-wide ${authMethod === "manual_facial" ? "bg-white text-emerald-700 shadow" : "text-slate-400"}`}>
             <Camera className="w-4 h-4" /> Foto + Assin.
           </button>
-          <button onClick={() => setAuthMethod("facial")} className={`py-3 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 ${authMethod === "facial" ? "bg-white text-blue-700 shadow" : "text-slate-400"}`}>
+          <button onClick={() => setAuthMethod("facial")} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-[10px] font-black uppercase tracking-wide ${authMethod === "facial" ? "bg-white text-blue-700 shadow" : "text-slate-400"}`}>
             <Fingerprint className="w-4 h-4" /> Facial
           </button>
         </div>

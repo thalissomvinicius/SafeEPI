@@ -1172,7 +1172,7 @@ export default function DeliveryPage() {
   }
 
   return (
-    <div className="p-4 md:p-5 lg:p-6 max-w-7xl mx-auto pb-24 lg:pb-8">
+    <div className="mx-auto max-w-7xl overflow-x-hidden p-4 pb-24 md:p-5 lg:p-6 lg:pb-8">
       <div className="mb-5 border-l-4 border-[#2563EB] pl-4">
         <h1 className="text-2xl lg:text-[28px] font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
         <p className="text-slate-500 font-medium text-sm lg:text-base mt-1">Compliance NR-06 com Rastreabilidade de Autoria.</p>
@@ -1705,22 +1705,22 @@ export default function DeliveryPage() {
                 </ul>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
+              <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-3">
                 <button 
                   onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
-                  className={`py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <PenLine className="w-4 h-4" /> Assinatura na Tela
                 </button>
                 <button 
                   onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }}
-                  className={`py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Camera className="w-4 h-4" /> Foto + Assinatura
                 </button>
                 <button 
                   onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }}
-                  className={`py-4 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Fingerprint className="w-4 h-4" /> Biometria Facial
                 </button>

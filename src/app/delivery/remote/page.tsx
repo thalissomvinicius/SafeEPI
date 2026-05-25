@@ -452,7 +452,7 @@ function RemoteDeliveryContent() {
   // RENDER: Loading
   // ---------------------------------------
   if (phase === 'loading') return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] overflow-x-hidden bg-slate-50">
       <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
       <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Validando Link de Assinatura...</p>
     </div>
@@ -462,7 +462,7 @@ function RemoteDeliveryContent() {
   // RENDER: Error
   // ---------------------------------------
   if (phase === 'error') return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50 p-6 text-center">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] overflow-x-hidden bg-slate-50 p-6 text-center">
       <ShieldAlert className="w-16 h-16 text-red-500 mb-4" />
       <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">{errorMsg}</h2>
       <p className="text-slate-500 mt-2 text-sm">Solicite um novo link ao gestor do SESMT.</p>
@@ -473,7 +473,7 @@ function RemoteDeliveryContent() {
   // RENDER: Done
   // ---------------------------------------
   if (phase === 'done') return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50 p-6 text-center animate-in zoom-in">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] overflow-x-hidden bg-slate-50 p-6 text-center animate-in zoom-in">
       <div className="bg-green-100 p-4 rounded-full mb-6 text-green-600">
         <ShieldCheck className="w-16 h-16" />
       </div>
@@ -500,7 +500,7 @@ function RemoteDeliveryContent() {
   // RENDER: Identity Verification (CPF)
   // ---------------------------------------
   if (phase === 'verify') return (
-    <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4">
       <div className="w-full max-w-md space-y-3 sm:space-y-6">
         <div className="text-center space-y-1.5">
           <div className="inline-block bg-[#2563EB] text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">Verificação de Identidade</div>
@@ -591,15 +591,15 @@ function RemoteDeliveryContent() {
   // RENDER: Signing Area (after CPF verified)
   // ---------------------------------------
   return (
-    <div className="min-h-[100dvh] bg-slate-50 flex flex-col items-center p-3 pt-4 sm:p-4 sm:pt-12">
-      <div className="w-full max-w-lg space-y-3 sm:space-y-6">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex flex-col items-center p-3 pt-4 sm:p-4 sm:pt-12">
+      <div className="w-full min-w-0 max-w-lg space-y-3 sm:space-y-6">
         <div className="text-center space-y-1.5">
           <div className="inline-block bg-green-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">✓ Identidade Verificada</div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirmação de Recebimento</h1>
           <p className="text-slate-500 text-xs sm:text-sm font-medium">{employee?.full_name}</p>
         </div>
 
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-3 sm:space-y-6">
+        <div className="w-full min-w-0 max-w-full space-y-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/50 sm:space-y-6 sm:rounded-3xl sm:p-6">
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 sm:hidden">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recebimento</p>
             <p className="mt-1 text-sm font-black text-slate-900">
@@ -623,14 +623,14 @@ function RemoteDeliveryContent() {
           </div>
 
           {/* Auth method toggle */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
-            <button onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }} className={`py-2.5 sm:py-3 text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+          <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+            <button onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
               <PenLine className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Manual
             </button>
-            <button onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }} className={`py-2.5 sm:py-3 text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
+            <button onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
               <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Foto + Assin.
             </button>
-            <button onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }} className={`py-2.5 sm:py-3 text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
+            <button onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
               <Fingerprint className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Biometria
             </button>
           </div>

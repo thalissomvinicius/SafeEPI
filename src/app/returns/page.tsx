@@ -277,7 +277,7 @@ export default function ReturnsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 pb-24 md:pb-8">
+    <div className="max-w-7xl mx-auto space-y-6 overflow-x-hidden p-4 pb-24 md:p-8 md:pb-8">
       <div className="mb-6">
         <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center">
           <ArrowRightLeft className="w-6 h-6 mr-2 text-[#2563EB]" /> 
@@ -468,14 +468,14 @@ export default function ReturnsPage() {
               {step === 2 && (
                 <div className="space-y-6">
                   {/* Tabs de Assinatura */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => setAuthMethod('manual')} className={`py-3 text-xs font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+                  <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+                    <button onClick={() => setAuthMethod('manual')} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-xs font-black uppercase tracking-wide transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
                       <PenLine className="w-4 h-4" /> Manual
                     </button>
-                    <button onClick={() => setAuthMethod('manual_facial')} className={`py-3 text-xs font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
+                    <button onClick={() => setAuthMethod('manual_facial')} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-xs font-black uppercase tracking-wide transition-all ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
                       <Camera className="w-4 h-4" /> Foto + Assinatura
                     </button>
-                    <button onClick={() => setAuthMethod('facial')} className={`py-3 text-xs font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
+                    <button onClick={() => setAuthMethod('facial')} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-xs font-black uppercase tracking-wide transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
                       <Fingerprint className="w-4 h-4" /> Biometria
                     </button>
                   </div>
