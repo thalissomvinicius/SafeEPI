@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/Skeleton"
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
-import { DeliveryWithRelations, PPE, Training, Workplace } from "@/types/database"
+import { DeliveryWithRelations, Employee, PPE, ThirdParty, Training, Workplace } from "@/types/database"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
 import { useActiveBrand } from "@/hooks/useActiveBrand"
@@ -20,6 +20,9 @@ type ReportScopeFilter = 'own' | 'third_party' | 'all'
 
 const getDeliveryCost = (delivery: DeliveryWithRelations) =>
   Number(delivery.quantity || 0) * Number(delivery.ppe?.cost || 0)
+
+const getThirdPartyDisplayName = (thirdParty?: ThirdParty | null) =>
+  thirdParty?.trade_name || thirdParty?.name || "Terceiro sem nome"
 
 export default function ReportsPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
@@ -31,9 +34,11 @@ export default function ReportsPage() {
   
   // Raw Data State
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [rawEmployees, setRawEmployees] = useState<Employee[]>([])
   const [rawPpes, setRawPpes] = useState<PPE[]>([])
   const [rawTrainings, setRawTrainings] = useState<Training[]>([])
   const [rawWorkplaces, setRawWorkplaces] = useState<Workplace[]>([])
+  const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
 
   // Filter State
   const [dateFilter, setDateFilter] = useState<DateFilter>('month')
@@ -43,6 +48,7 @@ export default function ReportsPage() {
   const [specificMonthSel, setSpecificMonthSel] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
   const [reportScopeFilter, setReportScopeFilter] = useState<ReportScopeFilter>('own')
+  const [selectedThirdPartyIds, setSelectedThirdPartyIds] = useState<string[]>([])
   const [isCompactCharts, setIsCompactCharts] = useState(false)
   
   // Computed Data State
@@ -54,6 +60,7 @@ export default function ReportsPage() {
     { label: "Treinamentos Registrados", value: "0", change: "NR-01/06" },
   ])
   const [investmentByWorkplace, setInvestmentByWorkplace] = useState<{name: string, value: number}[]>([])
+  const [investmentByThirdParty, setInvestmentByThirdParty] = useState<{id: string, name: string, value: number, deliveries: number, items: number}[]>([])
   const [ppeUsageData, setPpeUsageData] = useState<{name: string, value: number}[]>([])
   
   const COLORS = [brandColor, '#1e293b', '#475569', '#64748b', '#94a3b8']
@@ -78,16 +85,20 @@ export default function ReportsPage() {
       if (!user || user.role === 'ALMOXARIFE') return
       try {
         setLoading(true)
-        const [ppeData, deliveryData, trainingData, wpData] = await Promise.all([
+        const [ppeData, deliveryData, trainingData, wpData, employeeData, thirdPartyData] = await Promise.all([
           api.getPpes(),
           api.getDeliveries(),
           api.getTrainings(),
-          api.getWorkplaces()
+          api.getWorkplaces(),
+          api.getEmployees(),
+          api.getThirdParties(),
         ])
         setRawPpes(ppeData)
         setRawDeliveries(deliveryData)
         setRawTrainings(trainingData)
         setRawWorkplaces(wpData)
+        setRawEmployees(employeeData)
+        setThirdParties(thirdPartyData)
       } catch (err) {
         console.error("Erro ao carregar dados:", err)
       } finally {
@@ -105,16 +116,23 @@ export default function ReportsPage() {
   useEffect(() => {
     if (rawDeliveries.length === 0 && rawPpes.length === 0) return
 
+    const employeeThirdPartyById = new Map(rawEmployees.map((employee) => [employee.id, employee.third_party_id || null]))
     const workplaceThirdPartyById = new Map(rawWorkplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
+    const thirdPartyById = new Map(thirdParties.map((thirdParty) => [thirdParty.id, thirdParty]))
     const getDeliveryThirdPartyId = (delivery: DeliveryWithRelations) =>
       delivery.third_party_id ||
       delivery.employee?.third_party_id ||
       delivery.workplace?.third_party_id ||
+      employeeThirdPartyById.get(delivery.employee_id) ||
       workplaceThirdPartyById.get(delivery.workplace_id || "") ||
       null
-    const matchesScope = (thirdPartyId: string | null | undefined) =>
-      reportScopeFilter === 'all' ||
-      (reportScopeFilter === 'own' ? !thirdPartyId : Boolean(thirdPartyId))
+    const matchesThirdPartySelection = (thirdPartyId: string | null | undefined) =>
+      selectedThirdPartyIds.length === 0 || Boolean(thirdPartyId && selectedThirdPartyIds.includes(thirdPartyId))
+    const matchesScope = (thirdPartyId: string | null | undefined) => {
+      if (reportScopeFilter === 'own') return !thirdPartyId
+      if (reportScopeFilter === 'third_party') return Boolean(thirdPartyId) && matchesThirdPartySelection(thirdPartyId)
+      return !thirdPartyId || matchesThirdPartySelection(thirdPartyId)
+    }
 
     let filteredDeliveries = rawDeliveries
     let filteredTrainings = rawTrainings
@@ -177,6 +195,27 @@ export default function ReportsPage() {
 
     setInvestmentByWorkplace(wpStats)
 
+    const thirdPartyInvestmentMap = new Map<string, { name: string; value: number; deliveries: number; items: number }>()
+    filteredDeliveries.forEach((delivery) => {
+      const thirdPartyId = getDeliveryThirdPartyId(delivery)
+      if (!thirdPartyId) return
+      const current = thirdPartyInvestmentMap.get(thirdPartyId) || {
+        name: getThirdPartyDisplayName(thirdPartyById.get(thirdPartyId)),
+        value: 0,
+        deliveries: 0,
+        items: 0,
+      }
+      current.value += getDeliveryCost(delivery)
+      current.deliveries += 1
+      current.items += Number(delivery.quantity || 0)
+      thirdPartyInvestmentMap.set(thirdPartyId, current)
+    })
+    setInvestmentByThirdParty(
+      Array.from(thirdPartyInvestmentMap.entries())
+        .map(([id, item]) => ({ id, ...item }))
+        .sort((a, b) => b.value - a.value),
+    )
+
     // 4. Top 5 EPIs mais entregues no período
     const ppeCounts: {[key: string]: number} = {}
     filteredDeliveries.forEach(d => {
@@ -211,7 +250,7 @@ export default function ReportsPage() {
       { label: "EPIs em Alerta (C.A.)", value: criticalCount.toString(), change: "Atenção (Geral)" },
       { label: `Treinamentos (${labelMap[dateFilter]})`, value: filteredTrainings.length.toString(), change: scopeLabelMap[reportScopeFilter] },
     ])
-  }, [rawDeliveries, rawPpes, rawTrainings, rawWorkplaces, dateFilter, customStartDate, customEndDate, specificMonth, reportScopeFilter])
+  }, [rawDeliveries, rawEmployees, rawPpes, rawTrainings, rawWorkplaces, thirdParties, dateFilter, customStartDate, customEndDate, specificMonth, reportScopeFilter, selectedThirdPartyIds])
 
   if (authLoading || (user && user.role === 'ALMOXARIFE')) {
     return (
@@ -249,6 +288,41 @@ export default function ReportsPage() {
     all: 'Todos os Vínculos'
   }
 
+  const activeThirdParties = thirdParties.filter((thirdParty) => thirdParty.active)
+  const selectedThirdParties = selectedThirdPartyIds
+    .map((id) => thirdParties.find((thirdParty) => thirdParty.id === id))
+    .filter((thirdParty): thirdParty is ThirdParty => Boolean(thirdParty))
+  const thirdPartyFilterLabel = selectedThirdParties.length === 0
+    ? "Todos os terceiros cadastrados"
+    : selectedThirdParties.length <= 2
+      ? selectedThirdParties.map(getThirdPartyDisplayName).join(", ")
+      : `${selectedThirdParties.length} terceiros selecionados`
+  const showThirdPartySelector = reportScopeFilter !== "own"
+  const getReportDeliveryThirdPartyId = (delivery: DeliveryWithRelations) =>
+    delivery.third_party_id ||
+    delivery.employee?.third_party_id ||
+    delivery.workplace?.third_party_id ||
+    rawEmployees.find((employee) => employee.id === delivery.employee_id)?.third_party_id ||
+    rawWorkplaces.find((workplace) => workplace.id === delivery.workplace_id)?.third_party_id ||
+    null
+  const getReportDeliveryThirdPartyName = (delivery: DeliveryWithRelations) => {
+    const thirdPartyId = getReportDeliveryThirdPartyId(delivery)
+    return thirdPartyId ? getThirdPartyDisplayName(thirdParties.find((thirdParty) => thirdParty.id === thirdPartyId)) : "Próprio"
+  }
+  const deliveriesForExport = allDeliveries.map((delivery) => ({
+    ...delivery,
+    third_party_name: getReportDeliveryThirdPartyName(delivery),
+  }))
+
+  const addSelectedThirdParty = (thirdPartyId: string) => {
+    if (!thirdPartyId || selectedThirdPartyIds.includes(thirdPartyId)) return
+    setSelectedThirdPartyIds((prev) => [...prev, thirdPartyId])
+  }
+
+  const removeSelectedThirdParty = (thirdPartyId: string) => {
+    setSelectedThirdPartyIds((prev) => prev.filter((id) => id !== thirdPartyId))
+  }
+
   const handleExportPDF = () => {
     let periodTitle = 'Todo o Histórico'
     if (dateFilter === 'month') periodTitle = 'Neste Mês'
@@ -259,10 +333,13 @@ export default function ReportsPage() {
     if (dateFilter === 'specific_month') periodTitle = `Mês Específico: ${specificMonth}`
     periodTitle = `${periodTitle} · ${reportScopeTitleMap[reportScopeFilter]}`
 
+    if (showThirdPartySelector) periodTitle = `${periodTitle} · ${thirdPartyFilterLabel}`
+
     const pdfBlob = generateGeneralReportPDF({
       stats,
-      deliveries: allDeliveries,
-      periodTitle: periodTitle
+      deliveries: deliveriesForExport,
+      periodTitle: periodTitle,
+      thirdPartySummary: investmentByThirdParty,
     })
 
     const safePeriod = periodTitle
@@ -311,6 +388,59 @@ export default function ReportsPage() {
               </button>
             ))}
           </div>
+          {showThirdPartySelector && (
+            <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tomadores no relatório</p>
+                  <p className="mt-0.5 text-xs font-bold text-slate-600">
+                    {selectedThirdParties.length === 0 ? "Todos os terceiros cadastrados" : `${selectedThirdParties.length} selecionado(s)`}
+                  </p>
+                </div>
+                {selectedThirdParties.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedThirdPartyIds([])}
+                    className="min-h-9 rounded-xl px-3 text-[10px] font-black uppercase tracking-widest text-[#2563EB] hover:bg-blue-50"
+                  >
+                    Todos
+                  </button>
+                )}
+              </div>
+              <select
+                title="Selecionar terceiro para o relatório"
+                value=""
+                onChange={(event) => addSelectedThirdParty(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:border-[#2563EB]"
+              >
+                <option value="">Adicionar terceiro...</option>
+                {activeThirdParties.map((thirdParty) => (
+                  <option key={thirdParty.id} value={thirdParty.id} disabled={selectedThirdPartyIds.includes(thirdParty.id)}>
+                    {getThirdPartyDisplayName(thirdParty)}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedThirdParties.length === 0 ? (
+                  <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                    Todos os terceiros
+                  </span>
+                ) : (
+                  selectedThirdParties.map((thirdParty) => (
+                    <button
+                      key={thirdParty.id}
+                      type="button"
+                      onClick={() => removeSelectedThirdParty(thirdParty.id)}
+                      className="min-h-9 rounded-full border border-blue-100 bg-blue-50 px-3 text-[10px] font-black uppercase tracking-widest text-[#2563EB]"
+                      aria-label={`Remover ${getThirdPartyDisplayName(thirdParty)} do relatório`}
+                    >
+                      {getThirdPartyDisplayName(thirdParty)} ×
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Calendar className="h-4 w-4 text-slate-400" />
@@ -410,6 +540,46 @@ export default function ReportsPage() {
       </div>
 
       {/* Seção de Gráficos Analíticos */}
+      {showThirdPartySelector && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black uppercase tracking-tighter text-slate-800">Valores por terceiro</h2>
+              <p className="text-xs font-bold text-slate-500">
+                {thirdPartyFilterLabel}. Valores calculados por quantidade × custo unitário do EPI.
+              </p>
+            </div>
+            <span className="text-xs font-black uppercase tracking-widest text-[#2563EB]">
+              {investmentByThirdParty.length} tomador(es)
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {investmentByThirdParty.map((thirdParty) => (
+              <div key={thirdParty.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="truncate text-sm font-black uppercase tracking-tight text-slate-800" title={thirdParty.name}>{thirdParty.name}</p>
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total para cobrança</p>
+                    <p className="mt-1 text-xl font-black text-emerald-700">
+                      R$ {thirdParty.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <p>{thirdParty.deliveries} registro(s)</p>
+                    <p>{thirdParty.items} item(ns)</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {investmentByThirdParty.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400 md:col-span-2 xl:col-span-3">
+                Nenhum valor de terceiro encontrado para o período e seleção atual.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Gráfico 1: Investimento por Canteiro */}
           <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
@@ -544,8 +714,8 @@ export default function ReportsPage() {
         </div>
         <div className="flex gap-4 w-full sm:w-auto relative z-10">
             <button 
-              onClick={() => exportDeliveriesToExcel(allDeliveries)}
-              disabled={allDeliveries.length === 0}
+              onClick={() => exportDeliveriesToExcel(deliveriesForExport)}
+              disabled={deliveriesForExport.length === 0}
               className="flex-1 sm:flex-none border border-slate-700 bg-slate-800 text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center justify-center disabled:opacity-40 gap-2"
             >
                 <FileSpreadsheet className="w-4 h-4 text-green-400" />

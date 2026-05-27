@@ -103,6 +103,7 @@ export type Training = {
 };
 
 export type DeliveryWithRelations = Delivery & {
+  third_party_name?: string;
   employee?: {
     full_name: string;
     cpf: string;

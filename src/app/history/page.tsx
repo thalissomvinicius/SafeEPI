@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { ExternalLink, Fingerprint, History, ShieldCheck, Search, Loader2, FileDown, Trash2, AlertTriangle } from "lucide-react"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { api } from "@/services/api"
-import { DeliveryWithRelations, Employee, SignedDocument, Workplace } from "@/types/database"
+import { DeliveryWithRelations, Employee, SignedDocument, ThirdParty, Workplace } from "@/types/database"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
@@ -13,6 +13,12 @@ import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "@/lib/toast"
 
 type DeliveryScopeFilter = "own" | "third_party" | "all"
+
+const getDeliveryCost = (delivery: DeliveryWithRelations) =>
+  Number(delivery.quantity || 0) * Number(delivery.ppe?.cost || 0)
+
+const getThirdPartyDisplayName = (thirdParty?: ThirdParty | null) =>
+  thirdParty?.trade_name || thirdParty?.name || "Terceiro sem nome"
 
 export default function HistoryPage() {
   const { user } = useAuth()
@@ -22,6 +28,7 @@ export default function HistoryPage() {
   const [records, setRecords] = useState<DeliveryWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
+  const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
   const [signedDocuments, setSignedDocuments] = useState<SignedDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
@@ -29,21 +36,24 @@ export default function HistoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<DeliveryWithRelations | null>(null)
   const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>("own")
+  const [selectedThirdPartyIds, setSelectedThirdPartyIds] = useState<string[]>([])
 
   useEffect(() => {
     async function fetchHistory() {
       try {
         setLoading(true)
-        const [deliveryData, documentData, employeeData, workplaceData] = await Promise.all([
+        const [deliveryData, documentData, employeeData, workplaceData, thirdPartyData] = await Promise.all([
           api.getDeliveries(),
           api.getSignedDocuments(),
           hasThirdPartyFeature ? api.getEmployees() : Promise.resolve([] as Employee[]),
           hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
+          hasThirdPartyFeature ? api.getThirdParties() : Promise.resolve([] as ThirdParty[]),
         ])
         setRecords(deliveryData)
         setSignedDocuments(documentData)
         setEmployees(employeeData)
         setWorkplaces(workplaceData)
+        setThirdParties(thirdPartyData)
       } catch (err) {
         console.error("Erro histórico:", err)
         toast.error("Falha ao carregar histórico.")
@@ -56,6 +66,7 @@ export default function HistoryPage() {
 
   const employeeThirdPartyById = new Map(employees.map((employee) => [employee.id, employee.third_party_id || null]))
   const workplaceThirdPartyById = new Map(workplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
+  const thirdPartyById = new Map(thirdParties.map((thirdParty) => [thirdParty.id, thirdParty]))
 
   const getDeliveryThirdPartyId = (delivery: DeliveryWithRelations) =>
     delivery.third_party_id ||
@@ -64,6 +75,24 @@ export default function HistoryPage() {
     employeeThirdPartyById.get(delivery.employee_id) ||
     workplaceThirdPartyById.get(delivery.workplace_id || "") ||
     null
+  const getDeliveryThirdPartyName = (delivery: DeliveryWithRelations) =>
+    getDeliveryThirdPartyId(delivery)
+      ? getThirdPartyDisplayName(thirdPartyById.get(getDeliveryThirdPartyId(delivery) || ""))
+      : "Próprio"
+  const activeThirdParties = thirdParties.filter((thirdParty) => thirdParty.active)
+  const selectedThirdParties = selectedThirdPartyIds
+    .map((id) => thirdParties.find((thirdParty) => thirdParty.id === id))
+    .filter((thirdParty): thirdParty is ThirdParty => Boolean(thirdParty))
+  const showThirdPartySelector = hasThirdPartyFeature && deliveryScopeFilter !== "own"
+
+  const addSelectedThirdParty = (thirdPartyId: string) => {
+    if (!thirdPartyId || selectedThirdPartyIds.includes(thirdPartyId)) return
+    setSelectedThirdPartyIds((prev) => [...prev, thirdPartyId])
+  }
+
+  const removeSelectedThirdParty = (thirdPartyId: string) => {
+    setSelectedThirdPartyIds((prev) => prev.filter((id) => id !== thirdPartyId))
+  }
 
   const urlToBase64 = async (url: string) => {
     const response = await fetch(url)
@@ -196,17 +225,40 @@ export default function HistoryPage() {
   }
 
   const filteredRecords = records.filter((rec: DeliveryWithRelations) => {
-    const isThirdPartyDelivery = Boolean(getDeliveryThirdPartyId(rec))
+    const thirdPartyId = getDeliveryThirdPartyId(rec)
+    const isThirdPartyDelivery = Boolean(thirdPartyId)
+    const matchesThirdPartySelection = selectedThirdPartyIds.length === 0 || Boolean(thirdPartyId && selectedThirdPartyIds.includes(thirdPartyId))
     const matchesDeliveryScope = !hasThirdPartyFeature ||
       deliveryScopeFilter === "all" ||
-      (deliveryScopeFilter === "third_party" ? isThirdPartyDelivery : !isThirdPartyDelivery)
+      (deliveryScopeFilter === "third_party" ? isThirdPartyDelivery && matchesThirdPartySelection : !isThirdPartyDelivery)
+    const matchesAllScopeSelection = deliveryScopeFilter !== "all" || !isThirdPartyDelivery || matchesThirdPartySelection
+    const thirdPartyName = getDeliveryThirdPartyName(rec).toLowerCase()
 
-    return matchesDeliveryScope && (
+    return matchesDeliveryScope && matchesAllScopeSelection && (
       rec.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      thirdPartyName.includes(searchTerm.toLowerCase()) ||
       rec.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       getSignedDocumentForDelivery(rec.id)?.sha256_hash.toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
+
+  const thirdPartyTotals = Array.from(filteredRecords.reduce((acc, rec) => {
+    const thirdPartyId = getDeliveryThirdPartyId(rec)
+    if (!thirdPartyId) return acc
+    const current = acc.get(thirdPartyId) || {
+      name: getDeliveryThirdPartyName(rec),
+      value: 0,
+      deliveries: 0,
+      items: 0,
+    }
+    current.value += getDeliveryCost(rec)
+    current.deliveries += 1
+    current.items += Number(rec.quantity || 0)
+    acc.set(thirdPartyId, current)
+    return acc
+  }, new Map<string, { name: string; value: number; deliveries: number; items: number }>()).entries())
+    .map(([id, item]) => ({ id, ...item }))
+    .sort((a, b) => b.value - a.value)
 
   const activeFilterChips = [
     ...(searchTerm.trim() ? [{ label: `Busca: ${searchTerm.trim()}`, onRemove: () => setSearchTerm("") }] : []),
@@ -215,6 +267,12 @@ export default function HistoryPage() {
         label: deliveryScopeFilter === "third_party" ? "Terceiros" : "Todos vínculos",
         onRemove: () => setDeliveryScopeFilter("own" as DeliveryScopeFilter),
       }]
+      : []),
+    ...(showThirdPartySelector && selectedThirdParties.length > 0
+      ? selectedThirdParties.map((thirdParty) => ({
+        label: getThirdPartyDisplayName(thirdParty),
+        onRemove: () => removeSelectedThirdParty(thirdParty.id),
+      }))
       : []),
   ]
 
@@ -267,6 +325,40 @@ export default function HistoryPage() {
               Filtrar
             </button>
           </div>
+          {showThirdPartySelector && (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Terceiros no histórico</p>
+                  <p className="mt-0.5 text-xs font-bold text-slate-600">
+                    {selectedThirdParties.length === 0 ? "Todos os terceiros cadastrados" : `${selectedThirdParties.length} selecionado(s)`}
+                  </p>
+                </div>
+                {selectedThirdParties.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedThirdPartyIds([])}
+                    className="min-h-9 rounded-xl px-3 text-[10px] font-black uppercase tracking-widest text-[#2563EB] hover:bg-blue-50"
+                  >
+                    Ver todos
+                  </button>
+                )}
+              </div>
+              <select
+                title="Selecionar terceiro no histórico"
+                value=""
+                onChange={(event) => addSelectedThirdParty(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:border-[#2563EB]"
+              >
+                <option value="">Adicionar terceiro...</option>
+                {activeThirdParties.map((thirdParty) => (
+                  <option key={thirdParty.id} value={thirdParty.id} disabled={selectedThirdPartyIds.includes(thirdParty.id)}>
+                    {getThirdPartyDisplayName(thirdParty)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {activeFilterChips.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {activeFilterChips.map((chip) => (
@@ -280,6 +372,32 @@ export default function HistoryPage() {
                   {chip.label} ×
                 </button>
               ))}
+            </div>
+          )}
+          {showThirdPartySelector && (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {thirdPartyTotals.map((thirdParty) => (
+                <div key={thirdParty.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="truncate text-sm font-black uppercase tracking-tight text-slate-800" title={thirdParty.name}>{thirdParty.name}</p>
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Valor no filtro</p>
+                      <p className="mt-1 text-lg font-black text-emerald-700">
+                        R$ {thirdParty.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <p>{thirdParty.deliveries} registro(s)</p>
+                      <p>{thirdParty.items} item(ns)</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {thirdPartyTotals.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400 md:col-span-2 xl:col-span-3">
+                  Nenhum histórico de terceiro encontrado no filtro atual.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -307,6 +425,8 @@ export default function HistoryPage() {
                       { label: "Protocolo", value: `#${rec.id.slice(0, 8)}` },
                       { label: "Quantidade", value: String(rec.quantity) },
                       { label: "CA", value: rec.ppe?.ca_number || "-" },
+                      { label: "Tomador", value: getDeliveryThirdPartyId(rec) ? getDeliveryThirdPartyName(rec) : "Próprio" },
+                      { label: "Valor", value: `R$ ${getDeliveryCost(rec).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
                       { label: "Setor", value: rec.employee?.job_title || rec.workplace?.name || "-" },
                       { label: "Observações", value: rec.reason || "-" },
                       { label: "Quem registrou", value: "Sistema SafeEPI" },
@@ -347,7 +467,9 @@ export default function HistoryPage() {
                 <tr>
                     <th className="px-6 py-5">Protocolo</th>
                     <th className="px-6 py-5">Colaborador</th>
+                    <th className="px-6 py-5">Tomador</th>
                     <th className="px-6 py-5">EPI / CA</th>
+                    <th className="px-6 py-5">Valor</th>
                     <th className="px-6 py-5">Data da Entrega</th>
                     <th className="px-6 py-5">Arquivo Juridico</th>
                     <th className="px-6 py-5">Hash SHA-256</th>
@@ -362,9 +484,15 @@ export default function HistoryPage() {
                     <tr key={rec.id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-5 font-mono text-[10px] text-slate-400">#{rec.id.slice(0, 8)}</td>
                     <td className="px-6 py-5 font-bold text-slate-800">{rec.employee?.full_name}</td>
+                    <td className="px-6 py-5 text-xs font-black uppercase tracking-tight text-slate-500">
+                      {getDeliveryThirdPartyId(rec) ? getDeliveryThirdPartyName(rec) : "Próprio"}
+                    </td>
                     <td className="px-6 py-5 text-slate-600 font-medium">
                         {rec.ppe?.name} <br/>
                         <span className="text-[10px] text-slate-400 font-bold uppercase">CA {rec.ppe?.ca_number}</span>
+                    </td>
+                    <td className="px-6 py-5 text-xs font-black text-emerald-700">
+                      R$ {getDeliveryCost(rec).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-5 text-slate-400 text-xs font-bold uppercase">
                         {formatDeliveryDate(rec.delivery_date)} <br/>
@@ -446,7 +574,7 @@ export default function HistoryPage() {
                 })}
                 {filteredRecords.length === 0 && (
                     <tr>
-                        <td colSpan={7} className="px-6 py-20 text-center text-slate-400 italic font-medium">
+                        <td colSpan={9} className="px-6 py-20 text-center text-slate-400 italic font-medium">
                             Nenhum registro de entrega encontrado no histórico.
                         </td>
                     </tr>

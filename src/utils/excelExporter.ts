@@ -54,6 +54,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     Colaborador: delivery.employee?.full_name || "",
     CPF: delivery.employee?.cpf || "",
     Cargo: delivery.employee?.job_title || "",
+    "Terceiro/Tomador": delivery.third_party_name || (delivery.third_party_id ? delivery.third_party_id : "Proprio"),
     EPI: delivery.ppe?.name || "",
     "No. C.A.": delivery.ppe?.ca_number || "",
     Quantidade: delivery.quantity || 1,
@@ -102,6 +103,30 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     .sort((a, b) => b["Investimento Total (R$)"] - a["Investimento Total (R$)"])
 
   addReportSheet(workbook, "Resumo Canteiros", "Resumo por Canteiro", workplaceRows)
+
+  const thirdPartyMap: Record<string, { qtd: number; custo: number; registros: number }> = {}
+  deliveries.forEach((delivery) => {
+    if (!delivery.third_party_id && !delivery.third_party_name) return
+    const name = delivery.third_party_name || delivery.third_party_id || "Terceiro"
+    if (name === "Próprio" || name === "Proprio") return
+    if (!thirdPartyMap[name]) thirdPartyMap[name] = { qtd: 0, custo: 0, registros: 0 }
+    thirdPartyMap[name].qtd += delivery.quantity || 1
+    thirdPartyMap[name].registros += 1
+    thirdPartyMap[name].custo += (delivery.ppe?.cost || 0) * (delivery.quantity || 1)
+  })
+
+  const thirdPartyRows = Object.entries(thirdPartyMap)
+    .map(([terceiro, { qtd, custo, registros }]) => ({
+      Terceiro: terceiro,
+      Registros: registros,
+      Itens: qtd,
+      "Total para Cobranca (R$)": custo,
+    }))
+    .sort((a, b) => b["Total para Cobranca (R$)"] - a["Total para Cobranca (R$)"])
+
+  if (thirdPartyRows.length > 0) {
+    addReportSheet(workbook, "Resumo Terceiros", "Resumo por Terceiro", thirdPartyRows)
+  }
 
   void saveWorkbook(workbook, `Relatorio_EPIs_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
 }

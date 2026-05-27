@@ -840,6 +840,7 @@ export interface ReportPDFData {
   stats: { label: string; value: string; change: string }[]
   deliveries: DeliveryWithRelations[]
   periodTitle?: string
+  thirdPartySummary?: { name: string; value: number; deliveries: number; items: number }[]
 }
 
 export function generateGeneralReportPDF(data: ReportPDFData): Blob {
@@ -943,19 +944,55 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   doc.text(`${data.deliveries.length} entrega(s) no conjunto analisado`, mx + 7, summaryY + 13)
   doc.text("Tabela limitada aos 50 registros mais recentes para leitura gerencial.", pw - mx - 7, summaryY + 13, { align: "right" })
 
+  let tableStartY = 123
+  if (data.thirdPartySummary && data.thirdPartySummary.length > 0) {
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(9)
+    doc.setTextColor(...ink)
+    doc.text("Valores por terceiro", mx, 119)
+
+    autoTable(doc, {
+      startY: 123,
+      head: [["Terceiro", "Registros", "Itens", "Total para cobrança"]],
+      body: data.thirdPartySummary.map((item) => [
+        item.name,
+        String(item.deliveries),
+        String(item.items),
+        currency.format(item.value),
+      ]),
+      headStyles: { fillColor: brandColor, fontStyle: "bold", fontSize: 7.4, cellPadding: 2.8, textColor: 255 },
+      bodyStyles: { fontSize: 7.2, cellPadding: 2.6, textColor: ink },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { cellWidth: 128, fontStyle: "bold" },
+        1: { cellWidth: 34, halign: "center" },
+        2: { cellWidth: 34, halign: "center" },
+        3: { cellWidth: 73, halign: "right", fontStyle: "bold" },
+      },
+      margin: { left: mx, right: mx, bottom: 18 },
+      theme: "grid",
+      styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
+      didDrawPage: () => {
+        drawFooter()
+      },
+    })
+    tableStartY = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY || 123) + 12
+  }
+
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(...ink)
-  doc.text("Historico recente de transacoes", mx, 119)
+  doc.text("Historico recente de transacoes", mx, tableStartY - 4)
 
   const recentDeliveries = data.deliveries.slice(0, 50)
 
   autoTable(doc, {
-    startY: 123,
-    head: [["Data", "Colaborador", "EPI (C.A.)", "Qtd", "Custo Unit.", "Total", "Local"]],
+    startY: tableStartY,
+    head: [["Data", "Colaborador", "EPI (C.A.)", "Qtd", "Custo Unit.", "Total", "Tomador", "Local"]],
     body: recentDeliveries.length > 0 ? recentDeliveries.map(d => {
       const quantity = Number(d.quantity || 0)
       const unitCost = Number(d.ppe?.cost || 0)
+      const thirdPartyName = d.third_party_name || (d.third_party_id ? d.third_party_id.slice(0, 8) : "Proprio")
       return [
         `${formatDeliveryDate(d.delivery_date)} ${formatDeliveryTime(d.delivery_date)}`,
         d.employee?.full_name || 'N/A',
@@ -963,20 +1000,22 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
         String(d.quantity),
         currency.format(unitCost),
         currency.format(quantity * unitCost),
+        thirdPartyName,
         d.workplace?.name || 'Sede'
       ]
-    }) : [["-", "Nenhuma transacao encontrada", "-", "-", "-", "-", "-"]],
+    }) : [["-", "Nenhuma transacao encontrada", "-", "-", "-", "-", "-", "-"]],
     headStyles: { fillColor: [15, 23, 42], fontStyle: "bold", fontSize: 7.4, cellPadding: 3.2, textColor: 255, halign: "center" },
     bodyStyles: { fontSize: 7, cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 }, textColor: ink },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
-      0: { cellWidth: 28, halign: "center" },
-      1: { cellWidth: 52, fontStyle: "bold" },
-      2: { cellWidth: 64 },
-      3: { cellWidth: 13, halign: "center", fontStyle: "bold" },
-      4: { cellWidth: 24, halign: "right" },
-      5: { cellWidth: 24, halign: "right", fontStyle: "bold" },
-      6: { cellWidth: 64 },
+      0: { cellWidth: 25, halign: "center" },
+      1: { cellWidth: 42, fontStyle: "bold" },
+      2: { cellWidth: 50 },
+      3: { cellWidth: 12, halign: "center", fontStyle: "bold" },
+      4: { cellWidth: 22, halign: "right" },
+      5: { cellWidth: 22, halign: "right", fontStyle: "bold" },
+      6: { cellWidth: 36 },
+      7: { cellWidth: 60 },
     },
     margin: { left: mx, right: mx, bottom: 18 },
     theme: "grid",
