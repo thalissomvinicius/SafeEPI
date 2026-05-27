@@ -325,6 +325,46 @@ html[dir="ltr"] {
   }
 }
 
+@keyframes safeepi-loader-ring {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.04);
+  }
+}
+
+.safeepi-loading-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.safeepi-loading-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  animation: safeepi-loading-sheen 1.35s ease-in-out infinite;
+}
+
+@keyframes safeepi-loading-sheen {
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .safeepi-loading-sheen::after,
+  [class*="safeepi-loading-bar"],
+  [class*="safeepi-loader-ring"] {
+    animation: none !important;
+  }
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
