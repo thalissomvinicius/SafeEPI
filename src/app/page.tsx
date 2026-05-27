@@ -198,6 +198,11 @@ export default function Dashboard() {
   const activeAllEmployees = rawEmployees.filter(employee => employee.active).length
   const employeeCardTitle = employeeScope === "third_party" ? "Terceiros Ativos" : employeeScope === "all" ? "Equipe Total" : "Equipe Ativa"
   const employeeCardSubtitle = employeeScope === "third_party" ? "Colaboradores terceiros" : employeeScope === "all" ? "Proprios + terceiros" : "Colaboradores proprios"
+  const employeeScopeOptions = [
+    { value: "own" as const, label: "Próprios", count: activeOwnEmployees },
+    { value: "third_party" as const, label: "Terceiros", count: activeThirdPartyEmployees },
+    { value: "all" as const, label: "Todos", count: activeAllEmployees },
+  ]
 
   return (
     <div className="p-4 sm:p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
@@ -251,10 +256,35 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Equipe nos indicadores</p>
+          <p className="mt-0.5 text-sm font-bold text-slate-700">Escolha se o dashboard conta próprios, terceiros ou todos.</p>
+        </div>
+        <div className="grid w-full grid-cols-3 rounded-xl bg-slate-100 p-1 sm:w-auto sm:min-w-[360px]">
+          {employeeScopeOptions.map((scope) => (
+            <button
+              key={scope.value}
+              type="button"
+              onClick={() => setEmployeeScope(scope.value)}
+              className={`min-h-11 rounded-lg px-3 py-2 text-center transition-all ${
+                employeeScope === scope.value
+                  ? "bg-white text-[#2563EB] shadow-sm ring-1 ring-slate-200"
+                  : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
+              }`}
+              title={`Exibir ${scope.label.toLowerCase()}`}
+            >
+              <span className="block text-[10px] font-black uppercase tracking-widest">{scope.label}</span>
+              <span className="mt-0.5 block text-sm font-black">{scope.count}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {[
           { title: "Entregas Realizadas", value: stats.deliveries, subtitle: dateFilter === "all" ? "Todo o histórico" : "No período filtrado", icon: PackageCheck, color: "text-[#2563EB]", bg: "bg-red-50" },
-          { title: employeeCardTitle, value: stats.employees, subtitle: employeeCardSubtitle, icon: Users, color: "text-slate-800", bg: "bg-slate-100", employeeScopeCard: true },
+          { title: employeeCardTitle, value: stats.employees, subtitle: employeeCardSubtitle, icon: Users, color: "text-slate-800", bg: "bg-slate-100" },
           { title: "Estoque Baixo", value: stats.lowStock, subtitle: "Itens com 5 ou menos", icon: Boxes, color: "text-blue-700", bg: "bg-blue-50" },
           { title: "PDFs Auditados", value: stats.signedDocuments, subtitle: dateFilter === "all" ? "Arquivo jurídico ativo" : "No período filtrado", icon: Archive, color: "text-emerald-700", bg: "bg-emerald-50" },
           { title: "CAs em Alerta", value: stats.criticalCAs, subtitle: "Atenção necessária", icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
@@ -272,30 +302,6 @@ export default function Dashboard() {
                 <span className="text-2xl font-bold text-slate-800 tracking-tight">{item.value}</span>
                 <span className="text-xs font-bold text-slate-500 mt-1">{item.subtitle}</span>
               </div>
-              {item.employeeScopeCard && (
-                <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-50 p-1">
-                  {[
-                    { value: "own" as const, label: "Proprios", count: activeOwnEmployees },
-                    { value: "third_party" as const, label: "Terceiros", count: activeThirdPartyEmployees },
-                    { value: "all" as const, label: "Todos", count: activeAllEmployees },
-                  ].map((scope) => (
-                    <button
-                      key={scope.value}
-                      type="button"
-                      onClick={() => setEmployeeScope(scope.value)}
-                      className={`min-h-[44px] rounded-lg px-2 py-1 text-center transition-all ${
-                        employeeScope === scope.value
-                          ? "bg-white text-[#2563EB] shadow-sm ring-1 ring-slate-200"
-                          : "text-slate-500 hover:bg-white/70"
-                      }`}
-                      title={`Exibir ${scope.label.toLowerCase()}`}
-                    >
-                      <span className="block text-[9px] font-black uppercase tracking-widest">{scope.label}</span>
-                      <span className="block text-xs font-black">{scope.count}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           )
         })}
