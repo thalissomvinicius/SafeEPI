@@ -12,6 +12,7 @@ import SignatureCanvas from "react-signature-canvas"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
+import { LoadingState } from "@/components/ui/LoadingState"
 import { generateTrainingCertificate } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { generateAuditCode } from "@/utils/auditCode"
@@ -862,10 +863,11 @@ export default function TrainingPage() {
         
         <div className="min-h-[300px] md:overflow-x-auto">
           {loading ? (
-             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#2563EB]" />
-                <p className="text-sm font-medium italic">Acessando registros do Supabase...</p>
-            </div>
+            <LoadingState
+              variant="panel"
+              label="Acessando treinamentos"
+              detail="Carregando certificados, colaboradores e assinaturas pendentes."
+            />
           ) : (
             <>
             <div className="grid grid-cols-1 gap-4 bg-slate-50/60 p-4 md:hidden">

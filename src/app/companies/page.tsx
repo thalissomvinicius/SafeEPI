@@ -33,6 +33,7 @@ import { api, type CompanyWithCounts } from "@/services/api"
 import type { Profile } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
+import { LoadingRows, LoadingState } from "@/components/ui/LoadingState"
 
 type CompanyForm = {
   id?: string
@@ -303,10 +304,11 @@ export default function CompaniesPage() {
 
   if (authLoading || (user && user.role !== "MASTER")) {
     return (
-      <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
-        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Validando acesso master...</p>
-      </div>
+      <LoadingState
+        variant="page"
+        label="Validando acesso master"
+        detail="Conferindo credenciais antes de abrir a tela de empresas."
+      />
     )
   }
 
@@ -361,8 +363,8 @@ export default function CompaniesPage() {
           </div>
 
           {loading ? (
-            <div className="flex min-h-72 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-              <Loader2 className="h-8 w-8 animate-spin text-[#2563EB]" />
+            <div className="rounded-2xl border border-slate-100 bg-white p-4">
+              <LoadingRows rows={5} />
             </div>
           ) : filteredCompanies.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">

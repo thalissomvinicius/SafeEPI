@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
+import { LoadingRows, LoadingState } from "@/components/ui/LoadingState"
 
 export default function UsersPage() {
   const { user: currentUser, loading: authLoading } = useAuth()
@@ -134,10 +135,11 @@ export default function UsersPage() {
 
   if (authLoading || (currentUser && !canManageUsers)) {
     return (
-      <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
-        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Validando credenciais de administrador...</p>
-      </div>
+      <LoadingState
+        variant="page"
+        label="Validando administrador"
+        detail="Conferindo permissoes para gestao de acessos."
+      />
     )
   }
 
@@ -166,10 +168,7 @@ export default function UsersPage() {
 
       <div className="grid gap-4">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-            <Loader2 className="w-8 h-8 animate-spin mb-4" />
-            <p className="text-sm font-bold uppercase tracking-widest italic">Sincronizando Perfis do Auth...</p>
-          </div>
+          <LoadingRows rows={5} />
         ) : (
           <>
           <div className="grid grid-cols-1 gap-4 md:hidden">

@@ -20,6 +20,7 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { formatDeliveryDate } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { getSignatureDataUrl } from "@/utils/signatureCanvas"
+import { LoadingState } from "@/components/ui/LoadingState"
 
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -247,7 +248,15 @@ export default function ReturnsPage() {
     emp.cpf.includes(searchTerm)
   )
 
-  if (loading) return <div className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-[#2563EB]" /></div>
+  if (loading) {
+    return (
+      <LoadingState
+        variant="page"
+        label="Carregando devolucoes"
+        detail="Buscando colaboradores, EPIs e entregas ativas."
+      />
+    )
+  }
 
   if (isSaved) {
     return (

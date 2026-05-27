@@ -11,6 +11,7 @@ import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "@/lib/toast"
+import { LoadingState } from "@/components/ui/LoadingState"
 
 type DeliveryScopeFilter = "own" | "third_party" | "all"
 
@@ -404,10 +405,11 @@ export default function HistoryPage() {
         
         <div className="min-h-[300px] flex flex-col md:overflow-x-auto">
           {loading ? (
-             <div className="flex flex-col items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mb-2" />
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Acessando Arquivo Digital...</p>
-             </div>
+            <LoadingState
+              variant="panel"
+              label="Acessando arquivo digital"
+              detail="Carregando historico, PDFs auditados e filtros vinculados."
+            />
           ) : (
             <>
             <div className="grid grid-cols-1 gap-4 bg-slate-50/60 p-4 md:hidden">

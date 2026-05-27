@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import { Camera, CheckCircle2, Loader2, AlertTriangle, ShieldCheck, Lock, RefreshCw, XCircle } from "lucide-react"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { LoadingState } from "@/components/ui/LoadingState"
 import { formatCpf } from "@/utils/cpf"
 import Image from "next/image"
 import { Suspense } from "react"
@@ -156,7 +157,11 @@ function CaptureContent() {
   if (loading) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
+        <LoadingState
+          variant="page"
+          label="Abrindo captura"
+          detail="Validando link e preparando o fluxo facial."
+        />
       </div>
     )
   }
@@ -355,7 +360,7 @@ export default function RemoteCapturePage() {
   return (
     <Suspense fallback={
       <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
+        <LoadingState variant="page" label="Abrindo captura" detail="Preparando a tela segura." />
       </div>
     }>
       <CaptureContent />

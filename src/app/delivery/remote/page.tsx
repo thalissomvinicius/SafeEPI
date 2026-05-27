@@ -5,11 +5,12 @@
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, ShieldCheck, UserCheck, Lock } from "lucide-react"
+import { Camera, ExternalLink, FileDown, ShieldAlert, Fingerprint, PenLine, ShieldCheck, UserCheck, Lock } from "lucide-react"
 import { api } from "@/services/api"
 import { Delivery, Employee, PPE, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { LoadingState } from "@/components/ui/LoadingState"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
@@ -453,8 +454,11 @@ function RemoteDeliveryContent() {
   // ---------------------------------------
   if (phase === 'loading') return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] overflow-x-hidden bg-slate-50">
-      <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
-      <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Validando Link de Assinatura...</p>
+      <LoadingState
+        variant="page"
+        label="Validando link de assinatura"
+        detail="Carregando entrega, colaborador e itens para conferencia."
+      />
     </div>
   )
 
@@ -722,7 +726,7 @@ function RemoteDeliveryContent() {
 
 export default function RemoteDeliveryPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[100dvh] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-red-600" /></div>}>
+    <Suspense fallback={<div className="flex min-h-[100dvh] items-center justify-center"><LoadingState variant="page" label="Abrindo assinatura" detail="Preparando o fluxo externo." /></div>}>
       <RemoteDeliveryContent />
     </Suspense>
   )

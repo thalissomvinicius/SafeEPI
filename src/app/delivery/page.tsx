@@ -12,6 +12,7 @@ import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/typ
 import { useAuth } from "@/contexts/AuthContext"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { LoadingState } from "@/components/ui/LoadingState"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
@@ -1122,8 +1123,11 @@ export default function DeliveryPage() {
   if (loadingOptions) {
       return (
           <div className="flex flex-col items-center justify-center py-40">
-              <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
-              <p className="font-bold text-slate-500 uppercase tracking-widest text-xs italic">Sincronizando Sessão {COMPANY_CONFIG.shortName}...</p>
+              <LoadingState
+                variant="page"
+                label={`Sincronizando sessao ${COMPANY_CONFIG.shortName}`}
+                detail="Carregando colaboradores, EPIs e obras para uma nova entrega."
+              />
           </div>
       )
   }

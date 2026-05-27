@@ -3,10 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react"
 import { api } from "@/services/api"
 import { useRouter, usePathname } from "next/navigation"
-import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Company } from "@/types/database"
 import { applyCompanyBrand, clearCompanyTheme } from "@/lib/brandTheme"
+import { LoadingState } from "@/components/ui/LoadingState"
 
 type AppRole = "MASTER" | "ADMIN" | "ALMOXARIFE" | "DIRETORIA"
 
@@ -130,8 +130,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   if (loading || (!user && !isPublicPath(pathname))) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-slate-50">
-        <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
-        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Verificando seguranca...</p>
+        <LoadingState
+          variant="page"
+          label="Verificando seguranca"
+          detail="Validando sessao, empresa e permissoes de acesso."
+          className="min-h-[100dvh]"
+        />
       </div>
     )
   }

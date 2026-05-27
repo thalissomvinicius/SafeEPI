@@ -313,6 +313,18 @@ html[dir="ltr"] {
   }
 }
 
+@keyframes safeepi-loading-bar {
+  0% {
+    transform: translateX(-120%);
+  }
+  50% {
+    transform: translateX(45%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

@@ -5,6 +5,7 @@ import { BriefcaseBusiness, Building2, Loader2, Plus, Search, Trash2, X } from "
 import { api } from "@/services/api"
 import { CatalogItem } from "@/types/database"
 import { toast } from "@/lib/toast"
+import { LoadingRows } from "@/components/ui/LoadingState"
 
 type CatalogKind = "job" | "department"
 
@@ -252,10 +253,7 @@ export default function JobSectorsPage() {
 
           <div className="divide-y divide-slate-50 min-h-[320px]">
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-24">
-                <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mb-2" />
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Carregando cadastros...</p>
-              </div>
+              <LoadingRows rows={4} className="p-5" />
             ) : filteredItems.length === 0 ? (
               <div className="py-24 text-center px-6">
                 <p className="text-slate-400 text-sm italic font-medium">Nenhum cadastro encontrado.</p>

@@ -5,9 +5,10 @@
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, CheckCircle2, Fingerprint, Loader2, PenTool, ShieldAlert } from "lucide-react"
+import { Camera, CheckCircle2, Fingerprint, PenTool, ShieldAlert } from "lucide-react"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { LoadingState } from "@/components/ui/LoadingState"
 import { formatCpf } from "@/utils/cpf"
 import { toast } from "@/lib/toast"
 
@@ -108,7 +109,11 @@ function RemoteTrainingSignatureContent() {
   if (phase === "loading") {
     return (
       <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" />
+        <LoadingState
+          variant="page"
+          label="Preparando treinamento"
+          detail="Validando link e carregando dados para assinatura."
+        />
       </div>
     )
   }
@@ -248,7 +253,7 @@ function RemoteTrainingSignatureContent() {
 
 export default function RemoteTrainingSignaturePage() {
   return (
-    <Suspense fallback={<div className="min-h-[100dvh] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#2563EB]" /></div>}>
+    <Suspense fallback={<div className="min-h-[100dvh] flex items-center justify-center"><LoadingState variant="page" label="Abrindo assinatura" detail="Preparando o fluxo externo." /></div>}>
       <RemoteTrainingSignatureContent />
     </Suspense>
   )

@@ -16,6 +16,7 @@ import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime, parseLocalDateOnly } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
+import { LoadingState } from "@/components/ui/LoadingState"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 type DeliveryScopeFilter = 'own' | 'third_party' | 'all'
@@ -616,10 +617,11 @@ export default function MovementsPage() {
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
         <div className="min-h-[400px]">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-              <Loader2 className="w-10 h-10 animate-spin mb-4 text-[#2563EB]" />
-              <p className="text-sm font-black uppercase tracking-widest italic">Acessando Banco de Dados...</p>
-            </div>
+            <LoadingState
+              variant="panel"
+              label="Acessando banco de dados"
+              detail="Montando movimentacoes, documentos e filtros do periodo."
+            />
           ) : (
             <div className="bg-slate-50/70 p-4">
               <div className="mb-3 flex flex-col gap-1 px-1 sm:flex-row sm:items-center sm:justify-between">

@@ -9,6 +9,7 @@ import { api } from "@/services/api"
 import type { DeliveryWithRelations, Employee, ThirdParty, Workplace } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { BottomSheet } from "@/components/ui/BottomSheet"
+import { LoadingState } from "@/components/ui/LoadingState"
 
 type ThirdPartyForm = {
   id?: string
@@ -243,10 +244,11 @@ export default function ThirdPartiesPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="mb-4 h-10 w-10 animate-spin text-[#2563EB]" />
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Carregando terceiros...</p>
-      </div>
+      <LoadingState
+        variant="page"
+        label="Carregando terceiros"
+        detail="Sincronizando tomadores, colaboradores e entregas vinculadas."
+      />
     )
   }
 

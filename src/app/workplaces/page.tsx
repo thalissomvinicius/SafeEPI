@@ -7,6 +7,7 @@ import { api } from "@/services/api"
 import { Workplace, Employee, DeliveryWithRelations, ThirdParty } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { BottomSheet } from "@/components/ui/BottomSheet"
+import { LoadingRows, LoadingState } from "@/components/ui/LoadingState"
 
 export default function WorkplacesPage() {
   const { user } = useAuth()
@@ -179,10 +180,11 @@ export default function WorkplacesPage() {
         </div>
         <div className="p-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-[#2563EB] mb-2" />
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sincronizando...</p>
-            </div>
+            <LoadingState
+              variant="panel"
+              label="Sincronizando obras"
+              detail="Buscando canteiros, tomadores e vinculos operacionais."
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredWorkplaces.map((w) => (
@@ -292,9 +294,7 @@ export default function WorkplacesPage() {
 
               {/* Stats */}
               {detailsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#2563EB]" />
-                </div>
+                <LoadingRows rows={3} />
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-4">

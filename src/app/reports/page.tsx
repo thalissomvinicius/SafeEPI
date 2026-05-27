@@ -2,11 +2,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, Loader2, FileSpreadsheet, Calendar } from "lucide-react"
+import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, FileSpreadsheet, Calendar } from "lucide-react"
 import { api } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { LoadingState } from "@/components/ui/LoadingState"
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
@@ -254,10 +255,11 @@ export default function ReportsPage() {
 
   if (authLoading || (user && user.role === 'ALMOXARIFE')) {
     return (
-      <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
-        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Validando acesso...</p>
-      </div>
+      <LoadingState
+        variant="page"
+        label="Validando acesso"
+        detail="Conferindo permissoes para relatorios gerenciais."
+      />
     )
   }
 

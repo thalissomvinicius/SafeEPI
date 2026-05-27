@@ -12,6 +12,7 @@ import { Employee, Workplace, DeliveryWithRelations, CatalogItem, ThirdParty } f
 import { format, addDays, isPast } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { LoadingRows } from "@/components/ui/LoadingState"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { COMPANY_CONFIG } from "@/config/company"
@@ -2047,9 +2048,7 @@ export default function EmployeesPage() {
 
                   <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/30">
                     {loadingHistory ? (
-                      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#2563EB]" />
-                      </div>
+                      <LoadingRows rows={4} />
                     ) : (
                       <div className="space-y-6">
                         <div className="flex items-center justify-between">
