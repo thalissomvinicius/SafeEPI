@@ -112,7 +112,7 @@ export function SignatureCapture({
         </button>
       </div>
 
-      <div className="sticky bottom-0 w-full max-w-full bg-white/95 py-2 backdrop-blur sm:static sm:bg-transparent sm:p-0">
+      <div className="sticky bottom-0 z-10 w-full max-w-full bg-white/95 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur sm:static sm:bg-transparent sm:p-0">
         <button
           type="button"
           onClick={onConfirm}

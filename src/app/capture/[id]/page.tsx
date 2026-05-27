@@ -203,12 +203,12 @@ function CaptureContent() {
   // -- CÂMERA FULLSCREEN --
   if (isCapturing) {
     return (
-      <div className="fixed inset-0 bg-slate-50 flex flex-col z-50 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto overscroll-contain bg-slate-50 pb-[env(safe-area-inset-bottom)]">
         <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white/95 p-3 z-10 backdrop-blur">
           <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest">Captura Facial</h3>
           <button onClick={() => setIsCapturing(false)} className="min-h-[40px] text-slate-700 text-xs font-bold bg-slate-100 px-4 rounded-full">Cancelar</button>
         </div>
-        <div className="flex-1 min-h-0 p-3 sm:p-6">
+        <div className="min-h-0 flex-1 p-2 sm:p-6">
            <FaceCamera 
               employeeId={employee?.id}
               verifyToken={linkToken}
@@ -225,8 +225,8 @@ function CaptureContent() {
   // -- PREVIEW DA FOTO CAPTURADA --
   if (capturedPhoto) {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 p-4 flex flex-col items-center justify-center">
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5 animate-in fade-in">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
+        <div className="w-full max-w-md space-y-5 rounded-3xl bg-white p-5 text-center shadow-xl animate-in fade-in sm:p-8">
           <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Confirme sua Foto</h2>
           
           <div className="relative mx-auto w-48 h-48 sm:w-56 sm:h-56 rounded-full overflow-hidden border-4 border-green-500 shadow-xl">
@@ -247,7 +247,7 @@ function CaptureContent() {
             <button 
               onClick={handleConfirm}
               disabled={isSaving}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/15 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/15 transition-all hover:bg-emerald-700 disabled:opacity-50"
             >
               {isSaving ? (
                 <><Loader2 className="w-5 h-5 animate-spin" /> Salvando...</>
@@ -258,7 +258,7 @@ function CaptureContent() {
             <button 
               onClick={handleRetake}
               disabled={isSaving}
-              className="w-full bg-white border-2 border-slate-200 text-slate-600 py-3 rounded-2xl font-black uppercase tracking-widest text-xs transition-all hover:bg-slate-50 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-50"
             >
               <RefreshCw className="w-4 h-4" /> Tirar Outra Foto
             </button>
@@ -271,8 +271,8 @@ function CaptureContent() {
   // -- VERIFICAÇÃO DE CPF --
   if (!cpfVerified) {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 p-4 flex flex-col items-center justify-center">
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
+        <div className="w-full max-w-md space-y-5 rounded-3xl bg-white p-5 text-center shadow-xl sm:p-8">
           <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
             <Lock className="w-7 h-7 text-[#2563EB]" />
           </div>
@@ -293,7 +293,7 @@ function CaptureContent() {
               onChange={(e) => { setCpfInput(formatCpf(e.target.value)); setCpfError(""); }}
               placeholder="000.000.000-00"
               maxLength={14}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-center text-lg font-bold focus:border-[#2563EB] focus:outline-none transition-all tracking-widest"
+              className="min-h-[52px] w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-center text-lg font-bold tracking-widest transition-all focus:border-[#2563EB] focus:outline-none"
               autoFocus
               inputMode="numeric"
               onKeyDown={(e) => e.key === 'Enter' && handleCpfVerify()}
@@ -305,7 +305,7 @@ function CaptureContent() {
 
             <button 
               onClick={handleCpfVerify}
-              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-blue-900/20 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
+              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]"
             >
               <ShieldCheck className="w-4 h-4" /> Verificar CPF
             </button>
@@ -317,8 +317,8 @@ function CaptureContent() {
 
   // -- TELA PRINCIPAL (CPF verificado) --
   return (
-    <div className="min-h-[100dvh] bg-slate-50 p-4 flex flex-col items-center justify-center">
-      <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-5">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
+      <div className="w-full max-w-md space-y-5 rounded-3xl bg-white p-5 text-center shadow-xl sm:p-8">
         <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
           <Camera className="w-7 h-7 text-green-600" />
         </div>
@@ -338,7 +338,7 @@ function CaptureContent() {
 
         <button 
           onClick={() => setIsCapturing(true)}
-          className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
+          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#2563EB] py-4 font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]"
         >
           <Camera className="w-5 h-5" /> Iniciar Câmera
         </button>

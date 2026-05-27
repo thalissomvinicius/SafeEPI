@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   if (loading || (!user && !isPublicPath(pathname))) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-slate-50">
         <Loader2 className="w-10 h-10 animate-spin text-[#2563EB] mb-4" />
         <p className="font-bold text-slate-400 uppercase tracking-widest text-xs italic">Verificando seguranca...</p>
       </div>

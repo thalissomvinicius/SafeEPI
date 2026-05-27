@@ -399,6 +399,8 @@ export function FaceCamera({
       setInstruction("Abrindo imagem da camera...")
 
       const video = await waitForVideoElement(videoRef)
+      video.setAttribute("playsinline", "true")
+      video.setAttribute("webkit-playsinline", "true")
       video.srcObject = stream
       video.muted = true
       video.playsInline = true
@@ -461,8 +463,8 @@ export function FaceCamera({
 
   if (state === "INSTRUCTIONS") {
     return (
-      <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-xl shadow-slate-200/70">
-        <div className="flex min-h-[280px] flex-col justify-between p-4 sm:min-h-[340px] sm:p-7">
+      <div className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-xl shadow-slate-200/70">
+        <div className="flex min-h-[260px] flex-col justify-between p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:min-h-[340px] sm:p-7">
           <div className="text-center">
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-700 ring-1 ring-red-100 sm:h-16 sm:w-16">
               <ShieldCheck className="h-7 w-7 sm:h-8 sm:w-8" />
@@ -496,8 +498,8 @@ export function FaceCamera({
   }
 
   return (
-    <div className="relative w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-xl shadow-slate-200/70">
-      <div className="flex min-h-[calc(100dvh-96px)] flex-col gap-3 p-3 sm:min-h-0 sm:p-5">
+    <div className="relative w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-xl shadow-slate-200/70">
+      <div className="flex max-h-[calc(100dvh-0.75rem)] min-h-[calc(100dvh-0.75rem)] flex-col gap-3 overflow-y-auto overscroll-contain p-3 sm:max-h-none sm:min-h-0 sm:overflow-visible sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-700">{modeLabel}</p>
@@ -506,7 +508,7 @@ export function FaceCamera({
           <button
             type="button"
             onClick={handleCancel}
-            className="min-h-[44px] shrink-0 rounded-full border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-100"
+            className="min-h-[44px] max-w-[46%] shrink-0 truncate rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-100 sm:max-w-none sm:px-4"
           >
             {cancelLabel}
           </button>
@@ -525,7 +527,7 @@ export function FaceCamera({
               muted
               playsInline
               autoPlay
-              className={`h-full w-full scale-x-[-1] object-cover transition-opacity duration-300 ${isCameraReady ? "opacity-100" : "opacity-0"}`}
+              className={`h-full w-full touch-none scale-x-[-1] object-cover transition-opacity duration-300 ${isCameraReady ? "opacity-100" : "opacity-0"}`}
             />
 
             {!isCameraReady && (
@@ -582,7 +584,7 @@ export function FaceCamera({
           )}
         </div>
 
-        <div className="sticky bottom-0 -mx-3 mt-auto flex flex-col gap-2.5 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+        <div className="sticky bottom-0 z-10 mt-auto flex flex-col gap-2.5 border-t border-slate-200 bg-white/95 px-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0">
           {isEvidenceMode && !isTerminal && (
             <button
               type="button"

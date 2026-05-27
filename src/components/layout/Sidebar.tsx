@@ -47,7 +47,7 @@ export function Sidebar() {
   )
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 text-slate-600 hidden md:flex flex-col h-screen sticky top-0 shadow-sm">
+    <aside className="sticky top-0 hidden h-[100dvh] w-64 flex-col border-r border-slate-200 bg-white text-slate-600 shadow-sm md:flex">
       <div className="h-32 flex flex-col items-center justify-center border-b border-slate-100 bg-white p-4">
         <Image
           src={brandLogo}

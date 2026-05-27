@@ -1343,7 +1343,14 @@ export default function TrainingPage() {
                           <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
                             <SignatureCanvas
                               ref={tstSigCanvas}
-                              canvasProps={{ className: "w-full h-32 touch-none" }}
+                              canvasProps={{
+                                className: "block w-full h-32 max-w-full touch-none overscroll-contain",
+                                style: {
+                                  touchAction: "none",
+                                  WebkitUserSelect: "none",
+                                  userSelect: "none",
+                                },
+                              }}
                               penColor="#1e293b"
                             />
                           </div>
@@ -1537,7 +1544,14 @@ export default function TrainingPage() {
                         <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
                           <SignatureCanvas
                             ref={instructorSigCanvas}
-                            canvasProps={{ className: "w-full h-32 touch-none" }}
+                            canvasProps={{
+                              className: "block w-full h-32 max-w-full touch-none overscroll-contain",
+                              style: {
+                                touchAction: "none",
+                                WebkitUserSelect: "none",
+                                userSelect: "none",
+                              },
+                            }}
                             penColor="#1e293b"
                           />
                         </div>

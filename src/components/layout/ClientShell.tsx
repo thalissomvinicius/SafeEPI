@@ -19,7 +19,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   if (isLoginPage || isPublicRemotePage || !user) {
     return (
-      <main className="flex-1 w-full flex flex-col">
+      <main className="flex min-h-[100dvh] w-full max-w-full flex-1 flex-col overflow-x-hidden">
         {children}
       </main>
     )
@@ -27,12 +27,12 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="flex h-screen overflow-hidden w-full relative">
+      <div className="relative flex h-[100dvh] min-h-[100dvh] w-full max-w-full overflow-hidden">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-y-auto pb-16 md:pb-0 flex flex-col">
-            <div className="flex-1">
+          <main className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-0">
+            <div className="min-w-0 max-w-full flex-1">
               {children}
             </div>
             <footer className="w-full p-6 mt-8 border-t border-slate-200/60 bg-slate-50/50 text-center shrink-0">

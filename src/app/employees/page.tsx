@@ -1957,7 +1957,7 @@ export default function EmployeesPage() {
 
               </div>
 
-              <div className="sticky bottom-0 z-10 shrink-0 flex gap-3 border-t border-slate-100 bg-white/95 px-5 py-4 shadow-[0_-12px_28px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+              <div className="sticky bottom-0 z-10 flex shrink-0 gap-3 border-t border-slate-100 bg-white/95 px-5 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-12px_28px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
                 <button 
                   type="button" 
                   disabled={isSaving}
@@ -2289,7 +2289,16 @@ export default function EmployeesPage() {
                       <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
                         <SignatureCanvas
                           ref={tstSigCanvas}
-                          canvasProps={{ className: "w-full h-28 touch-none", style: { width: '100%', height: '112px' } }}
+                          canvasProps={{
+                            className: "block w-full h-28 max-w-full touch-none overscroll-contain",
+                            style: {
+                              width: "100%",
+                              height: "112px",
+                              touchAction: "none",
+                              WebkitUserSelect: "none",
+                              userSelect: "none",
+                            },
+                          }}
                           penColor="#1e293b"
                         />
                       </div>

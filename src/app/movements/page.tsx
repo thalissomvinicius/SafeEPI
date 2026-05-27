@@ -838,7 +838,14 @@ export default function MovementsPage() {
                       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                         <SignatureCanvas
                           ref={movementSigCanvas}
-                          canvasProps={{ className: "w-full h-28 bg-white" }}
+                          canvasProps={{
+                            className: "block w-full h-28 max-w-full touch-none overscroll-contain bg-white",
+                            style: {
+                              touchAction: "none",
+                              WebkitUserSelect: "none",
+                              userSelect: "none",
+                            },
+                          }}
                         />
                       </div>
                       <button

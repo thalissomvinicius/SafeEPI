@@ -343,7 +343,7 @@ export default function ThirdPartiesPage() {
                 <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
                   <button
                     onClick={() => editThirdParty(thirdParty)}
-                    className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-700 transition-colors hover:bg-red-100"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-700 transition-colors hover:bg-red-100 md:min-h-[30px] md:min-w-[30px]"
                     title="Editar terceiro"
                     aria-label="Editar terceiro"
                   >
@@ -352,7 +352,7 @@ export default function ThirdPartiesPage() {
                   <button
                     onClick={() => void handleDeactivate(thirdParty)}
                     disabled={!thirdParty.active}
-                    className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-red-100 bg-white text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-35"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-red-100 bg-white text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-35 md:min-h-[30px] md:min-w-[30px]"
                     title="Inativar terceiro"
                     aria-label="Inativar terceiro"
                   >
