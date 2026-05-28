@@ -21,6 +21,7 @@ import { copyTextToClipboard } from "@/utils/clipboard"
 import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
+import { isValidGeoLocation, requestRequiredGeolocation } from "@/utils/geolocation"
 
 interface CartItem {
   ppeId: string
@@ -103,6 +104,8 @@ export default function DeliveryPage() {
 
   const [ipAddress, setIpAddress] = useState<string>("")
   const [location, setLocation] = useState<string>("")
+  const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "granted" | "blocked">("idle")
+  const [locationError, setLocationError] = useState("")
 
   const [employees, setEmployees] = useState<Employee[]>([])
   const [ppes, setPpes] = useState<PPE[]>([])
@@ -125,6 +128,32 @@ export default function DeliveryPage() {
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
 
+  const requestLocationForSignature = useCallback(async (showToast = true) => {
+    if (isValidGeoLocation(location)) {
+      setLocationStatus("granted")
+      setLocationError("")
+      return location
+    }
+
+    setLocationStatus("requesting")
+    const result = await requestRequiredGeolocation()
+
+    if (result.ok) {
+      setLocation(result.value)
+      setLocationStatus("granted")
+      setLocationError("")
+      return result.value
+    }
+
+    setLocation("")
+    setLocationStatus("blocked")
+    setLocationError(result.message)
+    if (showToast) {
+      toast.error("Localização obrigatória", result.message)
+    }
+    return null
+  }, [location])
+
   const pendingSignatureSummary = useMemo(() => {
     const pending = pendingDrafts.filter((draft) => draft.status === "pending").length
     const expired = pendingDrafts.filter((draft) => draft.status === "expired").length
@@ -142,18 +171,16 @@ export default function DeliveryPage() {
             const ipData = await ipRes.json()
             setIpAddress(ipData.ip)
 
-            if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => {
-                    setLocation(`${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`)
-                  },
-                  () => {
-                    setLocation("Permissão negada pelo dispositivo")
-                  },
-                  { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                )
+            setLocationStatus("requesting")
+            const locationResult = await requestRequiredGeolocation()
+            if (locationResult.ok) {
+              setLocation(locationResult.value)
+              setLocationStatus("granted")
+              setLocationError("")
             } else {
-                setLocation("Navegador sem suporte a GPS")
+              setLocation("")
+              setLocationStatus("blocked")
+              setLocationError(locationResult.message)
             }
         } catch (e) { console.error("Erro ao capturar metadados:", e) }
     }
@@ -554,6 +581,8 @@ export default function DeliveryPage() {
       return
     }
     if (!validateCartForDelivery()) return
+    const requiredLocation = await requestLocationForSignature()
+    if (!requiredLocation) return
 
     try {
       setIsSaving(true)
@@ -617,7 +646,7 @@ export default function DeliveryPage() {
         signatureBase64: signatureDataUrl,
         photoBase64,
         ipAddress,
-        location,
+        location: requiredLocation,
         validationHash,
         deliveryDate: selectedDeliveryDateIso
       })
@@ -638,7 +667,7 @@ export default function DeliveryPage() {
           signatureUrl: savedDeliveries[0]?.signature_url,
           photoEvidenceBase64: photoBase64,
           ipAddress,
-          geoLocation: location,
+          geoLocation: requiredLocation,
           metadata: {
             validationHash,
             workplaceName: selectedWorkplace?.name || "Sede",
@@ -708,7 +737,7 @@ export default function DeliveryPage() {
     } finally {
       setIsSaving(false)
     }
-  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, location, authMethod, capturedPhotoBase64, selectedEmployee, selectedWorkplace, deliveryDate, validateCartForDelivery])
+  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, authMethod, capturedPhotoBase64, selectedEmployee, selectedWorkplace, deliveryDate, validateCartForDelivery, requestLocationForSignature])
 
   const handleManualSave = () => {
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
@@ -1708,6 +1737,30 @@ export default function DeliveryPage() {
                   ))}
                 </ul>
               </div>
+
+              {locationStatus !== "granted" && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-black uppercase tracking-wide text-amber-900">Localização obrigatória</p>
+                        <p className="mt-1 text-sm font-medium leading-relaxed text-amber-800">
+                          {locationError || "Permita a localização do navegador antes de concluir a assinatura auditável."}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void requestLocationForSignature(true)}
+                      disabled={locationStatus === "requesting"}
+                      className="min-h-[44px] w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-amber-900/10 transition-all hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
+                    >
+                      {locationStatus === "requesting" ? "Solicitando..." : "Permitir localização"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-3">
                 <button 

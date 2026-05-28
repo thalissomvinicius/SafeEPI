@@ -28,6 +28,16 @@ function shouldRestockReturnedDelivery(motive: string): boolean {
   )
 }
 
+function parseStock(raw: unknown): number | null {
+  if (typeof raw === "number") return raw
+  if (typeof raw === "string") {
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
+}
+
 function isMissingDeliveryReturnMotiveIssue(error: unknown): boolean {
   if (!error || typeof error !== "object") return false
   const maybeError = error as SupabaseLikeError
@@ -75,6 +85,15 @@ async function restockPpe(
 ) {
   if (quantity <= 0) return
 
+  const { data: stockBeforeData, error: stockBeforeError } = await supabaseAdmin
+    .from("ppes")
+    .select("current_stock")
+    .eq("id", ppeId)
+    .maybeSingle()
+
+  if (stockBeforeError) throw stockBeforeError
+  const stockBefore = parseStock((stockBeforeData as { current_stock?: unknown } | null)?.current_stock)
+
   const movementPayload: Record<string, unknown> = {
     ppe_id: ppeId,
     quantity,
@@ -87,18 +106,24 @@ async function restockPpe(
   const { error: movementError } = await insertReturnMovement(movementPayload)
   if (movementError) throw movementError
 
-  const { data: ppe, error: ppeError } = await supabaseAdmin
+  if (stockBefore === null) return
+
+  const { data: stockAfterData, error: stockAfterError } = await supabaseAdmin
     .from("ppes")
     .select("current_stock")
     .eq("id", ppeId)
     .maybeSingle()
 
-  if (ppeError) throw ppeError
+  if (stockAfterError) throw stockAfterError
 
-  const currentStock = Number((ppe as { current_stock?: unknown } | null)?.current_stock || 0)
+  const stockAfter = parseStock((stockAfterData as { current_stock?: unknown } | null)?.current_stock)
+  const expectedStock = stockBefore + quantity
+
+  if (stockAfter === expectedStock) return
+
   const updateQuery = supabaseAdmin
     .from("ppes")
-    .update({ current_stock: currentStock + quantity })
+    .update({ current_stock: expectedStock })
     .eq("id", ppeId)
 
   if (companyId) updateQuery.eq("company_id", companyId)

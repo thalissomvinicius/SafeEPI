@@ -18,6 +18,7 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { getSignatureDataUrl } from "@/utils/signatureCanvas"
+import { isValidGeoLocation, requestRequiredGeolocation } from "@/utils/geolocation"
 
 interface DeliveryData {
   e: string // employee id
@@ -96,7 +97,35 @@ function RemoteDeliveryContent() {
   // -- Metadata --
   const [ipAddress, setIpAddress] = useState("")
   const [location, setLocation] = useState("")
+  const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "granted" | "blocked">("idle")
+  const [locationError, setLocationError] = useState("")
   const [linkToken, setLinkToken] = useState<string>("")
+
+  const requestLocationForSignature = useCallback(async (showToast = true) => {
+    if (isValidGeoLocation(location)) {
+      setLocationStatus("granted")
+      setLocationError("")
+      return location
+    }
+
+    setLocationStatus("requesting")
+    const result = await requestRequiredGeolocation()
+
+    if (result.ok) {
+      setLocation(result.value)
+      setLocationStatus("granted")
+      setLocationError("")
+      return result.value
+    }
+
+    setLocation("")
+    setLocationStatus("blocked")
+    setLocationError(result.message)
+    if (showToast) {
+      toast.error("Localização obrigatória", result.message)
+    }
+    return null
+  }, [location])
 
   // -- Auto-scroll to top on phase/method change --
   useEffect(() => {
@@ -122,19 +151,16 @@ function RemoteDeliveryContent() {
         const ipRes = await fetch('https://api.ipify.org?format=json')
         const ipData = await ipRes.json()
         setIpAddress(ipData.ip)
-        if ('geolocation' in navigator) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              setLocation(`${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`)
-            },
-            (err) => {
-              console.warn("Geolocation denied or unavailable:", err.message)
-              setLocation("Permissão negada pelo dispositivo")
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-          )
+        setLocationStatus("requesting")
+        const locationResult = await requestRequiredGeolocation()
+        if (locationResult.ok) {
+          setLocation(locationResult.value)
+          setLocationStatus("granted")
+          setLocationError("")
         } else {
-          setLocation("Navegador sem suporte a GPS")
+          setLocation("")
+          setLocationStatus("blocked")
+          setLocationError(locationResult.message)
         }
       } catch { /* ignore */ }
 
@@ -296,6 +322,8 @@ function RemoteDeliveryContent() {
       toast.error("Faça a verificação facial antes de confirmar a assinatura.")
       return
     }
+    const requiredLocation = await requestLocationForSignature()
+    if (!requiredLocation) return
     try {
       setIsSaving(true)
       const validationHash = generateAuditCode()
@@ -313,6 +341,7 @@ function RemoteDeliveryContent() {
       formData.append('reason', firstItem?.reason || deliveryData?.r || 'Primeira Entrega')
       formData.append('quantity', String(firstItem?.quantity || deliveryData?.q || 1))
       formData.append('ip_address', ipAddress || 'Remoto')
+      formData.append('geo_location', requiredLocation)
       formData.append('auth_method', persistedAuthMethod)
       formData.append('signatureFile', signatureFile)
       if (linkToken) formData.append('token', linkToken) // Passa o token para o servidor
@@ -368,7 +397,7 @@ function RemoteDeliveryContent() {
         signatureBase64: signatureDataUrl,
         photoBase64,
         ipAddress,
-        location,
+        location: requiredLocation,
         validationHash,
         deliveryDate: getPdfDeliveryDate(authoritativeDeliveryDate),
       })
@@ -390,7 +419,7 @@ function RemoteDeliveryContent() {
           signatureUrl: responseData.data?.signature_url,
           photoEvidenceBase64: photoBase64,
           ipAddress,
-          geoLocation: location,
+          geoLocation: requiredLocation,
           linkToken,
           metadata: {
             validationHash,
@@ -447,7 +476,7 @@ function RemoteDeliveryContent() {
     } finally {
       setIsSaving(false)
     }
-  }, [employee, ppe, workplace, deliveryData, deliveryItems, authMethod, capturedPhotoBase64, ipAddress, location, linkToken])
+  }, [employee, ppe, workplace, deliveryData, deliveryItems, authMethod, capturedPhotoBase64, ipAddress, linkToken, requestLocationForSignature])
 
   // ---------------------------------------
   // RENDER: Loading
@@ -602,6 +631,30 @@ function RemoteDeliveryContent() {
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirmação de Recebimento</h1>
           <p className="text-slate-500 text-xs sm:text-sm font-medium">{employee?.full_name}</p>
         </div>
+
+        {locationStatus !== "granted" && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+            <div className="flex flex-col gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+                <div className="min-w-0">
+                  <p className="text-sm font-black uppercase tracking-wide text-amber-900">Localização obrigatória</p>
+                  <p className="mt-1 text-sm font-medium leading-relaxed text-amber-800">
+                    {locationError || "Permita a localização para concluir a assinatura e validar o PDF."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void requestLocationForSignature(true)}
+                disabled={locationStatus === "requesting"}
+                className="min-h-[44px] w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-amber-900/10 transition-all hover:bg-amber-700 disabled:opacity-60"
+              >
+                {locationStatus === "requesting" ? "Solicitando..." : "Permitir localização"}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="w-full min-w-0 max-w-full space-y-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/50 sm:space-y-6 sm:rounded-3xl sm:p-6">
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 sm:hidden">

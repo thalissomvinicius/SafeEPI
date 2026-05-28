@@ -6,6 +6,7 @@ import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { isValidationResponse } from "@/lib/validateBody"
 import { validateUpload } from "@/lib/validateUpload"
+import { isValidGeoLocation } from "@/utils/geolocation"
 
 const VALID_DOCUMENT_TYPES = new Set([
   "delivery",
@@ -14,6 +15,8 @@ const VALID_DOCUMENT_TYPES = new Set([
   "nr06",
   "training_certificate",
 ])
+
+const LOCATION_REQUIRED_DOCUMENT_TYPES = new Set(["delivery", "remote_delivery"])
 
 function sanitizeFileName(fileName: string) {
   return fileName
@@ -150,6 +153,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Hash SHA-256 invalido." }, { status: 400 })
     }
 
+    const geoLocation = String(formData.get("geo_location") || "").trim()
+    if (LOCATION_REQUIRED_DOCUMENT_TYPES.has(documentType) && !isValidGeoLocation(geoLocation)) {
+      return NextResponse.json({
+        error: "Localizacao obrigatoria para arquivar assinatura. Permita a localizacao e tente novamente.",
+      }, { status: 400 })
+    }
+
     const fileName = sanitizeFileName(String(
       formData.get("file_name") ||
       (pdfFile instanceof File ? pdfFile.name : "") ||
@@ -238,7 +248,7 @@ export async function POST(request: Request) {
       signature_url: String(formData.get("signature_url") || "") || null,
       photo_evidence_url: photoEvidenceUrl,
       ip_address: String(formData.get("ip_address") || "") || null,
-      geo_location: String(formData.get("geo_location") || "") || null,
+      geo_location: geoLocation || null,
       user_agent: request.headers.get("user-agent"),
       metadata,
       created_by: createdBy,

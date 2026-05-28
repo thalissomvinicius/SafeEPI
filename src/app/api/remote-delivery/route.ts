@@ -6,6 +6,7 @@ import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { remoteDeliveryFieldsSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUpload } from "@/lib/validateUpload"
+import { isValidGeoLocation } from "@/utils/geolocation"
 
 type SupabaseLikeError = {
   code?: string
@@ -17,6 +18,24 @@ type SupabaseLikeError = {
 type DeliveryInsertRow = {
   id?: string
   [key: string]: unknown
+}
+
+type SupabaseMutationResult = { error: SupabaseLikeError | null }
+type SupabaseSelectResult = { data: { current_stock?: unknown } | null; error: SupabaseLikeError | null }
+type SupabaseInsertBuilder = { select: () => PromiseLike<SupabaseMutationResult> }
+type SupabaseUpdateBuilder = PromiseLike<SupabaseMutationResult> & {
+  eq: (column: string, value: unknown) => SupabaseUpdateBuilder
+}
+type SupabaseSelectBuilder = {
+  eq: (column: string, value: unknown) => SupabaseSelectBuilder
+  maybeSingle: () => PromiseLike<SupabaseSelectResult>
+}
+type SupabaseAdminClient = {
+  from: (table: string) => {
+    insert: (rows: Record<string, unknown>[]) => SupabaseInsertBuilder
+    select: (columns: string) => SupabaseSelectBuilder
+    update: (payload: Record<string, unknown>) => SupabaseUpdateBuilder
+  }
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -116,6 +135,20 @@ function shouldAutoReturnReason(reason: string) {
   return reason !== "Primeira Entrega"
 }
 
+function shouldRestockReturnedDelivery(motive: string): boolean {
+  const normalized = motive
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
+  return !(
+    normalized.includes("perda") ||
+    normalized.includes("extravio") ||
+    normalized.includes("dano") ||
+    normalized.includes("quebra")
+  )
+}
+
 function getAutoReturnMotive(reason: string) {
   const normalized = reason
     .normalize("NFD")
@@ -125,6 +158,88 @@ function getAutoReturnMotive(reason: string) {
   if (normalized.includes("perda")) return "Baixa automatica por perda/extravio"
   if (normalized.includes("dano")) return "Baixa automatica por dano/quebra"
   return "Baixa automatica por substituicao"
+}
+
+function parseStock(raw: unknown): number | null {
+  if (typeof raw === "number") return raw
+  if (typeof raw === "string") {
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
+}
+
+async function insertRemoteReturnMovement(
+  supabaseAdmin: SupabaseAdminClient,
+  payload: Record<string, unknown>,
+) {
+  const firstTry = await supabaseAdmin
+    .from("stock_movements")
+    .insert([payload])
+    .select()
+
+  if (!firstTry.error) return firstTry
+  if (!isMissingDeliveryIdColumnIssue(firstTry.error)) return firstTry
+
+  const fallback = { ...payload }
+  delete fallback.delivery_id
+  return supabaseAdmin.from("stock_movements").insert([fallback]).select()
+}
+
+async function restockRemoteReturnedPpe(
+  supabaseAdmin: SupabaseAdminClient,
+  ppeId: string,
+  companyId: string | null,
+  quantity: number,
+  motive: string,
+  deliveryId: string,
+) {
+  if (quantity <= 0) return
+
+  const { data: stockBeforeData, error: stockBeforeError } = await supabaseAdmin
+    .from("ppes")
+    .select("current_stock")
+    .eq("id", ppeId)
+    .maybeSingle()
+
+  if (stockBeforeError) throw stockBeforeError
+  const stockBefore = parseStock((stockBeforeData as { current_stock?: unknown } | null)?.current_stock)
+
+  const movementPayload: Record<string, unknown> = {
+    ppe_id: ppeId,
+    quantity,
+    type: "ENTRADA",
+    motive: `Devolucao de EPI (${motive})`,
+    delivery_id: deliveryId,
+    created_by_name: "Sistema (Entrega Remota)",
+  }
+  if (companyId) movementPayload.company_id = companyId
+
+  const { error: movementError } = await insertRemoteReturnMovement(supabaseAdmin, movementPayload)
+  if (movementError) throw movementError
+  if (stockBefore === null) return
+
+  const { data: stockAfterData, error: stockAfterError } = await supabaseAdmin
+    .from("ppes")
+    .select("current_stock")
+    .eq("id", ppeId)
+    .maybeSingle()
+
+  if (stockAfterError) throw stockAfterError
+
+  const stockAfter = parseStock((stockAfterData as { current_stock?: unknown } | null)?.current_stock)
+  const expectedStock = stockBefore + quantity
+  if (stockAfter === expectedStock) return
+
+  let updateQuery = supabaseAdmin
+    .from("ppes")
+    .update({ current_stock: expectedStock })
+    .eq("id", ppeId)
+
+  if (companyId) updateQuery = updateQuery.eq("company_id", companyId)
+  const { error: updateError } = await updateQuery
+  if (updateError) throw updateError
 }
 
 function getDeliveryIdsFromLinkData(data: unknown): string[] {
@@ -219,6 +334,7 @@ export async function POST(req: Request) {
     const reason = normalizeDeliveryReason(fields.reason || "Primeira Entrega")
     const quantity = fields.quantity
     const ip_address = fields.ip_address || ""
+    const geo_location = String(formData.get("geo_location") || "").trim()
     const auth_method = fields.auth_method || "manual"
     const signatureFile = formData.get("signatureFile") as File | null
     const token = fields.token
@@ -230,6 +346,12 @@ export async function POST(req: Request) {
 
     if (!isValidUuid(employee_id) || !isValidUuid(ppe_id)) {
       return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 })
+    }
+
+    if (!isValidGeoLocation(geo_location)) {
+      return NextResponse.json({
+        error: "Localizacao obrigatoria. Permita a localizacao do navegador e tente novamente.",
+      }, { status: 400 })
     }
 
     // Token agora é OBRIGATÓRIO. Sem token não há rota pública pra criar
@@ -516,34 +638,71 @@ export async function POST(req: Request) {
       return failAfterClaim({ error: "Entrega não retornou registro." }, 500)
     }
 
-    let autoReturnedDeliveryIds: string[] = []
+    const autoReturnedDeliveryIds: string[] = []
     if (shouldAutoReturnReason(reason)) {
-      const { data: activeSamePpe } = await supabaseAdmin
+      let activeSamePpeQuery = supabaseAdmin
         .from("deliveries")
-        .select("id")
+        .select("id, quantity, returned_quantity")
         .eq("employee_id", employee_id)
         .eq("ppe_id", ppe_id)
         .is("returned_at", null)
         .neq("id", savedDelivery.id)
 
-      const previousDeliveryIds = (activeSamePpe || [])
-        .map((item: { id?: string }) => item.id)
-        .filter((id): id is string => Boolean(id))
+      if (companyId) activeSamePpeQuery = activeSamePpeQuery.eq("company_id", companyId)
+      const { data: activeSamePpe, error: activeSamePpeError } = await activeSamePpeQuery
 
-      if (previousDeliveryIds.length > 0) {
+      if (activeSamePpeError) {
+        console.warn("[/api/remote-delivery] auto-return fetch error:", activeSamePpeError)
+      } else {
+        const returnMotive = getAutoReturnMotive(reason)
         const returnedAt = new Date().toISOString()
-        const { error: returnError } = await supabaseAdmin
-          .from("deliveries")
-          .update({ returned_at: returnedAt, return_motive: getAutoReturnMotive(reason) })
-          .in("id", previousDeliveryIds)
 
-        if (returnError && isMissingReturnMotiveIssue(returnError)) {
-          await supabaseAdmin
+        for (const previousDelivery of activeSamePpe || []) {
+          const previousDeliveryId = (previousDelivery as { id?: unknown }).id
+          if (!isValidUuid(previousDeliveryId)) continue
+
+          const totalQuantity = Number((previousDelivery as { quantity?: unknown }).quantity || 0)
+          const alreadyReturned = Number((previousDelivery as { returned_quantity?: unknown }).returned_quantity || 0)
+          const quantityToReturn = Math.max(0, totalQuantity - alreadyReturned)
+          if (quantityToReturn <= 0) continue
+
+          const updatePayload = {
+            returned_quantity: totalQuantity,
+            returned_at: returnedAt,
+            return_motive: returnMotive,
+          }
+          const { error: returnError } = await supabaseAdmin
             .from("deliveries")
-            .update({ returned_at: returnedAt })
-            .in("id", previousDeliveryIds)
+            .update(updatePayload)
+            .eq("id", previousDeliveryId)
+
+          if (returnError && isMissingReturnMotiveIssue(returnError)) {
+            await supabaseAdmin
+              .from("deliveries")
+              .update({ returned_quantity: totalQuantity, returned_at: returnedAt })
+              .eq("id", previousDeliveryId)
+          } else if (returnError) {
+            console.warn("[/api/remote-delivery] auto-return update error:", returnError)
+            continue
+          }
+
+          if (shouldRestockReturnedDelivery(returnMotive)) {
+            try {
+              await restockRemoteReturnedPpe(
+                supabaseAdmin as unknown as SupabaseAdminClient,
+                ppe_id,
+                companyId,
+                quantityToReturn,
+                returnMotive,
+                previousDeliveryId,
+              )
+            } catch (restockError) {
+              console.warn("[/api/remote-delivery] auto-return restock error:", restockError)
+            }
+          }
+
+          autoReturnedDeliveryIds.push(previousDeliveryId)
         }
-        autoReturnedDeliveryIds = previousDeliveryIds
       }
     }
 
