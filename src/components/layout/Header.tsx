@@ -84,15 +84,16 @@ export function Header() {
             <button
               type="button"
               onClick={() => setCompanySwitcherOpen(true)}
-              className="flex min-h-[44px] max-w-[42vw] items-center gap-2 rounded-xl border border-[#2563EB]/25 bg-white px-3 py-2 text-left text-[#2563EB] shadow-sm transition-all hover:border-[#2563EB] hover:bg-red-50 sm:max-w-64"
+              aria-label="Alterar empresa em contexto master"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-[#2563EB]/25 bg-white text-[#2563EB] shadow-sm transition-all hover:border-[#2563EB] hover:bg-red-50 md:w-auto md:max-w-56 md:justify-start md:gap-2 md:px-3 md:text-left"
               title="Alterar empresa em contexto master"
             >
               <Building2 className="h-4 w-4 flex-shrink-0" />
-              <span className="min-w-0">
+              <span className="hidden min-w-0 md:block">
                 <span className="block truncate text-[10px] font-black uppercase leading-none tracking-widest">
                   Alterar empresa
                 </span>
-                <span className="mt-1 hidden truncate text-[9px] font-bold uppercase tracking-wide text-slate-500 sm:block">
+                <span className="mt-1 block truncate text-[9px] font-bold uppercase tracking-wide text-slate-500">
                   {selectedCompany ? selectedCompany.trade_name || selectedCompany.name : "Selecionar contexto"}
                 </span>
               </span>
