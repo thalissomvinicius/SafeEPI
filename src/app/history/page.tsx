@@ -403,7 +403,7 @@ export default function HistoryPage() {
           )}
         </div>
         
-        <div className="min-h-[300px] flex flex-col md:overflow-x-auto">
+        <div className="min-h-[300px] flex flex-col overflow-x-hidden md:overflow-x-auto md:overscroll-x-contain">
           {loading ? (
             <LoadingState
               variant="panel"
@@ -464,18 +464,18 @@ export default function HistoryPage() {
                 </div>
               )}
             </div>
-            <table className="hidden w-full text-sm text-left md:table">
+            <table className="hidden min-w-[1040px] w-full text-left text-sm md:table xl:min-w-0">
                 <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                 <tr>
-                    <th className="px-6 py-5">Protocolo</th>
-                    <th className="px-6 py-5">Colaborador</th>
-                    <th className="px-6 py-5">Tomador</th>
-                    <th className="px-6 py-5">EPI / CA</th>
-                    <th className="px-6 py-5">Valor</th>
-                    <th className="px-6 py-5">Data da Entrega</th>
-                    <th className="px-6 py-5">Arquivo Juridico</th>
-                    <th className="px-6 py-5">Hash SHA-256</th>
-                    <th className="px-6 py-5 text-right">Ação</th>
+                    <th className="px-4 py-5 lg:px-5">Protocolo</th>
+                    <th className="px-4 py-5 lg:px-5">Colaborador</th>
+                    <th className="px-4 py-5 lg:px-5">Tomador</th>
+                    <th className="px-4 py-5 lg:px-5">EPI / CA</th>
+                    <th className="px-4 py-5 lg:px-5">Valor</th>
+                    <th className="px-4 py-5 lg:px-5">Data da Entrega</th>
+                    <th className="px-4 py-5 lg:px-5">Arquivo Juridico</th>
+                    <th className="hidden px-4 py-5 lg:px-5 xl:table-cell">Hash SHA-256</th>
+                    <th className="sticky right-0 z-20 min-w-[118px] bg-white px-4 py-5 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)]">Ação</th>
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -484,23 +484,23 @@ export default function HistoryPage() {
 
                   return (
                     <tr key={rec.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-6 py-5 font-mono text-[10px] text-slate-400">#{rec.id.slice(0, 8)}</td>
-                    <td className="px-6 py-5 font-bold text-slate-800">{rec.employee?.full_name}</td>
-                    <td className="px-6 py-5 text-xs font-black uppercase tracking-tight text-slate-500">
+                    <td className="px-4 py-5 font-mono text-[10px] text-slate-400 lg:px-5">#{rec.id.slice(0, 8)}</td>
+                    <td className="px-4 py-5 font-bold text-slate-800 lg:px-5">{rec.employee?.full_name}</td>
+                    <td className="px-4 py-5 text-xs font-black uppercase tracking-tight text-slate-500 lg:px-5">
                       {getDeliveryThirdPartyId(rec) ? getDeliveryThirdPartyName(rec) : "Próprio"}
                     </td>
-                    <td className="px-6 py-5 text-slate-600 font-medium">
+                    <td className="px-4 py-5 text-slate-600 font-medium lg:px-5">
                         {rec.ppe?.name} <br/>
                         <span className="text-[10px] text-slate-400 font-bold uppercase">CA {rec.ppe?.ca_number}</span>
                     </td>
-                    <td className="px-6 py-5 text-xs font-black text-emerald-700">
+                    <td className="px-4 py-5 text-xs font-black text-emerald-700 lg:px-5">
                       R$ {getDeliveryCost(rec).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-6 py-5 text-slate-400 text-xs font-bold uppercase">
+                    <td className="px-4 py-5 text-slate-400 text-xs font-bold uppercase lg:px-5">
                         {formatDeliveryDate(rec.delivery_date)} <br/>
                         {formatDeliveryTime(rec.delivery_date)}
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-4 py-5 lg:px-5">
                         {signedDocument ? (
                              <a
                                 href={signedDocument.document_url}
@@ -526,7 +526,7 @@ export default function HistoryPage() {
                             <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-100 w-fit">Pendente</span>
                         )}
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="hidden px-4 py-5 lg:px-5 xl:table-cell">
                       {signedDocument ? (
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 uppercase tracking-widest">
@@ -541,12 +541,12 @@ export default function HistoryPage() {
                         <span className="text-[10px] font-bold text-slate-300 uppercase">Sem arquivo</span>
                       )}
                     </td>
-                    <td className="px-6 py-5 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                    <td className="sticky right-0 z-10 bg-white px-3 py-5 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)] transition-colors group-hover:bg-slate-50/80">
+                        <div className="flex min-w-[98px] items-center justify-end gap-1">
                           <button
                             onClick={() => handleDownloadPDF(rec)}
                             disabled={downloadingId === rec.id}
-                            className="text-[#2563EB] hover:bg-blue-50 font-black text-[10px] uppercase tracking-widest flex items-center justify-end p-2 rounded transition-all group-hover:underline disabled:opacity-30"
+                            className="flex min-h-10 min-w-[64px] items-center justify-center rounded-xl border border-blue-100 bg-blue-50 px-3 text-[10px] font-black uppercase tracking-widest text-[#2563EB] transition-all hover:bg-blue-100 disabled:opacity-30"
                           >
                               {downloadingId === rec.id ? (
                                 <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -560,7 +560,7 @@ export default function HistoryPage() {
                               onClick={() => setConfirmDelete(rec)}
                               disabled={deletingId === rec.id}
                               title="Excluir registro de entrega (Master)"
-                              className="text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 font-black text-[10px] uppercase tracking-widest flex items-center justify-center p-2 rounded transition-all disabled:opacity-30"
+                              className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition-all hover:bg-red-100 disabled:opacity-30"
                             >
                               {deletingId === rec.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
