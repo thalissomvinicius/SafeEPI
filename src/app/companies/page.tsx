@@ -313,16 +313,16 @@ export default function CompaniesPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
+    <div className="mx-auto max-w-7xl space-y-5 overflow-x-hidden px-3 py-4 pb-28 animate-in fade-in duration-500 md:space-y-6 md:p-8">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-7">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Painel Master</p>
-            <h1 className="mt-1 flex items-center gap-3 text-2xl md:text-4xl font-black tracking-tighter text-slate-800 uppercase">
-              <Building2 className="h-8 w-8 text-[#2563EB]" />
+            <h1 className="mt-1 flex items-center gap-2 text-xl font-black uppercase leading-tight tracking-tight text-slate-800 md:gap-3 md:text-4xl md:tracking-tighter">
+              <Building2 className="h-7 w-7 shrink-0 text-[#2563EB] md:h-8 md:w-8" />
               Empresas Clientes
             </h1>
-            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-slate-500">
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-slate-500 md:text-base">
               Controle central de clientes, acessos, marca visual e separacao de dados por empresa.
             </p>
           </div>
@@ -336,7 +336,7 @@ export default function CompaniesPage() {
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 md:mt-6 md:grid-cols-4">
           <Metric icon={Building2} label="Empresas" value={totals.companies} />
           <Metric icon={CheckCircle2} label="Ativas" value={totals.activeCompanies} />
           <Metric icon={Users} label="Colaboradores" value={totals.employees} />
@@ -393,11 +393,11 @@ export default function CompaniesPage() {
                       { label: "Telefone", value: company.phone || "-" },
                     ]}
                     actions={
-                      <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setSelectedCompanyId(company.id)} className="min-h-11 rounded-xl border border-slate-200 text-sm font-bold text-slate-600">
+                      <div className="grid w-full grid-cols-2 gap-2">
+                        <button onClick={() => setSelectedCompanyId(company.id)} className="min-h-11 min-w-0 rounded-xl border border-slate-200 px-2 text-sm font-bold text-slate-600">
                           Selecionar
                         </button>
-                        <button onClick={() => editCompany(company)} className="min-h-11 rounded-xl bg-[#2563EB] text-sm font-bold text-white">
+                        <button onClick={() => editCompany(company)} className="min-h-11 min-w-0 rounded-xl bg-[#2563EB] px-2 text-sm font-bold text-white">
                           Editar
                         </button>
                       </div>
@@ -422,7 +422,7 @@ export default function CompaniesPage() {
         </section>
 
         <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-          <form onSubmit={handleCompanySubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm [&_input]:min-h-11 [&_input]:w-full [&_select]:min-h-11 [&_select]:w-full">
+          <form onSubmit={handleCompanySubmit} className="max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 [&_select]:min-h-11 [&_select]:w-full">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Dados do cliente</p>
@@ -477,9 +477,9 @@ export default function CompaniesPage() {
                 </label>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
-                  <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <input type="color" value={companyForm.primary_color} onChange={(event) => setCompanyForm({ ...companyForm, primary_color: event.target.value })} className="h-10 w-12 cursor-pointer rounded-lg border-0 bg-transparent p-0" title="Cor principal da empresa" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cor principal</span>
+                  <label className="flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <input type="color" value={companyForm.primary_color} onChange={(event) => setCompanyForm({ ...companyForm, primary_color: event.target.value })} className="h-8 w-10 shrink-0 cursor-pointer rounded-lg border-0 bg-transparent p-0" title="Cor principal da empresa" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cor</span>
                   </label>
                   <input className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-widest outline-none focus:border-[#2563EB]" value={companyForm.primary_color} onChange={(event) => setCompanyForm({ ...companyForm, primary_color: event.target.value })} placeholder="#2563EB" />
                 </div>

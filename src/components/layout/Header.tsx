@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
-import { Building2, Check, X } from "lucide-react"
+import { Building2, ChevronDown } from "lucide-react"
 import { NotificationBell } from "./NotificationBell"
 import { GlobalSearch } from "./GlobalSearch"
 import { useAuth } from "@/contexts/AuthContext"
@@ -14,7 +14,6 @@ export function Header() {
   const { user } = useAuth()
   const [companies, setCompanies] = useState<CompanyWithCounts[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState("")
-  const [companySwitcherOpen, setCompanySwitcherOpen] = useState(false)
 
   const selectedCompany = companies.find((company) => company.id === selectedCompanyId) || null
 
@@ -44,7 +43,6 @@ export function Header() {
     setSelectedCompanyId(companyId)
     api.setMasterCompanyContext(companyId)
     await applyCompanyBrand(companies.find((company) => company.id === companyId), { enableTheme: true })
-    setCompanySwitcherOpen(false)
     window.location.reload()
   }
 
@@ -80,90 +78,29 @@ export function Header() {
 
       <div className="flex items-center gap-2 md:gap-4">
         {user?.role === "MASTER" && (
-          <>
-            <button
-              type="button"
-              onClick={() => setCompanySwitcherOpen(true)}
-              aria-label="Alterar empresa em contexto master"
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-[#2563EB]/25 bg-white text-[#2563EB] shadow-sm transition-all hover:border-[#2563EB] hover:bg-red-50 md:w-auto md:max-w-56 md:justify-start md:gap-2 md:px-3 md:text-left"
+          <div className="relative flex h-11 flex-shrink-0 items-center">
+            <div className="pointer-events-none flex h-11 w-11 items-center justify-center rounded-xl border border-[#2563EB]/25 bg-white text-[#2563EB] shadow-sm md:hidden">
+              <Building2 className="h-4 w-4" />
+            </div>
+            <select
+              value={selectedCompanyId}
+              onChange={(event) => void handleMasterCompanyChange(event.target.value)}
+              className="absolute inset-0 h-11 w-11 cursor-pointer opacity-0 md:static md:w-56 md:opacity-100 md:rounded-xl md:border md:border-[#2563EB]/25 md:bg-white md:px-3 md:py-2 md:pr-8 md:text-[10px] md:font-black md:uppercase md:tracking-widest md:text-slate-700 md:shadow-sm md:outline-none md:focus:border-[#2563EB]"
               title="Alterar empresa em contexto master"
+              aria-label="Alterar empresa em contexto master"
             >
-              <Building2 className="h-4 w-4 flex-shrink-0" />
-              <span className="hidden min-w-0 md:block">
-                <span className="block truncate text-[10px] font-black uppercase leading-none tracking-widest">
-                  Alterar empresa
-                </span>
-                <span className="mt-1 block truncate text-[9px] font-bold uppercase tracking-wide text-slate-500">
-                  {selectedCompany ? selectedCompany.trade_name || selectedCompany.name : "Selecionar contexto"}
-                </span>
-              </span>
-            </button>
-
-            {companySwitcherOpen && (
-              <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm md:items-center md:p-4">
-                <button
-                  type="button"
-                  aria-label="Fechar seleção de empresa"
-                  className="absolute inset-0 h-full w-full cursor-default"
-                  onClick={() => setCompanySwitcherOpen(false)}
-                />
-                <div className="relative z-[101] flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl md:rounded-3xl">
-                  <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#2563EB]">Contexto master</p>
-                      <h3 className="mt-1 text-lg font-black uppercase tracking-tight text-slate-900">Alterar empresa</h3>
-                      <p className="mt-1 text-sm font-medium text-slate-500">Escolha qual cliente será usado nas telas operacionais.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCompanySwitcherOpen(false)}
-                      className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                      title="Fechar"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-3">
-                    {companies.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-                        <p className="text-sm font-black uppercase tracking-wide text-slate-700">Nenhuma empresa carregada</p>
-                        <p className="mt-1 text-sm font-medium text-slate-500">Recarregue a página ou confira seu acesso master.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {companies.map((company) => {
-                          const active = company.id === selectedCompanyId
-                          return (
-                            <button
-                              key={company.id}
-                              type="button"
-                              onClick={() => void handleMasterCompanyChange(company.id)}
-                              className={`flex min-h-[56px] w-full items-center justify-between gap-3 rounded-2xl border p-4 text-left transition-all ${
-                                active
-                                  ? "border-[#2563EB]/30 bg-red-50 text-[#2563EB]"
-                                  : "border-slate-100 bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-50"
-                              }`}
-                            >
-                              <span className="min-w-0">
-                                <span className="block truncate text-sm font-black uppercase tracking-tight">
-                                  {company.trade_name || company.name}
-                                </span>
-                                <span className="mt-1 block truncate text-xs font-bold text-slate-500">
-                                  {company.cnpj || company.email || "Empresa sem CNPJ informado"}
-                                </span>
-                              </span>
-                              {active && <Check className="h-5 w-5 flex-shrink-0" />}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+              <option value="">Selecionar empresa</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.trade_name || company.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-slate-400 md:block" />
+            <span className="sr-only">
+              Empresa atual: {selectedCompany ? selectedCompany.trade_name || selectedCompany.name : "nenhuma"}
+            </span>
+          </div>
         )}
         <div className="hidden md:flex flex-col items-end mr-2">
             <span className="text-xs font-black text-slate-800 uppercase tracking-tighter">{user?.user_metadata?.full_name || user?.email}</span>

@@ -39,7 +39,7 @@ export function MobileTableCard({
   const hiddenFields = expandable ? fields.slice(2) : []
 
   return (
-    <article className="w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/80 md:hidden">
+    <article className="w-full max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/80 md:hidden">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-3">
           {leading && <div className="shrink-0">{leading}</div>}
@@ -49,7 +49,7 @@ export function MobileTableCard({
           </div>
         </div>
         {badge && (
-          <span className={cn("shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest", badge.variant)}>
+          <span className={cn("max-w-[42%] shrink-0 truncate rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest", badge.variant)}>
             {badge.label}
           </span>
         )}
@@ -88,7 +88,7 @@ export function MobileTableCard({
         </div>
       )}
 
-      {actions && <div className="mt-4 w-full border-t border-slate-100 pt-3">{actions}</div>}
+      {actions && <div className="mt-4 w-full max-w-full overflow-hidden border-t border-slate-100 pt-3">{actions}</div>}
     </article>
   )
 }

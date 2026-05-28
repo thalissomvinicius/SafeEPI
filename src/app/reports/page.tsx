@@ -357,14 +357,14 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 overflow-hidden">
-        <div>
+    <div className="mx-auto max-w-7xl space-y-6 overflow-x-hidden px-3 py-4 pb-28 animate-in fade-in md:space-y-8 md:p-8">
+      <div className="flex min-w-0 flex-col items-start justify-between gap-4 overflow-hidden md:flex-row md:items-end">
+        <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
                 <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Analytics / Supabase</span>
             </div>
-            <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-                <TrendingDown className="w-6 h-6 mr-2 text-[#2563EB]" />
+            <h1 className="flex min-w-0 items-start text-xl font-black uppercase leading-tight tracking-tight text-slate-800 sm:text-2xl md:tracking-tighter">
+                <TrendingDown className="mr-2 mt-0.5 h-5 w-5 shrink-0 text-[#2563EB] sm:h-6 sm:w-6" />
                 BI & Inteligência SafeEPI
             </h1>
             <p className="text-slate-500 text-sm mt-1 font-medium italic">Extração de custos operacionais e conformidade normativa.</p>
@@ -527,13 +527,13 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {stats.map((stat, i) => (
-          <div key={i} className="min-w-0 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{stat.label}</p>
-            <div className="mt-2 flex items-baseline gap-2">
-                <span className="break-words text-2xl font-bold text-slate-800 tracking-tight">{stat.value}</span>
-                <span className="text-[10px] font-bold text-[#2563EB] bg-red-50 px-2 py-0.5 rounded">
+          <div key={i} className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:shadow-md sm:p-5">
+            <p className="text-[10px] font-black uppercase leading-snug tracking-[0.14em] text-slate-400 sm:tracking-[0.2em]">{stat.label}</p>
+            <div className="mt-3 min-w-0 space-y-2">
+                <span className="block max-w-full break-words text-2xl font-bold leading-tight tracking-tight text-slate-800 sm:text-3xl">{stat.value}</span>
+                <span className="inline-flex max-w-full rounded bg-red-50 px-2 py-0.5 text-[10px] font-bold leading-snug text-[#2563EB]">
                     {stat.change}
                 </span>
             </div>
