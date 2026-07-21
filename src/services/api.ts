@@ -847,7 +847,7 @@ export const api = {
     return data.document;
   },
 
-  async getSignedDocuments(options: { employeeId?: string; documentType?: SignedDocument["document_type"]; limit?: number } = {}) {
+  async getSignedDocuments(options: { employeeId?: string; documentType?: SignedDocument["document_type"]; limit?: number; signAssets?: boolean } = {}) {
     const companyId = await getCurrentCompanyId();
     let sdQuery = supabase.from("signed_documents").select("*").order("created_at", { ascending: false });
     if (companyId) sdQuery = sdQuery.eq("company_id", companyId);
@@ -861,7 +861,10 @@ export const api = {
       throw error;
     }
 
-    return signStorageFields((data || []) as unknown as Record<string, unknown>[], [
+    const rows = (data || []) as unknown as Record<string, unknown>[];
+    if (options.signAssets === false) return rows as unknown as SignedDocument[];
+
+    return signStorageFields(rows, [
       "document_url",
       "signature_url",
       "photo_evidence_url",

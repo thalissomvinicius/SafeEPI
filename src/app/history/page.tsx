@@ -14,6 +14,7 @@ import { toast } from "@/lib/toast"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
 import { DataLoadError } from "@/components/ui/DataLoadError"
+import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 
 type DeliveryScopeFilter = "own" | "third_party" | "all"
 
@@ -37,6 +38,7 @@ export default function HistoryPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [openingAssetKey, setOpeningAssetKey] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<DeliveryWithRelations | null>(null)
@@ -49,8 +51,8 @@ export default function HistoryPage() {
         setLoading(true)
         setLoadError(null)
         const [deliveryData, documentData, thirdPartyData] = await Promise.all([
-          api.getDeliveries(),
-          api.getSignedDocuments(),
+          api.getDeliveries({ signAssets: false }),
+          api.getSignedDocuments({ signAssets: false }),
           hasThirdPartyFeature ? api.getThirdParties() : Promise.resolve([] as ThirdParty[]),
         ])
         setRecords(deliveryData)
@@ -71,7 +73,7 @@ export default function HistoryPage() {
   const loadMoreRecords = async () => {
     try {
       setLoadingMore(true)
-      const nextRecords = await api.getDeliveries({ offset: records.length, limit: 500 })
+      const nextRecords = await api.getDeliveries({ offset: records.length, limit: 500, signAssets: false })
       setRecords((current) => {
         const knownIds = new Set(current.map((record) => record.id))
         return [...current, ...nextRecords.filter((record) => !knownIds.has(record.id))]
@@ -111,14 +113,32 @@ export default function HistoryPage() {
     setSelectedThirdPartyIds((prev) => prev.filter((id) => id !== thirdPartyId))
   }
 
-  const urlToBase64 = async (url: string) => {
-    const response = await fetch(url)
-    const blob = await response.blob()
-    return new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.readAsDataURL(blob)
-    })
+  const handleOpenPrivateAsset = async (key: string, value: string | null | undefined, label: string) => {
+    if (!value) {
+      toast.error(`${label} não encontrada.`)
+      return
+    }
+
+    const popup = window.open("about:blank", "_blank")
+    if (popup) popup.opener = null
+
+    try {
+      setOpeningAssetKey(key)
+      const freshUrl = await api.getPrivateAssetUrl(value, "view")
+      if (!freshUrl) throw new Error(`Não foi possível gerar o acesso seguro para ${label.toLowerCase()}.`)
+
+      if (popup && !popup.closed) {
+        popup.location.replace(freshUrl)
+      } else {
+        window.open(freshUrl, "_blank", "noopener,noreferrer")
+      }
+    } catch (error) {
+      if (popup && !popup.closed) popup.close()
+      console.error(`Erro ao abrir ${label.toLowerCase()}:`, error)
+      toast.error(`Não foi possível abrir ${label.toLowerCase()}. Tente novamente.`)
+    } finally {
+      setOpeningAssetKey(null)
+    }
   }
 
   const handleDownloadPDF = async (rec: DeliveryWithRelations) => {
@@ -150,14 +170,20 @@ export default function HistoryPage() {
       
       // 1. Converter URL da assinatura para Base64 (necessário para jsPDF)
       const signatureUrl = await api.getPrivateAssetUrl(rec.signature_storage_path || rec.signature_url, "download")
-      const base64Signature = await urlToBase64(signatureUrl || rec.signature_url)
+      if (!signatureUrl) throw new Error("Nao foi possivel gerar o link seguro da assinatura.")
+      const base64Signature = await fetchImageDataUrl(signatureUrl, {
+        required: true,
+        label: "a assinatura da entrega",
+      })
+      if (!base64Signature) throw new Error("Nao foi possivel carregar a assinatura da entrega.")
       const photoBase64 = signedDocument?.photo_evidence_url
-        ? await urlToBase64(
+        ? await fetchImageDataUrl(
           await api.getPrivateAssetUrl(
-            signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url,
-            "download",
+             signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url,
+             "download",
           ) || signedDocument.photo_evidence_url,
-        ).catch(() => undefined)
+          { required: true, label: "a evidência fotográfica da entrega" },
+        ) || undefined
         : undefined
       const authMethod = signedDocument?.auth_method === "manual_facial" || rec.auth_method === "manual_facial"
         ? "manual_facial"
@@ -487,8 +513,8 @@ export default function HistoryPage() {
                 </div>
               )}
             </div>
-            <table className="hidden min-w-[1040px] w-full text-left text-sm md:table xl:min-w-0">
-                <thead className="text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
+            <table className="hidden min-w-[1220px] w-full whitespace-nowrap text-left text-sm md:table xl:min-w-0">
+                <thead className="whitespace-nowrap text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
                 <tr>
                     <th className="px-4 py-5 lg:px-5">Protocolo</th>
                     <th className="px-4 py-5 lg:px-5">Colaborador</th>
@@ -513,38 +539,49 @@ export default function HistoryPage() {
                       {getDeliveryThirdPartyId(rec) ? getDeliveryThirdPartyName(rec) : "Próprio"}
                     </td>
                     <td className="px-4 py-5 text-slate-600 font-medium lg:px-5">
-                        {rec.ppe?.name} <br/>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">CA {rec.ppe?.ca_number}</span>
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <span>{rec.ppe?.name}</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">CA {rec.ppe?.ca_number}</span>
+                        </div>
                     </td>
                     <td className="px-4 py-5 text-xs font-black text-emerald-700 lg:px-5">
                       R$ {getDeliveryCost(rec).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-5 text-slate-400 text-xs font-bold uppercase lg:px-5">
-                        {formatDeliveryDate(rec.delivery_date)} <br/>
-                        {formatDeliveryTime(rec.delivery_date)}
+                        <span className="whitespace-nowrap">{formatDeliveryDate(rec.delivery_date)} · {formatDeliveryTime(rec.delivery_date)}</span>
                     </td>
                     <td className="px-4 py-5 lg:px-5">
                         {signedDocument ? (
-                             <a
-                                href={signedDocument.document_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center text-[10px] text-green-700 font-bold bg-green-50 px-2 py-1 rounded border border-green-100 hover:bg-green-100 transition-colors w-fit"
+                             <button
+                                type="button"
+                                onClick={() => void handleOpenPrivateAsset(
+                                  `document:${signedDocument.id}`,
+                                  signedDocument.storage_path || signedDocument.document_url,
+                                  "Documento arquivado",
+                                )}
+                                disabled={openingAssetKey === `document:${signedDocument.id}`}
+                                aria-label={`Abrir documento arquivado de ${rec.employee?.full_name || "colaborador"}`}
+                                className="flex w-fit items-center whitespace-nowrap rounded border border-green-100 bg-green-50 px-2 py-1 text-[10px] font-bold text-green-700 transition-colors hover:bg-green-100 disabled:opacity-60"
                              >
-                                <ShieldCheck className="w-3 h-3 mr-1" />
+                                {openingAssetKey === `document:${signedDocument.id}` ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="w-3 h-3 mr-1" />}
                                 Arquivado
                                 <ExternalLink className="w-3 h-3 ml-1" />
-                             </a>
+                             </button>
                         ) : rec.signature_url ? (
-                             <a 
-                                href={rec.signature_url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-100 hover:bg-amber-100 transition-colors w-fit"
+                             <button
+                                type="button"
+                                onClick={() => void handleOpenPrivateAsset(
+                                  `signature:${rec.id}`,
+                                  rec.signature_storage_path || rec.signature_url,
+                                  "Assinatura",
+                                )}
+                                disabled={openingAssetKey === `signature:${rec.id}`}
+                                aria-label={`Abrir somente a assinatura de ${rec.employee?.full_name || "colaborador"}`}
+                                className="flex w-fit items-center whitespace-nowrap rounded border border-amber-100 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-600 transition-colors hover:bg-amber-100 disabled:opacity-60"
                              >
-                                <ShieldCheck className="w-3 h-3 mr-1" />
-                                So assinatura
-                             </a>
+                                {openingAssetKey === `signature:${rec.id}` ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="w-3 h-3 mr-1" />}
+                                Só assinatura
+                             </button>
                         ) : (
                             <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-100 w-fit">Pendente</span>
                         )}
