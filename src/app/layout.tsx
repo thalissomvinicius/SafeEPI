@@ -1,5 +1,6 @@
 ﻿import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { connection } from "next/server";
 
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
@@ -31,11 +32,15 @@ import { Toaster } from "sonner";
 import { ToastIcon } from "@/components/ui/ToastIcon";
 import { Analytics } from "@vercel/analytics/next";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // O nonce da CSP e unico por requisicao. A renderizacao dinamica permite
+  // que o Next aplique esse nonce aos scripts inline usados na hidratacao.
+  await connection();
+
   return (
     <html
       lang="pt-BR"
