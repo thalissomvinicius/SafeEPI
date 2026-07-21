@@ -1,6 +1,7 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 import { HelpCircle, MessageCircle, Phone, PlayCircle, BookOpen } from "lucide-react"
+import { WindowsHelloReadiness } from "@/components/support/WindowsHelloReadiness"
 
 export default function SupportPage() {
   const whatsappNumber = "5591991697664"
@@ -110,6 +111,8 @@ export default function SupportPage() {
 
         </div>
       </div>
+
+      <WindowsHelloReadiness />
     </div>
   )
 }

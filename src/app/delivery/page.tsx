@@ -255,10 +255,6 @@ export default function DeliveryPage() {
   const shouldAutoReturn = (reason: string, deliveries = currentActiveSamePpeDeliveries) =>
     deliveries.length > 0 && reason !== "Primeira Entrega"
 
-  const effectiveCurrentReason = currentActiveSamePpeDeliveries.length > 0 && currentReason === "Primeira Entrega"
-    ? SUBSTITUTION_REASON
-    : currentReason
-
   const formatRemoteExpiry = (value: string | null) => {
     if (!value) return "sem prazo"
     return new Date(value).toLocaleString("pt-BR", {
@@ -504,7 +500,7 @@ export default function DeliveryPage() {
       return
     }
 
-    const selectedReason = effectiveCurrentReason
+    const selectedReason = currentReason
     const autoReturnAllocations: { deliveryId: string; quantity: number; deliveryDate: string }[] = []
     if (shouldAutoReturn(selectedReason)) {
       let pendingReturnQuantity = currentQuantity
@@ -1240,7 +1236,7 @@ export default function DeliveryPage() {
           <select
             value={remoteWaitHours}
             onChange={(event) => setRemoteWaitHours(Number(event.target.value))}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#2563EB]"
+            className="min-h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#2563EB]"
             title="Tempo de espera da assinatura"
           >
             <option value={1}>1h</option>
@@ -1291,7 +1287,7 @@ export default function DeliveryPage() {
               <button
                 onClick={() => void checkVisiblePendingDrafts()}
                 disabled={filteredPendingDrafts.length === 0 || checkingPendingToken !== null}
-                className="bg-white border border-amber-200 text-amber-700 px-4 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
+                className="min-h-11 bg-white border border-amber-200 text-amber-700 px-4 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${checkingPendingToken ? "animate-spin" : ""}`} /> Atualizar Status
               </button>
@@ -1373,7 +1369,7 @@ export default function DeliveryPage() {
                               toast.warning("Nao foi possivel copiar automaticamente. Abra o link e copie pela barra do navegador.")
                             }
                           })}
-                          className="sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Clipboard className="w-3.5 h-3.5" /> Copiar
                         </button>
@@ -1381,14 +1377,14 @@ export default function DeliveryPage() {
                           href={draft.linkUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <ExternalLink className="w-3.5 h-3.5" /> Abrir
                         </a>
                         <button
                           onClick={() => void checkPendingDraft(draft)}
                           disabled={isChecking}
-                          className="sm:col-span-1 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} /> Checar
                         </button>
@@ -1396,7 +1392,7 @@ export default function DeliveryPage() {
                           <button
                             onClick={() => void reopenExpiredPendingDraft(draft)}
                             disabled={isReopening}
-                            className="sm:col-span-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 shadow-sm font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="min-h-11 sm:col-span-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 shadow-sm font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             {isReopening ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1408,14 +1404,14 @@ export default function DeliveryPage() {
                         ) : (
                           <button
                             onClick={() => restorePendingDraft(draft)}
-                            className="sm:col-span-2 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap"
+                            className="min-h-11 sm:col-span-2 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap"
                           >
                             <Package className="w-3.5 h-3.5" /> {draft.signaturePendingOnly ? "Copiar" : "Reabrir"}
                           </button>
                         )}
                         <button
                           onClick={() => removePendingDraft(draft.token)}
-                          className="sm:col-span-1 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Limpar
                         </button>
@@ -1596,7 +1592,7 @@ export default function DeliveryPage() {
                           <label htmlFor="reason-select" className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Motivo</label>
                           <select
                             id="reason-select" title="Motivo da entrega"
-                            value={effectiveCurrentReason} onChange={(e) => setCurrentReason(e.target.value)}
+                            value={currentReason} onChange={(e) => setCurrentReason(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-4 md:py-3 outline-none focus:border-[#2563EB] font-bold text-[11px]"
                           >
                             <option value="Primeira Entrega">Prim. Entrega</option>
@@ -1620,9 +1616,13 @@ export default function DeliveryPage() {
                             <ShieldAlert className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Baixa automática na nova entrega</p>
+                            <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">
+                              {shouldAutoReturn(currentReason) ? "Baixa automática confirmada" : "Motivo definido manualmente"}
+                            </p>
                             <p className="text-xs text-amber-700 font-semibold mt-1 leading-relaxed">
-                              {selectedEmployee?.full_name || "Colaborador"} possui {currentActiveSamePpeDeliveries.reduce((acc, delivery) => acc + getRemainingDeliveryQuantity(delivery), 0)} un. de {currentPpe.name}. Ao substituir {currentQuantity} un., a baixa será parcial e somente nessa quantidade.
+                              {shouldAutoReturn(currentReason)
+                                ? `${selectedEmployee?.full_name || "Colaborador"} possui ${currentActiveSamePpeDeliveries.reduce((acc, delivery) => acc + getRemainingDeliveryQuantity(delivery), 0)} un. de ${currentPpe.name}. A baixa sera parcial e somente na quantidade informada.`
+                                : `${selectedEmployee?.full_name || "Colaborador"} ja possui este EPI. O sistema nao alterara o motivo automaticamente; selecione Substituicao, Perda ou Dano somente quando for o caso.`}
                             </p>
                           </div>
                         </div>

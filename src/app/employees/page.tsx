@@ -813,7 +813,12 @@ export default function EmployeesPage() {
 
     try {
       setIsGeneratingPdf(true)
-      const signedDocuments = await api.getSignedDocuments()
+      // URLs assinadas expiram rapidamente. Atualizamos as entregas somente
+      // no momento da emissao para nunca montar a ficha com links vencidos.
+      const [freshEmployeeHistory, signedDocuments] = await Promise.all([
+        api.getEmployeeHistory(emp.id),
+        api.getSignedDocuments({ employeeId: emp.id }),
+      ])
       const getSignedDocumentForDelivery = (deliveryId: string) =>
         signedDocuments.find((document) =>
           document.delivery_id === deliveryId ||
@@ -827,7 +832,7 @@ export default function EmployeesPage() {
         employeeDepartment: getDepartmentName(emp.department),
         workplaceName: getWorkplaceName(emp.workplace_id),
         admissionDate: emp.admission_date ? format(new Date(`${emp.admission_date}T12:00:00`), "dd/MM/yyyy") : "Nao informado",
-        items: employeeHistory.map(d => {
+        items: freshEmployeeHistory.map(d => {
           const signedDocument = getSignedDocumentForDelivery(d.id)
           const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | null
           const deliveryDate = parseDeliveryDateTime(d.delivery_date)
@@ -842,7 +847,7 @@ export default function EmployeesPage() {
             returnedAt: d.returned_at,
             isExpired: expiryDate ? isPast(expiryDate) : false,
             authMethod,
-            signatureUrl: d.signature_url || signedDocument?.signature_url || null,
+            signatureUrl: signedDocument?.signature_url || d.signature_url || null,
             photoEvidenceUrl: signedDocument?.photo_evidence_url || null,
           }
         }),
@@ -867,14 +872,14 @@ export default function EmployeesPage() {
         await api.archiveSignedDocument({
           documentType: "nr06",
           employeeId: emp.id,
-          deliveryIds: employeeHistory.map((delivery) => delivery.id).filter(Boolean),
+          deliveryIds: freshEmployeeHistory.map((delivery) => delivery.id).filter(Boolean),
           fileName,
           pdfBlob,
           authMethod: tstAuthMethod,
           metadata: {
             tstSignerName: tstName,
             tstSignerRole: tstRole,
-            deliveryCount: employeeHistory.length,
+            deliveryCount: freshEmployeeHistory.length,
             workplaceName: getWorkplaceName(emp.workplace_id),
           },
         })
@@ -891,7 +896,7 @@ export default function EmployeesPage() {
       setIsTstModalOpen(false)
     } catch (err) {
       console.error("Erro ao gerar PDF:", err)
-      toast.error("Erro ao gerar o Prontuário NR-06.")
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar o Prontuário NR-06.")
     } finally {
       setIsGeneratingPdf(false)
     }

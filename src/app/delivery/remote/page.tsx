@@ -143,26 +143,39 @@ function RemoteDeliveryContent() {
   // -- Load delivery data on mount --
   useEffect(() => {
     const s = searchParams.get('s') // Legacy support
-    const t = searchParams.get('t')
+    const t = searchParams.get('t') || searchParams.get('token')
+    const controllers = new Set<AbortController>()
+    let disposed = false
+
+    const loadIpAddress = async () => {
+      const controller = new AbortController()
+      controllers.add(controller)
+      const timeoutId = window.setTimeout(() => controller.abort(), 5000)
+
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json', {
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (!ipRes.ok) return
+        const ipData = await ipRes.json() as { ip?: string }
+        if (!disposed && ipData.ip) setIpAddress(ipData.ip)
+      } catch {
+        // O endereço IP é evidência complementar e não pode bloquear a assinatura.
+      } finally {
+        window.clearTimeout(timeoutId)
+        controllers.delete(controller)
+      }
+    }
     
     const init = async () => {
-      // Capture IP & location
-      try {
-        const ipRes = await fetch('https://api.ipify.org?format=json')
-        const ipData = await ipRes.json()
-        setIpAddress(ipData.ip)
-        setLocationStatus("requesting")
-        const locationResult = await requestRequiredGeolocation()
-        if (locationResult.ok) {
-          setLocation(locationResult.value)
-          setLocationStatus("granted")
-          setLocationError("")
-        } else {
-          setLocation("")
-          setLocationStatus("blocked")
-          setLocationError(locationResult.message)
-        }
-      } catch { /* ignore */ }
+      if (!t && !s) {
+        setErrorMsg("Link inválido ou expirado.")
+        setPhase('error')
+        return
+      }
+
+      void loadIpAddress()
 
       try {
         let decoded: DeliveryData | null = null;
@@ -173,13 +186,25 @@ function RemoteDeliveryContent() {
         if (t) {
           // Token-based approach
           let res: Response
+          const controller = new AbortController()
+          controllers.add(controller)
+          const timeoutId = window.setTimeout(() => controller.abort(), 15000)
           try {
-            res = await fetch(`/api/remote-links?token=${encodeURIComponent(t)}`)
+            res = await fetch(`/api/remote-links?token=${encodeURIComponent(t)}`, {
+              cache: 'no-store',
+              signal: controller.signal,
+            })
           } catch (fetchErr) {
+            if (disposed) return
             console.error("[remote] Falha de rede ao buscar o link:", fetchErr)
-            setErrorMsg("Sem conexão com o servidor. Verifique sua internet e tente abrir o link novamente.")
+            setErrorMsg(fetchErr instanceof DOMException && fetchErr.name === 'AbortError'
+              ? "O servidor demorou para validar o link. Verifique sua internet e tente novamente."
+              : "Sem conexão com o servidor. Verifique sua internet e tente abrir o link novamente.")
             setPhase('error')
             return
+          } finally {
+            window.clearTimeout(timeoutId)
+            controllers.delete(controller)
           }
 
           let data: RemoteLinkResponse | null = null
@@ -227,10 +252,6 @@ function RemoteDeliveryContent() {
             setPhase('error')
             return
           }
-        } else {
-          setErrorMsg("Link inválido ou expirado.")
-          setPhase('error')
-          return
         }
 
         setDeliveryData(decoded)
@@ -278,7 +299,13 @@ function RemoteDeliveryContent() {
         setPhase('error')
       }
     }
-    init()
+    void init()
+
+    return () => {
+      disposed = true
+      controllers.forEach((controller) => controller.abort())
+      controllers.clear()
+    }
   }, [searchParams])
 
   const handleCpfChange = (value: string) => {

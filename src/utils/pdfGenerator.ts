@@ -9,6 +9,7 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
 import { formatDateOnly, formatDeliveryDate, formatDeliveryTime, getDaysUntilDateOnly } from "@/lib/dateOnly"
 import { calculateTrainingValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
+import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 
 let [r, g, b] = COMPANY_CONFIG.primaryColorRgb
 type AuthMethod = 'manual' | 'facial' | 'manual_facial'
@@ -632,29 +633,17 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       let photoBase64 = item.photoBase64
 
       if (item.signatureUrl) {
-        try {
-          const res = await fetch(item.signatureUrl)
-          const blob = await res.blob()
-          const b64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-          signatureBase64 = b64
-        } catch { /* fallback */ }
+        signatureBase64 = await fetchImageDataUrl(item.signatureUrl, {
+          required: true,
+          label: "a assinatura da entrega",
+        }) || undefined
       }
 
       if (item.photoEvidenceUrl) {
-        try {
-          const res = await fetch(item.photoEvidenceUrl)
-          const blob = await res.blob()
-          const b64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-          photoBase64 = b64
-        } catch { /* fallback */ }
+        photoBase64 = await fetchImageDataUrl(item.photoEvidenceUrl, {
+          required: true,
+          label: "a evidencia fotografica da entrega",
+        }) || undefined
       }
 
       if (signatureBase64 || photoBase64) return { ...item, signatureBase64, photoBase64 }
@@ -1880,22 +1869,7 @@ function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, accent
 }
 
 async function imageUrlToBase64(url?: string | null): Promise<string | null> {
-  if (!url) return null
-  if (url.startsWith("data:image/")) return url
-
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const blob = await res.blob()
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return null
-  }
+  return fetchImageDataUrl(url)
 }
 
 export function generateMovementsSimplePDF(data: MovementsReportData): Blob {

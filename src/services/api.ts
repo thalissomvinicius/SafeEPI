@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, CurrentUser, Company, ThirdParty } from "@/types/database";
 import { Session } from "@supabase/supabase-js";
+import { shouldRequestSignedStorageUrl } from "@/lib/storageAsset";
 
 type AddTrainingResult = {
   training: Training;
@@ -533,11 +534,7 @@ function storagePathShadowKey(field: string) {
 }
 
 function shouldSignStorageValue(value: unknown): value is string {
-  return typeof value === "string" &&
-    value.trim().length > 0 &&
-    !value.startsWith("data:") &&
-    !value.startsWith("blob:") &&
-    !value.startsWith("/");
+  return shouldRequestSignedStorageUrl(value);
 }
 
 async function getPrivateAssetUrl(
@@ -850,10 +847,13 @@ export const api = {
     return data.document;
   },
 
-  async getSignedDocuments() {
+  async getSignedDocuments(options: { employeeId?: string; documentType?: SignedDocument["document_type"]; limit?: number } = {}) {
     const companyId = await getCurrentCompanyId();
     let sdQuery = supabase.from("signed_documents").select("*").order("created_at", { ascending: false });
     if (companyId) sdQuery = sdQuery.eq("company_id", companyId);
+    if (options.employeeId) sdQuery = sdQuery.eq("employee_id", options.employeeId);
+    if (options.documentType) sdQuery = sdQuery.eq("document_type", options.documentType);
+    if (options.limit) sdQuery = sdQuery.limit(Math.min(Math.max(options.limit, 1), 1000));
     const { data, error } = await withSessionRetry(() => sdQuery);
 
     if (error) {
