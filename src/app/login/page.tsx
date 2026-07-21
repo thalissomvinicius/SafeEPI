@@ -138,7 +138,7 @@ export default function LoginPage() {
                   onClick={() => setShowPassword((current) => !current)}
                   disabled={loading || !!successMsg}
                   aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  className="absolute right-2 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-950/60 text-slate-300 transition-all hover:border-blue-400 hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50"
+                  className="absolute right-1.5 top-1/2 flex min-h-12 min-w-12 -translate-y-1/2 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-950/60 text-slate-300 transition-all hover:border-blue-400 hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
