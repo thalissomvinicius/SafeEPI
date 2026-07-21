@@ -39,7 +39,7 @@ export function Sidebar() {
   const brandColor = activeBrand.primaryColor
   const brandLogo = activeBrand.logoUrl || "/logo.png"
   const brandName = activeBrand.name
-  const companyCnpj = user?.company?.cnpj || null
+  const companyCnpj = user?.company?.cnpj || activeBrand.cnpj || null
 
   const filteredMenuItems = menuItems.filter(item =>
     item.roles.includes(user?.role || 'ADMIN') &&

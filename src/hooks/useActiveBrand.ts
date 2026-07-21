@@ -9,6 +9,7 @@ function brandFromCompany(company?: Company | null): ActiveBrand | null {
 
   return {
     name: company.trade_name || company.name || "SafeEPI",
+    cnpj: company.cnpj || null,
     logoUrl: company.logo_url || "/logo.png",
     logoDataUrl: null,
     primaryColor: normalizeHexColor(company.primary_color),

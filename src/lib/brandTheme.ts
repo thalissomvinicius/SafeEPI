@@ -2,6 +2,7 @@ import type { Company } from "@/types/database"
 
 export type ActiveBrand = {
   name: string
+  cnpj: string | null
   logoUrl: string | null
   logoDataUrl: string | null
   primaryColor: string
@@ -35,6 +36,7 @@ function darkenHexColor(color: string) {
 function getFallbackBrand(): ActiveBrand {
   return {
     name: "SafeEPI",
+    cnpj: null,
     logoUrl: "/logo.png",
     logoDataUrl: null,
     primaryColor: DEFAULT_COLOR,
@@ -56,6 +58,7 @@ export function getStoredBrand(): ActiveBrand {
     return {
       ...getFallbackBrand(),
       ...parsed,
+      cnpj: typeof parsed.cnpj === "string" ? parsed.cnpj : null,
       primaryColor: normalizeHexColor(parsed.primaryColor),
     }
   } catch {
@@ -93,6 +96,7 @@ export async function applyCompanyBrand(company?: Company | null, options: { ena
   const logoUrl = company?.logo_url || "/logo.png"
   const brand: ActiveBrand = {
     name: company?.trade_name || company?.name || "SafeEPI",
+    cnpj: company?.cnpj || null,
     logoUrl,
     logoDataUrl: null,
     primaryColor,
