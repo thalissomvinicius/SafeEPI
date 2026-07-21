@@ -14,11 +14,12 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   renderProbe: vi.fn(),
   authCallback: null as null | ((event: string) => void),
+  pathname: "/",
 }))
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mocks.replace }),
-  usePathname: () => "/",
+  usePathname: () => mocks.pathname,
 }))
 
 vi.mock("@/services/api", () => ({
@@ -61,6 +62,7 @@ describe("AuthProvider company context", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.pathname = "/"
     mocks.authCallback = null
     mocks.getSession.mockResolvedValue({
       user: {
@@ -146,5 +148,20 @@ describe("AuthProvider company context", () => {
     await waitFor(() => expect(mocks.getCurrentUser).toHaveBeenCalledTimes(2))
     expect(screen.getByText("ADMIN")).toBeInTheDocument()
     expect(mocks.replace).not.toHaveBeenCalledWith("/login")
+  })
+
+  it("renderiza a pagina de login mesmo quando a leitura da sessao fica pendente", () => {
+    mocks.pathname = "/login"
+    mocks.getSession.mockReturnValue(new Promise(() => {}))
+
+    render(
+      <AuthProvider>
+        <span>Formulario de login</span>
+      </AuthProvider>,
+    )
+
+    expect(screen.getByText("Formulario de login")).toBeInTheDocument()
+    expect(screen.queryByText("Verificando seguranca")).not.toBeInTheDocument()
+    expect(mocks.replace).not.toHaveBeenCalled()
   })
 })

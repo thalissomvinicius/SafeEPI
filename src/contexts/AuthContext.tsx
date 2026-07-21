@@ -45,6 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return path === "/login" || path?.startsWith("/delivery/remote") || path?.startsWith("/training/remote") || path?.startsWith("/capture")
   }, [])
 
+  const publicPath = isPublicPath(pathname)
+
   const hydrateUser = useCallback(async (preserveCurrentUser = false) => {
     const generation = ++hydrationGenerationRef.current
 
@@ -144,10 +146,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return
 
-    if (!user && !isPublicPath(pathname)) {
+    if (!user && !publicPath) {
       router.replace("/login")
     }
-  }, [isPublicPath, loading, pathname, router, user])
+  }, [loading, publicPath, router, user])
 
   useEffect(() => {
     const isLogin = pathname === "/login"
@@ -171,7 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (loading || (!user && !isPublicPath(pathname))) {
+  if (!publicPath && (loading || !user)) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-slate-50">
         <LoadingState
