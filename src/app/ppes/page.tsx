@@ -6,6 +6,7 @@ import { Shield, Plus, Search, Loader2, Package, Trash2, ShieldAlert, FileText }
 import { api } from "@/services/api"
 import { PPE } from "@/types/database"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import Link from "next/link"
@@ -24,7 +25,10 @@ export default function PpesPage() {
   const canGeneratePpeReport = user?.role === "MASTER" || user?.role === "ADMIN" || user?.role === "DIRETORIA"
   const [ppes, setPpes] = useState<PPE[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("search") || "",
+  )
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState<{id?: string, name: string, ca: string, valCa: string, cost: string, stock: string}>({ name: "", ca: "", valCa: "", cost: "", stock: "" })
   const [isSaving, setIsSaving] = useState(false)
@@ -34,12 +38,14 @@ export default function PpesPage() {
 
   const loadPpes = async () => {
     try {
+      setLoadError(null)
       // Removed synchronous setLoading(true) to avoid cascading renders in useEffect.
       // Loading is initialized to true.
       const data = await api.getPpes()
       setPpes(data)
     } catch (error) {
       console.error("Erro ao carregar EPIs:", error)
+      setLoadError(error instanceof Error ? error.message : "Falha ao carregar o catalogo de EPIs.")
       toast.error("Falha ao carregar catálogo de EPIs.")
     } finally {
       setLoading(false)
@@ -58,6 +64,19 @@ export default function PpesPage() {
     ppe.ca_number.includes(searchTerm)
   )
   const isStockFieldLocked = Boolean(formData.id && !canAdjustPpeStock)
+
+  if (!loading && loadError && ppes.length === 0) {
+    return (
+      <DataLoadError
+        title="Catalogo de EPIs temporariamente indisponivel"
+        message={`${loadError} O estoque nao foi interpretado como zero.`}
+        onRetry={() => {
+          setLoading(true)
+          void loadPpes()
+        }}
+      />
+    )
+  }
 
   const handleSavePpe = async (e: React.FormEvent) => {
     e.preventDefault()

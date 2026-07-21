@@ -33,9 +33,48 @@ export type CompanyWithCounts = Company & {
   users_count?: number;
 };
 
+export type GlobalSearchResults = {
+  employees: Array<Pick<Employee, "id" | "full_name" | "cpf">>;
+  ppes: Array<Pick<PPE, "id" | "name" | "ca_number">>;
+  workplaces: Array<Pick<Workplace, "id" | "name">>;
+};
+
+export type SystemNotification = {
+  id: string;
+  title: string;
+  description: string;
+  type: "CA" | "STOCK" | "LIFESPAN";
+  severity: "high" | "medium";
+};
+
+export type DashboardSummary = {
+  stats: {
+    deliveries: number;
+    employees: number;
+    criticalCAs: number;
+    lowStock: number;
+    signedDocuments: number;
+  };
+  employeeCounts: { own: number; third_party: number; all: number };
+  recentDeliveries: Array<{
+    id: string;
+    delivery_date: string;
+    employee: { full_name: string } | null;
+    ppe: { name: string } | null;
+  }>;
+  chartData: Array<{ date: string; value: number }>;
+};
+
 const SESSION_REFRESH_BUFFER_SECONDS = 60;
 const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete";
 const SIGNED_DOCUMENT_DIRECT_UPLOAD_THRESHOLD_BYTES = 2.5 * 1024 * 1024;
+const MASTER_COMPANY_CONTEXT_KEY = "safeepi_master_company_id";
+const AUTH_CONTEXT_SYNC_EVENT = "safeepi:auth-sync";
+
+let sessionRefreshPromise: Promise<Session | null> | null = null;
+let cachedCompanyId: string | null = null;
+let cachedCompanyIdResolved = false;
+let companyIdRequest: Promise<string | null> | null = null;
 
 type SignedDocumentUploadTarget = {
   error?: string;
@@ -101,6 +140,26 @@ function isJwtExpiredError(error: unknown): boolean {
   );
 }
 
+function getResolvedOperationError(result: unknown): unknown {
+  if (!result || typeof result !== "object" || !("error" in result)) return null;
+  return (result as { error?: unknown }).error || null;
+}
+
+async function refreshActiveSession(): Promise<Session | null> {
+  if (!sessionRefreshPromise) {
+    sessionRefreshPromise = (async () => {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      if (!data.session) throw new Error("Sessao nao pode ser renovada.");
+      return data.session;
+    })().finally(() => {
+      sessionRefreshPromise = null;
+    });
+  }
+
+  return sessionRefreshPromise;
+}
+
 async function ensureActiveSession(): Promise<Session | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
@@ -112,14 +171,13 @@ async function ensureActiveSession(): Promise<Session | null> {
   const nowInSeconds = Math.floor(Date.now() / 1000);
 
   if (expiresAt !== 0 && expiresAt <= nowInSeconds + SESSION_REFRESH_BUFFER_SECONDS) {
-    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
-
-    if (refreshError) {
+    try {
+      return await refreshActiveSession();
+    } catch (refreshError) {
+      clearCompanyContextCache(true);
       await supabase.auth.signOut();
       throw refreshError;
     }
-
-    return refreshedData.session;
   }
 
   return session;
@@ -128,22 +186,37 @@ async function ensureActiveSession(): Promise<Session | null> {
 async function withSessionRetry<T>(operation: () => PromiseLike<T>): Promise<T> {
   await ensureActiveSession();
 
+  let result: T;
   try {
-    return await operation();
+    result = await operation();
   } catch (error) {
     if (!isJwtExpiredError(error)) {
       throw error;
     }
 
-    const { data, error: refreshError } = await supabase.auth.refreshSession();
-
-    if (refreshError || !data.session) {
+    try {
+      await refreshActiveSession();
+    } catch (refreshError) {
+      clearCompanyContextCache(true);
       await supabase.auth.signOut();
-      throw refreshError || error;
+      throw refreshError;
     }
 
     return await operation();
   }
+
+  const operationError = getResolvedOperationError(result);
+  if (!isJwtExpiredError(operationError)) return result;
+
+  try {
+    await refreshActiveSession();
+  } catch (refreshError) {
+    clearCompanyContextCache(true);
+    await supabase.auth.signOut();
+    throw refreshError;
+  }
+
+  return await operation();
 }
 
 async function getSessionAuthHeaders(): Promise<Record<string, string>> {
@@ -163,15 +236,23 @@ async function fetchWithAuthRetry(input: RequestInfo | URL, init: RequestInit = 
   let response = await fetch(input, { ...init, headers });
   if (response.status !== 401) return response;
 
-  const { data, error } = await supabase.auth.refreshSession();
-  if (error || !data.session) {
-    cachedCompanyId = null;
+  let refreshedSession: Session | null = null;
+  try {
+    refreshedSession = await refreshActiveSession();
+  } catch {
+    clearCompanyContextCache(true);
+    await supabase.auth.signOut();
+    return response;
+  }
+
+  if (!refreshedSession) {
+    clearCompanyContextCache(true);
     await supabase.auth.signOut();
     return response;
   }
 
   const retryHeaders = new Headers(init.headers);
-  retryHeaders.set("Authorization", `Bearer ${data.session.access_token}`);
+  retryHeaders.set("Authorization", `Bearer ${refreshedSession.access_token}`);
   response = await fetch(input, { ...init, headers: retryHeaders });
   return response;
 }
@@ -211,31 +292,6 @@ function getDeliveryReasonStorageVariants(reason: Delivery["reason"] | string): 
   }
 
   return [normalizedReason];
-}
-
-function isDeliverySchemaCompatibilityIssue(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError;
-  const text = `${maybeError.message || ""} ${maybeError.details || ""} ${maybeError.hint || ""}`.toLowerCase();
-
-  return (
-    maybeError.code === "PGRST204" ||
-    maybeError.code === "42703" ||
-    text.includes("schema cache") ||
-    text.includes("could not find the") ||
-    text.includes("column") && (
-      text.includes("auth_method") ||
-      text.includes("workplace_id") ||
-      text.includes("third_party_id")
-    )
-  );
-}
-
-function isDeliveryReasonConstraintIssue(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const maybeError = error as SupabaseLikeError;
-  const text = `${maybeError.message || ""} ${maybeError.details || ""}`.toLowerCase();
-  return maybeError.code === "23514" && (text.includes("reason") || text.includes("deliveries"));
 }
 
 function isDuplicateCpfIssue(error: unknown): boolean {
@@ -378,12 +434,27 @@ async function readResponseJson<T = unknown>(res: Response): Promise<T> {
   }
 }
 
-let cachedCompanyId: string | null = null;
-const MASTER_COMPANY_CONTEXT_KEY = "safeepi_master_company_id";
-
 function getStoredMasterCompanyId(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(MASTER_COMPANY_CONTEXT_KEY);
+}
+
+function clearCompanyContextCache(clearStoredMasterCompany = false) {
+  cachedCompanyId = null;
+  cachedCompanyIdResolved = false;
+  companyIdRequest = null;
+
+  if (clearStoredMasterCompany && typeof window !== "undefined") {
+    window.localStorage.removeItem(MASTER_COMPANY_CONTEXT_KEY);
+  }
+}
+
+function primeResolvedCompanyContext(user: Pick<CurrentUser, "role" | "company_id">) {
+  cachedCompanyId = user.role === "MASTER"
+    ? getStoredMasterCompanyId()
+    : user.company_id || null;
+  cachedCompanyIdResolved = true;
+  companyIdRequest = null;
 }
 
 function setStoredMasterCompanyId(companyId: string | null) {
@@ -393,23 +464,34 @@ function setStoredMasterCompanyId(companyId: string | null) {
   } else {
     window.localStorage.removeItem(MASTER_COMPANY_CONTEXT_KEY);
   }
-  cachedCompanyId = null;
+  cachedCompanyId = companyId;
+  cachedCompanyIdResolved = true;
+  companyIdRequest = null;
 }
 
 async function getCurrentCompanyId(): Promise<string | null> {
-  if (cachedCompanyId) return cachedCompanyId;
+  if (cachedCompanyIdResolved) return cachedCompanyId;
+  if (companyIdRequest) return companyIdRequest;
 
-  const res = await fetchWithAuthRetry("/api/me");
-  const data = await readResponseJson<{ user?: CurrentUser; error?: string }>(res);
+  companyIdRequest = (async () => {
+    const res = await fetchWithAuthRetry("/api/me");
+    const data = await readResponseJson<{ user?: CurrentUser; error?: string }>(res);
 
-  if (!res.ok) {
-    throw new Error(data.error || "Nao foi possivel identificar a empresa atual.");
-  }
+    if (!res.ok) {
+      throw new Error(data.error || "Nao foi possivel identificar a empresa atual.");
+    }
 
-  cachedCompanyId = data.user?.role === "MASTER"
-    ? getStoredMasterCompanyId()
-    : data.user?.company_id || null;
-  return cachedCompanyId;
+    if (!data.user) {
+      throw new Error("Perfil sem contexto de empresa.");
+    }
+
+    primeResolvedCompanyContext(data.user);
+    return cachedCompanyId;
+  })().finally(() => {
+    companyIdRequest = null;
+  });
+
+  return companyIdRequest;
 }
 
 async function withCompanyId<T extends Record<string, unknown>>(payload: T): Promise<T & { company_id?: string }> {
@@ -552,61 +634,6 @@ async function uploadEmployeePhoto(photoFile: File, employeeId?: string): Promis
   return result.path;
 }
 
-async function getPpeCurrentStock(ppeId: string): Promise<number | null> {
-  const { data, error } = await withSessionRetry(() =>
-    supabase
-      .from("ppes")
-      .select("current_stock")
-      .eq("id", ppeId)
-      .maybeSingle()
-  );
-
-  if (error) throw error;
-  const raw = data?.current_stock;
-  if (typeof raw === "number") return raw;
-  if (typeof raw === "string") {
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-async function insertStockMovementViaApi(
-  movement: Omit<StockMovement, "id" | "created_at" | "ppe">
-): Promise<void> {
-  const response = await fetchWithAuthRetry("/api/stock-movements", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(movement),
-  });
-
-  const result = await readResponseJson<{ error?: string }>(response);
-  if (!response.ok) {
-    throw new Error(result.error || "Erro ao aplicar movimentacao de estoque.");
-  }
-}
-
-async function insertStockOutMovement(
-  ppeId: string,
-  quantity: number,
-  motive: string,
-  deliveryId?: string | null,
-): Promise<void> {
-  if (quantity <= 0) return;
-  const payload = await withCompanyId({
-    ppe_id: ppeId,
-    quantity,
-    type: "SAIDA",
-    motive,
-    created_by_name: "Sistema (Entrega)",
-    ...(deliveryId ? { delivery_id: deliveryId } : {}),
-  });
-
-  await insertStockMovementViaApi(payload as Omit<StockMovement, "id" | "created_at" | "ppe">);
-}
-
 export const api = {
   async getAuthHeaders(): Promise<Record<string, string>> {
     return getSessionAuthHeaders();
@@ -623,23 +650,22 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    const data = await readResponseJson<{ error?: string; session?: Session; user?: Session["user"] }>(response);
+    const data = await readResponseJson<{ error?: string; user?: Session["user"] }>(response);
 
-    if (!response.ok || !data.session) {
+    if (!response.ok || !data.user) {
       throw new Error(data.error || "Falha ao autenticar.");
     }
 
-    const { data: sessionData, error } = await supabase.auth.setSession({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-    });
-
-    if (error) throw error;
+    const { data: sessionData, error } = await supabase.auth.getSession();
+    if (error || !sessionData.session) throw error || new Error("Sessao nao foi persistida.");
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(AUTH_CONTEXT_SYNC_EVENT));
+    }
     return sessionData;
   },
 
   async logout() {
-    cachedCompanyId = null;
+    clearCompanyContextCache(true);
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   },
@@ -676,8 +702,65 @@ export const api = {
     return getStoredMasterCompanyId();
   },
 
+  primeCompanyContext(user: Pick<CurrentUser, "role" | "company_id">) {
+    primeResolvedCompanyContext(user);
+  },
+
+  resetCompanyContext() {
+    clearCompanyContextCache(true);
+  },
+
   async getCurrentCompanyContext() {
     return getCurrentCompanyId();
+  },
+
+  async searchGlobal(query: string, signal?: AbortSignal): Promise<GlobalSearchResults> {
+    const params = new URLSearchParams({ q: query.trim() });
+    const companyId = await getCurrentCompanyId();
+    if (companyId) params.set("company_id", companyId);
+
+    const response = await fetchWithAuthRetry(`/api/search?${params.toString()}`, { signal });
+    const result = await readResponseJson<GlobalSearchResults & { error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || "Falha ao realizar a busca.");
+    return {
+      employees: result.employees || [],
+      ppes: result.ppes || [],
+      workplaces: result.workplaces || [],
+    };
+  },
+
+  async getNotifications(): Promise<SystemNotification[]> {
+    const params = new URLSearchParams();
+    const companyId = await getCurrentCompanyId();
+    if (companyId) params.set("company_id", companyId);
+    const response = await fetchWithAuthRetry(`/api/notifications${params.size ? `?${params.toString()}` : ""}`);
+    const result = await readResponseJson<{ notifications?: SystemNotification[]; error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || "Falha ao carregar alertas.");
+    return result.notifications || [];
+  },
+
+  async getDashboardSummary(filters: {
+    allHistory: boolean;
+    start: string;
+    end: string;
+    chartStart: string;
+    chartEnd: string;
+    scope: "own" | "third_party" | "all";
+  }, signal?: AbortSignal): Promise<DashboardSummary> {
+    const params = new URLSearchParams({
+      all: String(filters.allHistory),
+      start: filters.start,
+      end: filters.end,
+      chart_start: filters.chartStart,
+      chart_end: filters.chartEnd,
+      scope: filters.scope,
+    });
+    const companyId = await getCurrentCompanyId();
+    if (companyId) params.set("company_id", companyId);
+    const response = await fetchWithAuthRetry(`/api/dashboard?${params.toString()}`, { signal });
+    const result = await readResponseJson<DashboardSummary & { error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || "Falha ao carregar o dashboard.");
+    return result;
   },
 
   setMasterCompanyContext(companyId: string | null) {
@@ -827,9 +910,7 @@ export const api = {
   },
 
   async getCompanies() {
-    const res = await fetch('/api/companies', {
-      headers: await this.getAuthHeaders(),
-    });
+    const res = await fetchWithAuthRetry('/api/companies');
     const data = await readResponseJson<{ error?: string; companies?: CompanyWithCounts[] }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel carregar empresas.");
     return data.companies || [];
@@ -1257,14 +1338,6 @@ export const api = {
       }
       throw new Error(result.error || 'Erro ao atualizar colaborador');
     }
-    if (finalUpdates.active === false) {
-      try {
-        await this.deleteEmployeeBiometric(id, "deactivation_cleanup");
-      } catch (error) {
-        console.error("[api.updateEmployee] biometric cleanup after deactivation failed:", error);
-      }
-    }
-
     return result.employee as Employee;
   },
 
@@ -1304,12 +1377,6 @@ export const api = {
       throw new Error(result.error || 'Erro ao excluir colaborador');
     }
 
-    try {
-      await this.deleteEmployeeBiometric(id, "deactivation_cleanup");
-    } catch (error) {
-      console.error("[api.deleteEmployee] biometric cleanup after delete failed:", error);
-    }
-
     return result.employee;
   },
 
@@ -1330,11 +1397,6 @@ export const api = {
     
     if (error) throw error;
 
-    try {
-      await this.deleteEmployeeBiometric(employeeId, "deactivation_cleanup");
-    } catch (cleanupError) {
-      console.error("[api.terminateEmployee] biometric cleanup after termination failed:", cleanupError);
-    }
   },
 
   // --- EPIs ---
@@ -1428,13 +1490,31 @@ export const api = {
   },
 
   // --- Entregas ---
-  async getDeliveries() {
+  async getDeliveries(options: { all?: boolean; limit?: number; offset?: number; signAssets?: boolean } = {}) {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('deliveries').select(`*, employee:employees(full_name, cpf, job_title), ppe:ppes(name, ca_number, ca_expiry_date, cost, lifespan_days), workplace:workplaces(name)`).order('delivery_date', { ascending: false });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) throw error;
-    return signStorageFields((data || []) as unknown as Record<string, unknown>[], ["signature_url"]) as Promise<DeliveryWithRelations[]>;
+    const pageSize = options.all ? 1000 : Math.min(Math.max(options.limit || 500, 1), 1000);
+    const rows: Record<string, unknown>[] = [];
+    let from = Math.max(options.offset || 0, 0);
+
+    while (true) {
+      let query = supabase
+        .from('deliveries')
+        .select(`*, employee:employees(full_name, cpf, job_title, third_party_id), ppe:ppes(name, ca_number, ca_expiry_date, cost, lifespan_days), workplace:workplaces(name, third_party_id)`)
+        .is('deleted_at', null)
+        .order('delivery_date', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (companyId) query = query.eq('company_id', companyId);
+      const { data, error } = await withSessionRetry(() => query);
+      if (error) throw error;
+
+      const page = (data || []) as unknown as Record<string, unknown>[];
+      rows.push(...page);
+      if (!options.all || page.length < pageSize) break;
+      from += pageSize;
+    }
+
+    if (options.signAssets === false) return rows as unknown as DeliveryWithRelations[];
+    return signStorageFields(rows, ["signature_url"]) as Promise<DeliveryWithRelations[]>;
   },
 
   async getEmployeeHistory(employeeId: string) {
@@ -1448,6 +1528,7 @@ export const api = {
           workplace:workplaces(name)
         `)
         .eq('employee_id', employeeId)
+        .is('deleted_at', null)
         .order('delivery_date', { ascending: false })
     );
     
@@ -1458,124 +1539,30 @@ export const api = {
   async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at'>, signatureFile?: File) {
     let signatureUrl = null;
     await ensureActiveSession();
-    const reasonVariants = getDeliveryReasonStorageVariants(delivery.reason);
-    const normalizedReason = reasonVariants[0] as Delivery["reason"];
-    const stockBefore = await getPpeCurrentStock(delivery.ppe_id);
+    const normalizedReason = getDeliveryReasonStorageVariants(delivery.reason)[0] as Delivery["reason"];
 
     if (signatureFile) {
       signatureUrl = await uploadDeliverySignature(signatureFile, delivery.employee_id, delivery.auth_method);
     }
 
-    const syncStockIfNeeded = async (reasonVariant: string, newDeliveryId?: string | null) => {
-      const stockAfterInsert = await getPpeCurrentStock(delivery.ppe_id);
-      const desiredStock = stockBefore === null ? null : Math.max(0, stockBefore - delivery.quantity);
-
-      // If delivery insert did not reduce stock (missing trigger/misconfig), compensate via stock movement.
-      if (desiredStock !== null && stockAfterInsert !== null && stockAfterInsert > desiredStock) {
-        const missingOut = stockAfterInsert - desiredStock;
-        await insertStockOutMovement(
-          delivery.ppe_id,
-          missingOut,
-          `Entrega de EPI (${reasonVariant})`,
-          newDeliveryId,
-        );
-      }
-    };
-
-    const baseInsertPayload = await withCompanyId({
+    const payload = await withCompanyId({
       ...delivery,
       reason: normalizedReason,
       signature_url: signatureUrl,
       delivery_date: delivery.delivery_date || new Date().toISOString(),
+      idempotency_key: crypto.randomUUID(),
     } as Record<string, unknown>);
 
-    let insertError: unknown = null;
-
-    for (const reasonVariant of reasonVariants) {
-      const insertPayload: Record<string, unknown> = {
-        ...baseInsertPayload,
-        reason: reasonVariant,
-      };
-
-      const firstInsertResult = await withSessionRetry(() =>
-        supabase
-          .from('deliveries')
-          .insert([insertPayload])
-          .select()
-      );
-
-      if (!firstInsertResult.error && firstInsertResult.data?.[0]) {
-        await syncStockIfNeeded(reasonVariant, firstInsertResult.data[0]?.id);
-        return firstInsertResult.data[0];
-      }
-
-      insertError = firstInsertResult.error;
-
-      if (isDeliverySchemaCompatibilityIssue(insertError)) {
-        const fallbackPayloads = [
-          {
-            ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
-            employee_id: insertPayload.employee_id,
-            ppe_id: insertPayload.ppe_id,
-            workplace_id: insertPayload.workplace_id,
-            third_party_id: insertPayload.third_party_id,
-            reason: insertPayload.reason,
-            quantity: insertPayload.quantity,
-            signature_url: insertPayload.signature_url,
-            ip_address: insertPayload.ip_address,
-            delivery_date: insertPayload.delivery_date,
-          },
-          {
-            ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
-            employee_id: insertPayload.employee_id,
-            ppe_id: insertPayload.ppe_id,
-            third_party_id: insertPayload.third_party_id,
-            reason: insertPayload.reason,
-            quantity: insertPayload.quantity,
-            signature_url: insertPayload.signature_url,
-            ip_address: insertPayload.ip_address,
-            delivery_date: insertPayload.delivery_date,
-          },
-          {
-            ...(insertPayload.company_id ? { company_id: insertPayload.company_id } : {}),
-            employee_id: insertPayload.employee_id,
-            ppe_id: insertPayload.ppe_id,
-            reason: insertPayload.reason,
-            quantity: insertPayload.quantity,
-            signature_url: insertPayload.signature_url,
-            ip_address: insertPayload.ip_address,
-            delivery_date: insertPayload.delivery_date,
-          },
-        ];
-
-        for (const fallbackPayload of fallbackPayloads) {
-          const fallbackResult = await withSessionRetry(() =>
-            supabase
-              .from('deliveries')
-              .insert([fallbackPayload])
-              .select()
-          );
-
-          if (!fallbackResult.error && fallbackResult.data?.[0]) {
-            await syncStockIfNeeded(reasonVariant, fallbackResult.data[0]?.id);
-            return fallbackResult.data[0];
-          }
-
-          insertError = fallbackResult.error;
-          if (!isDeliverySchemaCompatibilityIssue(insertError)) break;
-        }
-      }
-
-      if (!isDeliveryReasonConstraintIssue(insertError)) break;
+    const response = await fetchWithAuthRetry("/api/deliveries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await readResponseJson<{ data?: Delivery; error?: string }>(response);
+    if (!response.ok || !result.data) {
+      throw new Error(result.error || "Falha ao salvar entrega.");
     }
-
-    if (isDeliveryReasonConstraintIssue(insertError)) {
-      throw new Error(
-        "Motivo da entrega nao aceito pelo banco. Atualize o CHECK da coluna reason em deliveries para aceitar Substituição (Desgaste/Validade)."
-      );
-    }
-
-    throw insertError || new Error("Falha ao salvar entrega no Supabase.");
+    return result.data;
   },
 
   async deleteDelivery(deliveryId: string) {

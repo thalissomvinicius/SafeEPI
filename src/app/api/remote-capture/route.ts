@@ -3,27 +3,18 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { BIOMETRIC_BUCKET, signStorageValue } from "@/lib/privateStorage"
 import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
 import { remoteCaptureSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUploadBuffer } from "@/lib/validateUpload"
+import {
+  BIOMETRIC_KEY_VERSION,
+  BiometricEncryptionConfigurationError,
+  encryptBiometricDescriptor,
+} from "@/lib/biometricEncryption"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
-const EMPLOYEE_PUBLIC_SELECT = [
-  "id",
-  "company_id",
-  "third_party_id",
-  "full_name",
-  "cpf",
-  "job_title",
-  "department",
-  "admission_date",
-  "active",
-  "workplace_id",
-  "termination_date",
-  "photo_url",
-  "created_at",
-].join(",")
 
 function isValidUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_REGEX.test(value)
@@ -113,14 +104,12 @@ async function loadValidLink(token: string, expectedEmployeeId: string, expected
 
 export async function GET(request: Request) {
   try {
+    const ipLimited = await rateLimit(`remote-capture:get:ip:${getClientIp(request)}`, 30, 60 * 60 * 1000)
+    if (!ipLimited.success) return rateLimitExceededResponse(ipLimited.retryAfter)
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
     const token = searchParams.get("token")
-    const rateLimitKey = isValidToken(token)
-      ? `remote-capture:token:${token}`
-      : `remote-capture:ip:${getClientIp(request)}`
-    const limited = rateLimit(rateLimitKey, 10, 60 * 60 * 1000)
-    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     if (!isValidUuid(id)) {
       return NextResponse.json({ error: "ID do colaborador invalido." }, { status: 400 })
@@ -133,6 +122,12 @@ export async function GET(request: Request) {
     if (!validation.ok) {
       return NextResponse.json({ error: validation.error }, { status: validation.status })
     }
+    if (!validation.link.company_id) {
+      return NextResponse.json({ error: "Empresa do link nao identificada." }, { status: 400 })
+    }
+
+    const tokenLimited = await rateLimit(`remote-capture:get:link:${validation.link.id}`, 10, 60 * 60 * 1000)
+    if (!tokenLimited.success) return rateLimitExceededResponse(tokenLimited.retryAfter)
 
     const { data: employee, error } = await supabaseAdmin
       .from("employees")
@@ -157,13 +152,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { data: body } = validateBody(remoteCaptureSchema, await request.json())
+    const ipLimited = await rateLimit(`remote-capture:post:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+    if (!ipLimited.success) return rateLimitExceededResponse(ipLimited.retryAfter)
+
+    const { data: body } = validateBody(remoteCaptureSchema, await readJsonWithLimit(request, 5 * 1024 * 1024))
     const { id, photo_url, face_descriptor, token } = body
-    const rateLimitKey = isValidToken(token)
-      ? `remote-capture:token:${token}`
-      : `remote-capture:ip:${getClientIp(request)}`
-    const limited = rateLimit(rateLimitKey, 10, 60 * 60 * 1000)
-    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     if (!isValidUuid(id)) {
       return NextResponse.json({ error: "ID do colaborador invalido." }, { status: 400 })
@@ -192,6 +185,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.error }, { status: validation.status })
     }
 
+    const tokenLimited = await rateLimit(`remote-capture:post:link:${validation.link.id}`, 5, 60 * 60 * 1000)
+    if (!tokenLimited.success) return rateLimitExceededResponse(tokenLimited.retryAfter)
+
     let imageToUpload: ReturnType<typeof dataUrlToBuffer> = null
     if (photo_url.startsWith("data:")) {
       imageToUpload = dataUrlToBuffer(photo_url)
@@ -212,12 +208,29 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("employees")
-      .update({ photo_url: storedPhotoPath, face_descriptor: normalizedDescriptor })
-      .eq("id", id)
-      .select(EMPLOYEE_PUBLIC_SELECT)
-      .single()
+    const biometricUpdate = normalizedDescriptor
+      ? {
+          face_descriptor: null,
+          face_descriptor_encrypted: encryptBiometricDescriptor(
+            normalizedDescriptor,
+            validation.link.company_id,
+          ),
+          biometric_key_version: BIOMETRIC_KEY_VERSION,
+        }
+      : {
+          face_descriptor: null,
+          face_descriptor_encrypted: null,
+          biometric_key_version: null,
+        }
+
+    const { data, error } = await supabaseAdmin.rpc("safeepi_complete_remote_capture", {
+      p_remote_link_id: validation.link.id,
+      p_employee_id: id,
+      p_company_id: validation.link.company_id,
+      p_photo_url: storedPhotoPath,
+      p_face_descriptor_encrypted: biometricUpdate.face_descriptor_encrypted,
+      p_biometric_key_version: biometricUpdate.biometric_key_version,
+    })
 
     if (error) {
       console.error("[/api/remote-capture][POST] update error:", error)
@@ -227,26 +240,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Falha ao atualizar dados." }, { status: 500 })
     }
 
-    const { data: claimed, error: claimError } = await supabaseAdmin
-      .from("remote_links")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", validation.link.id)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle()
-
-    if (claimError || !claimed) {
-      console.error("[/api/remote-capture][POST] completion error:", claimError)
-      return NextResponse.json({
-        success: true,
-        warning: "Foto salva, mas o status do link nao foi concluido automaticamente.",
-        employee: data,
-      })
-    }
-
     return NextResponse.json({ success: true, employee: data })
   } catch (error: unknown) {
+    if (error instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
     if (isValidationResponse(error)) return error
+    if (error instanceof BiometricEncryptionConfigurationError) {
+      console.error("[/api/remote-capture][POST] biometric encryption is not configured")
+      return NextResponse.json({ error: "Captura biometrica temporariamente indisponivel." }, { status: 503 })
+    }
     console.error("[/api/remote-capture][POST] error:", error)
     return NextResponse.json({ error: "Erro interno do servidor." }, { status: 500 })
   }

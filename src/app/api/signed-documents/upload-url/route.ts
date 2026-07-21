@@ -6,6 +6,7 @@ import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { uploadFieldsSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
+import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
 
 const VALID_DOCUMENT_TYPES = new Set([
   "delivery",
@@ -46,10 +47,11 @@ async function validateRemoteLink(linkToken: string | null, employeeId: string |
 }
 
 export async function POST(request: Request) {
-  const limited = rateLimit(`upload:signed-documents-url:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+  const limited = await rateLimit(`upload:signed-documents-url:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
   if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
   try {
+  assertRequestSize(request, 64 * 1024)
   const formData = await request.formData()
   const { data: fields } = validateBody(uploadFieldsSchema, {
     document_type: formData.get("document_type") || undefined,
@@ -110,6 +112,9 @@ export async function POST(request: Request) {
   })
   } catch (error: unknown) {
     if (isValidationResponse(error)) return error
+    if (error instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 })
+    }
     console.error("[signed-documents/upload-url] unexpected error:", error)
     return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }

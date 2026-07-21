@@ -7,7 +7,7 @@
 ![Next.js](https://img.shields.io/badge/Next.js-000?style=for-the-badge&logo=nextdotjs)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=0b1f17)
 
-🔗 **[Ver demonstração ao vivo →](https://safeepi-pi.vercel.app)**
+🔗 **[Ver demonstração ao vivo →](https://safe-epi.vercel.app)**
 
 ---
 
@@ -55,7 +55,7 @@ Cada ferramenta escolhida por um motivo.
 | 🎨 | Tailwind + shadcn/ui | Interface firme para rotina de SESMT, sem carnaval visual |
 | 🤖 | FastAPI + InsightFace | Biometria facial server-side, sem IA pesada no navegador |
 | 📄 | jsPDF | PDF auditável na hora, sem depender de editor externo |
-| 🔒 | Zod + lru-cache | Entrada validada e abuso segurado antes de bater no banco |
+| 🔒 | Zod + rate limit no Postgres | Entrada validada e abuso controlado entre todas as instâncias |
 
 ---
 
@@ -63,12 +63,12 @@ Cada ferramenta escolhida por um motivo.
 
 Dados de colaboradores merecem tratamento sério.
 
-✅ Bucket privado — signed URLs com expiração curta  
-✅ RLS ativo em 100% das tabelas  
-✅ Middleware server-side com verificação real de sessão  
-✅ Rate limiting em todas as rotas críticas  
-✅ CSP com nonce por request  
-✅ Uploads validados por magic bytes  
+✅ Bucket privado — signed URLs com expiração curta
+✅ RLS ativo em 100% das tabelas
+✅ Middleware server-side com verificação real de sessão
+✅ Rate limiting em todas as rotas críticas
+✅ CSP bloqueante com nonce por request e headers defensivos
+✅ Uploads validados por magic bytes
 ✅ Zero vulnerabilidades (`npm audit`)
 
 > Veja [SECURITY.md](./SECURITY.md) para detalhes completos.
@@ -122,7 +122,17 @@ Configure as variáveis em `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+BIOMETRIC_SERVICE_URL=
+BIOMETRIC_SERVICE_TOKEN=
+BIOMETRIC_ENCRYPTION_KEY=
+CRON_SECRET=
 ```
+
+Os segredos de servico e cron devem ter pelo menos 32 caracteres aleatorios. Gere
+`BIOMETRIC_ENCRYPTION_KEY` separadamente com `openssl rand -base64 32`.
+Antes do deploy, rode o preflight documentado, aplique `production_hardening.sql`,
+execute o postcheck, rode `npm run verify` e valide o servico biometrico com
+`npm run test:python`.
 
 Migrations em `/database/migrations/` — ordem documentada em [`docs/database.md`](./docs/database.md).
 

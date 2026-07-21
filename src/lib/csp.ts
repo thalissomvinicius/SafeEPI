@@ -17,7 +17,7 @@ function toWebSocketOrigin(origin: string) {
   return origin
 }
 
-export function buildCspReportOnlyHeader(nonce: string) {
+export function buildCspHeader(nonce: string) {
   const supabaseOrigin = resolveSupabaseOrigin()
   const supabaseWsOrigin = toWebSocketOrigin(supabaseOrigin)
 

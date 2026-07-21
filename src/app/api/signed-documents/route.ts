@@ -7,6 +7,8 @@ import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { isValidationResponse } from "@/lib/validateBody"
 import { validateUpload } from "@/lib/validateUpload"
 import { isValidGeoLocation } from "@/utils/geolocation"
+import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
+import { assertPdfBytes, calculateSha256 } from "@/lib/documentIntegrity"
 
 const VALID_DOCUMENT_TYPES = new Set([
   "delivery",
@@ -17,6 +19,7 @@ const VALID_DOCUMENT_TYPES = new Set([
 ])
 
 const LOCATION_REQUIRED_DOCUMENT_TYPES = new Set(["delivery", "remote_delivery"])
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function sanitizeFileName(fileName: string) {
   return fileName
@@ -65,7 +68,7 @@ async function resolveUserId(request: Request) {
 }
 
 type RemoteLinkValidationResult =
-  | { ok: true; companyId: string | null }
+  | { ok: true; companyId: string | null; linkId: string }
   | { ok: false }
 
 async function validateRemoteLink(linkToken: string | null, employeeId: string | null): Promise<RemoteLinkValidationResult> {
@@ -73,7 +76,7 @@ async function validateRemoteLink(linkToken: string | null, employeeId: string |
 
   const { data: link } = await supabaseAdmin
     .from("remote_links")
-    .select("employee_id,company_id,status,expires_at")
+    .select("id,employee_id,company_id,status,expires_at")
     .eq("token", linkToken)
     .maybeSingle()
 
@@ -81,16 +84,20 @@ async function validateRemoteLink(linkToken: string | null, employeeId: string |
   if (employeeId && link.employee_id !== employeeId) return { ok: false }
   if (new Date(link.expires_at) < new Date()) return { ok: false }
 
-  if (link.status !== "completed" && link.status !== "pending") return { ok: false }
+  if (link.status !== "completed") return { ok: false }
 
-  return { ok: true, companyId: link.company_id || null }
+  return { ok: true, companyId: link.company_id || null, linkId: link.id }
 }
 
-function isValidPreuploadedPath(path: string, documentType: string) {
-  return (
-    path.startsWith(`signed-documents/${documentType}/`) ||
-    new RegExp(`^signed-documents/[^/]+/${documentType}/`).test(path)
-  ) && !path.includes("..")
+function isValidPreuploadedPath(path: string, documentType: string, companyId: string) {
+  return path.startsWith(`signed-documents/${companyId}/${documentType}/`) && !path.includes("..")
+}
+
+function isTenantStoragePath(path: string, companyId: string) {
+  return !path.includes("..") && (
+    path.startsWith(`${companyId}/`) ||
+    path.startsWith(`signed-documents/${companyId}/`)
+  )
 }
 
 async function withSignedDocumentUrls<T extends {
@@ -110,21 +117,22 @@ async function withSignedDocumentUrls<T extends {
 }
 
 export async function POST(request: Request) {
-  const limited = rateLimit(`upload:signed-documents:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+  const limited = await rateLimit(`upload:signed-documents:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
   if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
   try {
+    assertRequestSize(request, 25 * 1024 * 1024)
     const formData = await request.formData()
     const pdfFile = formData.get("pdfFile")
     const documentType = String(formData.get("document_type") || "")
     const employeeId = String(formData.get("employee_id") || "") || null
     const linkToken = String(formData.get("link_token") || "") || null
     const preuploadedStoragePath = String(formData.get("storage_path") || "")
-    const preuploadedDocumentUrl = String(formData.get("document_url") || "")
-    const hasPreuploadedPdf = Boolean(preuploadedStoragePath && preuploadedDocumentUrl)
+    const hasPreuploadedPdf = Boolean(preuploadedStoragePath)
     const createdBy = await resolveUserId(request)
     const auth = await requireAuthorizedUser(request)
     let remoteCompanyId: string | null = null
+    let remoteLinkId: string | null = null
 
     if (!VALID_DOCUMENT_TYPES.has(documentType)) {
       return NextResponse.json({ error: "Tipo de documento invalido." }, { status: 400 })
@@ -134,24 +142,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "PDF assinado nao informado." }, { status: 400 })
     }
 
-    if (hasPreuploadedPdf && !isValidPreuploadedPath(preuploadedStoragePath, documentType)) {
-      return NextResponse.json({ error: "Caminho do PDF pre-enviado invalido." }, { status: 400 })
-    }
-
     if (linkToken) {
       const remoteLink = await validateRemoteLink(linkToken, employeeId)
       if (!remoteLink.ok) {
         return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
       }
       remoteCompanyId = remoteLink.companyId
+      remoteLinkId = remoteLink.linkId
     } else if (!auth.authorized || !createdBy) {
       return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
     }
 
-    const sha256Hash = String(formData.get("sha256_hash") || "").trim()
-    if (!/^[a-f0-9]{64}$/i.test(sha256Hash)) {
-      return NextResponse.json({ error: "Hash SHA-256 invalido." }, { status: 400 })
-    }
+    const declaredSha256Hash = String(formData.get("sha256_hash") || "").trim().toLowerCase()
 
     const geoLocation = String(formData.get("geo_location") || "").trim()
     if (LOCATION_REQUIRED_DOCUMENT_TYPES.has(documentType) && !isValidGeoLocation(geoLocation)) {
@@ -165,19 +167,29 @@ export async function POST(request: Request) {
       (pdfFile instanceof File ? pdfFile.name : "") ||
       "documento_assinado.pdf"
     ))
+    const companyId = remoteCompanyId ||
+      (auth.authorized && auth.user.role === "MASTER"
+        ? String(formData.get("company_id") || "") || null
+        : auth.authorized
+          ? auth.user.company_id
+          : null)
+    if (!companyId) {
+      return NextResponse.json({ error: "Empresa atual nao identificada para arquivar documento." }, { status: 400 })
+    }
+    if (hasPreuploadedPdf && !isValidPreuploadedPath(preuploadedStoragePath, documentType, companyId)) {
+      return NextResponse.json({ error: "Caminho do PDF pre-enviado invalido para esta empresa." }, { status: 403 })
+    }
+
     let storagePath = preuploadedStoragePath
-    let documentUrl = preuploadedDocumentUrl || preuploadedStoragePath
+    let documentUrl = preuploadedStoragePath
+    let pdfBytes: Uint8Array
 
     if (!hasPreuploadedPdf) {
       const uploadFile = pdfFile as File
       const validatedPdf = await validateUpload(uploadFile, "pdf")
-      const targetCompanyPath = remoteCompanyId ||
-        (auth.authorized && auth.user.role === "MASTER"
-          ? String(formData.get("company_id") || "global")
-          : auth.authorized
-            ? auth.user.company_id || "global"
-            : "global")
-      storagePath = `signed-documents/${targetCompanyPath}/${documentType}/${Date.now()}_${fileName}`
+      pdfBytes = new Uint8Array(validatedPdf.buffer)
+      assertPdfBytes(pdfBytes)
+      storagePath = `signed-documents/${companyId}/${documentType}/${Date.now()}_${fileName}`
 
       const { error: uploadError } = await supabaseAdmin.storage
         .from(PRIVATE_STORAGE_BUCKET)
@@ -192,6 +204,21 @@ export async function POST(request: Request) {
       }
 
       documentUrl = storagePath
+    } else {
+      const { data: storedPdf, error: downloadError } = await supabaseAdmin.storage
+        .from(PRIVATE_STORAGE_BUCKET)
+        .download(storagePath)
+      if (downloadError || !storedPdf) {
+        return NextResponse.json({ error: "PDF pre-enviado nao encontrado." }, { status: 400 })
+      }
+      pdfBytes = new Uint8Array(await storedPdf.arrayBuffer())
+      assertPdfBytes(pdfBytes)
+    }
+
+    const sha256Hash = await calculateSha256(pdfBytes)
+    if (declaredSha256Hash && declaredSha256Hash !== sha256Hash) {
+      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath])
+      return NextResponse.json({ error: "O hash do PDF enviado nao corresponde aos bytes arquivados." }, { status: 400 })
     }
 
     let photoEvidenceUrl = String(formData.get("photo_evidence_url") || "") || null
@@ -199,13 +226,7 @@ export async function POST(request: Request) {
     const photoEvidenceFile = formData.get("photoEvidenceFile")
     if (photoEvidenceFile instanceof File && photoEvidenceFile.size > 0) {
       const validatedEvidence = await validateUpload(photoEvidenceFile, "image")
-      const targetCompanyPath = remoteCompanyId ||
-        (auth.authorized && auth.user.role === "MASTER"
-          ? String(formData.get("company_id") || "global")
-          : auth.authorized
-            ? auth.user.company_id || "global"
-            : "global")
-      const evidencePath = `signed-documents/${targetCompanyPath}/evidence/${documentType}/${Date.now()}_${sanitizeFileName(photoEvidenceFile.name || `foto.${validatedEvidence.extension}`)}`
+      const evidencePath = `signed-documents/${companyId}/evidence/${documentType}/${Date.now()}_${sanitizeFileName(photoEvidenceFile.name || `foto.${validatedEvidence.extension}`)}`
       photoEvidenceStoragePath = evidencePath
       const { error: evidenceUploadError } = await supabaseAdmin.storage
         .from(PRIVATE_STORAGE_BUCKET)
@@ -224,28 +245,52 @@ export async function POST(request: Request) {
     }
 
     const deliveryIds = parseJsonField<string[]>(formData.get("delivery_ids"), [])
-      .filter((id) => typeof id === "string" && id.length > 0)
+      .filter((id) => typeof id === "string" && UUID_REGEX.test(id))
+    const deliveryId = String(formData.get("delivery_id") || "") || null
+    const referencedDeliveryIds = [...new Set([
+      ...deliveryIds,
+      ...(deliveryId ? [deliveryId] : []),
+    ])]
+    const signatureUrl = String(formData.get("signature_url") || "") || null
+    if (signatureUrl && !isTenantStoragePath(signatureUrl, companyId)) {
+      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath, photoEvidenceStoragePath].filter((value): value is string => Boolean(value)))
+      return NextResponse.json({ error: "Assinatura nao pertence a empresa atual." }, { status: 403 })
+    }
+    if (photoEvidenceUrl && !isTenantStoragePath(photoEvidenceUrl, companyId)) {
+      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath, photoEvidenceStoragePath].filter((value): value is string => Boolean(value)))
+      return NextResponse.json({ error: "Evidencia facial nao pertence a empresa atual." }, { status: 403 })
+    }
+
+    if (referencedDeliveryIds.length > 0) {
+      let deliveryQuery = supabaseAdmin
+        .from("deliveries")
+        .select("id")
+        .in("id", referencedDeliveryIds)
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+      if (employeeId) deliveryQuery = deliveryQuery.eq("employee_id", employeeId)
+      const { data: scopedDeliveries, error: scopedError } = await deliveryQuery
+      if (scopedError || scopedDeliveries?.length !== referencedDeliveryIds.length) {
+        await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath, photoEvidenceStoragePath].filter((value): value is string => Boolean(value)))
+        return NextResponse.json({ error: "Entrega referenciada nao pertence a empresa ou colaborador atual." }, { status: 403 })
+      }
+    }
 
     const metadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
-    const companyId = remoteCompanyId ||
-      (auth.authorized && auth.user.role === "MASTER"
-        ? String(formData.get("company_id") || "") || null
-        : auth.authorized
-          ? auth.user.company_id
-          : null)
     const insertPayload = {
       company_id: companyId,
       document_type: documentType,
       employee_id: employeeId,
-      delivery_id: String(formData.get("delivery_id") || "") || null,
+      delivery_id: deliveryId,
       delivery_ids: deliveryIds,
       training_id: String(formData.get("training_id") || "") || null,
       file_name: fileName,
       document_url: documentUrl,
       storage_path: storagePath,
       sha256_hash: sha256Hash.toLowerCase(),
+      remote_link_id: remoteLinkId,
       auth_method: String(formData.get("auth_method") || "") || null,
-      signature_url: String(formData.get("signature_url") || "") || null,
+      signature_url: signatureUrl,
       photo_evidence_url: photoEvidenceUrl,
       ip_address: String(formData.get("ip_address") || "") || null,
       geo_location: geoLocation || null,
@@ -282,6 +327,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, document })
   } catch (error: unknown) {
+    if (error instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
     if (isValidationResponse(error)) return error
     console.error("[signed-documents] unexpected error:", error)
     return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })

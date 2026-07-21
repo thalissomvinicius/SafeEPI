@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Empresa não informada para este usuário." }, { status: 400 })
     }
 
-    const limited = rateLimit(`users:create:company:${targetCompanyId}`, 10, 60 * 60 * 1000)
+    const limited = await rateLimit(`users:create:company:${targetCompanyId}`, 10, 60 * 60 * 1000)
     if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({

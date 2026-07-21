@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
 
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
 
@@ -22,13 +23,11 @@ function isValidDataUrl(value: unknown): value is string {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const ipLimited = await rateLimit(`remote-training-signature:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+    if (!ipLimited.success) return rateLimitExceededResponse(ipLimited.retryAfter)
+
+    const body = await readJsonWithLimit<Record<string, unknown>>(request, 9 * 1024 * 1024)
     const { token, signatureBase64, authMethod = "manual", photoBase64 = null } = body
-    const rateLimitKey = isValidToken(token)
-      ? `remote-training-signature:token:${token}`
-      : `remote-training-signature:ip:${getClientIp(request)}`
-    const limited = rateLimit(rateLimitKey, 10, 60 * 60 * 1000)
-    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     if (!isValidToken(token)) {
       return NextResponse.json({ error: "Token inválido." }, { status: 401 })
@@ -57,6 +56,9 @@ export async function POST(request: NextRequest) {
     if (linkError || !link || !isTrainingLink) {
       return NextResponse.json({ error: "Link não encontrado ou inválido." }, { status: 404 })
     }
+
+    const linkLimited = await rateLimit(`remote-training-signature:link:${link.id}`, 5, 60 * 60 * 1000)
+    if (!linkLimited.success) return rateLimitExceededResponse(linkLimited.retryAfter)
 
     if (new Date(link.expires_at) < new Date()) {
       await supabaseAdmin.from("remote_links").update({ status: "expired" }).eq("id", link.id)
@@ -100,6 +102,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
+    if (err instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: err.message }, { status: err.status })
+    }
     console.error("[/api/remote-training-signature] error:", err)
     return NextResponse.json({ error: "Erro interno." }, { status: 500 })
   }

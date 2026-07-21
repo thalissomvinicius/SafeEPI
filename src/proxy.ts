@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import { buildCspReportOnlyHeader } from "@/lib/csp"
+import { buildCspHeader } from "@/lib/csp"
+import { extractBearerToken } from "@/lib/authHeaders"
 
 const ADMIN_ROLES = new Set(["MASTER", "ADMIN"])
 const PUBLIC_ROUTES = new Set(["/login", "/cadastro", "/esqueci-senha", "/unauthorized"])
@@ -11,8 +12,13 @@ function generateNonce() {
   return btoa(String.fromCharCode(...bytes))
 }
 
-function withCspHeaders(response: NextResponse, csp: string, nonce: string) {
-  response.headers.set("Content-Security-Policy-Report-Only", csp)
+function withSecurityHeaders(response: NextResponse, csp: string, nonce: string) {
+  response.headers.set("Content-Security-Policy", csp)
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
+  response.headers.set("X-Content-Type-Options", "nosniff")
+  response.headers.set("X-Frame-Options", "DENY")
+  response.headers.set("Permissions-Policy", "camera=(self), geolocation=(self), microphone=()")
+  response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
   response.headers.set("x-nonce", nonce)
   return response
 }
@@ -22,14 +28,22 @@ function redirectToLogin(request: NextRequest, csp: string, nonce: string) {
   loginUrl.pathname = "/login"
   loginUrl.search = ""
   loginUrl.searchParams.set("redirectTo", `${request.nextUrl.pathname}${request.nextUrl.search}`)
-  return withCspHeaders(NextResponse.redirect(loginUrl), csp, nonce)
+  return withSecurityHeaders(NextResponse.redirect(loginUrl), csp, nonce)
 }
 
 function redirectToUnauthorized(request: NextRequest, csp: string, nonce: string) {
   const unauthorizedUrl = request.nextUrl.clone()
   unauthorizedUrl.pathname = "/unauthorized"
   unauthorizedUrl.search = ""
-  return withCspHeaders(NextResponse.redirect(unauthorizedUrl), csp, nonce)
+  return withSecurityHeaders(NextResponse.redirect(unauthorizedUrl), csp, nonce)
+}
+
+function apiUnauthorized(csp: string, nonce: string) {
+  return withSecurityHeaders(
+    NextResponse.json({ error: "Nao autenticado." }, { status: 401 }),
+    csp,
+    nonce,
+  )
 }
 
 function isAdminRoute(pathname: string) {
@@ -42,6 +56,7 @@ function isAdminRoute(pathname: string) {
 function isAuthBypassedRoute(pathname: string) {
   return PUBLIC_ROUTES.has(pathname) ||
     pathname === "/api/csp-report" ||
+    pathname === "/api/cron/biometric-retention" ||
     pathname === "/api/auth" ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/remote-delivery" ||
@@ -57,9 +72,9 @@ function isAuthBypassedRoute(pathname: string) {
     pathname.startsWith("/capture/")
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const nonce = generateNonce()
-  const csp = buildCspReportOnlyHeader(nonce)
+  const csp = buildCspHeader(nonce)
   const requestHeaders = new Headers(request.headers)
 
   requestHeaders.set("x-nonce", nonce)
@@ -75,7 +90,7 @@ export async function middleware(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (isAuthBypassedRoute(request.nextUrl.pathname)) {
-    return withCspHeaders(response, csp, nonce)
+    return withSecurityHeaders(response, csp, nonce)
   }
 
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -87,7 +102,7 @@ export async function middleware(request: NextRequest) {
       getAll() {
         return request.cookies.getAll()
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headersToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         response = NextResponse.next({
           request: {
@@ -97,16 +112,29 @@ export async function middleware(request: NextRequest) {
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options)
         })
+        Object.entries(headersToSet).forEach(([name, value]) => {
+          response.headers.set(name, value)
+        })
       },
     },
   })
 
-  const {
+  let {
     data: { user },
   } = await supabase.auth.getUser()
 
+  if (!user && request.nextUrl.pathname.startsWith("/api/")) {
+    const bearer = extractBearerToken(request.headers.get("authorization"))
+    if (bearer) {
+      const result = await supabase.auth.getUser(bearer)
+      user = result.data.user
+    }
+  }
+
   if (!user) {
-    return redirectToLogin(request, csp, nonce)
+    return request.nextUrl.pathname.startsWith("/api/")
+      ? apiUnauthorized(csp, nonce)
+      : redirectToLogin(request, csp, nonce)
   }
 
   if (isAdminRoute(request.nextUrl.pathname)) {
@@ -116,7 +144,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return withCspHeaders(response, csp, nonce)
+  return withSecurityHeaders(response, csp, nonce)
 }
 
 export const config = {

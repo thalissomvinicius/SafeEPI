@@ -3,6 +3,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Literal
 import random
+from threading import RLock
 
 import numpy as np
 
@@ -61,10 +62,25 @@ class BiometricSession:
         self.state_index += 1
         self.challenge_hits = 0
 
+    def accept_frame_hash(self, frame_hash: str) -> bool:
+        if frame_hash in self.frame_hashes:
+            return False
+        self.frame_hashes.add(frame_hash)
+        return True
+
 
 class SessionStore:
-    def __init__(self) -> None:
+    def __init__(self, max_sessions: int | None = None) -> None:
         self.sessions: dict[str, BiometricSession] = {}
+        self.max_sessions = max_sessions or settings.max_sessions
+        self._lock = RLock()
+
+    def cleanup_expired(self) -> int:
+        with self._lock:
+            expired_ids = [session_id for session_id, session in self.sessions.items() if session.expired()]
+            for session_id in expired_ids:
+                self.sessions.pop(session_id, None)
+            return len(expired_ids)
 
     def create(
         self,
@@ -73,7 +89,14 @@ class SessionStore:
         company_id: str | None,
         require_liveness: bool = False,
     ) -> BiometricSession:
+        with self._lock:
+            self.cleanup_expired()
+            if len(self.sessions) >= self.max_sessions:
+                raise RuntimeError("biometric_session_capacity_reached")
+
         sequence = ["CENTER"]
+        if mode == "verify":
+            require_liveness = True
         if mode == "verify" and require_liveness:
             # Active liveness adaptativo: um desafio natural por sessao.
             # Blink/smile ficam como plug-in quando houver landmark model denso
@@ -86,17 +109,19 @@ class SessionStore:
             company_id=company_id,
             challenge_sequence=sequence,
         )
-        self.sessions[session.id] = session
+        with self._lock:
+            self.sessions[session.id] = session
         return session
 
     def get(self, session_id: str) -> BiometricSession | None:
-        session = self.sessions.get(session_id)
-        if not session:
-            return None
-        if session.expired():
-            self.sessions.pop(session_id, None)
-            return None
-        return session
+        with self._lock:
+            session = self.sessions.get(session_id)
+            if not session:
+                return None
+            if session.expired():
+                self.sessions.pop(session_id, None)
+                return None
+            return session
 
 
 session_store = SessionStore()

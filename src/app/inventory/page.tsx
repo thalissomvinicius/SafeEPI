@@ -9,11 +9,13 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "@/lib/toast"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { generateInventoryStockReportPDF } from "@/utils/pdfGenerator"
 import { exportInventoryStockToExcel } from "@/utils/excelExporter"
+import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
 
 export default function InventoryPage() {
   const { user } = useAuth()
@@ -21,6 +23,7 @@ export default function InventoryPage() {
   const [ppes, setPpes] = useState<PPE[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
@@ -36,6 +39,7 @@ export default function InventoryPage() {
 
   const loadData = async () => {
     try {
+      setLoadError(null)
       // Removed synchronous setLoading(true)
       const [ppeData, moveData] = await Promise.all([
         api.getPpes(),
@@ -46,6 +50,7 @@ export default function InventoryPage() {
       if (ppeData.length > 0) setFormData(prev => ({ ...prev, ppe_id: ppeData[0].id }))
     } catch (error) {
       console.error("Erro ao carregar estoque:", error)
+      setLoadError(error instanceof Error ? error.message : "Falha ao carregar o estoque.")
     } finally {
       setLoading(false)
     }
@@ -88,6 +93,19 @@ export default function InventoryPage() {
 
   const filteredPpes = ppes.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
   const stockReportPpes = filteredPpes.filter(ppe => Number(ppe.current_stock || 0) > 0)
+
+  if (!loading && loadError && ppes.length === 0 && movements.length === 0) {
+    return (
+      <DataLoadError
+        title="Estoque temporariamente indisponivel"
+        message={`${loadError} Os saldos nao foram substituidos por zero.`}
+        onRetry={() => {
+          setLoading(true)
+          void loadData()
+        }}
+      />
+    )
+  }
   const recentMovements = movements.slice(0, 5)
 
   const getStockBadge = (stock: number) => {
@@ -345,7 +363,7 @@ export default function InventoryPage() {
       </div>
 
       {isHistoryModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-end justify-center p-0 md:items-center md:p-4 animate-in fade-in duration-300">
+        <AccessibleOverlay label="Historico completo de estoque" onClose={() => setIsHistoryModalOpen(false)} className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-end justify-center p-0 md:items-center md:p-4 animate-in fade-in duration-300">
           <div className="bg-slate-950 border border-slate-800 rounded-t-3xl md:rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88dvh] overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200">
             <div className="p-5 sm:p-7 border-b border-slate-800 flex items-start justify-between gap-4">
               <div>
@@ -374,12 +392,12 @@ export default function InventoryPage() {
               </div>
             </div>
           </div>
-        </div>
+        </AccessibleOverlay>
       )}
 
       {/* Modal Adicionar Movimento */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <AccessibleOverlay label="Ajuste de saldo" onClose={() => setIsModalOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
             <div className="p-5 sm:p-8 border-b border-slate-100 flex justify-between items-center">
               <div>
@@ -472,7 +490,7 @@ export default function InventoryPage() {
               </div>
             </form>
           </div>
-        </div>
+        </AccessibleOverlay>
       )}
       {pdfActionDialog}
     </div>

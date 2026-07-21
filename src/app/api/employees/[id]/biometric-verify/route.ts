@@ -3,7 +3,8 @@ import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
-import type { EmployeeBiometric } from "@/types/biometric"
+import { loadEmployeeReferenceEmbedding } from "@/lib/serverBiometric"
+import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
@@ -76,7 +77,7 @@ async function validateRemoteToken(token: string, employeeId: string) {
 
 export async function POST(request: Request, context: RouteContext) {
   const { id } = await Promise.resolve(context.params)
-  const limited = rateLimit(`biometric-verify:${id}:${getClientIp(request)}`, 60, 60 * 60 * 1000)
+  const limited = await rateLimit(`biometric-verify:${id}:${getClientIp(request)}`, 60, 60 * 60 * 1000)
   if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
   try {
@@ -84,7 +85,7 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "ID do colaborador invalido." }, { status: 400 })
     }
 
-    const body = await request.json()
+    const body = await readJsonWithLimit<Record<string, unknown>>(request, 64 * 1024)
     const descriptor = body?.descriptor
     const token = body?.token
 
@@ -105,25 +106,12 @@ export async function POST(request: Request, context: RouteContext) {
       companyIdScope = auth.user.role === "MASTER" ? null : auth.user.company_id
     }
 
-    let query = supabaseAdmin
-      .from("employees")
-      .select("id, company_id, face_descriptor")
-      .eq("id", id)
-
-    if (companyIdScope) query = query.eq("company_id", companyIdScope)
-
-    const { data: employee, error } = await query.maybeSingle<EmployeeBiometric>()
-
-    if (error) {
-      console.error("[biometric-verify] employee lookup error:", error)
-      return NextResponse.json({ error: "Falha ao validar biometria." }, { status: 500 })
-    }
-
-    if (!employee?.face_descriptor?.length) {
+    const storedDescriptor = await loadEmployeeReferenceEmbedding(id, companyIdScope)
+    if (!storedDescriptor?.length) {
       return NextResponse.json({ match: false, confidence: 0 })
     }
 
-    const similarity = cosineSimilarity(descriptor, employee.face_descriptor)
+    const similarity = cosineSimilarity(descriptor, storedDescriptor)
     const match = similarity >= FACE_MATCH_THRESHOLD
 
     return NextResponse.json({
@@ -131,6 +119,9 @@ export async function POST(request: Request, context: RouteContext) {
       confidence: confidenceFromSimilarity(similarity),
     })
   } catch (error) {
+    if (error instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 })
+    }
     console.error("[biometric-verify] unexpected error:", error)
     return NextResponse.json({ error: "Erro interno do servidor." }, { status: 500 })
   }

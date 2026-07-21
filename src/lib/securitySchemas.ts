@@ -33,7 +33,9 @@ export const remoteLinkCompleteSchema = z.object({
 export const remoteCaptureSchema = z.object({
   id: uuidSchema,
   token: tokenSchema,
-  photo_url: z.string().min(1),
+  photo_url: z.string()
+    .max(4_500_000)
+    .regex(/^data:image\/(png|jpe?g|webp);base64,/i),
   face_descriptor: z.union([
     z.array(z.number().finite()).length(512),
     z.array(z.never()).length(0),

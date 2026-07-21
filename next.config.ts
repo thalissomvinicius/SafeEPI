@@ -23,7 +23,7 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
 ]
 
-// A CSP usa nonce por request e fica no middleware.ts em modo Report-Only.
+// A CSP usa nonce por request e fica no proxy.ts (convencao do Next.js 16).
 // O next.config.ts mantem apenas headers estaticos que nao dependem do request.
 
 const nextConfig: NextConfig = {

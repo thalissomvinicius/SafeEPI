@@ -4,11 +4,10 @@
 import { useState, useEffect } from "react"
 import { Users, AlertTriangle, PackageCheck, ArrowRight, ShieldCheck, Archive, Boxes, Calendar } from "lucide-react"
 import Link from "next/link"
-import { api } from "@/services/api"
-import { DeliveryWithRelations, Employee, PPE, SignedDocument } from "@/types/database"
+import { api, type DashboardSummary } from "@/services/api"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts"
-import { formatDeliveryDate, getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
+import { formatDeliveryDate } from "@/lib/dateOnly"
 import { useActiveBrand } from "@/hooks/useActiveBrand"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -55,10 +54,6 @@ export default function Dashboard() {
   const { user } = useAuth()
   const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
   const brandColor = activeBrand.primaryColor
-  const [rawEmployees, setRawEmployees] = useState<Employee[]>([])
-  const [rawPpes, setRawPpes] = useState<PPE[]>([])
-  const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
-  const [rawDocuments, setRawDocuments] = useState<SignedDocument[]>([])
   const [stats, setStats] = useState({
     deliveries: 0,
     employees: 0,
@@ -66,42 +61,26 @@ export default function Dashboard() {
     lowStock: 0,
     signedDocuments: 0,
   })
-  const [recentDeliveries, setRecentDeliveries] = useState<DeliveryWithRelations[]>([])
+  const [employeeCounts, setEmployeeCounts] = useState({ own: 0, third_party: 0, all: 0 })
+  const [recentDeliveries, setRecentDeliveries] = useState<DashboardSummary["recentDeliveries"]>([])
   const [chartData, setChartData] = useState<{name: string, value: number}[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasLoadedData, setHasLoadedData] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadVersion, setReloadVersion] = useState(0)
   const [dateFilter, setDateFilter] = useState<DashboardDateFilter>("last7")
   const [employeeScope, setEmployeeScope] = useState<DashboardEmployeeScope>("own")
   const [customStartDate, setCustomStartDate] = useState("")
   const [customEndDate, setCustomEndDate] = useState("")
 
   useEffect(() => {
-    async function loadDashboardData() {
-      try {
-        setLoading(true)
-        const [empData, ppeData, deliveryData, documentData] = await Promise.all([
-          api.getEmployees(),
-          api.getPpes(),
-          api.getDeliveries(),
-          api.getSignedDocuments()
-        ])
-
-        setRawEmployees(empData)
-        setRawPpes(ppeData)
-        setRawDeliveries(deliveryData)
-        setRawDocuments(documentData)
-      } catch (err) {
-        console.error("Erro dashboard:", err)
-      } finally {
-        setLoading(false)
-      }
+    if (dateFilter === "custom" && (!customStartDate || !customEndDate)) {
+      return
     }
-    loadDashboardData()
-  }, [])
 
-  useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     const now = new Date()
-    const getStartDate = () => {
+    const getStartDate = (): Date | null => {
       if (dateFilter === "last7") {
         const start = new Date(now)
         start.setDate(start.getDate() - 6)
@@ -122,90 +101,98 @@ export default function Dashboard() {
       }
       return null
     }
-    const getEndDate = () => {
+    const getEndDate = (): Date => {
       if (dateFilter === "custom" && customEndDate) return new Date(`${customEndDate}T23:59:59`)
-      return null
+      return now
     }
     const startDate = getStartDate()
     const endDate = getEndDate()
-    const isInsidePeriod = (value?: string | null) => {
-      if (dateFilter === "all") return true
-      const date = parseDeliveryDateTime(value) || (value ? new Date(value) : null)
-      if (!date || Number.isNaN(date.getTime())) return false
-      if (startDate && date < startDate) return false
-      if (endDate && date > endDate) return false
-      return true
-    }
-
-    const filteredDeliveries = rawDeliveries.filter((delivery) => isInsidePeriod(delivery.delivery_date))
-    const filteredDocuments = rawDocuments.filter((document) => isInsidePeriod(document.created_at))
-    const criticalCount = rawPpes.filter(p => {
-      const diffDays = getDaysUntilDateOnly(p.ca_expiry_date)
-      return diffDays < 90
-    }).length
-    const scopedEmployees = rawEmployees.filter((employee) => {
-      if (employeeScope === "all") return true
-      if (employeeScope === "third_party") return Boolean(employee.third_party_id)
-      return !employee.third_party_id
-    })
-
-    const nextStats = {
-      deliveries: filteredDeliveries.length,
-      employees: scopedEmployees.filter(e => e.active).length,
-      criticalCAs: criticalCount,
-      lowStock: rawPpes.filter(p => p.active && (p.current_stock || 0) <= 5).length,
-      signedDocuments: filteredDocuments.length
-    }
-
     const chartStart = startDate || (() => {
       const start = new Date(now)
       start.setDate(start.getDate() - 29)
       start.setHours(0, 0, 0, 0)
       return start
     })()
-    const chartEnd = endDate || now
-    const diffDays = Math.max(0, Math.floor((chartEnd.getTime() - chartStart.getTime()) / 86400000))
-    const bucketCount = Math.min(31, diffDays + 1)
-    const firstBucket = new Date(chartEnd)
-    firstBucket.setDate(chartEnd.getDate() - (bucketCount - 1))
-    firstBucket.setHours(0, 0, 0, 0)
+    chartStart.setHours(0, 0, 0, 0)
 
-    const buckets = [...Array(bucketCount)].map((_, i) => {
-      const date = new Date(firstBucket)
-      date.setDate(firstBucket.getDate() + i)
-      const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-      const count = filteredDeliveries.filter(d =>
-        parseDeliveryDateTime(d.delivery_date)?.toDateString() === date.toDateString()
-      ).length
-      return { name: dateStr, value: count }
-    })
-    queueMicrotask(() => {
-      if (cancelled) return
-      setStats(nextStats)
-      setChartData(buckets)
-      setRecentDeliveries(filteredDeliveries.slice(0, 5))
-    })
+    async function loadDashboardData() {
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const summary = await api.getDashboardSummary({
+          allHistory: dateFilter === "all",
+          start: (startDate || new Date(0)).toISOString(),
+          end: endDate.toISOString(),
+          chartStart: chartStart.toISOString(),
+          chartEnd: endDate.toISOString(),
+          scope: employeeScope,
+        }, controller.signal)
+        setStats(summary.stats)
+        setEmployeeCounts(summary.employeeCounts)
+        setRecentDeliveries(summary.recentDeliveries)
+        setChartData(summary.chartData.map((bucket) => ({
+          name: new Date(`${bucket.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+          value: bucket.value,
+        })))
+        setHasLoadedData(true)
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          console.error("Erro dashboard:", error)
+          setLoadError(error instanceof Error ? error.message : "Nao foi possivel carregar os indicadores.")
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void loadDashboardData()
 
     return () => {
-      cancelled = true
+      controller.abort()
     }
-  }, [rawEmployees, rawPpes, rawDeliveries, rawDocuments, dateFilter, customStartDate, customEndDate, employeeScope])
+  }, [dateFilter, customStartDate, customEndDate, employeeScope, reloadVersion])
 
-  if (loading) return <DashboardSkeleton />
+  if (loading && !hasLoadedData) return <DashboardSkeleton />
 
-  const activeOwnEmployees = rawEmployees.filter(employee => employee.active && !employee.third_party_id).length
-  const activeThirdPartyEmployees = rawEmployees.filter(employee => employee.active && Boolean(employee.third_party_id)).length
-  const activeAllEmployees = rawEmployees.filter(employee => employee.active).length
+  if (loadError && !hasLoadedData) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center p-6">
+        <div role="alert" className="w-full rounded-3xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+          <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-500" aria-hidden="true" />
+          <h1 className="text-xl font-black text-slate-900">Os dados continuam seguros</h1>
+          <p className="mx-auto mt-2 max-w-xl text-sm font-medium text-slate-600">
+            O painel nao conseguiu consultar o Supabase agora. Os valores nao foram substituidos por zero.
+          </p>
+          <p className="mt-2 text-xs text-slate-500">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => setReloadVersion((version) => version + 1)}
+            className="mt-6 min-h-11 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const employeeCardTitle = employeeScope === "third_party" ? "Terceiros Ativos" : employeeScope === "all" ? "Equipe Total" : "Equipe Ativa"
   const employeeCardSubtitle = employeeScope === "third_party" ? "Colaboradores terceiros" : employeeScope === "all" ? "Proprios + terceiros" : "Colaboradores proprios"
   const employeeScopeOptions = [
-    { value: "own" as const, label: "Próprios", count: activeOwnEmployees },
-    { value: "third_party" as const, label: "Terceiros", count: activeThirdPartyEmployees },
-    { value: "all" as const, label: "Todos", count: activeAllEmployees },
+    { value: "own" as const, label: "Próprios", count: employeeCounts.own },
+    { value: "third_party" as const, label: "Terceiros", count: employeeCounts.third_party },
+    { value: "all" as const, label: "Todos", count: employeeCounts.all },
   ]
 
   return (
     <div className="p-4 sm:p-6 md:p-8 md:pt-10 max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
+      {loadError && (
+        <div role="status" className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <span className="font-bold">Falha temporaria ao atualizar. Mantivemos os ultimos dados carregados.</span>
+          <button type="button" onClick={() => setReloadVersion((version) => version + 1)} className="min-h-11 rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-black uppercase tracking-widest">
+            Atualizar
+          </button>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row justify-between items-stretch md:items-end border-b border-slate-100 pb-6 md:pb-8 gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -220,7 +207,11 @@ export default function Dashboard() {
               <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <select
                 value={dateFilter}
-                onChange={(event) => setDateFilter(event.target.value as DashboardDateFilter)}
+                onChange={(event) => {
+                  const nextFilter = event.target.value as DashboardDateFilter
+                  setDateFilter(nextFilter)
+                  if (nextFilter === "custom") setLoading(false)
+                }}
                 title="Filtrar dashboard por período"
                 className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-9 text-xs font-black uppercase tracking-widest text-slate-600 outline-none transition-colors focus:border-[#2563EB] sm:w-auto"
               >

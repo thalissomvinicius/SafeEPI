@@ -7,13 +7,14 @@ import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { uploadFieldsSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUpload } from "@/lib/validateUpload"
+import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
 
 function sanitizePathPart(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80)
 }
 
 export async function POST(request: Request) {
-  const limited = rateLimit(`upload:employee-photo:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+  const limited = await rateLimit(`upload:employee-photo:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
   if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    assertRequestSize(request, 12 * 1024 * 1024)
     const formData = await request.formData()
     const photoFile = formData.get("photoFile")
     const { data: fields } = validateBody(uploadFieldsSchema, {
@@ -66,6 +68,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ signedUrl: signed?.signedUrl || null, publicUrl: signed?.signedUrl || null, path: fileName })
   } catch (error: unknown) {
     if (isValidationResponse(error)) return error
+    if (error instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 })
+    }
     console.error("[employee-photo-upload] unexpected error:", error)
     return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
   }

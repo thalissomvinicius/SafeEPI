@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import {
+  BIOMETRIC_KEY_VERSION,
+  BiometricEncryptionConfigurationError,
+  encryptBiometricDescriptor,
+} from "@/lib/biometricEncryption"
 
 const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete"
 const EMPLOYEE_PUBLIC_SELECT = [
@@ -77,6 +82,24 @@ function cleanEmployeePayload(payload: unknown) {
   return Object.fromEntries(
     Object.entries(payload as Record<string, unknown>).filter(([, value]) => value !== undefined)
   )
+}
+
+function protectEmployeeBiometricPayload(payload: Record<string, unknown>, companyId: string) {
+  if (!Object.prototype.hasOwnProperty.call(payload, "face_descriptor")) return payload
+  const protectedPayload = { ...payload }
+  const descriptor = protectedPayload.face_descriptor
+
+  if (descriptor === null || (Array.isArray(descriptor) && descriptor.length === 0)) {
+    protectedPayload.face_descriptor = null
+    protectedPayload.face_descriptor_encrypted = null
+    protectedPayload.biometric_key_version = null
+    return protectedPayload
+  }
+
+  protectedPayload.face_descriptor_encrypted = encryptBiometricDescriptor(descriptor as number[], companyId)
+  protectedPayload.biometric_key_version = BIOMETRIC_KEY_VERSION
+  protectedPayload.face_descriptor = null
+  return protectedPayload
 }
 
 async function validateThirdPartyAccess(thirdPartyId: unknown, companyId: string) {
@@ -211,7 +234,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Dados do colaborador sao obrigatorios." }, { status: 400 })
     }
 
-    const employeePayload = cleanEmployeePayload(employee)
+    const employeePayload = protectEmployeeBiometricPayload(cleanEmployeePayload(employee), companyId)
     const thirdPartyValidation = await validateThirdPartyAccess(employeePayload.third_party_id, companyId)
     if (!thirdPartyValidation.ok) return thirdPartyValidation.response
 
@@ -271,6 +294,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ employee: data?.[0] || null })
   } catch (err) {
+    if (err instanceof BiometricEncryptionConfigurationError) {
+      console.error("[API employees/update] biometric encryption is not configured")
+      return NextResponse.json({ error: "Criptografia biometrica nao configurada no servidor." }, { status: 503 })
+    }
     console.error("[API employees/update] Unexpected insert error:", err)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
@@ -296,24 +323,28 @@ export async function PUT(request: NextRequest) {
     }
 
     if (removePhoto) {
-      const { data, error } = await supabaseAdmin
-        .from("employees")
-        .update({ photo_url: null, face_descriptor: null })
-        .eq("id", id)
-        .eq("company_id", companyId)
-        .select(EMPLOYEE_PUBLIC_SELECT)
+      const { error } = await supabaseAdmin.rpc("safeepi_queue_employee_biometric_deletion", {
+        p_employee_id: id,
+        p_company_id: companyId,
+        p_reason: "manual_photo_removal",
+      })
 
       if (error) {
         console.error("[API employees/update] Remove photo error:", error)
         return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
       }
 
-      console.log("[API employees/update] Photo removed. Result:", data)
-      return NextResponse.json({ employee: data?.[0] || null })
+      const { data: employee } = await supabaseAdmin
+        .from("employees")
+        .select(EMPLOYEE_PUBLIC_SELECT)
+        .eq("id", id)
+        .eq("company_id", companyId)
+        .maybeSingle()
+      return NextResponse.json({ employee })
     }
 
     if (updates && Object.keys(updates).length > 0) {
-      const cleanUpdates = cleanEmployeePayload(updates)
+      const cleanUpdates = protectEmployeeBiometricPayload(cleanEmployeePayload(updates), companyId)
       const thirdPartyValidation = await validateThirdPartyAccess(cleanUpdates.third_party_id, companyId)
       if (!thirdPartyValidation.ok) return thirdPartyValidation.response
 
@@ -337,6 +368,10 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ error: "Nenhuma atualização fornecida" }, { status: 400 })
   } catch (err) {
+    if (err instanceof BiometricEncryptionConfigurationError) {
+      console.error("[API employees/update] biometric encryption is not configured")
+      return NextResponse.json({ error: "Criptografia biometrica nao configurada no servidor." }, { status: 503 })
+    }
     console.error("[API employees/update] Unexpected error:", err)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }

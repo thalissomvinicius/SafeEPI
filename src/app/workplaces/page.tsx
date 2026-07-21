@@ -17,7 +17,9 @@ export default function WorkplacesPage() {
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchTerm, setSearchTerm] = useState(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("search") || "",
+  )
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -99,7 +101,7 @@ export default function WorkplacesPage() {
     setDetailsWorkplace(w)
     setDetailsLoading(true)
     try {
-      const [allEmp, allDel] = await Promise.all([api.getEmployees(), api.getDeliveries()])
+      const [allEmp, allDel] = await Promise.all([api.getEmployees(), api.getDeliveries({ all: true, signAssets: false })])
       setDetailsEmployees(allEmp.filter(e => e.workplace_id === w.id && e.active))
       setDetailsDeliveries(allDel.filter(d => d.workplace_id === w.id))
     } catch (err) {
@@ -113,7 +115,7 @@ export default function WorkplacesPage() {
     if (!formData.id) return
     setIsDeleting(true)
     try {
-      const [allEmp, allDel] = await Promise.all([api.getEmployees(), api.getDeliveries()])
+      const [allEmp, allDel] = await Promise.all([api.getEmployees(), api.getDeliveries({ all: true, signAssets: false })])
       const linkedEmp = allEmp.filter(e => e.workplace_id === formData.id && e.active).length
       const linkedDel = allDel.filter(d => d.workplace_id === formData.id).length
       setDeleteModal({ open: true, linkedEmp, linkedDel })
@@ -485,5 +487,3 @@ export default function WorkplacesPage() {
     </div>
   )
 }
-
-

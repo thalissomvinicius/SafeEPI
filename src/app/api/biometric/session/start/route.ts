@@ -5,6 +5,7 @@ import {
   enforceBiometricRateLimit,
   isValidBiometricUuid,
 } from "@/lib/serverBiometric"
+import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
 
 type StartSessionResponse = {
   session_id: string
@@ -18,9 +19,10 @@ type StartSessionResponse = {
 
 export async function POST(request: Request) {
   try {
-    const limited = enforceBiometricRateLimit(request, "session-start")
+    const limited = await enforceBiometricRateLimit(request, "session-start")
     if (limited) return limited
 
+    assertRequestSize(request, 64 * 1024)
     const formData = await request.formData()
     const employeeId = String(formData.get("employee_id") || "") || null
     const token = String(formData.get("token") || "") || null
@@ -41,6 +43,9 @@ export async function POST(request: Request) {
     const response = await callBiometricService<StartSessionResponse>("/biometric/session/start", upstream)
     return NextResponse.json(response)
   } catch (error) {
+    if (error instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 })
+    }
     console.error("[/api/biometric/session/start] error:", error)
     const serviceUnavailable = error instanceof Error && error.name === "BIOMETRIC_SERVICE_NOT_CONFIGURED"
     return NextResponse.json(

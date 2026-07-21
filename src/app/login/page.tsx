@@ -59,7 +59,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-950 overflow-y-auto relative px-4 py-8 sm:py-12">
+    <main id="main-content" className="min-h-[100dvh] flex items-center justify-center bg-slate-950 overflow-y-auto relative px-4 py-8 sm:py-12">
       <div className="absolute inset-x-0 top-0 h-px bg-blue-300/30 pointer-events-none" />
 
       <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-700">
@@ -75,7 +75,7 @@ export default function LoginPage() {
 
         <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-2xl">
           {successMsg && (
-            <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-400/30 text-emerald-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
+            <div role="status" aria-live="polite" className="mb-6 p-4 bg-emerald-500/10 border border-emerald-400/30 text-emerald-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-300 mt-0.5 shrink-0" />
                 <div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
           )}
 
           {errorMsg && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-400/30 text-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
+            <div role="alert" aria-live="assertive" className="mb-6 p-4 bg-red-500/10 border border-red-400/30 text-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 shrink-0" />
                 <div>
@@ -104,13 +104,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="block text-[10px] font-black text-slate-300 uppercase tracking-widest">E-mail Corporativo</label>
+              <label htmlFor="login-email" className="block text-xs font-black text-slate-300 uppercase tracking-widest">E-mail corporativo</label>
               <input 
+                id="login-email"
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading || !!successMsg}
-                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl sm:rounded-2xl px-4 sm:px-5 py-4 text-base sm:text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-600 outline-none disabled:opacity-70"
+                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl sm:rounded-2xl px-4 sm:px-5 py-4 text-base sm:text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-70"
                 placeholder="nome@empresa.com.br"
                 autoComplete="email"
                 required
@@ -118,14 +119,15 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-[10px] font-black text-slate-300 uppercase tracking-widest">Senha de Acesso</label>
+              <label htmlFor="login-password" className="block text-xs font-black text-slate-300 uppercase tracking-widest">Senha de acesso</label>
               <div className="relative">
                 <input 
+                  id="login-password"
                   type={showPassword ? "text" : "password"} 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading || !!successMsg}
-                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl sm:rounded-2xl py-4 pl-4 pr-14 text-base sm:pl-5 sm:text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-600 outline-none disabled:opacity-70"
+                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl sm:rounded-2xl py-4 pl-4 pr-14 text-base sm:pl-5 sm:text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-70"
                   placeholder="Digite sua senha"
                   autoComplete="current-password"
                   required
@@ -136,7 +138,7 @@ export default function LoginPage() {
                   onClick={() => setShowPassword((current) => !current)}
                   disabled={loading || !!successMsg}
                   aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl border border-slate-700/80 bg-slate-950/60 p-2 text-slate-400 transition-all hover:border-blue-400 hover:text-blue-200 disabled:opacity-50"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl border border-slate-700/80 bg-slate-950/60 p-2 text-slate-300 transition-all hover:border-blue-400 hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -147,7 +149,7 @@ export default function LoginPage() {
               <button 
                 type="submit" 
                 disabled={loading || !!successMsg}
-                className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-[0.16em] sm:tracking-[0.2em] transition-all shadow-2xl shadow-blue-950/35 shadow-lg shadow-blue-900/15 flex items-center justify-center disabled:opacity-70"
+                className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-[0.16em] sm:tracking-[0.2em] transition-all shadow-2xl shadow-blue-950/35 shadow-lg shadow-blue-900/15 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-70"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : successMsg ? "Acesso Confirmado" : "Iniciar Sessao"}
               </button>
@@ -155,10 +157,10 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-8 pt-6 border-t border-white/5 text-center">
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black italic">Ambiente Protegido NR-06</p>
+            <p className="text-xs text-slate-400 uppercase tracking-widest font-black italic">Ambiente protegido NR-06</p>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

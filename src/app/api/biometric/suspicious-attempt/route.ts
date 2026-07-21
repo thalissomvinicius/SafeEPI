@@ -33,7 +33,7 @@ async function resolveCompanyFromRemoteToken(token: string, employeeId: string) 
 
 export async function POST(request: Request) {
   const ip = getClientIp(request)
-  const limited = rateLimit(`biometric-suspicious:${ip}`, 30, 60 * 60 * 1000)
+  const limited = await rateLimit(`biometric-suspicious:${ip}`, 30, 60 * 60 * 1000)
   if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
   try {
@@ -107,4 +107,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Erro interno do servidor." }, { status: 500 })
   }
 }
-

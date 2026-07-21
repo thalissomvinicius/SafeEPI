@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { api } from "@/services/api"
 import { useRouter, usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -39,21 +39,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
+  const hydrationGenerationRef = useRef(0)
 
   const isPublicPath = useCallback((path: string | null) => {
     return path === "/login" || path?.startsWith("/delivery/remote") || path?.startsWith("/training/remote") || path?.startsWith("/capture")
   }, [])
 
-  const hydrateUser = useCallback(async () => {
+  const hydrateUser = useCallback(async (preserveCurrentUser = false) => {
+    const generation = ++hydrationGenerationRef.current
+
     try {
       const session = await api.getSession()
 
       if (!session) {
-        setUser(null)
+        if (generation === hydrationGenerationRef.current) {
+          api.resetCompanyContext()
+          setUser(null)
+        }
         return
       }
 
       const profile = await api.getCurrentUser()
+
+      if (profile.role === "MASTER") {
+        const storedCompanyId = api.getMasterCompanyContext()
+
+        if (storedCompanyId) {
+          api.setMasterCompanyContext(storedCompanyId)
+        } else {
+          const companies = await api.getCompanies()
+          const defaultCompany = companies.find((company) => company.active !== false) || companies[0] || null
+          api.setMasterCompanyContext(defaultCompany?.id || null)
+        }
+      } else {
+        api.primeCompanyContext(profile)
+      }
+
+      if (generation !== hydrationGenerationRef.current) return
+
       // O role é definido SOMENTE pelo backend (/api/me), que lê de
       // fontes confiáveis (app_metadata / company_users / profiles).
       // Nunca fazer override por e-mail aqui — qualquer bypass de UI
@@ -74,9 +97,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(userData as User)
     } catch (error) {
       console.error("Auth error:", error)
-      setUser(null)
+      if (generation === hydrationGenerationRef.current) {
+        setUser((currentUser) => preserveCurrentUser ? currentUser : null)
+      }
     } finally {
-      setLoading(false)
+      if (generation === hydrationGenerationRef.current) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -85,14 +112,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void hydrateUser()
     }, 0)
 
+    const handleExplicitAuthSync = () => {
+      void hydrateUser()
+    }
+
+    window.addEventListener("safeepi:auth-sync", handleExplicitAuthSync)
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      void hydrateUser()
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "INITIAL_SESSION") return
+
+      if (event === "SIGNED_OUT") {
+        hydrationGenerationRef.current += 1
+        api.resetCompanyContext()
+        setUser(null)
+        setLoading(false)
+        return
+      }
+
+      void hydrateUser(event === "TOKEN_REFRESHED" || event === "USER_UPDATED")
     })
 
     return () => {
       window.clearTimeout(initialSync)
+      window.removeEventListener("safeepi:auth-sync", handleExplicitAuthSync)
       subscription.unsubscribe()
     }
   }, [hydrateUser])

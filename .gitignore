@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+.coverage
+.pytest_cache/
+__pycache__/
+*.py[cod]
 
 # next.js
 /.next/
@@ -41,6 +45,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local biometric runtime
+/biometric_service/.venv/
+
 # claude
 /.claude/
-

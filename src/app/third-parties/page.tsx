@@ -137,7 +137,7 @@ export default function ThirdPartiesPage() {
         api.getThirdParties(),
         api.getWorkplaces(),
         api.getEmployees(),
-        api.getDeliveries(),
+        api.getDeliveries({ all: true, signAssets: false }),
       ])
       setThirdParties(thirdPartyData)
       setWorkplaces(workplaceData)

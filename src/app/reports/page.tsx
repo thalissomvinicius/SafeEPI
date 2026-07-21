@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
@@ -32,6 +33,8 @@ export default function ReportsPage() {
   const brandColor = activeBrand.primaryColor
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadVersion, setReloadVersion] = useState(0)
   
   // Raw Data State
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
@@ -86,9 +89,10 @@ export default function ReportsPage() {
       if (!user || user.role === 'ALMOXARIFE') return
       try {
         setLoading(true)
+        setLoadError(null)
         const [ppeData, deliveryData, trainingData, wpData, employeeData, thirdPartyData] = await Promise.all([
           api.getPpes(),
-          api.getDeliveries(),
+          api.getDeliveries({ all: true, signAssets: false }),
           api.getTrainings(),
           api.getWorkplaces(),
           api.getEmployees(),
@@ -102,6 +106,7 @@ export default function ReportsPage() {
         setThirdParties(thirdPartyData)
       } catch (err) {
         console.error("Erro ao carregar dados:", err)
+        setLoadError(err instanceof Error ? err.message : "Falha ao carregar o relatorio.")
       } finally {
         setLoading(false)
       }
@@ -111,7 +116,7 @@ export default function ReportsPage() {
         loadData()
     }, 0)
     return () => clearTimeout(timer)
-  }, [user])
+  }, [user, reloadVersion])
 
   // Compute stats based on filter
   useEffect(() => {
@@ -281,6 +286,16 @@ export default function ReportsPage() {
                 <Skeleton className="h-[400px] w-full rounded-3xl" />
             </div>
         </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <DataLoadError
+        title="Relatorios temporariamente indisponiveis"
+        message={`${loadError} Nenhum indicador foi recalculado como zero.`}
+        onRetry={() => setReloadVersion((version) => version + 1)}
+      />
     )
   }
 

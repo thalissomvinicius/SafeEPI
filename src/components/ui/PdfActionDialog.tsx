@@ -1,6 +1,8 @@
 ﻿"use client"
 
 import { Download, ExternalLink, FileText, X } from "lucide-react"
+import { useId } from "react"
+import { useDialogAccessibility } from "@/hooks/useDialogAccessibility"
 
 type PdfActionDialogProps = {
   description?: string
@@ -21,16 +23,33 @@ export function PdfActionDialog({
   title,
   url,
 }: PdfActionDialogProps) {
+  const dialogRef = useDialogAccessibility<HTMLDivElement>(true, onClose)
+  const titleId = useId()
+  const descriptionId = useId()
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden"
+      >
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
           <div className="min-w-0">
             <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#2563EB]">
               <FileText className="h-3.5 w-3.5" />
               PDF pronto
             </div>
-            <h2 className="text-xl font-black uppercase tracking-tighter text-slate-800">{title}</h2>
+            <h2 id={titleId} className="text-xl font-black uppercase tracking-tighter text-slate-800">{title}</h2>
             <p className="mt-2 break-all text-xs font-medium text-slate-400">{fileName}</p>
           </div>
           <button
@@ -44,7 +63,7 @@ export function PdfActionDialog({
         </div>
 
         <div className="space-y-5 px-6 py-6">
-          <p className="text-sm font-medium leading-relaxed text-slate-500">
+          <p id={descriptionId} className="text-sm font-medium leading-relaxed text-slate-500">
             {description || "Escolha se deseja apenas visualizar o PDF em uma nova aba ou baixá-lo agora."}
           </p>
 

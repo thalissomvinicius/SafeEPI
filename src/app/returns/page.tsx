@@ -21,12 +21,15 @@ import { formatDeliveryDate } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [ppes, setPpes] = useState<PPE[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadVersion, setReloadVersion] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
 
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
@@ -51,6 +54,7 @@ export default function ReturnsPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        setLoadError(null)
         const [empData, ppeData, wpData] = await Promise.all([
           api.getEmployees(),
           api.getPpes(),
@@ -61,12 +65,13 @@ export default function ReturnsPage() {
         setWorkplaces(wpData)
       } catch (err) {
         console.error("Erro", err)
+        setLoadError(err instanceof Error ? err.message : "Falha ao carregar as devolucoes.")
       } finally {
         setLoading(false)
       }
     }
     loadData()
-  }, [])
+  }, [reloadVersion])
 
   useEffect(() => {
     return () => {
@@ -254,6 +259,19 @@ export default function ReturnsPage() {
         variant="page"
         label="Carregando devolucoes"
         detail="Buscando colaboradores, EPIs e entregas ativas."
+      />
+    )
+  }
+
+  if (loadError) {
+    return (
+      <DataLoadError
+        title="Devolucoes temporariamente indisponiveis"
+        message={`${loadError} As entregas nao foram consideradas zeradas ou inexistentes.`}
+        onRetry={() => {
+          setLoading(true)
+          setReloadVersion((version) => version + 1)
+        }}
       />
     )
   }

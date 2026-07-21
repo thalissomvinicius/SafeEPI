@@ -1,7 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Criação do cliente singleton do Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// O cliente SSR usa cookies, mantendo navegador, middleware e API routes
+// na mesma fonte de sessão.
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)

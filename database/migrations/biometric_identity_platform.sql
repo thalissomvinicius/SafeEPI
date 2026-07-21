@@ -1,9 +1,14 @@
 -- SafeEPI biometric identity platform
 -- Arquitetura server-side: captura leve no Next.js, processamento facial no FastAPI.
 
-create table if not exists biometric_profiles (
-  employee_id uuid primary key references employees(id) on delete cascade,
-  company_id uuid references companies(id) on delete cascade,
+begin;
+set local lock_timeout = '10s';
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.biometric_profiles (
+  employee_id uuid primary key references public.employees(id) on delete cascade,
+  company_id uuid references public.companies(id) on delete cascade,
   embedding jsonb not null,
   model_provider text not null default 'insightface',
   model_name text not null default 'arcface-buffalo_l',
@@ -14,10 +19,10 @@ create table if not exists biometric_profiles (
   revoked_at timestamptz
 );
 
-create table if not exists biometric_sessions (
+create table if not exists public.biometric_sessions (
   id uuid primary key default gen_random_uuid(),
-  employee_id uuid references employees(id) on delete set null,
-  company_id uuid references companies(id) on delete cascade,
+  employee_id uuid references public.employees(id) on delete set null,
+  company_id uuid references public.companies(id) on delete cascade,
   mode text not null check (mode in ('enroll', 'verify', 'evidence')),
   state text not null,
   decision text not null default 'pending',
@@ -33,11 +38,11 @@ create table if not exists biometric_sessions (
   completed_at timestamptz
 );
 
-create table if not exists biometric_audit_log (
+create table if not exists public.biometric_audit_log (
   id uuid primary key default gen_random_uuid(),
-  session_id uuid references biometric_sessions(id) on delete set null,
-  employee_id uuid references employees(id) on delete set null,
-  company_id uuid references companies(id) on delete cascade,
+  session_id uuid references public.biometric_sessions(id) on delete set null,
+  employee_id uuid references public.employees(id) on delete set null,
+  company_id uuid references public.companies(id) on delete cascade,
   event_type text not null,
   decision text,
   reason text,
@@ -49,16 +54,31 @@ create table if not exists biometric_audit_log (
   created_at timestamptz not null default now()
 );
 
-create index if not exists idx_biometric_profiles_company_id on biometric_profiles(company_id);
-create index if not exists idx_biometric_sessions_employee_id on biometric_sessions(employee_id);
-create index if not exists idx_biometric_sessions_company_id_created_at on biometric_sessions(company_id, created_at desc);
-create index if not exists idx_biometric_audit_company_created_at on biometric_audit_log(company_id, created_at desc);
+create index if not exists idx_biometric_profiles_company_id on public.biometric_profiles(company_id);
+create index if not exists idx_biometric_sessions_employee_id on public.biometric_sessions(employee_id);
+create index if not exists idx_biometric_sessions_company_id_created_at on public.biometric_sessions(company_id, created_at desc);
+create index if not exists idx_biometric_audit_company_created_at on public.biometric_audit_log(company_id, created_at desc);
 
-alter table biometric_profiles enable row level security;
-alter table biometric_sessions enable row level security;
-alter table biometric_audit_log enable row level security;
+alter table public.biometric_profiles enable row level security;
+alter table public.biometric_profiles force row level security;
+alter table public.biometric_sessions enable row level security;
+alter table public.biometric_sessions force row level security;
+alter table public.biometric_audit_log enable row level security;
+alter table public.biometric_audit_log force row level security;
 
-comment on table biometric_profiles is 'Perfis biometricos server-side. O app legado ainda pode espelhar employees.face_descriptor durante a transicao.';
-comment on column biometric_profiles.embedding is 'Embedding ArcFace 512d. Em producao, criptografar por empresa antes de persistir.';
-comment on table biometric_sessions is 'Sessao temporal de verificacao/cadastro facial, usada para observabilidade e auditoria.';
-comment on table biometric_audit_log is 'Trilha forense de decisoes biometricas, retries, fallback e tentativas suspeitas.';
+revoke all on public.biometric_profiles from public, anon, authenticated;
+revoke all on public.biometric_sessions from public, anon, authenticated;
+revoke all on public.biometric_audit_log from public, anon, authenticated;
+
+grant select, insert, update, delete on public.biometric_profiles to service_role;
+grant select, insert, update, delete on public.biometric_sessions to service_role;
+grant select, insert, update, delete on public.biometric_audit_log to service_role;
+
+comment on table public.biometric_profiles is 'Perfis biometricos server-side. O app legado ainda pode espelhar employees.face_descriptor durante a transicao.';
+comment on column public.biometric_profiles.embedding is 'Embedding ArcFace 512d. Em producao, criptografar por empresa antes de persistir.';
+comment on table public.biometric_sessions is 'Sessao temporal de verificacao/cadastro facial, usada para observabilidade e auditoria.';
+comment on table public.biometric_audit_log is 'Trilha forense de decisoes biometricas, retries, fallback e tentativas suspeitas.';
+
+notify pgrst, 'reload schema';
+
+commit;

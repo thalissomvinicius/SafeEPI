@@ -4,6 +4,11 @@ import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import type { EmployeeBiometric } from "@/types/biometric"
+import {
+  BIOMETRIC_KEY_VERSION,
+  decryptBiometricDescriptor,
+  encryptBiometricDescriptor,
+} from "@/lib/biometricEncryption"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
@@ -30,14 +35,27 @@ export async function callBiometricService<T>(path: string, formData: FormData):
     throw error
   }
 
-  const response = await fetch(`${serviceUrl}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${serviceToken}`,
-    },
-    body: formData,
-    cache: "no-store",
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+  let response: Response
+  try {
+    response = await fetch(`${serviceUrl}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceToken}`,
+      },
+      body: formData,
+      cache: "no-store",
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Servico biometrico excedeu o tempo limite.")
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
@@ -95,8 +113,8 @@ export async function authorizeBiometricAccess(
   }
 }
 
-export function enforceBiometricRateLimit(request: Request, key: string) {
-  const limited = rateLimit(`biometric:${key}:${getClientIp(request)}`, 90, 60 * 60 * 1000)
+export async function enforceBiometricRateLimit(request: Request, key: string) {
+  const limited = await rateLimit(`biometric:${key}:${getClientIp(request)}`, 90, 60 * 60 * 1000)
   if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
   return null
 }
@@ -107,16 +125,53 @@ export async function loadEmployeeReferenceEmbedding(
 ): Promise<number[] | null> {
   let query = supabaseAdmin
     .from("employees")
-    .select("id, company_id, face_descriptor")
+    .select("id, company_id, face_descriptor, face_descriptor_encrypted, biometric_key_version")
     .eq("id", employeeId)
 
   if (companyIdScope) query = query.eq("company_id", companyIdScope)
 
-  const { data, error } = await query.maybeSingle<EmployeeBiometric>()
+  const { data, error } = await query.maybeSingle<EmployeeBiometric & {
+    company_id: string
+    face_descriptor_encrypted?: string | null
+    biometric_key_version?: string | null
+  }>()
   if (error) {
     console.error("[biometric] employee reference lookup failed:", error)
     throw new Error("Falha ao carregar referencia biometrica.")
   }
 
-  return data?.face_descriptor?.length ? data.face_descriptor : null
+  if (!data) return null
+
+  if (data.face_descriptor_encrypted) {
+    try {
+      return decryptBiometricDescriptor(data.face_descriptor_encrypted, data.company_id)
+    } catch (decryptionError) {
+      console.error("[biometric] encrypted descriptor could not be decrypted:", {
+        employeeId: data.id,
+        keyVersion: data.biometric_key_version,
+        error: decryptionError instanceof Error ? decryptionError.message : "unknown",
+      })
+      throw new Error("Referencia biometrica indisponivel.")
+    }
+  }
+
+  if (!data.face_descriptor?.length) return null
+
+  const encrypted = encryptBiometricDescriptor(data.face_descriptor, data.company_id)
+  const { error: migrationError } = await supabaseAdmin
+    .from("employees")
+    .update({
+      face_descriptor_encrypted: encrypted,
+      biometric_key_version: BIOMETRIC_KEY_VERSION,
+      face_descriptor: null,
+    })
+    .eq("id", data.id)
+    .eq("company_id", data.company_id)
+
+  if (migrationError) {
+    console.error("[biometric] legacy descriptor migration failed:", migrationError)
+    throw new Error("Falha ao proteger referencia biometrica legada.")
+  }
+
+  return data.face_descriptor
 }

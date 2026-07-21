@@ -25,12 +25,16 @@ export function Header() {
         const data = await api.getCompanies()
         setCompanies(data)
         const storedCompanyId = api.getMasterCompanyContext()
-        const nextCompanyId = storedCompanyId || data[0]?.id || ""
+        const storedCompany = data.find((company) => company.id === storedCompanyId && company.active !== false)
+        const defaultCompany = data.find((company) => company.active !== false) || data[0] || null
+        const nextCompanyId = storedCompany?.id || defaultCompany?.id || ""
+
+        if (storedCompanyId !== nextCompanyId) {
+          api.setMasterCompanyContext(nextCompanyId || null)
+        }
+
         setSelectedCompanyId(nextCompanyId)
         void applyCompanyBrand(data.find((company) => company.id === nextCompanyId), { enableTheme: true })
-        if (!storedCompanyId && nextCompanyId) {
-          api.setMasterCompanyContext(nextCompanyId)
-        }
       } catch (error) {
         console.error("Erro ao carregar empresas para contexto master:", error)
       }
@@ -112,4 +116,3 @@ export function Header() {
     </header>
   )
 }
-

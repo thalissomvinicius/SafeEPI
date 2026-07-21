@@ -1,15 +1,15 @@
 # Security Hardening - SafeEPI
 
-Data da auditoria: 20/05/2026
+Data da auditoria: 20/07/2026
 
 ## Protecoes implementadas
 
 - Supabase Storage privado para documentos, assinaturas, fotos e evidencias sensiveis.
 - URLs de arquivos sensiveis geradas por signed URL server-side, com validade curta.
 - RLS revisado e documentado em `rls_audit.sql`.
-- Rate limiting in-memory com `lru-cache` nas rotas de autenticacao, uploads, links remotos e signed URLs.
+- Rate limiting atomico e distribuido no Supabase, com fallback local limitado apenas para indisponibilidade temporaria da migration.
 - Middleware server-side com Supabase SSR para bloquear paginas protegidas sem sessao valida.
-- CSP em modo `Content-Security-Policy-Report-Only` com nonce por request e endpoint `/api/csp-report`.
+- CSP bloqueante com nonce por request, headers defensivos e endpoint `/api/csp-report`.
 - Validacao Zod nas rotas criticas de usuarios, links remotos, assinatura remota e uploads.
 - Respostas HTTP nao expõem mais `message`, `code` ou `details` internos do Supabase.
 - Uploads validam magic bytes reais antes de salvar no Storage.
@@ -29,7 +29,7 @@ Novos buckets com dados pessoais, documentos, assinaturas ou biometria devem nas
 
 **O que é coletado:** foto facial de referência/evidência e descritor numérico ArcFace de 512 dimensões para verificação de identidade.
 
-**Onde fica:** bucket privado `biometric_photos` (foto) e, durante a transição, coluna `face_descriptor` em `employees` (descritor legado). A migration `biometric_identity_platform.sql` cria `biometric_profiles` para mover o perfil biométrico para uma tabela dedicada.
+**Onde fica:** bucket privado `biometric_photos` (foto) e coluna `face_descriptor_encrypted` em `employees`. O vetor e cifrado no servidor com AES-256-GCM e AAD por empresa; `BIOMETRIC_ENCRYPTION_KEY` nunca e enviada ao navegador nem persistida no banco. Valores antigos em `face_descriptor` sao migrados e zerados na primeira leitura autenticada.
 
 **Quem acessa:** apenas API routes server-side com service_role. O descritor nunca é enviado ao cliente.
 
@@ -40,11 +40,13 @@ Novos buckets com dados pessoais, documentos, assinaturas ou biometria devem nas
 **Quando é deletado:**
 - Automaticamente ao desativar o colaborador
 - Manualmente por ADMIN/MASTER a qualquer momento
-- Toda deleção é registrada em `biometric_deletion_log`
+- O vinculo e o descritor sao apagados da ficha na mesma transacao que registra a auditoria
+- O arquivo fisico entra em `biometric_deletion_queue` e o cron autenticado tenta a exclusao diariamente
+- Toda delecao e registrada em `biometric_deletion_log`
 
-**Base legal (LGPD):** legítimo interesse para controle de acesso e conformidade NR-06. Dado tratado como dado sensível (Art. 11 LGPD).
+**Base legal (LGPD):** biometria e dado pessoal sensivel e exige enquadramento especifico no Art. 11 da LGPD. Nao presumir `legitimo interesse`: a hipotese legal, necessidade, proporcionalidade, prazo de retencao e RIPD devem ser definidos e aprovados pelo encarregado/DPO para o caso concreto antes da ativacao em producao.
 
-**Limite honesto:** o anti-spoof atual possui ponto de extensão para MiniFASNet/SilentFace. Sem esse modelo licenciado/implantado, a engine usa qualidade, temporalidade e consistência como mitigação operacional, mas não deve ser tratada como KYC bancário completo.
+**Limite honesto:** sem modelo anti-spoof licenciado e implantado, a verificacao biometrica falha de forma fechada e deve oferecer assinatura manual auditavel. Nao deve ser tratada como KYC bancario.
 
 ## Rate limiting
 
@@ -52,8 +54,8 @@ Novos buckets com dados pessoais, documentos, assinaturas ou biometria devem nas
 | --- | --- |
 | `/api/auth/*` e login/cadastro | 5 tentativas por IP a cada 15 minutos |
 | `/api/storage/signed-url` | 60 requisicoes por usuario autenticado por hora |
-| `/api/remote-delivery` | 10 requisicoes por token por hora |
-| `/api/remote-capture` | 10 requisicoes por token por hora |
+| `/api/remote-delivery` | limite por IP antes do parsing e por link valido depois da validacao |
+| `/api/remote-capture` | limite por IP antes do parsing e por link valido depois da validacao |
 | `/api/users` criacao | 10 criacoes por empresa por hora |
 | Uploads de arquivo | 20 uploads por IP por hora |
 
@@ -73,7 +75,8 @@ A CSP esta em modo report-only para observar violacoes antes de bloquear produca
 - `https://api.ipify.org`
 - `data:` e `blob:` apenas onde necessario para imagens/midia
 
-Depois de alguns ciclos sem violacoes relevantes em `/api/csp-report`, trocar para `Content-Security-Policy`.
+A politica e enviada como `Content-Security-Policy` bloqueante. Monitore `/api/csp-report`
+apos cada alteracao de scripts, Storage ou integracoes e ajuste apenas as origens estritamente necessarias.
 
 ## Orientacoes para novos deploys
 

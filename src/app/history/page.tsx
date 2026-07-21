@@ -5,13 +5,15 @@ import { useState, useEffect } from "react"
 import { ExternalLink, Fingerprint, History, ShieldCheck, Search, Loader2, FileDown, Trash2, AlertTriangle } from "lucide-react"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { api } from "@/services/api"
-import { DeliveryWithRelations, Employee, SignedDocument, ThirdParty, Workplace } from "@/types/database"
+import { DeliveryWithRelations, SignedDocument, ThirdParty } from "@/types/database"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "@/lib/toast"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 
 type DeliveryScopeFilter = "own" | "third_party" | "all"
 
@@ -27,11 +29,13 @@ export default function HistoryPage() {
   const hasThirdPartyFeature = Boolean(user)
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [records, setRecords] = useState<DeliveryWithRelations[]>([])
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
   const [signedDocuments, setSignedDocuments] = useState<SignedDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadVersion, setReloadVersion] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -43,38 +47,50 @@ export default function HistoryPage() {
     async function fetchHistory() {
       try {
         setLoading(true)
-        const [deliveryData, documentData, employeeData, workplaceData, thirdPartyData] = await Promise.all([
+        setLoadError(null)
+        const [deliveryData, documentData, thirdPartyData] = await Promise.all([
           api.getDeliveries(),
           api.getSignedDocuments(),
-          hasThirdPartyFeature ? api.getEmployees() : Promise.resolve([] as Employee[]),
-          hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
           hasThirdPartyFeature ? api.getThirdParties() : Promise.resolve([] as ThirdParty[]),
         ])
         setRecords(deliveryData)
+        setHasMore(deliveryData.length === 500)
         setSignedDocuments(documentData)
-        setEmployees(employeeData)
-        setWorkplaces(workplaceData)
         setThirdParties(thirdPartyData)
       } catch (err) {
         console.error("Erro histórico:", err)
+        setLoadError(err instanceof Error ? err.message : "Falha ao carregar o historico.")
         toast.error("Falha ao carregar histórico.")
       } finally {
         setLoading(false)
       }
     }
     fetchHistory()
-  }, [hasThirdPartyFeature])
+  }, [hasThirdPartyFeature, reloadVersion])
 
-  const employeeThirdPartyById = new Map(employees.map((employee) => [employee.id, employee.third_party_id || null]))
-  const workplaceThirdPartyById = new Map(workplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
+  const loadMoreRecords = async () => {
+    try {
+      setLoadingMore(true)
+      const nextRecords = await api.getDeliveries({ offset: records.length, limit: 500 })
+      setRecords((current) => {
+        const knownIds = new Set(current.map((record) => record.id))
+        return [...current, ...nextRecords.filter((record) => !knownIds.has(record.id))]
+      })
+      setHasMore(nextRecords.length === 500)
+    } catch (error) {
+      console.error("Erro ao carregar mais registros:", error)
+      toast.error("Falha ao carregar mais registros do historico.")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   const thirdPartyById = new Map(thirdParties.map((thirdParty) => [thirdParty.id, thirdParty]))
 
   const getDeliveryThirdPartyId = (delivery: DeliveryWithRelations) =>
     delivery.third_party_id ||
     delivery.employee?.third_party_id ||
     delivery.workplace?.third_party_id ||
-    employeeThirdPartyById.get(delivery.employee_id) ||
-    workplaceThirdPartyById.get(delivery.workplace_id || "") ||
     null
   const getDeliveryThirdPartyName = (delivery: DeliveryWithRelations) =>
     getDeliveryThirdPartyId(delivery)
@@ -283,6 +299,19 @@ export default function HistoryPage() {
     return { label: "Pendente", variant: "border-slate-200 bg-slate-50 text-slate-500" }
   }
 
+  if (!loading && loadError && records.length === 0) {
+    return (
+      <DataLoadError
+        title="Historico temporariamente indisponivel"
+        message={`${loadError} Os registros nao foram considerados inexistentes.`}
+        onRetry={() => {
+          setLoading(true)
+          setReloadVersion((version) => version + 1)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -319,12 +348,6 @@ export default function HistoryPage() {
                 <option value="all">Todos vínculos</option>
               </select>
             )}
-            <button
-              type="button"
-              className="min-h-11 w-full rounded-xl bg-[#2563EB] px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/10 md:w-auto"
-            >
-              Filtrar
-            </button>
           </div>
           {showThirdPartySelector && (
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
@@ -586,11 +609,27 @@ export default function HistoryPage() {
             </>
           )}
         </div>
+        {hasMore && !loading && (
+          <div className="border-t border-slate-100 bg-slate-50 p-4 text-center">
+            <button
+              type="button"
+              onClick={() => void loadMoreRecords()}
+              disabled={loadingMore}
+              className="min-h-11 rounded-xl border border-slate-200 bg-white px-5 text-xs font-black uppercase tracking-widest text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-[#2563EB] disabled:opacity-50"
+            >
+              {loadingMore ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Carregar mais 500 registros"}
+            </button>
+          </div>
+        )}
       </div>
       {pdfActionDialog}
 
       {confirmDelete && isMaster && (
-        <div
+        <AccessibleOverlay
+          label="Invalidar registro de entrega"
+          onClose={() => {
+            if (deletingId !== confirmDelete.id) setConfirmDelete(null)
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in"
           onClick={(event) => {
             if (event.target === event.currentTarget && deletingId !== confirmDelete.id) {
@@ -605,17 +644,17 @@ export default function HistoryPage() {
               </div>
               <div>
                 <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">
-                  Excluir registro de entrega
+                  Invalidar registro de entrega
                 </h2>
                 <p className="text-xs text-red-700 font-bold mt-1">
-                  Acao restrita ao usuario MASTER. Esta operacao nao pode ser desfeita.
+                  Acao restrita ao usuario MASTER e registrada para auditoria.
                 </p>
               </div>
             </div>
             <div className="p-5 space-y-3 text-sm text-slate-700">
               <p className="font-medium">
-                Confirma a exclusao desta entrega? O EPI sera devolvido ao estoque automaticamente
-                e o arquivo juridico associado sera removido.
+                Confirma a invalidacao desta entrega? O saldo consumido sera estornado automaticamente.
+                A entrega, o documento assinado e a trilha de auditoria serao preservados como evidencia.
               </p>
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1 text-xs">
                 <p>
@@ -660,11 +699,11 @@ export default function HistoryPage() {
                 ) : (
                   <Trash2 className="w-4 h-4" />
                 )}
-                Excluir agora
+                Invalidar agora
               </button>
             </div>
           </div>
-        </div>
+        </AccessibleOverlay>
       )}
     </div>
   )

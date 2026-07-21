@@ -2,7 +2,7 @@
 
 // ui: câmera/assinatura redesenhada — mobile-first ✓
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
+import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react"
 import SignatureCanvas from "react-signature-canvas"
 import { CheckCircle2, Loader2, RotateCcw } from "lucide-react"
 
@@ -25,6 +25,9 @@ export function SignatureCapture({
 }: SignatureCaptureProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const [hasSignature, setHasSignature] = useState(false)
+  const [typedSignature, setTypedSignature] = useState("")
+  const typedSignatureId = useId()
+  const typedSignatureHelpId = useId()
 
   const syncCanvasSize = useCallback(() => {
     const signature = signatureRef.current
@@ -70,6 +73,35 @@ export function SignatureCapture({
     onClear?.()
   }
 
+  const applyTypedSignature = () => {
+    const signature = signatureRef.current
+    const name = typedSignature.trim().replace(/\s+/g, " ")
+    if (!signature || name.length < 3) return
+
+    const source = document.createElement("canvas")
+    source.width = 1400
+    source.height = 360
+    const context = source.getContext("2d")
+    if (!context) return
+
+    context.clearRect(0, 0, source.width, source.height)
+    context.fillStyle = "#0f172a"
+    context.font = 'italic 96px "Segoe Script", "Brush Script MT", cursive'
+    context.textAlign = "center"
+    context.textBaseline = "middle"
+    context.fillText(name.slice(0, 100), source.width / 2, source.height / 2, source.width - 100)
+
+    const target = signature.getCanvas()
+    const ratio = Math.min(window.devicePixelRatio || 1, 2)
+    signature.clear()
+    signature.fromDataURL(source.toDataURL("image/png"), {
+      ratio,
+      width: target.width / ratio,
+      height: target.height / ratio,
+    })
+    setHasSignature(true)
+  }
+
   return (
     <div className={`w-full min-w-0 max-w-full overflow-x-hidden space-y-3 ${className}`}>
       <div className="relative">
@@ -90,6 +122,7 @@ export function SignatureCapture({
             onEnd={() => setHasSignature(!signatureRef.current?.isEmpty())}
             canvasProps={{
               className: "block h-full w-full max-w-full touch-none overscroll-contain",
+              "aria-label": "Área para desenhar a assinatura. Há uma alternativa por digitação logo abaixo.",
               style: {
                 width: "100%",
                 height: "100%",
@@ -110,6 +143,36 @@ export function SignatureCapture({
           <RotateCcw className="h-4 w-4 sm:mr-1" />
           <span className="hidden sm:inline">Limpar</span>
         </button>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <label htmlFor={typedSignatureId} className="block text-sm font-bold text-slate-800">
+          Alternativa acessível: digite o nome completo
+        </label>
+        <p id={typedSignatureHelpId} className="mt-1 text-xs leading-relaxed text-slate-600">
+          Use esta opção se não conseguir desenhar. O nome será aplicado visualmente ao campo de assinatura.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            id={typedSignatureId}
+            type="text"
+            autoComplete="name"
+            maxLength={100}
+            value={typedSignature}
+            onChange={(event) => setTypedSignature(event.target.value)}
+            aria-describedby={typedSignatureHelpId}
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-500"
+            placeholder="Nome completo"
+          />
+          <button
+            type="button"
+            onClick={applyTypedSignature}
+            disabled={typedSignature.trim().length < 3 || isSaving}
+            className="min-h-11 rounded-xl border border-[#2563EB] bg-white px-4 text-xs font-black uppercase tracking-wide text-[#2563EB] transition hover:bg-blue-50 disabled:border-slate-300 disabled:text-slate-400"
+          >
+            Aplicar assinatura
+          </button>
+        </div>
       </div>
 
       <div className="sticky bottom-0 z-10 w-full max-w-full bg-white/95 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur sm:static sm:bg-transparent sm:p-0">

@@ -19,7 +19,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   if (isLoginPage || isPublicRemotePage || !user) {
     return (
-      <main className="flex min-h-[100dvh] w-full max-w-full flex-1 flex-col overflow-x-hidden">
+      <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] w-full max-w-full flex-1 flex-col overflow-x-hidden">
         {children}
       </main>
     )
@@ -31,12 +31,12 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
           <Header />
-          <main className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-0">
+          <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-0">
             <div className="min-w-0 max-w-full flex-1">
               {children}
             </div>
             <footer className="w-full p-6 mt-8 border-t border-slate-200/60 bg-slate-50/50 text-center shrink-0">
-              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest flex items-center justify-center gap-1">
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-widest flex items-center justify-center gap-1">
                 Desenvolvido por
                 <a 
                   href="https://wa.me/5591991697664" 

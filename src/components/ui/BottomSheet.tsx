@@ -1,9 +1,10 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { ReactNode } from "react"
+import { ReactNode, useId } from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useDialogAccessibility } from "@/hooks/useDialogAccessibility"
 
 type BottomSheetProps = {
   open: boolean
@@ -28,6 +29,10 @@ export function BottomSheet({
   closeLabel = "Fechar",
   desktop = "dialog",
 }: BottomSheetProps) {
+  const dialogRef = useDialogAccessibility<HTMLElement>(open, onClose)
+  const titleId = useId()
+  const descriptionId = useId()
+
   if (!open) return null
 
   const desktopLayout = desktop === "sheet"
@@ -46,9 +51,13 @@ export function BottomSheet({
       }}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title || closeLabel}
+        aria-label={title ? undefined : closeLabel}
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
         className={cn(
           "flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl animate-in slide-in-from-bottom-8 duration-200 md:zoom-in-95",
           desktopPanel,
@@ -58,8 +67,8 @@ export function BottomSheet({
         {(title || description) && (
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-5 md:p-6">
             <div className="min-w-0">
-              {title && <h2 className="break-words text-lg font-black uppercase tracking-tight text-slate-900">{title}</h2>}
-              {description && <p className="mt-1 text-sm font-medium text-slate-500">{description}</p>}
+              {title && <h2 id={titleId} className="break-words text-lg font-black uppercase tracking-tight text-slate-900">{title}</h2>}
+              {description && <p id={descriptionId} className="mt-1 text-sm font-medium text-slate-500">{description}</p>}
             </div>
             <button
               type="button"

@@ -358,6 +358,14 @@ html[dir="ltr"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
   .safeepi-loading-sheen::after,
   [class*="safeepi-loading-bar"],
   [class*="safeepi-loader-ring"] {
@@ -436,6 +444,34 @@ html[dir="ltr"] {
   textarea {
     -webkit-tap-highlight-color: transparent;
   }
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--brand-color) 72%, white);
+    outline-offset: 3px;
+  }
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 9999;
+  top: 0.75rem;
+  left: 0.75rem;
+  transform: translateY(-200%);
+  border-radius: 0.75rem;
+  background: #0f172a;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+  transition: transform 120ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+[class~="text-[9px]"],
+[class~="text-[10px]"] {
+  font-size: 0.75rem !important;
+  line-height: 1rem !important;
 }
 
 @media (max-width: 767px) {

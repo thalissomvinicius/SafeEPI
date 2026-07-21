@@ -6,6 +6,8 @@ import {
   isValidBiometricUuid,
   loadEmployeeReferenceEmbedding,
 } from "@/lib/serverBiometric"
+import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
+import { validateUpload } from "@/lib/validateUpload"
 
 type FrameResponse = {
   session_id: string
@@ -26,9 +28,10 @@ function embeddingToFormValue(embedding: number[]) {
 
 export async function POST(request: Request) {
   try {
-    const limited = enforceBiometricRateLimit(request, "session-frame")
+    const limited = await enforceBiometricRateLimit(request, "session-frame")
     if (limited) return limited
 
+    assertRequestSize(request, 3 * 1024 * 1024)
     const formData = await request.formData()
     const sessionId = String(formData.get("session_id") || "")
     const employeeId = String(formData.get("employee_id") || "") || null
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
     if (!(frame instanceof File)) {
       return NextResponse.json({ error: "Frame da camera ausente." }, { status: 400 })
     }
+    await validateUpload(frame, "image")
     if (employeeId && !isValidBiometricUuid(employeeId)) {
       return NextResponse.json({ error: "ID do colaborador invalido." }, { status: 400 })
     }
@@ -77,6 +81,10 @@ export async function POST(request: Request) {
     const response = await callBiometricService<FrameResponse>("/biometric/session/frame", upstream)
     return NextResponse.json(response)
   } catch (error) {
+    if (error instanceof Response) return error
+    if (error instanceof RequestTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 })
+    }
     console.error("[/api/biometric/session/frame] error:", error)
     const serviceUnavailable = error instanceof Error && error.name === "BIOMETRIC_SERVICE_NOT_CONFIGURED"
     return NextResponse.json(

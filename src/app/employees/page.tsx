@@ -13,6 +13,7 @@ import { format, addDays, isPast } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { LoadingRows } from "@/components/ui/LoadingState"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { COMPANY_CONFIG } from "@/config/company"
@@ -22,6 +23,7 @@ import { copyTextToClipboard } from "@/utils/clipboard"
 import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
+import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
@@ -159,7 +161,10 @@ export default function EmployeesPage() {
   const [departments, setDepartments] = useState<CatalogItem[]>([])
   const [catalogWarning, setCatalogWarning] = useState("")
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("search") || "",
+  )
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
   const [employeeScopeFilter, setEmployeeScopeFilter] = useState<EmployeeScopeFilter>("own")
   const [departmentFilter, setDepartmentFilter] = useState("all")
@@ -294,6 +299,7 @@ export default function EmployeesPage() {
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(null)
       const [empData, wpData, jobData, deptData, thirdPartyData] = await Promise.all([
         api.getEmployees(),
         api.getWorkplaces(),
@@ -309,6 +315,7 @@ export default function EmployeesPage() {
       setCatalogWarning("")
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
+      setLoadError(error instanceof Error ? error.message : "Falha ao carregar os colaboradores.")
       toast.error("Falha ao carregar dados do banco de dados.")
     } finally {
       setLoading(false)
@@ -402,13 +409,16 @@ export default function EmployeesPage() {
           admission_date: formData.admission_date || null,
           termination_date: formData.termination_date || null,
           active: !formData.termination_date,
-          face_descriptor: formData.face_descriptor?.length ? Array.from(formData.face_descriptor) : null
+        }
+
+        if (formData.face_descriptor?.length) {
+          updates.face_descriptor = Array.from(formData.face_descriptor)
         }
 
         await api.updateEmployee(formData.id, updates as Partial<Employee>, photoFile)
 
         if (formData.photo_url === null) {
-          await api.removeEmployeePhoto(formData.id)
+          await api.deleteEmployeeBiometric(formData.id, "manual_photo_removal")
         }
 
         await loadData()
@@ -1001,6 +1011,19 @@ export default function EmployeesPage() {
     : employeeScopeFilter === "all"
       ? "colaborador(es) cadastrado(s) nesta empresa."
       : "colaborador(es) proprio(s) no filtro atual."
+
+  if (!loading && loadError && employees.length === 0) {
+    return (
+      <DataLoadError
+        title="Colaboradores temporariamente indisponiveis"
+        message={`${loadError} A lista nao foi considerada vazia.`}
+        onRetry={() => {
+          setLoading(true)
+          void loadData()
+        }}
+      />
+    )
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in relative">
@@ -1649,7 +1672,7 @@ export default function EmployeesPage() {
       </div>
       )}
       {employeeToDelete && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <AccessibleOverlay label="Excluir colaborador" onClose={() => { if (!isDeletingEmployee) setEmployeeToDelete(null) }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)] animate-in zoom-in-95 duration-200">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div className="flex items-center gap-3">
@@ -1703,11 +1726,11 @@ export default function EmployeesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </AccessibleOverlay>
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
+        <AccessibleOverlay label={formData.id ? "Editar colaborador" : "Novo colaborador"} onClose={closeEditModal} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-t-3xl md:my-4 md:rounded-3xl shadow-2xl w-full max-w-md max-h-[92dvh] md:max-h-[calc(100dvh-2rem)] overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200 flex flex-col">
             <div className="shrink-0 flex justify-between items-center p-5 sm:p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">{formData.id ? 'Editar Colaborador' : `Novo Cadastro ${COMPANY_CONFIG.shortName}`}</h2>
@@ -1978,11 +2001,11 @@ export default function EmployeesPage() {
             </form>
             )}
           </div>
-        </div>
+        </AccessibleOverlay>
       )}
 
       {isProfileOpen && selectedEmployeeId && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
+        <AccessibleOverlay label="Prontuario do colaborador" onClose={() => setIsProfileOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-t-[28px] md:my-3 md:rounded-[28px] shadow-2xl w-full max-w-6xl max-h-[92dvh] md:max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200">
             {(() => {
               const emp = employees.find(e => e.id === selectedEmployeeId)
@@ -2144,10 +2167,10 @@ export default function EmployeesPage() {
               )
             })()}
           </div>
-        </div>
+        </AccessibleOverlay>
       )}
       {isTstModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <AccessibleOverlay label="Assinar prontuario" onClose={() => setIsTstModalOpen(false)} className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col border border-slate-200 animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
               <div>
@@ -2372,10 +2395,9 @@ export default function EmployeesPage() {
               </div>
             )}
           </div>
-        </div>
+        </AccessibleOverlay>
       )}
       {pdfActionDialog}
     </div>
   )
 }
-

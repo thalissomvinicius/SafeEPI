@@ -23,7 +23,7 @@ No Next.js:
 
 ```env
 BIOMETRIC_SERVICE_URL=http://localhost:8001
-BIOMETRIC_SERVICE_TOKEN=dev-safeepi-biometric-token
+BIOMETRIC_SERVICE_TOKEN=gere-um-segredo-aleatorio-com-pelo-menos-32-caracteres
 ```
 
 ## Producao
@@ -34,7 +34,7 @@ pelas API routes do Next.js ou rede interna.
 ```bash
 docker build -t safeepi-biometric .
 docker run -p 8001:8001 \
-  -e SAFE_EPI_BIOMETRIC_SERVICE_TOKEN=troque-este-token \
+  -e SAFE_EPI_BIOMETRIC_SERVICE_TOKEN=gere-um-segredo-aleatorio-com-pelo-menos-32-caracteres \
   safeepi-biometric
 ```
 
@@ -42,8 +42,15 @@ No Vercel/Next.js, configure:
 
 ```env
 BIOMETRIC_SERVICE_URL=https://url-privada-do-servico
-BIOMETRIC_SERVICE_TOKEN=troque-este-token
+BIOMETRIC_SERVICE_TOKEN=gere-um-segredo-aleatorio-com-pelo-menos-32-caracteres
 ```
+
+O servico recusa inicializar sem um token com pelo menos 32 caracteres. Em producao,
+gere um valor criptograficamente aleatorio e mantenha o mesmo segredo somente no
+servico FastAPI e nas variaveis server-side da Vercel.
+
+O endpoint de liveness falha de forma fechada quando o modelo anti-spoof licenciado
+nao esta disponivel; ele nunca aprova uma verificacao por heuristica substituta.
 
 > Atencao: valide licenciamento comercial dos modelos InsightFace/anti-spoof antes
 > de operar em producao.

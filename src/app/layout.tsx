@@ -17,7 +17,6 @@ import type { Metadata, Viewport } from "next";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
@@ -43,6 +42,7 @@ export default function RootLayout({
       className={`${plusJakarta.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-[100dvh] overflow-x-hidden flex flex-col bg-slate-50 text-slate-900">
+        <a href="#main-content" className="skip-link">Pular para o conteúdo principal</a>
         <AuthProvider>
           <ClientShell>
             {children}

@@ -93,7 +93,12 @@ def start_session(
 ) -> StartSessionResponse:
     if mode not in {"enroll", "verify", "evidence"}:
         raise HTTPException(status_code=400, detail="invalid_mode")
-    session = session_store.create(mode, employee_id, company_id, require_liveness)  # type: ignore[arg-type]
+    try:
+        session = session_store.create(mode, employee_id, company_id, require_liveness)  # type: ignore[arg-type]
+    except RuntimeError as error:
+        if "capacity" in str(error):
+            raise HTTPException(status_code=503, detail="session_capacity_reached") from error
+        raise
     return StartSessionResponse(
         session_id=session.id,
         state="WAIT_FACE",
@@ -119,6 +124,19 @@ async def process_frame(
     if len(image_bytes) > settings.max_frame_bytes:
         raise HTTPException(status_code=413, detail="frame_too_large")
     frame_hash = image_sha256(image_bytes)
+    if not session.accept_frame_hash(frame_hash):
+        scores = ScoreBundle(spoof=0, quality=0, consistency=0, challenge=0, context=0, final=0)
+        return FrameResponse(
+            session_id=session.id,
+            state="WAIT_FACE",
+            decision="pending",
+            instruction="A imagem nao mudou. Movimente o rosto e tente novamente",
+            progress=10,
+            frame_interval_ms=500,
+            reason="duplicate_frame",
+            scores=scores,
+            audit={"frame_hash": frame_hash, "duplicate_frame": True},
+        )
     image = decode_image(image_bytes)
 
     analysis = face_engine.analyze(image)
@@ -141,8 +159,7 @@ async def process_frame(
     embedding = analysis["embedding"]
     consistency = session.add_embedding(embedding)
     live_score = antispoof.score(image, analysis["bbox"], quality)
-    duplicate_frame = frame_hash in session.frame_hashes
-    session.frame_hashes.add(frame_hash)
+    duplicate_frame = False
 
     if quality_instruction:
         scores = ScoreBundle(spoof=live_score, quality=quality, consistency=consistency, challenge=0.2, context=0.6, final=quality)

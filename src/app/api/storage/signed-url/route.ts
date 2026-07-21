@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   const auth = await requireAuthorizedUser(request)
   if (!auth.authorized) return auth.response
 
-  const limited = rateLimit(`storage:signed-url:user:${auth.user.id}`, 60, 60 * 60 * 1000)
+  const limited = await rateLimit(`storage:signed-url:user:${auth.user.id}`, 60, 60 * 60 * 1000)
   if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
   try {

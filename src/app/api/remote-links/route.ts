@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
     }
 
-    const limited = rateLimit(`remote-links:create:company:${companyId}`, 10, 60 * 60 * 1000)
+    const limited = await rateLimit(`remote-links:create:company:${companyId}`, 10, 60 * 60 * 1000)
     if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
 
     const dbType = type === "training_signature" ? "delivery" : type
