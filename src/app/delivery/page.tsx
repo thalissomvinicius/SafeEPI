@@ -105,6 +105,7 @@ export default function DeliveryPage() {
 
   const [ipAddress, setIpAddress] = useState<string>("")
   const [location, setLocation] = useState<string>("")
+  const [locationSource, setLocationSource] = useState<"device" | "network" | null>(null)
   const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "granted" | "blocked">("idle")
   const [locationError, setLocationError] = useState("")
 
@@ -136,7 +137,7 @@ export default function DeliveryPage() {
     if (isValidGeoLocation(location)) {
       setLocationStatus("granted")
       setLocationError("")
-      return location
+      return { value: location, source: locationSource || "device" as const }
     }
 
     setLocationStatus("requesting")
@@ -144,19 +145,21 @@ export default function DeliveryPage() {
 
     if (result.ok) {
       setLocation(result.value)
+      setLocationSource(result.source)
       setLocationStatus("granted")
       setLocationError("")
-      return result.value
+      return { value: result.value, source: result.source }
     }
 
     setLocation("")
+    setLocationSource(null)
     setLocationStatus("blocked")
     setLocationError(result.message)
     if (showToast) {
       toast.error("Localização obrigatória", result.message)
     }
     return null
-  }, [location])
+  }, [location, locationSource])
 
   const pendingSignatureSummary = useMemo(() => {
     const pending = pendingDrafts.filter((draft) => draft.status === "pending").length
@@ -175,17 +178,6 @@ export default function DeliveryPage() {
             const ipData = await ipRes.json()
             setIpAddress(ipData.ip)
 
-            setLocationStatus("requesting")
-            const locationResult = await requestRequiredGeolocation()
-            if (locationResult.ok) {
-              setLocation(locationResult.value)
-              setLocationStatus("granted")
-              setLocationError("")
-            } else {
-              setLocation("")
-              setLocationStatus("blocked")
-              setLocationError(locationResult.message)
-            }
         } catch (e) { console.error("Erro ao capturar metadados:", e) }
     }
     captureMetadata()
@@ -591,8 +583,10 @@ export default function DeliveryPage() {
       return
     }
     if (!validateCartForDelivery()) return
-    const requiredLocation = await requestLocationForSignature()
-    if (!requiredLocation) return
+    const locationEvidence = await requestLocationForSignature()
+    if (!locationEvidence) return
+    const requiredLocation = locationEvidence.value
+    const requiredLocationSource = locationEvidence.source
 
     try {
       setIsSaving(true)
@@ -677,6 +671,7 @@ export default function DeliveryPage() {
         photoBase64,
         ipAddress,
         location: requiredLocation,
+        locationSource: requiredLocationSource,
         validationHash,
         deliveryDate: selectedDeliveryDateIso
       })
@@ -700,6 +695,7 @@ export default function DeliveryPage() {
           geoLocation: requiredLocation,
           metadata: {
             validationHash,
+            locationSource: requiredLocationSource,
             workplaceName: selectedWorkplace?.name || "Sede",
             thirdPartyId: selectedThirdPartyId,
             itemCount: cart.length,
@@ -1756,7 +1752,10 @@ export default function DeliveryPage() {
                   <button 
                     disabled={employees.length === 0 || cart.length === 0}
                     onClick={() => {
-                      if (validateCartForDelivery()) setStep(2)
+                      if (validateCartForDelivery()) {
+                        setStep(2)
+                        void requestLocationForSignature(false)
+                      }
                     }}
                     className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/10 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
                   >
@@ -1903,7 +1902,12 @@ export default function DeliveryPage() {
                   <SignatureCapture
                     signatureRef={sigCanvas}
                     isSaving={isSaving}
-                    confirmLabel={`Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
+                    isPreparing={locationStatus === "requesting"}
+                    preparingLabel="Obtendo localização..."
+                    confirmLabel={locationStatus === "granted"
+                      ? `Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`
+                      : "Obter localização e confirmar"}
+                    confirmHint={locationStatus === "blocked" ? "A localização será tentada novamente ao confirmar." : undefined}
                     onClear={clearSignature}
                     onConfirm={handleManualSave}
                   />

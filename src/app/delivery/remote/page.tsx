@@ -97,6 +97,7 @@ function RemoteDeliveryContent() {
   // -- Metadata --
   const [ipAddress, setIpAddress] = useState("")
   const [location, setLocation] = useState("")
+  const [locationSource, setLocationSource] = useState<"device" | "network" | null>(null)
   const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "granted" | "blocked">("idle")
   const [locationError, setLocationError] = useState("")
   const [linkToken, setLinkToken] = useState<string>("")
@@ -105,7 +106,7 @@ function RemoteDeliveryContent() {
     if (isValidGeoLocation(location)) {
       setLocationStatus("granted")
       setLocationError("")
-      return location
+      return { value: location, source: locationSource || "device" as const }
     }
 
     setLocationStatus("requesting")
@@ -113,19 +114,21 @@ function RemoteDeliveryContent() {
 
     if (result.ok) {
       setLocation(result.value)
+      setLocationSource(result.source)
       setLocationStatus("granted")
       setLocationError("")
-      return result.value
+      return { value: result.value, source: result.source }
     }
 
     setLocation("")
+    setLocationSource(null)
     setLocationStatus("blocked")
     setLocationError(result.message)
     if (showToast) {
       toast.error("Localização obrigatória", result.message)
     }
     return null
-  }, [location])
+  }, [location, locationSource])
 
   // -- Auto-scroll to top on phase/method change --
   useEffect(() => {
@@ -340,6 +343,7 @@ function RemoteDeliveryContent() {
 
     // CPF matches - proceed to signing
     setPhase('sign')
+    void requestLocationForSignature(false)
   }
 
   // -- Save delivery --
@@ -349,8 +353,10 @@ function RemoteDeliveryContent() {
       toast.error("Faça a verificação facial antes de confirmar a assinatura.")
       return
     }
-    const requiredLocation = await requestLocationForSignature()
-    if (!requiredLocation) return
+    const locationEvidence = await requestLocationForSignature()
+    if (!locationEvidence) return
+    const requiredLocation = locationEvidence.value
+    const requiredLocationSource = locationEvidence.source
     try {
       setIsSaving(true)
       const validationHash = generateAuditCode()
@@ -425,6 +431,7 @@ function RemoteDeliveryContent() {
         photoBase64,
         ipAddress,
         location: requiredLocation,
+        locationSource: requiredLocationSource,
         validationHash,
         deliveryDate: getPdfDeliveryDate(authoritativeDeliveryDate),
       })
@@ -450,6 +457,7 @@ function RemoteDeliveryContent() {
           linkToken,
           metadata: {
             validationHash,
+            locationSource: requiredLocationSource,
             remoteLinkToken: linkToken,
             signaturePendingOnly: deliveryData?.signaturePendingOnly === true,
             workplaceName: workplace?.name || "Sede",
@@ -763,7 +771,10 @@ function RemoteDeliveryContent() {
               <SignatureCapture
                 signatureRef={sigCanvas}
                 isSaving={isSaving}
-                confirmLabel="Confirmar recebimento"
+                isPreparing={locationStatus === "requesting"}
+                preparingLabel="Obtendo localização..."
+                confirmLabel={locationStatus === "granted" ? "Confirmar recebimento" : "Obter localização e confirmar"}
+                confirmHint={locationStatus === "blocked" ? "A localização será tentada novamente ao confirmar." : undefined}
                 onConfirm={() => {
                   if (sigCanvas.current?.isEmpty()) return toast.error("Assine antes de confirmar.")
                   const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)

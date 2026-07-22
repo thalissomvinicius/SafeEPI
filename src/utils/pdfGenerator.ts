@@ -218,6 +218,7 @@ export interface DeliveryPDFData {
   }
   ipAddress?: string
   location?: string
+  locationSource?: "device" | "network"
   validationHash?: string
   deliveryDate?: string
 }
@@ -539,7 +540,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
 
   doc.setFont("helvetica", "normal")
   doc.setTextColor(148, 163, 184)
-  doc.text("GEOLOCALIZAÇÃO", metaX, currentY + 31)
+  doc.text(data.locationSource === "network" ? "GEOLOCALIZAÇÃO (REDE APROX.)" : "GEOLOCALIZAÇÃO", metaX, currentY + 31)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(71, 85, 105)
   doc.text(fitSingleLineText(doc, data.location || "Coordenadas não capturadas", pageWidth - 78), metaX, currentY + 35)

@@ -1,5 +1,5 @@
 export type RequiredGeolocationResult =
-  | { ok: true; value: string }
+  | { ok: true; value: string; source: "device" | "network"; accuracyMeters?: number }
   | { ok: false; reason: "unsupported" | "denied" | "timeout" | "unavailable" | "unknown"; message: string }
 
 const COORDINATE_PATTERN = /^(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$/
@@ -65,23 +65,69 @@ function resolveGeolocationError(error: GeolocationPositionError): RequiredGeolo
   }
 }
 
-export function requestRequiredGeolocation(): Promise<RequiredGeolocationResult> {
-  if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-    return Promise.resolve({
-      ok: false,
-      reason: "unsupported",
-      message: "Este navegador não oferece localização. Use um navegador com GPS/localização habilitada.",
-    })
-  }
-
+function requestDeviceGeolocation(): Promise<RequiredGeolocationResult> {
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const value = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`
-        resolve({ ok: true, value })
+        resolve({
+          ok: true,
+          value,
+          source: "device",
+          accuracyMeters: Number.isFinite(position.coords.accuracy) ? Math.round(position.coords.accuracy) : undefined,
+        })
       },
       (error) => resolve(resolveGeolocationError(error)),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      // Uma leitura recente e de baixa precisão responde melhor em PCs sem GPS.
+      // A evidência continua sendo do dispositivo e evita travar o clique por 15 s.
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 5 * 60 * 1000 },
     )
   })
+}
+
+async function requestNetworkGeolocation(): Promise<RequiredGeolocationResult | null> {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 5000)
+
+  try {
+    const response = await fetch("/api/client-location", {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+    if (!response.ok) return null
+
+    const data = await response.json() as { location?: unknown }
+    const value = typeof data.location === "string" ? data.location.trim() : ""
+    if (!isValidGeoLocation(value)) return null
+
+    return { ok: true, value, source: "network" }
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
+export async function requestRequiredGeolocation(): Promise<RequiredGeolocationResult> {
+  const unsupportedResult: RequiredGeolocationResult = {
+    ok: false,
+    reason: "unsupported",
+    message: "Este navegador não oferece localização. Use um navegador com localização habilitada.",
+  }
+
+  const deviceResult = typeof navigator === "undefined" || !("geolocation" in navigator)
+    ? unsupportedResult
+    : await requestDeviceGeolocation()
+
+  if (deviceResult.ok) return deviceResult
+
+  // Em PCs sem sensor GPS, a Vercel fornece uma coordenada aproximada da rede.
+  // Isso mantém a trilha de auditoria e impede que a assinatura fique bloqueada.
+  if (typeof window !== "undefined") {
+    const networkResult = await requestNetworkGeolocation()
+    if (networkResult) return networkResult
+  }
+
+  return deviceResult
 }

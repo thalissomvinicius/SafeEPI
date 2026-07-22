@@ -31,7 +31,7 @@ set search_path = public, pg_temp
 as $$
 declare
   current_row public.api_rate_limits%rowtype;
-  current_time timestamptz := clock_timestamp();
+  v_now timestamptz := clock_timestamp();
 begin
   if length(p_key) < 8 or p_limit < 1 or p_window_seconds < 1 then
     raise exception 'invalid_rate_limit_parameters';
@@ -45,22 +45,22 @@ begin
   ) values (
     p_key,
     1,
-    current_time,
-    current_time + make_interval(secs => p_window_seconds)
+    v_now,
+    v_now + make_interval(secs => p_window_seconds)
   )
   on conflict (key_hash) do update
   set
     request_count = case
-      when api_rate_limits.expires_at <= current_time then 1
+      when api_rate_limits.expires_at <= v_now then 1
       else api_rate_limits.request_count + 1
     end,
     window_started_at = case
-      when api_rate_limits.expires_at <= current_time then current_time
+      when api_rate_limits.expires_at <= v_now then v_now
       else api_rate_limits.window_started_at
     end,
     expires_at = case
-      when api_rate_limits.expires_at <= current_time
-        then current_time + make_interval(secs => p_window_seconds)
+      when api_rate_limits.expires_at <= v_now
+        then v_now + make_interval(secs => p_window_seconds)
       else api_rate_limits.expires_at
     end
   returning * into current_row;
@@ -68,7 +68,7 @@ begin
   allowed := current_row.request_count <= p_limit;
   retry_after := case
     when allowed then 0
-    else greatest(1, ceil(extract(epoch from (current_row.expires_at - current_time)))::integer)
+    else greatest(1, ceil(extract(epoch from (current_row.expires_at - v_now)))::integer)
   end;
   return next;
 end;
