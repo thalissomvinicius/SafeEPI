@@ -55,6 +55,7 @@ function isAdminRoute(pathname: string) {
 
 function isAuthBypassedRoute(pathname: string) {
   return PUBLIC_ROUTES.has(pathname) ||
+    pathname === "/api/client-location" ||
     pathname === "/api/csp-report" ||
     pathname === "/api/cron/biometric-retention" ||
     pathname === "/api/fingerprint/agent" ||
