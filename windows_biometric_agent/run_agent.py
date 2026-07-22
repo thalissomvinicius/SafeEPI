@@ -1,5 +1,5 @@
-from safeepi_agent.app import run
+from safeepi_agent.app import main
 
 
 if __name__ == "__main__":
-    run()
+    raise SystemExit(main())

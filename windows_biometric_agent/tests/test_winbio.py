@@ -21,6 +21,10 @@ class WinBioInteropTests(unittest.TestCase):
         self.assertEqual(describe_hresult(0x80098008), "Leitura ruim. Posicione o dedo novamente.")
         self.assertEqual(describe_hresult(0x80098005), "Digital não cadastrada neste terminal.")
 
+    def test_maps_incompatible_private_pool_to_a_clear_message(self):
+        self.assertIn("sessão biométrica privada", describe_hresult(0x80070057))
+        self.assertIn("configurar", describe_hresult(0x80098033))
+
 
 if __name__ == "__main__":
     unittest.main()

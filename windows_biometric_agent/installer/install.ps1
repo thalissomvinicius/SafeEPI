@@ -25,6 +25,11 @@ Copy-Item -LiteralPath $PoolScript -Destination (Join-Path $InstallDirectory "se
 
 & $PoolScript -Install
 
+$HealthCheck = Start-Process -FilePath $TargetExecutable -ArgumentList "--health-check" -Wait -PassThru
+if ($HealthCheck.ExitCode -ne 0) {
+  throw "O leitor foi detectado, mas o driver nao permite uma sessao biometrica privada do SafeEPI. Este modelo funciona somente com Windows Hello ou exige um SDK do fabricante."
+}
+
 $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 New-ItemProperty -LiteralPath $RunKey -Name "SafeEPI Leitor" -PropertyType String -Value ('"' + $TargetExecutable + '"') -Force | Out-Null
 

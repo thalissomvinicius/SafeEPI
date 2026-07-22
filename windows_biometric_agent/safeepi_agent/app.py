@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import platform
 import queue
+import sys
 import threading
+import time
 import tkinter as tk
 from dataclasses import dataclass
 from tkinter import messagebox, ttk
@@ -113,10 +115,7 @@ class SafeEpiFingerprintApp:
         def work() -> None:
             try:
                 winbio = self.winbio_factory()
-                units = winbio.units()
-                if not units:
-                    raise RuntimeError("Nenhum leitor biométrico foi encontrado pelo Windows.")
-                unit = units[0]
+                unit = winbio.ready_unit()
                 api = AgentApi(server_url)
                 result = api.pair({
                     "code": code,
@@ -177,8 +176,15 @@ class SafeEpiFingerprintApp:
         assert self.token is not None
         api = AgentApi(self.config.server_url)
         interval = self.config.poll_interval_seconds
+        hardware_ready = False
+        last_hardware_check = 0.0
         while not self.stop_event.is_set():
             try:
+                now = time.monotonic()
+                if not hardware_ready or now - last_hardware_check >= 30:
+                    self.winbio_factory().ready_unit()
+                    hardware_ready = True
+                    last_hardware_check = now
                 command = api.next_command(self.token)
                 self.ui_events.put(UiEvent("online", "Conectado ao SafeEPI"))
                 if command:
@@ -199,6 +205,7 @@ class SafeEpiFingerprintApp:
                     break
                 self.ui_events.put(UiEvent("offline", str(error)))
             except (WinBioError, RuntimeError, ValueError) as error:
+                hardware_ready = False
                 self.ui_events.put(UiEvent("offline", str(error)))
             self.stop_event.wait(interval)
 
@@ -260,8 +267,8 @@ class SafeEpiFingerprintApp:
     def _test_sensor(self) -> None:
         def work() -> None:
             try:
-                units = self.winbio_factory().units()
-                message = f"Leitor pronto: {units[0].description}" if units else "Nenhum leitor encontrado."
+                unit = self.winbio_factory().ready_unit()
+                message = f"Leitor pronto: {unit.description}"
                 self.ui_events.put(UiEvent("sensor", message))
             except (WinBioError, RuntimeError) as error:
                 self.ui_events.put(UiEvent("sensor", str(error)))
@@ -320,3 +327,20 @@ def run() -> None:
     root = tk.Tk()
     SafeEpiFingerprintApp(root)
     root.mainloop()
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["--health-check"]:
+        try:
+            unit = WinBioClient().ready_unit()
+            print(f"Leitor SafeEPI pronto: {unit.description}")
+            return 0
+        except (WinBioError, RuntimeError) as error:
+            print(str(error), file=sys.stderr)
+            return 2
+    if args:
+        print("Uso: SafeEPI-Leitor.exe [--health-check]", file=sys.stderr)
+        return 64
+    run()
+    return 0

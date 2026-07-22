@@ -19,6 +19,10 @@ WINBIO_E_BAD_CAPTURE = 0x80098008
 WINBIO_E_DEVICE_BUSY = 0x80098010
 WINBIO_E_DATABASE_CANT_OPEN = 0x80098012
 WINBIO_E_DUPLICATE_ENROLLMENT = 0x8009801C
+WINBIO_E_CONFIGURATION_FAILURE = 0x80098033
+WINBIO_E_SENSOR_UNAVAILABLE = 0x80098034
+WINBIO_E_DEVICE_FAILURE = 0x80098036
+E_INVALIDARG = 0x80070057
 
 SAFE_EPI_DATABASE_ID = uuid.UUID("e5975b98-141f-4d9c-bb5a-d1f62a1dfa44")
 
@@ -36,6 +40,10 @@ def describe_hresult(value: int) -> str:
         WINBIO_E_DEVICE_BUSY: "O leitor está ocupado. Aguarde e tente novamente.",
         WINBIO_E_DATABASE_CANT_OPEN: "Banco biométrico local indisponível. Execute o instalador como administrador.",
         WINBIO_E_DUPLICATE_ENROLLMENT: "Esta digital já está cadastrada.",
+        E_INVALIDARG: "O driver deste leitor não oferece uma sessão biométrica privada compatível com o SafeEPI.",
+        WINBIO_E_CONFIGURATION_FAILURE: "O Windows não conseguiu configurar este leitor para uso pelo SafeEPI.",
+        WINBIO_E_SENSOR_UNAVAILABLE: "O leitor não está disponível para a sessão biométrica privada do SafeEPI.",
+        WINBIO_E_DEVICE_FAILURE: "O driver informou uma falha no leitor biométrico.",
     }
     return messages.get(code, f"Falha biométrica do Windows (0x{code:08X}).")
 
@@ -220,6 +228,18 @@ class WinBioClient:
         )
         self._check(hr)
         return session
+
+    def ready_unit(self) -> BiometricUnit:
+        """Return a sensor only after a real SafeEPI private session succeeds."""
+        units = self.units()
+        if not units:
+            raise RuntimeError("Nenhum leitor biométrico foi encontrado pelo Windows.")
+        unit = units[0]
+        session = self._open_private_session(unit.unit_id)
+        try:
+            return unit
+        finally:
+            self._check(self._dll.WinBioCloseSession(session))
 
     def enroll(self, unit_id: int, max_captures: int = 12) -> EnrollmentResult:
         session = self._open_private_session(unit_id)

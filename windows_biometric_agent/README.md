@@ -34,6 +34,10 @@ O resultado fica em `dist\SafeEPI-Leitor.exe`.
 3. Informe o código no aplicativo.
 4. Cadastre o indicador direito de cada colaborador pela tela de colaboradores.
 
-O leitor precisa aparecer no Gerenciador de Dispositivos como dispositivo biométrico compatível com WBF. Sensores com Windows Enhanced Sign-in Security (ESS) não expõem esta API para aplicativos privados; o ChipSailing CS9711/FP100 identificado neste terminal expõe WBF e foi detectado pelo agente.
+O leitor precisa aparecer no Gerenciador de Dispositivos e permitir uma sessão WBF de pool privado. A simples detecção USB ou o funcionamento no Windows Hello não são suficientes: o instalador executa uma sessão real e interrompe a instalação se o driver for incompatível.
+
+### Leitor FP100 / ChipSailing deste terminal
+
+O dispositivo `USB\VID_2541&PID_0236`, com o driver ChipSailing `18.28.18.814`, funciona como leitor do Windows Hello, mas recusou a configuração e a abertura do pool privado exigido para identificar colaboradores do SafeEPI (`0x80098033`/`0x80070057`). O manual também documenta apenas Windows Hello e não fornece SDK de integração. Portanto, este exemplar não pode ser usado com segurança para identificar vários colaboradores no aplicativo. Será necessário um leitor cujo fabricante forneça SDK para Windows ou que passe no teste WBF de pool privado.
 
 O instalador registra uma configuração WBF privada usando o banco `{E5975B98-141F-4D9C-BB5A-D1F62A1DFA44}`. A remoção é reversível por `installer\uninstall.ps1` e não exclui o banco padrão do Windows Hello.
