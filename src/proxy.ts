@@ -57,6 +57,8 @@ function isAuthBypassedRoute(pathname: string) {
   return PUBLIC_ROUTES.has(pathname) ||
     pathname === "/api/csp-report" ||
     pathname === "/api/cron/biometric-retention" ||
+    pathname === "/api/fingerprint/agent" ||
+    pathname.startsWith("/api/fingerprint/agent/") ||
     pathname === "/api/auth" ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/remote-delivery" ||

@@ -24,6 +24,7 @@ import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime } from "@
 import { toast } from "@/lib/toast"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
+import { FingerprintEnrollmentManager } from "@/components/biometrics/FingerprintEnrollmentManager"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
@@ -827,11 +828,14 @@ export default function EmployeesPage() {
 
       const pdfItems = await Promise.all(freshEmployeeHistory.map(async (d) => {
         const signedDocument = getSignedDocumentForDelivery(d.id)
-        const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | null
+        const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | 'fingerprint' | null
         const deliveryDate = parseDeliveryDateTime(d.delivery_date)
         const expiryDate = deliveryDate && d.ppe ? addDays(deliveryDate, d.ppe.lifespan_days || 180) : null
         const signatureSource = d.signature_url || signedDocument?.signature_storage_path || signedDocument?.signature_url || null
         const photoSource = signedDocument?.photo_evidence_storage_path || signedDocument?.photo_evidence_url || null
+        const fingerprintEvidence = authMethod === "fingerprint"
+          ? await api.getDeliveryFingerprintEvidence(d.id)
+          : null
 
         return {
           deliveryDate: formatDeliveryDate(d.delivery_date),
@@ -848,6 +852,7 @@ export default function EmployeesPage() {
           photoEvidenceUrl: photoSource
             ? await api.getPrivateAssetUrl(photoSource, "view")
             : null,
+          fingerprintEvidenceCode: fingerprintEvidence?.evidence.code,
         }
       }))
 
@@ -1923,6 +1928,13 @@ export default function EmployeesPage() {
                     Cadastrar agora
                   </Link>
                 </div>
+              )}
+
+              {formData.id && canEdit && (
+                <FingerprintEnrollmentManager
+                  employeeId={formData.id}
+                  employeeName={formData.name}
+                />
               )}
 
               <div className="space-y-2">

@@ -65,4 +65,58 @@ describe("layout dos PDFs juridicos", () => {
     expect(source.match(/\/I\d+\s+Do\b/g)?.length || 0).toBeGreaterThan(20)
     expect(source).not.toContain("SubstituiÃ§Ã£o")
   })
+
+  it("reserva o comprovante biometrico fora da tabela mesmo em entregas extensas", async () => {
+    const blob = await generateDeliveryPDF({
+      employeeName: "COLABORADOR BIOMETRIA",
+      employeeCpf: "000.000.000-00",
+      employeeRole: "OPERADOR",
+      workplaceName: "UNIDADE TESTE",
+      authMethod: "fingerprint",
+      validationHash: "FPTESTE123",
+      fingerprintEvidence: {
+        code: "FP-20260722-ABC123",
+        terminalName: "Terminal Portaria Principal",
+        completedAt: "2026-07-22T14:30:00-03:00",
+        resultHash: "a".repeat(64),
+      },
+      items: Array.from({ length: 23 }, (_, index) => ({
+        ppeName: `EQUIPAMENTO BIOMETRICO ${index + 1}`,
+        ppeCaNumber: String(30000 + index),
+        quantity: 1,
+        reason: "Primeira entrega",
+      })),
+    })
+
+    const source = await pdfSource(blob)
+    expect(pageCount(source)).toBeGreaterThanOrEqual(3)
+    expect(source).not.toContain("NaN")
+    expect(blob.size).toBeGreaterThan(10_000)
+  })
+
+  it("renderiza evidencias digitais nas celulas da ficha NR-06", async () => {
+    const blob = await generateNR06PDF({
+      employeeName: "COLABORADOR BIOMETRIA",
+      employeeCpf: "000.000.000-00",
+      employeeRole: "OPERADOR",
+      employeeDepartment: "OPERACOES",
+      workplaceName: "UNIDADE TESTE",
+      admissionDate: "01/01/2026",
+      items: Array.from({ length: 23 }, (_, index) => ({
+        deliveryDate: "22/07/2026",
+        ppeName: `EPI BIOMETRICO ${index + 1}`,
+        caNr: String(40000 + index),
+        quantity: 1,
+        reason: "Primeira entrega",
+        isExpired: false,
+        authMethod: "fingerprint" as const,
+        fingerprintEvidenceCode: `FP-${String(index + 1).padStart(4, "0")}`,
+      })),
+    })
+
+    const source = await pdfSource(blob)
+    expect(pageCount(source)).toBeGreaterThanOrEqual(3)
+    expect(source).not.toContain("NaN")
+    expect(blob.size).toBeGreaterThan(10_000)
+  })
 })

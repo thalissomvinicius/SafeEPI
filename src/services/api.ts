@@ -48,6 +48,31 @@ export type SystemNotification = {
   severity: "high" | "medium";
 };
 
+export type FingerprintTerminal = {
+  id: string;
+  name: string;
+  device_description: string | null;
+  app_version: string | null;
+  active: boolean;
+  last_seen_at: string | null;
+  paired_at: string;
+  online: boolean;
+};
+
+export type FingerprintEvidence = {
+  id: string;
+  code: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired';
+  operation: 'enroll' | 'verify' | 'delete';
+  employeeId: string;
+  matchedEmployeeId: string | null;
+  completedAt: string | null;
+  expiresAt: string;
+  resultHash: string | null;
+  terminalName: string | null;
+  errorCode?: string | null;
+};
+
 export type DashboardSummary = {
   stats: {
     deliveries: number;
@@ -1493,6 +1518,78 @@ export const api = {
   },
 
   // --- Entregas ---
+  async getFingerprintTerminals() {
+    const params = new URLSearchParams();
+    const companyId = getStoredMasterCompanyId();
+    if (companyId) params.set('company_id', companyId);
+    const response = await fetchWithAuthRetry(`/api/fingerprint/terminals${params.size ? `?${params.toString()}` : ''}`);
+    const result = await readResponseJson<{ terminals?: FingerprintTerminal[]; error?: string }>(response);
+    if (!response.ok) throw new Error(result.error || 'Falha ao carregar terminais de digital.');
+    return result.terminals || [];
+  },
+
+  async createFingerprintPairing(terminalName: string) {
+    const response = await fetchWithAuthRetry('/api/fingerprint/pairings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ terminal_name: terminalName, company_id: getStoredMasterCompanyId() }),
+    });
+    const result = await readResponseJson<{ pairing_id?: string; code?: string; expires_at?: string; error?: string }>(response);
+    if (!response.ok || !result.code || !result.expires_at) {
+      throw new Error(result.error || 'Falha ao criar o código de pareamento.');
+    }
+    return { pairingId: result.pairing_id || '', code: result.code, expiresAt: result.expires_at };
+  },
+
+  async revokeFingerprintTerminal(terminalId: string) {
+    const params = new URLSearchParams({ id: terminalId });
+    const companyId = getStoredMasterCompanyId();
+    if (companyId) params.set('company_id', companyId);
+    const response = await fetchWithAuthRetry(`/api/fingerprint/terminals?${params.toString()}`, { method: 'DELETE' });
+    const result = await readResponseJson<{ ok?: boolean; error?: string }>(response);
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Falha ao revogar o terminal.');
+  },
+
+  async createFingerprintCommand(payload: {
+    employeeId: string;
+    operation: 'enroll' | 'verify' | 'delete';
+    terminalId?: string;
+  }) {
+    const response = await fetchWithAuthRetry('/api/fingerprint/commands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employee_id: payload.employeeId,
+        operation: payload.operation,
+        terminal_id: payload.terminalId,
+        company_id: getStoredMasterCompanyId(),
+      }),
+    });
+    const result = await readResponseJson<{ command?: FingerprintEvidence; error?: string }>(response);
+    if (!response.ok || !result.command) throw new Error(result.error || 'Falha ao iniciar leitura digital.');
+    return result.command;
+  },
+
+  async getFingerprintCommand(commandId: string) {
+    const params = new URLSearchParams();
+    const companyId = getStoredMasterCompanyId();
+    if (companyId) params.set('company_id', companyId);
+    const response = await fetchWithAuthRetry(`/api/fingerprint/commands/${encodeURIComponent(commandId)}${params.size ? `?${params.toString()}` : ''}`);
+    const result = await readResponseJson<{ command?: FingerprintEvidence; error?: string }>(response);
+    if (!response.ok || !result.command) throw new Error(result.error || 'Falha ao consultar leitura digital.');
+    return result.command;
+  },
+
+  async getDeliveryFingerprintEvidence(deliveryId: string) {
+    const params = new URLSearchParams({ delivery_id: deliveryId });
+    const companyId = getStoredMasterCompanyId();
+    if (companyId) params.set('company_id', companyId);
+    const response = await fetchWithAuthRetry(`/api/fingerprint/evidence?${params.toString()}`);
+    const result = await readResponseJson<{ evidence?: FingerprintEvidence; batchId?: string; error?: string }>(response);
+    if (!response.ok || !result.evidence) throw new Error(result.error || 'Falha ao consultar evidência biométrica.');
+    return { evidence: result.evidence, batchId: result.batchId || null };
+  },
+
   async getDeliveries(options: { all?: boolean; limit?: number; offset?: number; signAssets?: boolean } = {}) {
     const companyId = await getCurrentCompanyId();
     const pageSize = options.all ? 1000 : Math.min(Math.max(options.limit || 500, 1), 1000);
@@ -1539,7 +1636,11 @@ export const api = {
     return signStorageFields((data || []) as unknown as Record<string, unknown>[], ["signature_url"]) as Promise<DeliveryWithRelations[]>;
   },
 
-  async saveDelivery(delivery: Omit<Delivery, 'id' | 'created_at'>, signatureFile?: File) {
+  async saveDelivery(
+    delivery: Omit<Delivery, 'id' | 'created_at'>,
+    signatureFile?: File,
+    evidence?: { fingerprintEventId: string; fingerprintBatchId: string },
+  ) {
     let signatureUrl = null;
     await ensureActiveSession();
     const normalizedReason = getDeliveryReasonStorageVariants(delivery.reason)[0] as Delivery["reason"];
@@ -1554,6 +1655,8 @@ export const api = {
       signature_url: signatureUrl,
       delivery_date: delivery.delivery_date || new Date().toISOString(),
       idempotency_key: crypto.randomUUID(),
+      fingerprint_event_id: evidence?.fingerprintEventId || null,
+      fingerprint_batch_id: evidence?.fingerprintBatchId || null,
     } as Record<string, unknown>);
 
     const response = await fetchWithAuthRetry("/api/deliveries", {

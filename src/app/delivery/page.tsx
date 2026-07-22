@@ -7,7 +7,7 @@ import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
 import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle, Search } from "lucide-react"
 import { format, addDays } from "date-fns"
-import { api, type PendingDeliveryRemoteLink } from "@/services/api"
+import { api, type FingerprintEvidence, type PendingDeliveryRemoteLink } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { FaceCamera } from "@/components/ui/FaceCamera"
@@ -22,6 +22,7 @@ import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { isValidGeoLocation, requestRequiredGeolocation } from "@/utils/geolocation"
+import { FingerprintCommandPanel } from "@/components/biometrics/FingerprintCommandPanel"
 
 interface CartItem {
   ppeId: string
@@ -127,8 +128,9 @@ export default function DeliveryPage() {
   const [currentQuantity, setCurrentQuantity] = useState(1)
   const [currentReason, setCurrentReason] = useState("Primeira Entrega")
 
-  const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
+  const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial' | 'fingerprint'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
+  const [fingerprintEvidence, setFingerprintEvidence] = useState<FingerprintEvidence | null>(null)
 
   const requestLocationForSignature = useCallback(async (showToast = true) => {
     if (isValidGeoLocation(location)) {
@@ -468,6 +470,7 @@ export default function DeliveryPage() {
   const handleEmployeeChange = (empId: string) => {
     setSelectedEmployeeId(empId)
     setCapturedPhotoBase64(null)
+    setFingerprintEvidence(null)
     const emp = employees.find(e => e.id === empId)
     if (emp && emp.workplace_id) {
         setSelectedWorkplaceId(emp.workplace_id)
@@ -582,7 +585,7 @@ export default function DeliveryPage() {
     }
   }
 
-  const saveDelivery = useCallback(async (signatureDataUrl: string) => {
+  const saveDelivery = useCallback(async (signatureDataUrl?: string, verifiedFingerprint?: FingerprintEvidence) => {
     if (cart.length === 0) {
       toast.error("Adicione pelo menos um EPI à lista de entrega.")
       return
@@ -596,7 +599,18 @@ export default function DeliveryPage() {
       
       const validationHash = generateAuditCode()
       
-      const signatureFile = await dataUrlToImageFile(signatureDataUrl, "signature")
+      const biometricEvidence = authMethod === 'fingerprint' ? verifiedFingerprint || fingerprintEvidence : null
+      if (authMethod === 'fingerprint' && (
+        !biometricEvidence ||
+        biometricEvidence.status !== 'completed' ||
+        biometricEvidence.operation !== 'verify' ||
+        biometricEvidence.employeeId !== selectedEmployeeId ||
+        biometricEvidence.matchedEmployeeId !== selectedEmployeeId
+      )) {
+        throw new Error("Confirme a digital do colaborador antes de concluir a entrega.")
+      }
+      const fingerprintBatchId = biometricEvidence ? crypto.randomUUID() : null
+      const signatureFile = signatureDataUrl ? await dataUrlToImageFile(signatureDataUrl, "signature") : undefined
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
       const persistedAuthMethod: Delivery['auth_method'] = authMethod
       const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)
@@ -616,7 +630,10 @@ export default function DeliveryPage() {
           auth_method: persistedAuthMethod,
           signature_url: null,
           delivery_date: selectedDeliveryDateIso
-        }, signatureFile)
+        }, signatureFile, biometricEvidence && fingerprintBatchId ? {
+          fingerprintEventId: biometricEvidence.id,
+          fingerprintBatchId,
+        } : undefined)
         savedDeliveries.push(savedDelivery as Delivery)
 
         const previousAllocations = item.autoReturnAllocations || (item.autoReturnDeliveryIds || []).map(deliveryId => ({
@@ -651,6 +668,12 @@ export default function DeliveryPage() {
         })),
         authMethod,
         signatureBase64: signatureDataUrl,
+        fingerprintEvidence: biometricEvidence ? {
+          code: biometricEvidence.code,
+          terminalName: biometricEvidence.terminalName || "Terminal SafeEPI",
+          completedAt: biometricEvidence.completedAt || new Date().toISOString(),
+          resultHash: biometricEvidence.resultHash || "",
+        } : undefined,
         photoBase64,
         ipAddress,
         location: requiredLocation,
@@ -690,6 +713,14 @@ export default function DeliveryPage() {
               autoReturnNote: item.autoReturnNote,
             })),
             autoReturnedDeliveryIds,
+            fingerprintEvidence: biometricEvidence ? {
+              id: biometricEvidence.id,
+              code: biometricEvidence.code,
+              terminalName: biometricEvidence.terminalName,
+              completedAt: biometricEvidence.completedAt,
+              resultHash: biometricEvidence.resultHash,
+              batchId: fingerprintBatchId,
+            } : null,
           },
         })
       } catch (archiveError) {
@@ -744,7 +775,7 @@ export default function DeliveryPage() {
     } finally {
       setIsSaving(false)
     }
-  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, authMethod, capturedPhotoBase64, selectedEmployee, selectedWorkplace, deliveryDate, validateCartForDelivery, requestLocationForSignature])
+  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, authMethod, capturedPhotoBase64, fingerprintEvidence, selectedEmployee, selectedWorkplace, deliveryDate, validateCartForDelivery, requestLocationForSignature])
 
   const handleManualSave = () => {
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
@@ -1201,7 +1232,7 @@ export default function DeliveryPage() {
             </>
           )}
           <button 
-            onClick={() => { setIsSaved(false); setStep(1); setLastPdfUrl(null); setLastPdfFileName(null); setCart([]); }}
+            onClick={() => { setIsSaved(false); setStep(1); setLastPdfUrl(null); setLastPdfFileName(null); setCart([]); setFingerprintEvidence(null); }}
             className="px-8 py-4 bg-white hover:bg-slate-50 text-slate-600 rounded-xl font-bold transition-all border border-slate-200 shadow-sm"
           >
             Nova Entrega
@@ -1787,24 +1818,30 @@ export default function DeliveryPage() {
                 </div>
               )}
 
-              <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-3">
+              <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-2 lg:grid-cols-4">
                 <button 
-                  onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
+                  onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
                   className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <PenLine className="w-4 h-4" /> Assinatura na Tela
                 </button>
                 <button 
-                  onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }}
+                  onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
                   className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Camera className="w-4 h-4" /> Foto + Assinatura
                 </button>
                 <button 
-                  onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }}
+                  onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
                   className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Fingerprint className="w-4 h-4" /> Biometria Facial
+                </button>
+                <button
+                  onClick={() => { setAuthMethod('fingerprint'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
+                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'fingerprint' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  <Fingerprint className="w-4 h-4" /> Impressão Digital
                 </button>
               </div>
 
@@ -1886,6 +1923,26 @@ export default function DeliveryPage() {
                   </button>
                     </>
                   )}
+                </div>
+              ) : authMethod === 'fingerprint' ? (
+                <div className="space-y-4 animate-in zoom-in-95">
+                  <FingerprintCommandPanel
+                    key={`${selectedEmployeeId}:verify`}
+                    employeeId={selectedEmployeeId}
+                    employeeName={selectedEmployee?.full_name || "Colaborador"}
+                    operation="verify"
+                    onCompleted={setFingerprintEvidence}
+                    onReset={() => setFingerprintEvidence(null)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveDelivery(undefined, fingerprintEvidence || undefined)}
+                    disabled={isSaving || fingerprintEvidence?.status !== 'completed'}
+                    className="flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-900/10 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                    Concluir entrega com digital
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-4 animate-in zoom-in-95">

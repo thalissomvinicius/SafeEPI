@@ -1,0 +1,6 @@
+.venv-build/
+build/
+dist/
+release/
+SafeEPI-Leitor-Windows.zip
+*.spec

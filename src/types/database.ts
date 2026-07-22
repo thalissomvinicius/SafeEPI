@@ -75,7 +75,7 @@ export type Delivery = {
   quantity: number;
   signature_url: string | null;
   signature_storage_path?: string | null;
-  auth_method?: 'manual' | 'facial' | 'manual_facial';
+  auth_method?: 'manual' | 'facial' | 'manual_facial' | 'fingerprint';
   ip_address: string | null;
   workplace_id: string | null;
   returned_at?: string | null;

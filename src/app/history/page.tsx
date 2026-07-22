@@ -168,14 +168,26 @@ export default function HistoryPage() {
         return
       }
       
-      // 1. Converter URL da assinatura para Base64 (necessário para jsPDF)
-      const signatureUrl = await api.getPrivateAssetUrl(rec.signature_storage_path || rec.signature_url, "download")
-      if (!signatureUrl) throw new Error("Nao foi possivel gerar o link seguro da assinatura.")
-      const base64Signature = await fetchImageDataUrl(signatureUrl, {
-        required: true,
-        label: "a assinatura da entrega",
-      })
-      if (!base64Signature) throw new Error("Nao foi possivel carregar a assinatura da entrega.")
+      // 1. Carregar somente a evidência correspondente ao método registrado.
+      let base64Signature: string | undefined
+      let fingerprintEvidence: { code: string; terminalName: string; completedAt: string; resultHash: string } | undefined
+      if (rec.auth_method === "fingerprint") {
+        const result = await api.getDeliveryFingerprintEvidence(rec.id)
+        fingerprintEvidence = {
+          code: result.evidence.code,
+          terminalName: result.evidence.terminalName || "Terminal SafeEPI",
+          completedAt: result.evidence.completedAt || rec.delivery_date,
+          resultHash: result.evidence.resultHash || "",
+        }
+      } else {
+        const signatureUrl = await api.getPrivateAssetUrl(rec.signature_storage_path || rec.signature_url, "download")
+        if (!signatureUrl) throw new Error("Nao foi possivel gerar o link seguro da assinatura.")
+        base64Signature = await fetchImageDataUrl(signatureUrl, {
+          required: true,
+          label: "a assinatura da entrega",
+        }) || undefined
+        if (!base64Signature) throw new Error("Nao foi possivel carregar a assinatura da entrega.")
+      }
       const photoBase64 = signedDocument?.photo_evidence_url
         ? await fetchImageDataUrl(
           await api.getPrivateAssetUrl(
@@ -185,9 +197,11 @@ export default function HistoryPage() {
           { required: true, label: "a evidência fotográfica da entrega" },
         ) || undefined
         : undefined
-      const authMethod = signedDocument?.auth_method === "manual_facial" || rec.auth_method === "manual_facial"
+      const authMethod = rec.auth_method === "fingerprint"
+        ? "fingerprint"
+        : signedDocument?.auth_method === "manual_facial" || rec.auth_method === "manual_facial"
         ? "manual_facial"
-        : (rec.signature_url.includes('bio_') || rec.signature_url.includes('emp_') || rec.auth_method === "facial") ? 'facial' : 'manual'
+        : ((rec.signature_url?.includes('bio_') || rec.signature_url?.includes('emp_') || rec.auth_method === "facial") ? 'facial' : 'manual')
 
       // 2. Gerar o PDF
       const pdfBlob = await generateDeliveryPDF({
@@ -202,6 +216,7 @@ export default function HistoryPage() {
         reason: rec.reason,
         authMethod,
         signatureBase64: base64Signature,
+        fingerprintEvidence,
         photoBase64,
         ipAddress: rec.ip_address || "Remoto",
         location: signedDocument?.geo_location || undefined,
@@ -568,6 +583,10 @@ export default function HistoryPage() {
                                 Arquivado
                                 <ExternalLink className="w-3 h-3 ml-1" />
                              </button>
+                        ) : rec.auth_method === "fingerprint" ? (
+                            <span className="flex w-fit items-center whitespace-nowrap rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
+                              <Fingerprint className="mr-1 h-3 w-3" /> Digital validada
+                            </span>
                         ) : rec.signature_url ? (
                              <button
                                 type="button"

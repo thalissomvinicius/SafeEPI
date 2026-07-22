@@ -232,8 +232,20 @@ export default function MovementsPage() {
         return
       }
 
-      const signatureUrl = await api.getPrivateAssetUrl(delivery.signature_storage_path || delivery.signature_url, "download")
-      const base64Signature = await urlToBase64(signatureUrl || delivery.signature_url)
+      let base64Signature: string | undefined
+      let fingerprintEvidence: { code: string; terminalName: string; completedAt: string; resultHash: string } | undefined
+      if (delivery.auth_method === "fingerprint") {
+        const result = await api.getDeliveryFingerprintEvidence(delivery.id)
+        fingerprintEvidence = {
+          code: result.evidence.code,
+          terminalName: result.evidence.terminalName || "Terminal SafeEPI",
+          completedAt: result.evidence.completedAt || delivery.delivery_date,
+          resultHash: result.evidence.resultHash || "",
+        }
+      } else {
+        const signatureUrl = await api.getPrivateAssetUrl(delivery.signature_storage_path || delivery.signature_url, "download")
+        base64Signature = await urlToBase64(signatureUrl || delivery.signature_url)
+      }
       const photoBase64 = signedDocument?.photo_evidence_url
         ? await urlToBase64(
           await api.getPrivateAssetUrl(
@@ -242,9 +254,11 @@ export default function MovementsPage() {
           ) || signedDocument.photo_evidence_url,
         ).catch(() => undefined)
         : undefined
-      const authMethod = signedDocument?.auth_method === "manual_facial" || delivery.auth_method === "manual_facial"
+      const authMethod = delivery.auth_method === "fingerprint"
+        ? "fingerprint"
+        : signedDocument?.auth_method === "manual_facial" || delivery.auth_method === "manual_facial"
         ? "manual_facial"
-        : (delivery.signature_url.includes("bio_") || delivery.signature_url.includes("emp_") || delivery.auth_method === "facial") ? "facial" : "manual"
+        : ((delivery.signature_url?.includes("bio_") || delivery.signature_url?.includes("emp_") || delivery.auth_method === "facial") ? "facial" : "manual")
 
       const pdfBlob = await generateDeliveryPDF({
         employeeName: delivery.employee?.full_name || "Desconhecido",
@@ -258,6 +272,7 @@ export default function MovementsPage() {
         reason: delivery.reason,
         authMethod,
         signatureBase64: base64Signature,
+        fingerprintEvidence,
         photoBase64,
         ipAddress: delivery.ip_address || "Remoto",
         location: signedDocument?.geo_location || undefined,

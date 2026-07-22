@@ -12,7 +12,7 @@ import { calculateTrainingValidity, getTrainingWorkloadRule } from "@/utils/trai
 import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 
 let [r, g, b] = COMPANY_CONFIG.primaryColorRgb
-type AuthMethod = 'manual' | 'facial' | 'manual_facial'
+type AuthMethod = 'manual' | 'facial' | 'manual_facial' | 'fingerprint'
 
 function refreshPdfBrand() {
   const brand = getStoredBrand()
@@ -210,6 +210,12 @@ export interface DeliveryPDFData {
   authMethod: AuthMethod
   signatureBase64?: string
   photoBase64?: string
+  fingerprintEvidence?: {
+    code: string
+    terminalName: string
+    completedAt: string
+    resultHash: string
+  }
   ipAddress?: string
   location?: string
   validationHash?: string
@@ -293,6 +299,8 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   currentY = doc.lastAutoTable.finalY + 15
   const signatureBlockHeight = data.authMethod === "facial"
     ? 80
+    : data.authMethod === "fingerprint"
+      ? 66
     : data.authMethod === "manual_facial" && data.photoBase64 && data.signatureBase64
       ? 62
       : 58
@@ -333,7 +341,43 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     } catch { /* keep declared method */ }
   }
 
-  if (hasManualAndPhoto && data.photoBase64 && data.signatureBase64) {
+  if (data.authMethod === "fingerprint" && data.fingerprintEvidence) {
+    const evidence = data.fingerprintEvidence
+    const boxW = 124
+    const boxH = 43
+    const boxX = (pageWidth - boxW) / 2
+
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(8)
+    doc.setTextColor(30, 64, 175)
+    doc.text("CONFIRMAÇÃO POR IMPRESSÃO DIGITAL", pageWidth / 2, currentY, { align: "center" })
+
+    doc.setDrawColor(147, 197, 253)
+    doc.setFillColor(239, 246, 255)
+    doc.roundedRect(boxX, currentY + 5, boxW, boxH, 3, 3, "FD")
+    doc.setFillColor(37, 99, 235)
+    doc.circle(boxX + 13, currentY + 18, 7, "F")
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(10)
+    doc.text("OK", boxX + 13, currentY + 20.5, { align: "center" })
+
+    doc.setTextColor(30, 41, 59)
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.text("DIGITAL CONFIRMADA NO ATO DA ENTREGA", boxX + 24, currentY + 14)
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(71, 85, 105)
+    doc.text(`Evidência: ${evidence.code}`, boxX + 24, currentY + 21)
+    doc.text(`Terminal: ${fitSingleLineText(doc, evidence.terminalName, 68)}`, boxX + 24, currentY + 27)
+    doc.text(`Data/hora: ${formatDeliveryDate(evidence.completedAt)} ${formatDeliveryTime(evidence.completedAt)}`, boxX + 24, currentY + 33)
+    doc.setFont("courier", "normal")
+    doc.setFontSize(5.5)
+    doc.setTextColor(100, 116, 139)
+    doc.text(`Resultado: ${evidence.resultHash.slice(0, 32) || "registrado no histórico auditável"}`, boxX + 24, currentY + 39)
+
+    currentY += boxH + 17
+  } else if (hasManualAndPhoto && data.photoBase64 && data.signatureBase64) {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8)
     doc.setTextColor(71, 85, 105)
@@ -501,7 +545,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.text(fitSingleLineText(doc, data.location || "Coordenadas não capturadas", pageWidth - 78), metaX, currentY + 35)
 
   try {
-    const qrText = `${COMPANY_CONFIG.systemName} | Valid: ${hash} | Date: ${today}`
+    const qrText = `${COMPANY_CONFIG.systemName} | Valid: ${hash} | Date: ${today}${data.fingerprintEvidence ? ` | Fingerprint: ${data.fingerprintEvidence.code}` : ""}`
     const qrDataUrl = await QRCode.toDataURL(qrText, { width: 200, margin: 1 })
     doc.addImage(qrDataUrl, 'PNG', pageWidth - 45, currentY + 5, 25, 25)
     doc.setFontSize(6)
@@ -643,6 +687,7 @@ export interface NR06PDFData {
     signatureBase64?: string
     photoEvidenceUrl?: string | null
     photoBase64?: string
+    fingerprintEvidenceCode?: string
   }[]
   tstSigner?: {
     name: string
@@ -759,6 +804,20 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
         const maxH = cell.height - 4
         const x = cell.x + 2
         const y = cell.y + 2
+
+        if (item.authMethod === "fingerprint" && item.fingerprintEvidenceCode) {
+          doc.setFillColor(239, 246, 255)
+          doc.setDrawColor(147, 197, 253)
+          doc.roundedRect(x, y, maxW, maxH, 1.5, 1.5, "FD")
+          doc.setFont("helvetica", "bold")
+          doc.setFontSize(5.7)
+          doc.setTextColor(30, 64, 175)
+          doc.text("DIGITAL VALIDADA", cell.x + cell.width / 2, y + 6, { align: "center" })
+          doc.setFont("courier", "normal")
+          doc.setFontSize(5.2)
+          doc.text(fitSingleLineText(doc, item.fingerprintEvidenceCode, maxW - 2), cell.x + cell.width / 2, y + 12, { align: "center" })
+          return
+        }
 
         if (!item?.signatureBase64 && !item?.photoBase64) {
           drawSignatureCellLine(doc, cell)
