@@ -1,7 +1,7 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import SignatureCanvas from "react-signature-canvas"
 import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, Shield, Users, FileDown, Presentation, PenTool, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
@@ -17,6 +17,7 @@ import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime, parseLoc
 import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 type DeliveryScopeFilter = 'own' | 'third_party' | 'all'
@@ -27,6 +28,7 @@ export default function MovementsPage() {
   const router = useRouter()
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
@@ -59,30 +61,36 @@ export default function MovementsPage() {
     }
   }, [user, authLoading, router])
 
+  const loadData = useCallback(async () => {
+    if (!user || user.role === 'ALMOXARIFE') return
+    try {
+      setLoading(true)
+      setLoadError(null)
+      const [deliveryData, documentData, employeeData, workplaceData] = await Promise.all([
+        // Os arquivos privados so recebem URL temporaria quando o usuario os abre.
+        // Isso evita dezenas de lotes de assinatura e o limite do endpoint na carga da tela.
+        api.getDeliveries({ signAssets: false }),
+        api.getSignedDocuments({ signAssets: false }),
+        hasThirdPartyFeature ? api.getEmployees() : Promise.resolve([] as Employee[]),
+        hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
+      ])
+      setRawDeliveries(deliveryData)
+      setSignedDocuments(documentData)
+      setEmployees(employeeData)
+      setWorkplaces(workplaceData)
+    } catch (err) {
+      console.error("Erro ao carregar movimentações:", err)
+      setLoadError(err instanceof Error ? err.message : "Falha ao consultar as movimentacoes.")
+    } finally {
+      setLoading(false)
+    }
+  }, [user, hasThirdPartyFeature])
+
   // Load Data
   useEffect(() => {
-    async function loadData() {
-      if (!user || user.role === 'ALMOXARIFE') return
-      try {
-        setLoading(true)
-        const [deliveryData, documentData, employeeData, workplaceData] = await Promise.all([
-          api.getDeliveries(),
-          api.getSignedDocuments(),
-          hasThirdPartyFeature ? api.getEmployees() : Promise.resolve([] as Employee[]),
-          hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
-        ])
-        setRawDeliveries(deliveryData)
-        setSignedDocuments(documentData)
-        setEmployees(employeeData)
-        setWorkplaces(workplaceData)
-      } catch (err) {
-        console.error("Erro ao carregar movimentações:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadData()
-  }, [user, hasThirdPartyFeature])
+    const timer = window.setTimeout(() => void loadData(), 0)
+    return () => window.clearTimeout(timer)
+  }, [loadData])
 
   const employeeThirdPartyById = new Map(employees.map((employee) => [employee.id, employee.third_party_id || null]))
   const workplaceThirdPartyById = new Map(workplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
@@ -183,8 +191,8 @@ export default function MovementsPage() {
 
   const getSignedDocumentForDelivery = (deliveryId: string) =>
     signedDocuments.find((document) =>
-      document.delivery_id === deliveryId ||
-      document.delivery_ids?.includes(deliveryId)
+      (document.document_type === "delivery" || document.document_type === "remote_delivery") &&
+      (document.delivery_id === deliveryId || document.delivery_ids?.includes(deliveryId))
     )
 
   const urlToBase64 = async (url: string) => {
@@ -252,6 +260,7 @@ export default function MovementsPage() {
         signatureBase64: base64Signature,
         photoBase64,
         ipAddress: delivery.ip_address || "Remoto",
+        location: signedDocument?.geo_location || undefined,
         validationHash: delivery.id.slice(0, 8).toUpperCase(),
         deliveryDate: delivery.delivery_date,
       })
@@ -349,6 +358,16 @@ export default function MovementsPage() {
     if (dateFilter === 'specific_month' && specificMonth) return `Mês ${specificMonth}`
     if (dateFilter === 'custom' && customStartDate && customEndDate) return `${customStartDate} a ${customEndDate}`
     return 'Período selecionado'
+  }
+
+  if (!loading && loadError && rawDeliveries.length === 0) {
+    return (
+      <DataLoadError
+        title="Movimentacoes temporariamente indisponiveis"
+        message={`${loadError} Nenhum indicador foi substituido por zero.`}
+        onRetry={() => void loadData()}
+      />
+    )
   }
 
   const handleSimplePDF = () => {
@@ -596,10 +615,10 @@ export default function MovementsPage() {
       {/* Stats Quick View */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Entregas", value: stats.deliveries, icon: ArrowUpRight, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "Devoluções", value: stats.returns, icon: ArrowDownLeft, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "Itens Movimentados", value: stats.totalItems, icon: Shield, color: "text-[#2563EB]", bg: "bg-red-50" },
-          { label: "Pessoas Atendidas", value: stats.uniqueEmployees, icon: Users, color: "text-slate-600", bg: "bg-slate-50" },
+          { label: "Entregas", value: loading && rawDeliveries.length === 0 ? "—" : stats.deliveries, icon: ArrowUpRight, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "Devoluções", value: loading && rawDeliveries.length === 0 ? "—" : stats.returns, icon: ArrowDownLeft, color: "text-amber-600", bg: "bg-amber-50" },
+          { label: "Itens Movimentados", value: loading && rawDeliveries.length === 0 ? "—" : stats.totalItems, icon: Shield, color: "text-[#2563EB]", bg: "bg-red-50" },
+          { label: "Pessoas Atendidas", value: loading && rawDeliveries.length === 0 ? "—" : stats.uniqueEmployees, icon: Users, color: "text-slate-600", bg: "bg-slate-50" },
         ].map((s, i) => (
           <div key={i} className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex items-center gap-4">
             <div className={`p-3 rounded-2xl ${s.bg}`}>

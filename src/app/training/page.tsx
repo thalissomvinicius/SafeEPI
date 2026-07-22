@@ -13,6 +13,7 @@ import { FaceCamera } from "@/components/ui/FaceCamera"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { DataLoadError } from "@/components/ui/DataLoadError"
 import { generateTrainingCertificate } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { generateAuditCode } from "@/utils/auditCode"
@@ -69,6 +70,7 @@ export default function TrainingPage() {
   const [trainings, setTrainings] = useState<TrainingWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -245,6 +247,7 @@ export default function TrainingPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
+      setLoadError(null)
       const [trainingsResult, employeesResult] = await Promise.allSettled([
         api.getTrainings(),
         api.getEmployees()
@@ -254,8 +257,8 @@ export default function TrainingPage() {
         setTrainings(trainingsResult.value)
       } else {
         console.error("Erro ao carregar treinamentos:", trainingsResult.reason)
-        setTrainings([])
-        toast.warning("Nao foi possivel carregar o historico de treinamentos agora. O cadastro continua disponivel.")
+        setLoadError("Nao foi possivel atualizar o historico de treinamentos.")
+        toast.warning("Nao foi possivel atualizar o historico agora. Os dados anteriores foram mantidos.")
       }
 
       if (employeesResult.status === "fulfilled") {
@@ -270,7 +273,9 @@ export default function TrainingPage() {
         }))
       } else {
         console.error("Erro ao carregar colaboradores:", employeesResult.reason)
-        setEmployees([])
+        setLoadError((current) => current
+          ? `${current} Tambem nao foi possivel atualizar os colaboradores.`
+          : "Nao foi possivel atualizar os colaboradores.")
         toast.error("Falha ao carregar os colaboradores no Supabase.")
       }
     } catch (error) {
@@ -826,6 +831,16 @@ export default function TrainingPage() {
     draft.instructorName.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  if (!loading && loadError && trainings.length === 0 && employees.length === 0) {
+    return (
+      <DataLoadError
+        title="Treinamentos temporariamente indisponiveis"
+        message={`${loadError} Nenhum registro foi substituido por uma lista vazia.`}
+        onRetry={() => void loadData()}
+      />
+    )
+  }
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -844,6 +859,19 @@ export default function TrainingPage() {
           Registrar Treinamento
         </button>
       </div>
+
+      {loadError && (
+        <div role="status" className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <span className="font-bold">{loadError} Mantivemos os ultimos dados carregados.</span>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            className="min-h-11 rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-black uppercase tracking-widest"
+          >
+            Atualizar
+          </button>
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 border-b border-slate-200 bg-slate-50/30">

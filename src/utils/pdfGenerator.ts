@@ -111,7 +111,44 @@ function addPageFooter(doc: jsPDF, hash?: string, ip?: string) {
   doc.text(right, pageWidth - 14, pageHeight - 6, { align: "right" })
 }
 
-function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number) {
+function addFootersToEveryPage(doc: jsPDF, hash?: string, ip?: string) {
+  const lastPage = doc.getNumberOfPages()
+  for (let page = 1; page <= lastPage; page += 1) {
+    doc.setPage(page)
+    addPageFooter(doc, hash, ip)
+  }
+  doc.setPage(lastPage)
+}
+
+function normalizeLegacyPdfText(value: string | null | undefined) {
+  const text = value || ""
+  const replacements: Array<[string, string]> = [
+    ["Ã§", "ç"], ["Ã£", "ã"], ["Ã¡", "á"], ["Ã ", "à"], ["Ã¢", "â"],
+    ["Ã©", "é"], ["Ãª", "ê"], ["Ã­", "í"], ["Ã³", "ó"],
+    ["Ã´", "ô"], ["Ãµ", "õ"], ["Ãº", "ú"], ["Ãƒ", "Ã"],
+    ["Âº", "º"], ["Âª", "ª"], ["Â·", "·"],
+    ["â€¢", "•"], ["â€“", "–"], ["â€”", "—"],
+  ]
+
+  return replacements.reduce((normalized, [broken, fixed]) => normalized.replaceAll(broken, fixed), text)
+}
+
+function fitSingleLineText(doc: jsPDF, value: string | null | undefined, maxWidth: number) {
+  const text = normalizeLegacyPdfText(value) || "-"
+  if (doc.getTextWidth(text) <= maxWidth) return text
+
+  const suffix = "…"
+  let low = 0
+  let high = text.length
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (doc.getTextWidth(`${text.slice(0, middle).trimEnd()}${suffix}`) <= maxWidth) low = middle
+    else high = middle - 1
+  }
+  return `${text.slice(0, low).trimEnd()}${suffix}`
+}
+
+function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number, maxWidth?: number) {
   doc.setFont("helvetica", "bold")
   doc.setFontSize(7.5)
   doc.setTextColor(100, 116, 139)
@@ -120,7 +157,7 @@ function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(30, 41, 59)
-  doc.text(value || "-", x, y + 5)
+  doc.text(maxWidth ? fitSingleLineText(doc, value, maxWidth) : normalizeLegacyPdfText(value) || "-", x, y + 5)
 }
 
 function drawManualSignatureLine(
@@ -183,6 +220,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   refreshPdfBrand()
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const hash = data.validationHash || generateAuditCode()
 
   const pdfItems = data.items && data.items.length > 0
@@ -203,7 +241,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.setFont("helvetica", "bold")
   doc.setFontSize(12)
   doc.setTextColor(r, g, b)
-  doc.text(data.employeeName.toUpperCase(), 20, currentY + 10)
+  doc.text(fitSingleLineText(doc, data.employeeName.toUpperCase(), pageWidth - 40), 20, currentY + 10)
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(8)
@@ -219,35 +257,51 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.text("CARGO / FUNÇÃO", pageWidth / 2, currentY + 18)
   doc.setTextColor(30, 41, 59)
   doc.setFont("helvetica", "bold")
-  doc.text(data.employeeRole || "Não Informado", pageWidth / 2, currentY + 23)
+  doc.text(fitSingleLineText(doc, data.employeeRole || "Não Informado", 62), pageWidth / 2, currentY + 23)
 
   doc.setTextColor(100, 116, 139)
   doc.setFont("helvetica", "normal")
   doc.text("UNIDADE / CANTEIRO", pageWidth - 20, currentY + 18, { align: "right" })
   doc.setTextColor(30, 41, 59)
   doc.setFont("helvetica", "bold")
-  doc.text(data.workplaceName || "Sede", pageWidth - 20, currentY + 23, { align: "right" })
+  doc.text(fitSingleLineText(doc, data.workplaceName || "Sede", 62), pageWidth - 20, currentY + 23, { align: "right" })
 
   currentY += 45
   autoTable(doc, {
     startY: currentY,
     head: [["Equipamento (EPI)", "Nº CA", "Venc. CA", "Qtd", "Motivo", "Data Entrega"]],
     body: pdfItems.map(item => [
-      item.ppeName,
+      normalizeLegacyPdfText(item.ppeName),
       item.ppeCaNumber,
       item.caExpiry ? format(new Date(item.caExpiry), "dd/MM/yyyy") : "-",
       String(item.quantity),
-      item.autoReturnNote ? `${item.reason}\n${item.autoReturnNote}` : item.reason,
+      normalizeLegacyPdfText(item.autoReturnNote ? `${item.reason}\n${item.autoReturnNote}` : item.reason),
       data.deliveryDate ? `${formatDeliveryDate(data.deliveryDate)} ${formatDeliveryTime(data.deliveryDate)}` : format(new Date(), "dd/MM/yyyy HH:mm")
     ]),
     styles: { fontSize: 8.5, cellPadding: 4, font: "helvetica" },
     headStyles: { fillColor: [245, 245, 245], textColor: [71, 85, 105], fontStyle: "bold" },
-    margin: { left: 14, right: 14 },
-    theme: 'grid'
+    margin: { top: 45, right: 14, bottom: 22, left: 14 },
+    theme: 'grid',
+    didDrawPage: () => {
+      if (doc.getCurrentPageInfo().pageNumber > 1) {
+        addPageHeader(doc, "FICHA DE ENTREGA DE EPI", "NR-06 | Certificado de Uso Individual")
+      }
+    },
   })
 
   // @ts-expect-error - jsPDF-autotable adds lastAutoTable to doc
   currentY = doc.lastAutoTable.finalY + 15
+  const signatureBlockHeight = data.authMethod === "facial"
+    ? 80
+    : data.authMethod === "manual_facial" && data.photoBase64 && data.signatureBase64
+      ? 62
+      : 58
+  const requiredLegalBlockHeight = 35 + signatureBlockHeight + 45
+  if (currentY + requiredLegalBlockHeight > pageHeight - 18) {
+    doc.addPage()
+    addPageHeader(doc, "FICHA DE ENTREGA DE EPI", "NR-06 | Certificado de Uso Individual")
+    currentY = 50
+  }
   doc.setFillColor(255, 255, 255)
   doc.roundedRect(14, currentY, pageWidth - 28, 25, 2, 2, "S")
 
@@ -305,8 +359,10 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
         drawH = photoSize - 3
         drawW = drawH * photoRatio
       }
-      doc.addImage(data.photoBase64, 'JPEG', photoX + (photoSize - drawW) / 2, boxY + (photoSize - drawH) / 2, drawW, drawH)
-    } catch { /* skip */ }
+      doc.addImage(data.photoBase64, getImageFormat(data.photoBase64), photoX + (photoSize - drawW) / 2, boxY + (photoSize - drawH) / 2, drawW, drawH)
+    } catch (error) {
+      throw new Error("Nao foi possivel inserir a foto de evidencia no PDF.", { cause: error })
+    }
 
     doc.setFillColor(252, 252, 252)
     doc.roundedRect(sigBoxX, boxY + 4, sigBoxW, sigBoxH, 2, 2, "FD")
@@ -319,8 +375,10 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
         drawH = sigBoxH - 6
         drawW = drawH * sigRatio
       }
-      doc.addImage(data.signatureBase64, 'PNG', sigBoxX + (sigBoxW - drawW) / 2, boxY + 4 + (sigBoxH - drawH) / 2, drawW, drawH)
-    } catch { /* skip */ }
+      doc.addImage(data.signatureBase64, getImageFormat(data.signatureBase64), sigBoxX + (sigBoxW - drawW) / 2, boxY + 4 + (sigBoxH - drawH) / 2, drawW, drawH)
+    } catch (error) {
+      throw new Error("Nao foi possivel inserir a assinatura no PDF.", { cause: error })
+    }
 
     doc.setDrawColor(200, 200, 200)
     doc.line(sigBoxX + 8, boxY + sigBoxH + 8, sigBoxX + sigBoxW - 8, boxY + sigBoxH + 8)
@@ -357,9 +415,9 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
       }
       const drawX = containerX + (containerSize - drawW) / 2
       const drawY = currentY + 7 + (containerSize - drawH) / 2
-      doc.addImage(data.signatureBase64, 'JPEG', drawX, drawY, drawW, drawH)
+      doc.addImage(data.signatureBase64, getImageFormat(data.signatureBase64), drawX, drawY, drawW, drawH)
     } catch (e) {
-      console.error("Error adding photo to PDF", e)
+      throw new Error("Nao foi possivel inserir a biometria facial no PDF.", { cause: e })
     }
 
     doc.setFont("helvetica", "bold")
@@ -398,8 +456,10 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
       }
       const drawX = sigBoxX + (sigBoxW - drawW) / 2
       const drawY = currentY + 4 + (sigBoxH - drawH) / 2
-      doc.addImage(data.signatureBase64, 'PNG', drawX, drawY, drawW, drawH)
-    } catch {}
+      doc.addImage(data.signatureBase64, getImageFormat(data.signatureBase64), drawX, drawY, drawW, drawH)
+    } catch (error) {
+      throw new Error("Nao foi possivel inserir a assinatura no PDF.", { cause: error })
+    }
 
     drawManualSignatureLine(
       doc,
@@ -438,7 +498,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   doc.text("GEOLOCALIZAÇÃO", metaX, currentY + 31)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(71, 85, 105)
-  doc.text(data.location || "Coordenadas não capturadas", metaX, currentY + 35)
+  doc.text(fitSingleLineText(doc, data.location || "Coordenadas não capturadas", pageWidth - 78), metaX, currentY + 35)
 
   try {
     const qrText = `${COMPANY_CONFIG.systemName} | Valid: ${hash} | Date: ${today}`
@@ -449,15 +509,7 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     doc.text("Scan to Verify", pageWidth - 32, currentY + 33, { align: "center" })
   } catch {}
 
-  currentY += 45
-  doc.setDrawColor(230, 230, 230)
-  doc.setLineWidth(0.3)
-  doc.line(14, currentY, pageWidth - 14, currentY)
-  doc.setFontSize(6.5)
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(148, 163, 184)
-  const footerText = `${COMPANY_CONFIG.systemName} Digital • NR-06 Compliance • Documento gerado automaticamente para fins de auditoria.`
-  doc.text(footerText, pageWidth / 2, currentY + 6, { align: "center" })
+  addFootersToEveryPage(doc, hash, data.ipAddress)
 
   return doc.output("blob")
 }
@@ -624,7 +676,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   fields.forEach((f, i) => {
     const x = 14 + (i % 3) * col
     const y = boxY + Math.floor(i / 3) * 17
-    infoRow(doc, f.label, f.value, x, y)
+    infoRow(doc, f.label, f.value, x, y, col - 6)
   })
 
   const itemsWithSigs = await Promise.all(
@@ -660,17 +712,17 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       item.ppeName,
       item.caNr,
       item.quantity,
-      item.reason,
+      normalizeLegacyPdfText(item.reason),
       item.returnedAt ? "Devolvido" : item.isExpired ? "Troca Pendente" : "Em uso",
       item.returnedAt ? format(new Date(item.returnedAt), "dd/MM/yyyy") : "-",
       "",
     ]),
     styles: {
       fontSize: 7,
-      cellPadding: { top: 6, right: 3, bottom: 6, left: 3 },
+      cellPadding: { top: 4, right: 3, bottom: 4, left: 3 },
       font: "helvetica",
       textColor: [30, 41, 59],
-      minCellHeight: 12,
+      minCellHeight: 22,
     },
     headStyles: {
       fillColor: [r, g, b],
@@ -678,6 +730,8 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       fontStyle: "bold",
       fontSize: 6.5,
       halign: "center",
+      minCellHeight: 10,
+      cellPadding: 3,
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
@@ -700,6 +754,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
         const rowIndex = hookData.row.index
         const item = itemsWithSigs[rowIndex]
         const cell = hookData.cell
+        if (!item) return
         const maxW = cell.width - 4
         const maxH = cell.height - 4
         const x = cell.x + 2
@@ -735,10 +790,18 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
           } else if (item.photoBase64) {
             drawImageFit(item.photoBase64, x, y, maxW, maxH)
           }
-        } catch { /* skip */ }
+        } catch (error) {
+          throw new Error("Nao foi possivel inserir a assinatura da entrega na ficha NR-06.", { cause: error })
+        }
       }
     },
-    margin: { left: 14, right: 14 },
+    didDrawPage: () => {
+      if (doc.getCurrentPageInfo().pageNumber > 1) {
+        addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
+      }
+    },
+    rowPageBreak: "avoid",
+    margin: { top: 45, right: 14, bottom: 22, left: 14 },
   })
 
   // @ts-expect-error - jsPDF-autotable adds lastAutoTable to doc
@@ -749,6 +812,11 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     const tst = data.tstSigner
     const blockWidth = 88
     const blockX = (pageWidth - blockWidth) / 2
+    if (finalY + 50 > pageHeight - 20) {
+      doc.addPage()
+      addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
+      finalY = 50
+    }
     const blockY = finalY
     const contentX = blockX + 16
     const contentWidth = blockWidth - 32
@@ -766,7 +834,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       const ratio = imgProps.width / imgProps.height
       if (tst.authMethod === 'manual_facial' && tst.photoBase64) {
         const photoSize = 18
-        doc.addImage(tst.photoBase64, 'JPEG', blockX + 16, blockY + 11, photoSize, photoSize)
+        doc.addImage(tst.photoBase64, getImageFormat(tst.photoBase64), blockX + 16, blockY + 11, photoSize, photoSize)
         const drawH = 12
         let drawW = drawH * ratio
         const sigAreaW = contentWidth - photoSize - 8
@@ -775,8 +843,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
         }
         const sigX = blockX + 16 + photoSize + 8 + (sigAreaW - drawW) / 2
         const sigY = blockY + 15
-        const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
-        doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
+        doc.addImage(tst.signatureBase64, getImageFormat(tst.signatureBase64), sigX, sigY, drawW, drawH)
       } else {
         const isPhoto = ratio <= 1.5
         const drawH = isPhoto ? 20 : 12
@@ -786,10 +853,11 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
         }
         const sigX = blockX + (blockWidth - drawW) / 2
         const sigY = blockY + 12
-        const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
-        doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
+        doc.addImage(tst.signatureBase64, getImageFormat(tst.signatureBase64), sigX, sigY, drawW, drawH)
       }
-    } catch { /* skip */ }
+    } catch (error) {
+      throw new Error("Nao foi possivel inserir a assinatura do responsavel tecnico na ficha NR-06.", { cause: error })
+    }
 
     doc.setDrawColor(203, 213, 225)
     doc.setLineWidth(0.3)
@@ -798,29 +866,17 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8.5)
     doc.setTextColor(30, 41, 59)
-    doc.text(tst.name.toUpperCase(), contentX, blockY + 40)
+    doc.text(fitSingleLineText(doc, tst.name.toUpperCase(), contentWidth), contentX, blockY + 40)
 
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(102, 102, 102)
-    doc.text(tst.role, contentX, blockY + 45)
+    doc.text(fitSingleLineText(doc, tst.role, contentWidth), contentX, blockY + 45)
 
     finalY += 56
   }
 
-  const emitDate = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-  const footerY = pageHeight - 24
-  doc.setFillColor(248, 250, 252)
-  doc.rect(0, footerY - 8, pageWidth, 20, "F")
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.line(14, footerY - 4, pageWidth - 14, footerY - 4)
-
-  doc.setFontSize(7)
-  doc.setFont("helvetica", "italic")
-  doc.setTextColor(100, 116, 139)
-  doc.text(`Documento emitido em ${emitDate} pelo ${COMPANY_CONFIG.systemName}.`, 14, footerY + 2)
-  doc.text(`${COMPANY_CONFIG.systemName} • NR-06 Compliance • Identidade Digital Verificada`, 14, footerY + 6)
+  addFootersToEveryPage(doc)
 
   return doc.output("blob")
 }

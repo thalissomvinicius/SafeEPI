@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import HistoryPage from "@/app/history/page"
 import type { DeliveryWithRelations } from "@/types/database"
@@ -41,6 +41,8 @@ const delivery = {
 } as unknown as DeliveryWithRelations
 
 describe("HistoryPage", () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
     apiMocks.getDeliveries.mockResolvedValue([delivery])
@@ -77,5 +79,23 @@ describe("HistoryPage", () => {
     expect(window.open).toHaveBeenCalledWith("about:blank", "_blank")
     expect(apiMocks.getPrivateAssetUrl).toHaveBeenCalledWith(delivery.signature_url, "view")
     await waitFor(() => expect(replace).toHaveBeenCalledWith("https://storage.example/fresh-signature.png"))
+  })
+
+  it("nao confunde uma ficha NR-06 coletiva com o comprovante arquivado da entrega", async () => {
+    apiMocks.getSignedDocuments.mockResolvedValue([{
+      id: "nr06-1",
+      document_type: "nr06",
+      delivery_id: null,
+      delivery_ids: [delivery.id],
+      document_url: "signed-documents/company/ficha-nr06.pdf",
+      storage_path: "signed-documents/company/ficha-nr06.pdf",
+      sha256_hash: "abc123",
+      created_at: "2026-07-21T10:00:00.000Z",
+    }])
+
+    render(<HistoryPage />)
+
+    expect(await screen.findByRole("button", { name: /abrir somente a assinatura/i })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /abrir documento arquivado/i })).not.toBeInTheDocument()
   })
 })

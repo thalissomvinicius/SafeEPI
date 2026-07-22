@@ -817,13 +817,39 @@ export default function EmployeesPage() {
       // no momento da emissao para nunca montar a ficha com links vencidos.
       const [freshEmployeeHistory, signedDocuments] = await Promise.all([
         api.getEmployeeHistory(emp.id),
-        api.getSignedDocuments({ employeeId: emp.id }),
+        api.getSignedDocuments({ employeeId: emp.id, signAssets: false }),
       ])
       const getSignedDocumentForDelivery = (deliveryId: string) =>
         signedDocuments.find((document) =>
-          document.delivery_id === deliveryId ||
-          document.delivery_ids?.includes(deliveryId)
+          (document.document_type === "delivery" || document.document_type === "remote_delivery") &&
+          (document.delivery_id === deliveryId || document.delivery_ids?.includes(deliveryId))
         )
+
+      const pdfItems = await Promise.all(freshEmployeeHistory.map(async (d) => {
+        const signedDocument = getSignedDocumentForDelivery(d.id)
+        const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | null
+        const deliveryDate = parseDeliveryDateTime(d.delivery_date)
+        const expiryDate = deliveryDate && d.ppe ? addDays(deliveryDate, d.ppe.lifespan_days || 180) : null
+        const signatureSource = d.signature_url || signedDocument?.signature_storage_path || signedDocument?.signature_url || null
+        const photoSource = signedDocument?.photo_evidence_storage_path || signedDocument?.photo_evidence_url || null
+
+        return {
+          deliveryDate: formatDeliveryDate(d.delivery_date),
+          ppeName: d.ppe?.name || "N/A",
+          caNr: d.ppe?.ca_number || "N/A",
+          quantity: d.quantity,
+          reason: d.reason,
+          returnedAt: d.returned_at,
+          isExpired: expiryDate ? isPast(expiryDate) : false,
+          authMethod,
+          signatureUrl: signatureSource && !d.signature_url
+            ? await api.getPrivateAssetUrl(signatureSource, "view")
+            : signatureSource,
+          photoEvidenceUrl: photoSource
+            ? await api.getPrivateAssetUrl(photoSource, "view")
+            : null,
+        }
+      }))
 
       const pdfBlob = await generateNR06PDF({
         employeeName: emp.full_name,
@@ -832,25 +858,7 @@ export default function EmployeesPage() {
         employeeDepartment: getDepartmentName(emp.department),
         workplaceName: getWorkplaceName(emp.workplace_id),
         admissionDate: emp.admission_date ? format(new Date(`${emp.admission_date}T12:00:00`), "dd/MM/yyyy") : "Nao informado",
-        items: freshEmployeeHistory.map(d => {
-          const signedDocument = getSignedDocumentForDelivery(d.id)
-          const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | null
-          const deliveryDate = parseDeliveryDateTime(d.delivery_date)
-          const expiryDate = deliveryDate && d.ppe ? addDays(deliveryDate, d.ppe.lifespan_days || 180) : null
-
-          return {
-            deliveryDate: formatDeliveryDate(d.delivery_date),
-            ppeName: d.ppe?.name || "N/A",
-            caNr: d.ppe?.ca_number || "N/A",
-            quantity: d.quantity,
-            reason: d.reason,
-            returnedAt: d.returned_at,
-            isExpired: expiryDate ? isPast(expiryDate) : false,
-            authMethod,
-            signatureUrl: signedDocument?.signature_url || d.signature_url || null,
-            photoEvidenceUrl: signedDocument?.photo_evidence_url || null,
-          }
-        }),
+        items: pdfItems,
         tstSigner: {
           name: tstName,
           role: tstRole,

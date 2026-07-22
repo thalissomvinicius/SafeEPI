@@ -112,6 +112,8 @@ export default function DeliveryPage() {
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [activeDeliveries, setActiveDeliveries] = useState<DeliveryWithRelations[]>([])
   const [loadingActiveDeliveries, setLoadingActiveDeliveries] = useState(false)
+  const [activeDeliveriesError, setActiveDeliveriesError] = useState<string | null>(null)
+  const [activeDeliveriesReloadVersion, setActiveDeliveriesReloadVersion] = useState(0)
   const [loadingOptions, setLoadingOptions] = useState(true)
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("")
@@ -222,7 +224,10 @@ export default function DeliveryPage() {
 
   useEffect(() => {
     if (!selectedEmployeeId) {
-      const timer = window.setTimeout(() => setActiveDeliveries([]), 0)
+      const timer = window.setTimeout(() => {
+        setActiveDeliveries([])
+        setActiveDeliveriesError(null)
+      }, 0)
       return () => window.clearTimeout(timer)
     }
 
@@ -230,11 +235,13 @@ export default function DeliveryPage() {
       const loadEmployeeActiveDeliveries = async () => {
         try {
           setLoadingActiveDeliveries(true)
+          setActiveDeliveriesError(null)
+          setActiveDeliveries([])
           const history = await api.getEmployeeHistory(selectedEmployeeId)
           setActiveDeliveries(history.filter(delivery => !delivery.returned_at && getRemainingDeliveryQuantity(delivery) > 0))
         } catch (err) {
           console.error("Erro ao carregar EPIs ativos do colaborador:", err)
-          setActiveDeliveries([])
+          setActiveDeliveriesError(err instanceof Error ? err.message : "Falha ao consultar os EPIs em posse.")
         } finally {
           setLoadingActiveDeliveries(false)
         }
@@ -244,7 +251,7 @@ export default function DeliveryPage() {
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [selectedEmployeeId])
+  }, [selectedEmployeeId, activeDeliveriesReloadVersion])
 
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const currentPpe = ppes.find(p => p.id === currentPpeId)
@@ -484,6 +491,10 @@ export default function DeliveryPage() {
 
   const addToCart = () => {
     if (!currentPpe) return
+    if (loadingActiveDeliveries || activeDeliveriesError) {
+      toast.error("Confirme os EPIs em posse antes de adicionar uma nova entrega.")
+      return
+    }
     if (isCurrentPpeExpired) {
       toast.error("EPI com CA vencido não pode ser entregue.")
       return
@@ -1610,6 +1621,20 @@ export default function DeliveryPage() {
                         </div>
                       )}
 
+                      {!loadingActiveDeliveries && activeDeliveriesError && selectedEmployeeId && (
+                        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
+                          <p className="text-[10px] font-black uppercase tracking-widest">Nao foi possivel confirmar os EPIs em posse</p>
+                          <p className="mt-1 text-xs font-semibold">A entrega foi bloqueada para evitar baixa ou substituicao incorreta.</p>
+                          <button
+                            type="button"
+                            onClick={() => setActiveDeliveriesReloadVersion((version) => version + 1)}
+                            className="mt-3 min-h-11 rounded-xl border border-amber-300 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest"
+                          >
+                            Tentar novamente
+                          </button>
+                        </div>
+                      )}
+
                       {!loadingActiveDeliveries && currentPpe && currentActiveSamePpeDeliveries.length > 0 && (
                         <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-start gap-3">
                           <div className="bg-amber-100 text-amber-700 rounded-lg p-2 flex-shrink-0">
@@ -1647,7 +1672,7 @@ export default function DeliveryPage() {
                       
                       <button 
                         onClick={addToCart}
-                        disabled={!currentPpe || isCurrentPpeExpired}
+                        disabled={!currentPpe || isCurrentPpeExpired || loadingActiveDeliveries || Boolean(activeDeliveriesError)}
                         className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 mt-2"
                       >
                         <Plus className="w-4 h-4" /> Adicionar à Entrega

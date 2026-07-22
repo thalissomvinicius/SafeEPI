@@ -204,6 +204,7 @@ export default function HistoryPage() {
         signatureBase64: base64Signature,
         photoBase64,
         ipAddress: rec.ip_address || "Remoto",
+        location: signedDocument?.geo_location || undefined,
         validationHash: rec.id.slice(0, 8).toUpperCase(),
         deliveryDate: rec.delivery_date,
       })
@@ -230,8 +231,8 @@ export default function HistoryPage() {
 
   const getSignedDocumentForDelivery = (deliveryId: string) =>
     signedDocuments.find((document) =>
-      document.delivery_id === deliveryId ||
-      document.delivery_ids?.includes(deliveryId)
+      (document.document_type === "delivery" || document.document_type === "remote_delivery") &&
+      (document.delivery_id === deliveryId || document.delivery_ids?.includes(deliveryId))
     )
 
   const handleDeleteDelivery = async (rec: DeliveryWithRelations) => {
