@@ -23,6 +23,7 @@ import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "
 import { toast } from "@/lib/toast"
 import { isValidGeoLocation, requestRequiredGeolocation } from "@/utils/geolocation"
 import { FingerprintCommandPanel } from "@/components/biometrics/FingerprintCommandPanel"
+import { imageDataUrlToFile } from "@/utils/imageDataUrl"
 
 interface CartItem {
   ppeId: string
@@ -78,14 +79,6 @@ const normalizeSearchText = (value: unknown) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-
-const dataUrlToImageFile = async (dataUrl: string, baseName: string) => {
-  const response = await fetch(dataUrl)
-  const blob = await response.blob()
-  const mimeType = blob.type || "image/png"
-  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png"
-  return new File([blob], `${baseName}.${extension}`, { type: mimeType })
-}
 
 export default function DeliveryPage() {
   const { user } = useAuth()
@@ -604,7 +597,7 @@ export default function DeliveryPage() {
         throw new Error("Confirme a digital do colaborador antes de concluir a entrega.")
       }
       const fingerprintBatchId = biometricEvidence ? crypto.randomUUID() : null
-      const signatureFile = signatureDataUrl ? await dataUrlToImageFile(signatureDataUrl, "signature") : undefined
+      const signatureFile = signatureDataUrl ? imageDataUrlToFile(signatureDataUrl, "signature") : undefined
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
       const persistedAuthMethod: Delivery['auth_method'] = authMethod
       const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)

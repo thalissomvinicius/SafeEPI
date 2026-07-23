@@ -22,6 +22,7 @@ import { toast } from "@/lib/toast"
 import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { DataLoadError } from "@/components/ui/DataLoadError"
+import { imageDataUrlToFile } from "@/utils/imageDataUrl"
 
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -158,9 +159,7 @@ export default function ReturnsPage() {
 
       // 2. Criar Nova Entrega se precisar
       if (needsReplacement && replacementPpeId) {
-        const response = await fetch(signatureDataUrl)
-        const blob = await response.blob()
-        const signatureFile = new File([blob], "signature.png", { type: "image/png" })
+        const signatureFile = imageDataUrlToFile(signatureDataUrl, "signature")
 
         replacementDelivery = await api.saveDelivery({
           employee_id: selectedEmployee.id,

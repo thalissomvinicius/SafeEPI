@@ -3,6 +3,36 @@ type FetchImageDataUrlOptions = {
   label?: string
 }
 
+const IMAGE_DATA_URL_PATTERN = /^data:(image\/(?:png|jpeg|webp));base64,([a-z0-9+/=\s]+)$/i
+
+export function imageDataUrlToFile(dataUrl: string, baseName: string): File {
+  const match = IMAGE_DATA_URL_PATTERN.exec(dataUrl.trim())
+  if (!match) {
+    throw new Error("A assinatura gerada é inválida. Limpe e assine novamente.")
+  }
+
+  let binary: string
+  try {
+    binary = atob(match[2].replace(/\s/g, ""))
+  } catch {
+    throw new Error("A assinatura gerada é inválida. Limpe e assine novamente.")
+  }
+
+  if (!binary.length) {
+    throw new Error("A assinatura está vazia. Limpe e assine novamente.")
+  }
+
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  const mimeType = match[1].toLowerCase()
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/webp" ? "webp" : "png"
+
+  return new File([bytes], `${baseName}.${extension}`, { type: mimeType })
+}
+
 function readBlobAsDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
