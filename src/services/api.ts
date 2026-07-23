@@ -96,11 +96,15 @@ const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete";
 const SIGNED_DOCUMENT_DIRECT_UPLOAD_THRESHOLD_BYTES = 2.5 * 1024 * 1024;
 const MASTER_COMPANY_CONTEXT_KEY = "safeepi_master_company_id";
 const AUTH_CONTEXT_SYNC_EVENT = "safeepi:auth-sync";
+const COMPANIES_CACHE_TTL_MS = 30_000;
 
 let sessionRefreshPromise: Promise<Session | null> | null = null;
 let cachedCompanyId: string | null = null;
 let cachedCompanyIdResolved = false;
 let companyIdRequest: Promise<string | null> | null = null;
+let cachedCompanies: CompanyWithCounts[] | null = null;
+let cachedCompaniesExpiresAt = 0;
+let companiesRequest: Promise<CompanyWithCounts[]> | null = null;
 
 type SignedDocumentUploadTarget = {
   error?: string;
@@ -469,6 +473,9 @@ function clearCompanyContextCache(clearStoredMasterCompany = false) {
   cachedCompanyId = null;
   cachedCompanyIdResolved = false;
   companyIdRequest = null;
+  cachedCompanies = null;
+  cachedCompaniesExpiresAt = 0;
+  companiesRequest = null;
 
   if (clearStoredMasterCompany && typeof window !== "undefined") {
     window.localStorage.removeItem(MASTER_COMPANY_CONTEXT_KEY);
@@ -938,10 +945,23 @@ export const api = {
   },
 
   async getCompanies() {
-    const res = await fetchWithAuthRetry('/api/companies');
-    const data = await readResponseJson<{ error?: string; companies?: CompanyWithCounts[] }>(res);
-    if (!res.ok) throw new Error(data.error || "Nao foi possivel carregar empresas.");
-    return data.companies || [];
+    if (cachedCompanies && cachedCompaniesExpiresAt > Date.now()) {
+      return cachedCompanies;
+    }
+    if (companiesRequest) return companiesRequest;
+
+    companiesRequest = (async () => {
+      const res = await fetchWithAuthRetry('/api/companies');
+      const data = await readResponseJson<{ error?: string; companies?: CompanyWithCounts[] }>(res);
+      if (!res.ok) throw new Error(data.error || "Nao foi possivel carregar empresas.");
+      cachedCompanies = data.companies || [];
+      cachedCompaniesExpiresAt = Date.now() + COMPANIES_CACHE_TTL_MS;
+      return cachedCompanies;
+    })().finally(() => {
+      companiesRequest = null;
+    });
+
+    return companiesRequest;
   },
 
   async createCompany(payload: Partial<Company>) {
@@ -952,6 +972,8 @@ export const api = {
     });
     const data = await readResponseJson<{ error?: string; company?: Company }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel criar empresa.");
+    cachedCompanies = null;
+    cachedCompaniesExpiresAt = 0;
     return data.company;
   },
 
@@ -963,6 +985,8 @@ export const api = {
     });
     const data = await readResponseJson<{ error?: string; company?: Company }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel atualizar empresa.");
+    cachedCompanies = null;
+    cachedCompaniesExpiresAt = 0;
     return data.company;
   },
 
@@ -1288,7 +1312,7 @@ export const api = {
   },
 
   // --- Colaboradores ---
-  async getEmployees() {
+  async getEmployees(options: { signPhotos?: boolean } = {}) {
     const companyId = await getCurrentCompanyId();
     const buildEmployeeQuery = (selectColumns: string) => {
       let empQuery = supabase.from('employees').select(selectColumns).order('full_name', { ascending: true });
@@ -1310,6 +1334,8 @@ export const api = {
       const archivedIds = await getArchivedEmployeeIds(companyId);
       employees = employees.filter(employee => !archivedIds.has(employee.id));
     }
+
+    if (options.signPhotos === false) return employees;
 
     return signStorageFields(employees as unknown as Record<string, unknown>[], ["photo_url"], "view", BIOMETRIC_BUCKET) as Promise<Employee[]>;
   },

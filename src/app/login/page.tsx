@@ -43,7 +43,6 @@ export default function LoginPage() {
     try {
       setLoading(true)
       await api.login(email.trim(), password)
-      await api.getCurrentUser()
       setRedirectCountdown(3)
       setSuccessMsg("Login efetuado com sucesso. Preparando seu painel SafeEPI...")
     } catch (err) {

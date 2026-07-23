@@ -122,26 +122,30 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  let {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const {
+    data: verifiedToken,
+  } = await supabase.auth.getClaims()
+  let claims = verifiedToken?.claims || null
 
-  if (!user && request.nextUrl.pathname.startsWith("/api/")) {
+  if (!claims?.sub && request.nextUrl.pathname.startsWith("/api/")) {
     const bearer = extractBearerToken(request.headers.get("authorization"))
     if (bearer) {
-      const result = await supabase.auth.getUser(bearer)
-      user = result.data.user
+      const result = await supabase.auth.getClaims(bearer)
+      claims = result.data?.claims || null
     }
   }
 
-  if (!user) {
+  if (!claims?.sub) {
     return request.nextUrl.pathname.startsWith("/api/")
       ? apiUnauthorized(csp, nonce)
       : redirectToLogin(request, csp, nonce)
   }
 
   if (isAdminRoute(request.nextUrl.pathname)) {
-    const role = typeof user.app_metadata?.role === "string" ? user.app_metadata.role : null
+    const appMetadata = claims.app_metadata && typeof claims.app_metadata === "object"
+      ? claims.app_metadata as Record<string, unknown>
+      : null
+    const role = typeof appMetadata?.role === "string" ? appMetadata.role : null
     if (!role || !ADMIN_ROLES.has(role)) {
       return redirectToUnauthorized(request, csp, nonce)
     }

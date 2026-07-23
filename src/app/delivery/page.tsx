@@ -125,6 +125,7 @@ export default function DeliveryPage() {
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial' | 'fingerprint'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
   const [fingerprintEvidence, setFingerprintEvidence] = useState<FingerprintEvidence | null>(null)
+  const [selectedEmployeePhoto, setSelectedEmployeePhoto] = useState<{ employeeId: string; url: string } | null>(null)
 
   const requestLocationForSignature = useCallback(async (showToast = true) => {
     if (isValidGeoLocation(location)) {
@@ -178,7 +179,7 @@ export default function DeliveryPage() {
     async function loadOptions() {
       try {
         const [empData, ppeData, wpData] = await Promise.all([
-          api.getEmployees(),
+          api.getEmployees({ signPhotos: false }),
           api.getPpes(),
           api.getWorkplaces()
         ])
@@ -245,6 +246,34 @@ export default function DeliveryPage() {
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
   const selectedThirdPartyId = selectedEmployee?.third_party_id || selectedWorkplace?.third_party_id || null
   const currentActiveSamePpeDeliveries = activeDeliveries.filter(delivery => delivery.ppe_id === currentPpeId && !delivery.returned_at)
+
+  useEffect(() => {
+    let disposed = false
+
+    if (step !== 2 || authMethod !== "facial" || !selectedEmployee?.photo_url) {
+      return () => {
+        disposed = true
+      }
+    }
+
+    void api.getPrivateAssetUrl(selectedEmployee.photo_url, "view", undefined, "biometric_photos")
+      .then((signedUrl) => {
+        if (!disposed && signedUrl) {
+          setSelectedEmployeePhoto({ employeeId: selectedEmployee.id, url: signedUrl })
+        }
+      })
+      .catch((error) => {
+        console.error("Erro ao carregar a foto do colaborador selecionado:", error)
+      })
+
+    return () => {
+      disposed = true
+    }
+  }, [authMethod, selectedEmployee?.id, selectedEmployee?.photo_url, step])
+
+  const selectedEmployeePhotoUrl = selectedEmployeePhoto && selectedEmployeePhoto.employeeId === selectedEmployee?.id
+    ? selectedEmployeePhoto.url
+    : null
 
   const shouldAutoReturn = (reason: string, deliveries = currentActiveSamePpeDeliveries) =>
     deliveries.length > 0 && reason !== "Primeira Entrega"
@@ -1962,7 +1991,13 @@ export default function DeliveryPage() {
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidade Requerida</span>
                         <div className="flex items-center gap-3">
                           <span className="text-xs font-bold text-slate-700 uppercase">{selectedEmployee.full_name}</span>
-                          <Image src={selectedEmployee.photo_url || ''} alt="User" width={32} height={32} className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover" unoptimized />
+                          {selectedEmployeePhotoUrl ? (
+                            <Image src={selectedEmployeePhotoUrl} alt="User" width={32} height={32} className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover" unoptimized />
+                          ) : (
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-400 shadow-sm" aria-label="Carregando foto">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            </span>
+                          )}
                         </div>
                       </div>
                       <FaceCamera 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Home, Users, Shield, PenTool, History, TrendingDown, CheckCircle2, HardDrive, Package, LogOut, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog, Handshake } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useActiveBrand } from "@/hooks/useActiveBrand"
@@ -34,6 +34,7 @@ function formatCnpj(value?: string | null) {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { logout, user } = useAuth()
   const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
   const brandColor = activeBrand.primaryColor
@@ -68,6 +69,9 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
+              onPointerEnter={() => router.prefetch(item.href)}
+              onFocus={() => router.prefetch(item.href)}
               style={isActive ? { borderLeftColor: brandColor, color: brandColor, backgroundColor: `${brandColor}0D` } : undefined}
               className={`flex items-center px-3 py-2.5 rounded-lg transition-colors group ${
                 isActive

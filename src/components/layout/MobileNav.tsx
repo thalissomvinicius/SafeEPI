@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Home, Users, PenTool, History, TrendingDown, HardDrive, Package, LogOut, Menu, X, Shield, CheckCircle2, Settings, ArrowRightLeft, HelpCircle, BriefcaseBusiness, Building2, UserRoundCog, Handshake } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useActiveBrand } from "@/hooks/useActiveBrand"
@@ -28,6 +28,7 @@ const allItems = [
 
 export function MobileNav() {
   const pathname = usePathname()
+  const router = useRouter()
   const { logout, user } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
@@ -52,6 +53,8 @@ export function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
+              onFocus={() => router.prefetch(item.href)}
               style={isActive ? { color: brandColor } : undefined}
               className={`flex min-h-14 flex-col items-center justify-center rounded-xl px-1.5 py-2 transition-colors ${
                 isActive ? "text-[#2563EB]" : "text-slate-400"
@@ -107,6 +110,8 @@ export function MobileNav() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      prefetch={false}
+                      onFocus={() => router.prefetch(item.href)}
                       onClick={() => setIsMenuOpen(false)}
                       style={isActive ? { color: brandColor, borderColor: `${brandColor}33`, backgroundColor: `${brandColor}0D` } : undefined}
                       className={`flex min-h-24 flex-col items-center justify-center rounded-2xl border p-4 transition-all ${
@@ -141,4 +146,3 @@ export function MobileNav() {
     </>
   )
 }
-
