@@ -1,9 +1,14 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from safeepi_agent.models import FingerprintCommand, ProtocolError
 
 
 class FingerprintCommandTests(unittest.TestCase):
+    @staticmethod
+    def future_expiry() -> str:
+        return (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat().replace("+00:00", "Z")
+
     def test_parses_supported_command_without_biometric_payload(self):
         command = FingerprintCommand.from_payload(
             {
@@ -11,7 +16,7 @@ class FingerprintCommandTests(unittest.TestCase):
                 "operation": "verify",
                 "employee_id": "4f5ea79d-d833-493f-baad-dd3d0c3e39aa",
                 "employee_name": "MARIA DA SILVA",
-                "expires_at": "2026-07-22T15:10:00Z",
+                "expires_at": self.future_expiry(),
             }
         )
 
@@ -28,7 +33,7 @@ class FingerprintCommandTests(unittest.TestCase):
                     "operation": "capture_raw",
                     "employee_id": "also-invalid",
                     "employee_name": "TESTE",
-                    "expires_at": "2026-07-22T15:10:00Z",
+                    "expires_at": self.future_expiry(),
                 }
             )
 

@@ -20,8 +20,8 @@ jobs:
       BIOMETRIC_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       CRON_SECRET: ci-cron-secret-with-at-least-32-characters
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -36,8 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -47,3 +47,14 @@ jobs:
         env:
           SAFE_EPI_BIOMETRIC_SERVICE_TOKEN: ci-biometric-token-with-at-least-32-characters
       - run: python -m pip_audit -r biometric_service/requirements.txt
+
+  windows-fingerprint-agent:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: python -m unittest discover -s tests -v
+        working-directory: windows_biometric_agent
