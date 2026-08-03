@@ -13,7 +13,6 @@ import { useAuth } from "@/contexts/AuthContext"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { LoadingState } from "@/components/ui/LoadingState"
-import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
@@ -187,10 +186,6 @@ export default function DeliveryPage() {
         setPpes(ppeData.filter(p => p.active))
         setWorkplaces(wpData)
         
-        if (empData.length > 0) {
-            setSelectedEmployeeId(empData[0].id)
-            setSelectedWorkplaceId(empData[0].workplace_id || "")
-        }
         if (ppeData.length > 0) setCurrentPpeId(ppeData[0].id)
       } catch (error) {
         console.error("Erro ao carregar opções:", error)
@@ -664,6 +659,9 @@ export default function DeliveryPage() {
         }
       }
 
+      // jsPDF and the 2k+ line renderer stay out of the initial route chunk.
+      // They are loaded only after the user confirms a delivery.
+      const { generateDeliveryPDF } = await import("@/utils/pdfGenerator")
       const pdfBlob = await generateDeliveryPDF({
         employeeName: selectedEmployee?.full_name || "",
         employeeCpf: selectedEmployee?.cpf || "",

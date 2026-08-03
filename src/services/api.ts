@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithRelations, Workplace, StockMovement, Profile, CatalogItem, SignedDocument, CurrentUser, Company, ThirdParty } from "@/types/database";
 import { Session } from "@supabase/supabase-js";
 import { shouldRequestSignedStorageUrl } from "@/lib/storageAsset";
+import { collectSupabasePages } from "@/lib/supabasePagination";
 
 type AddTrainingResult = {
   training: Training;
@@ -881,19 +882,39 @@ export const api = {
 
   async getSignedDocuments(options: { employeeId?: string; documentType?: SignedDocument["document_type"]; limit?: number; signAssets?: boolean } = {}) {
     const companyId = await getCurrentCompanyId();
-    let sdQuery = supabase.from("signed_documents").select("*").order("created_at", { ascending: false });
-    if (companyId) sdQuery = sdQuery.eq("company_id", companyId);
-    if (options.employeeId) sdQuery = sdQuery.eq("employee_id", options.employeeId);
-    if (options.documentType) sdQuery = sdQuery.eq("document_type", options.documentType);
-    if (options.limit) sdQuery = sdQuery.limit(Math.min(Math.max(options.limit, 1), 1000));
-    const { data, error } = await withSessionRetry(() => sdQuery);
+    const buildQuery = () => {
+      let query = supabase
+        .from("signed_documents")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+      if (companyId) query = query.eq("company_id", companyId);
+      if (options.employeeId) query = query.eq("employee_id", options.employeeId);
+      if (options.documentType) query = query.eq("document_type", options.documentType);
+      return query;
+    };
 
-    if (error) {
+    let rows: Record<string, unknown>[];
+    try {
+      if (options.limit) {
+        const limit = Math.min(Math.max(options.limit, 1), 1000);
+        const { data, error } = await withSessionRetry(() => buildQuery().limit(limit));
+        if (error) throw error;
+        rows = (data || []) as unknown as Record<string, unknown>[];
+      } else {
+        rows = await collectSupabasePages<Record<string, unknown>>(
+          async (from, to) => {
+            const { data, error } = await withSessionRetry(() => buildQuery().range(from, to));
+            return { data: (data || []) as unknown as Record<string, unknown>[], error };
+          },
+          { maxRows: 50_000, resourceName: "documentos assinados" },
+        );
+      }
+    } catch (error) {
       if (isMissingSignedDocumentsTableIssue(error)) return [] as SignedDocument[];
       throw error;
     }
 
-    const rows = (data || []) as unknown as Record<string, unknown>[];
     if (options.signAssets === false) return rows as unknown as SignedDocument[];
 
     return signStorageFields(rows, [
@@ -1093,11 +1114,18 @@ export const api = {
   // --- Canteiros (Workplaces) ---
   async getWorkplaces() {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('workplaces').select('*').order('name', { ascending: true });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) throw error;
-    return data as Workplace[];
+    return collectSupabasePages<Workplace>((from, to) =>
+      withSessionRetry(() => {
+        let query = supabase
+          .from('workplaces')
+          .select('*')
+          .order('name', { ascending: true })
+          .order('id', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query.range(from, to);
+      }),
+      { resourceName: "obras e canteiros" },
+    );
   },
 
   async addWorkplace(workplace: Omit<Workplace, 'id' | 'created_at'>) {
@@ -1205,14 +1233,24 @@ export const api = {
   // --- Cargos e Setores ---
   async getJobTitles() {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('job_titles').select('*').eq('active', true).order('name', { ascending: true });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) {
+    try {
+      return await collectSupabasePages<CatalogItem>((from, to) =>
+        withSessionRetry(() => {
+          let query = supabase
+            .from('job_titles')
+            .select('*')
+            .eq('active', true)
+            .order('name', { ascending: true })
+            .order('id', { ascending: true });
+          if (companyId) query = query.eq('company_id', companyId);
+          return query.range(from, to);
+        }),
+        { resourceName: "cargos" },
+      );
+    } catch (error) {
       if (isMissingCatalogTableIssue(error)) return [] as CatalogItem[];
       throw error;
     }
-    return data as CatalogItem[];
   },
 
   async addJobTitle(name: string) {
@@ -1259,14 +1297,24 @@ export const api = {
 
   async getDepartments() {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('departments').select('*').eq('active', true).order('name', { ascending: true });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) {
+    try {
+      return await collectSupabasePages<CatalogItem>((from, to) =>
+        withSessionRetry(() => {
+          let query = supabase
+            .from('departments')
+            .select('*')
+            .eq('active', true)
+            .order('name', { ascending: true })
+            .order('id', { ascending: true });
+          if (companyId) query = query.eq('company_id', companyId);
+          return query.range(from, to);
+        }),
+        { resourceName: "setores" },
+      );
+    } catch (error) {
       if (isMissingCatalogTableIssue(error)) return [] as CatalogItem[];
       throw error;
     }
-    return data as CatalogItem[];
   },
 
   async addDepartment(name: string) {
@@ -1314,17 +1362,19 @@ export const api = {
   // --- Colaboradores ---
   async getEmployees(options: { signPhotos?: boolean } = {}) {
     const companyId = await getCurrentCompanyId();
-    const buildEmployeeQuery = (selectColumns: string) => {
-      let empQuery = supabase.from('employees').select(selectColumns).order('full_name', { ascending: true });
-      if (companyId) empQuery = empQuery.eq('company_id', companyId);
-      return empQuery;
-    };
-
-    const { data, error } = await withSessionRetry(() => buildEmployeeQuery(EMPLOYEE_BASE_SELECT));
-
-    if (error) throw error;
-
-    const rows = ((data || []) as unknown) as Employee[];
+    const rows = await collectSupabasePages<Employee>((from, to) =>
+      withSessionRetry(async () => {
+        let query = supabase
+          .from('employees')
+          .select(EMPLOYEE_BASE_SELECT)
+          .order('full_name', { ascending: true })
+          .order('id', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        const result = await query.range(from, to);
+        return result as unknown as { data: Employee[] | null; error: unknown };
+      }),
+      { resourceName: "colaboradores" },
+    );
     const hasSoftDeleteColumn = rows.some((employee) =>
       Object.prototype.hasOwnProperty.call(employee as Record<string, unknown>, "deleted_at")
     );
@@ -1456,11 +1506,19 @@ export const api = {
   // --- EPIs ---
   async getPpes() {
     const companyId = await getCurrentCompanyId();
-    let query = supabase.from('ppes').select('*').eq('active', true).order('name', { ascending: true });
-    if (companyId) query = query.eq('company_id', companyId);
-    const { data, error } = await withSessionRetry(() => query);
-    if (error) throw error;
-    return data as PPE[];
+    return collectSupabasePages<PPE>((from, to) =>
+      withSessionRetry(() => {
+        let query = supabase
+          .from('ppes')
+          .select('*')
+          .eq('active', true)
+          .order('name', { ascending: true })
+          .order('id', { ascending: true });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query.range(from, to);
+      }),
+      { resourceName: "EPIs" },
+    );
   },
 
   async addPpe(ppe: Omit<PPE, 'id' | 'created_at'>) {

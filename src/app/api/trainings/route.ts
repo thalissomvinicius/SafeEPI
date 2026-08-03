@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { collectSupabasePages } from "@/lib/supabasePagination"
 
 type SupabaseLikeError = {
   code?: string
@@ -87,23 +88,26 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
 
-    const query = supabaseAdmin
-      .from("trainings")
-      .select("*, employee:employees!trainings_employee_id_fkey(full_name, cpf, company_id)")
-      .order("completion_date", { ascending: false })
+    const trainings = await collectSupabasePages<TrainingWithEmployeeCompany>(
+      async (from, to) => {
+        let query = supabaseAdmin
+          .from("trainings")
+          .select("*, employee:employees!trainings_employee_id_fkey(full_name, cpf, company_id)")
+          .order("completion_date", { ascending: false })
+          .order("id", { ascending: false })
 
-    if (companyId) {
-      query.or(`company_id.eq.${companyId},company_id.is.null`)
-    }
+        if (companyId) {
+          query = query.or(`company_id.eq.${companyId},company_id.is.null`)
+        }
 
-    const { data, error } = await query
-
-    if (error) {
-      console.error("[API trainings] List error:", error)
-      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
-    }
-
-    const trainings = (data || []) as TrainingWithEmployeeCompany[]
+        const { data, error } = await query.range(from, to)
+        return {
+          data: (data || []) as TrainingWithEmployeeCompany[],
+          error,
+        }
+      },
+      { maxRows: 50_000, resourceName: "treinamentos" },
+    )
     const scopedTrainings = companyId
       ? trainings.filter((training) => belongsToCompany(training, companyId))
       : trainings

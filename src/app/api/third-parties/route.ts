@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { collectSupabasePages } from "@/lib/supabasePagination"
 
 function resolveCompanyId(authUser: { role: string; company_id: string | null }, requestedCompanyId: unknown) {
   if (authUser.role === "MASTER") return typeof requestedCompanyId === "string" && requestedCompanyId ? requestedCompanyId : null
@@ -34,21 +35,23 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
 
-    let query = supabaseAdmin
-      .from("third_parties")
-      .select("*")
-      .order("name", { ascending: true })
+    const thirdParties = await collectSupabasePages<Record<string, unknown>>(
+      async (from, to) => {
+        let query = supabaseAdmin
+          .from("third_parties")
+          .select("*")
+          .order("name", { ascending: true })
+          .order("id", { ascending: true })
 
-    if (companyId) query = query.eq("company_id", companyId)
+        if (companyId) query = query.eq("company_id", companyId)
 
-    const { data, error } = await query
+        const { data, error } = await query.range(from, to)
+        return { data: data || [], error }
+      },
+      { resourceName: "terceiros" },
+    )
 
-    if (error) {
-      console.error("[API third-parties] List error:", error)
-      return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
-    }
-
-    return NextResponse.json({ thirdParties: data || [] })
+    return NextResponse.json({ thirdParties })
   } catch (err) {
     console.error("[API third-parties] Unexpected list error:", err)
     return NextResponse.json({ error: "Erro interno ao carregar terceiros." }, { status: 500 })
