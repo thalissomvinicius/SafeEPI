@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import type SignatureCanvas from "react-signature-canvas"
 import EmployeesPage from "@/app/employees/page"
 
@@ -26,6 +26,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.getHistory.mockResolvedValue([{ id: "delivery-test", employee_id: employee.id, quantity: 1, delivery_date: "2026-10-14", reason: "Primeira Entrega", ppe: { name: "Capacete", ca_number: "12345", lifespan_days: 180 } }])
   mocks.generate.mockResolvedValue(new Blob(["synthetic-pdf"], { type: "application/pdf" }))
+  mocks.archive.mockResolvedValue({ id: "document-test" })
   vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:synthetic-document"), revokeObjectURL: vi.fn() }))
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -63,4 +64,23 @@ describe("prontuário pronto e arquivamento", () => {
     expect(await screen.findByRole("dialog", { name: "Prontuário NR-06 pronto" })).toBeInTheDocument()
     expect(mocks.generate).toHaveBeenCalledTimes(1)
   })
+
+  it("o fim do arquivamento anterior não libera os controles de uma nova geração em andamento", async () => {
+    let finishArchive!: (value: unknown) => void
+    mocks.archive.mockReturnValueOnce(new Promise(resolve => { finishArchive = resolve }))
+    await signAndGenerate()
+    const ready = await screen.findByRole("dialog", { name: "Prontuário NR-06 pronto" })
+    fireEvent.click(within(ready).getByRole("button", { name: "Fechar" }))
+    let finishHistory!: (value: unknown) => void
+    mocks.getHistory.mockReturnValueOnce(new Promise(resolve => { finishHistory = resolve }))
+    fireEvent.click(screen.getByRole("button", { name: /Ficha NR-06/i }))
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Assinar prontuario" })).getByRole("button", { name: /RESPONSÁVEL TESTE/i }))
+    fireEvent.click(await screen.findByRole("button", { name: "Desenhar assinatura sintética" }))
+    fireEvent.click(screen.getByRole("button", { name: "Gerar Prontuário NR-06" }))
+    expect(screen.getByRole("button", { name: "Gerando PDF..." })).toBeDisabled()
+    await act(async () => { finishArchive({ id: "archived-first" }) })
+    expect(screen.getByRole("button", { name: "Gerando PDF..." })).toBeDisabled()
+    await act(async () => { finishHistory([]) })
+    expect(await screen.findByRole("dialog", { name: "Prontuário NR-06 pronto" })).toBeInTheDocument()
+  }, 15_000)
 })

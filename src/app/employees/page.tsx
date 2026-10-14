@@ -965,26 +965,23 @@ export default function EmployeesPage() {
       })
       setIsGeneratingPdf(false)
 
-      try {
-        await api.archiveSignedDocument({
-          documentType: "nr06",
-          employeeId: emp.id,
-          deliveryIds: freshEmployeeHistory.map((delivery) => delivery.id).filter(Boolean),
-          fileName,
-          pdfBlob,
-          authMethod: tstAuthMethod,
-          metadata: {
-            tstSignerName: tstName,
-            tstSignerRole: tstRole,
-            deliveryCount: freshEmployeeHistory.length,
-            workplaceName: getWorkplaceName(emp.workplace_id),
-          },
-        })
-      } catch (archiveError) {
+      void api.archiveSignedDocument({
+        documentType: "nr06",
+        employeeId: emp.id,
+        deliveryIds: freshEmployeeHistory.map((delivery) => delivery.id).filter(Boolean),
+        fileName,
+        pdfBlob,
+        authMethod: tstAuthMethod,
+        metadata: {
+          tstSignerName: tstName,
+          tstSignerRole: tstRole,
+          deliveryCount: freshEmployeeHistory.length,
+          workplaceName: getWorkplaceName(emp.workplace_id),
+        },
+      }).catch((archiveError: unknown) => {
         const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
         toast.warning(message)
-      }
-
+      })
     } catch (err) {
       console.error("Erro ao gerar PDF:", err)
       toast.error(err instanceof Error ? err.message : "Erro ao gerar o Prontuário NR-06.")
