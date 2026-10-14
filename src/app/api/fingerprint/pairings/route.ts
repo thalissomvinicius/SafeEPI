@@ -9,6 +9,7 @@ import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { resolveFingerprintCompanyId } from "@/lib/serverFingerprint"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { isBiometricOperationAllowed } from "@/lib/signaturePolicy"
 
 const pairingSchema = z.object({
   company_id: z.string().uuid().nullable().optional(),
@@ -18,6 +19,8 @@ const pairingSchema = z.object({
 export async function POST(request: Request) {
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN"])
   if (!auth.authorized) return auth.response
+
+  if (!isBiometricOperationAllowed("pair")) return NextResponse.json({ error: "O pareamento de leitores foi retirado.", code: "BIOMETRIC_RETIRED" }, { status: 410 })
 
   try {
     const parsed = pairingSchema.safeParse(await readJsonWithLimit(request, 4 * 1024))

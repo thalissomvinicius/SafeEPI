@@ -118,3 +118,5 @@ describe("facial retention cron", () => {
     expect(mocks.updates[0].payload).not.toHaveProperty("processed_at")
   })
 })
+// Historical retention regression coverage, independent of the active gate.
+vi.mock("@/lib/facialFeature", () => ({ isFacialV2Enabled: () => process.env.FACIAL_V2_ENABLED === "true" }))

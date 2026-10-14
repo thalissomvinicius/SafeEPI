@@ -25,7 +25,6 @@ import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime } from "@
 import { toast } from "@/lib/toast"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
-import { FingerprintEnrollmentManager } from "@/components/biometrics/FingerprintEnrollmentManager"
 import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
 import { mapConcurrent } from "@/lib/mapConcurrent"
 import signatureStyles from "./prontuarioSignature.module.css"
@@ -173,7 +172,7 @@ const getBiometryStatus = (employee: Employee) => {
 }
 
 export default function EmployeesPage() {
-  const facialV2Enabled = process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED === "true"
+  const facialV2Enabled = false
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
@@ -882,11 +881,11 @@ export default function EmployeesPage() {
 
   const tstName = tstSelectedEmployee?.full_name || ""
 
-  const exportNR06PDF = async (signatureBase64 = tstSignatureBase64) => {
+  const exportNR06PDF = async (signatureBase64 = tstSignatureBase64, forPaper = false) => {
     const emp = employees.find(e => e.id === selectedEmployeeId)
     if (!emp) return
-    if (!signatureBase64 || isGeneratingPdf) return
-    if (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) {
+    if ((!signatureBase64 && !forPaper) || isGeneratingPdf) return
+    if (!forPaper && tstAuthMethod === 'manual_facial' && !tstPhotoBase64) {
       toast.error("Cadastre uma foto do responsavel tecnico antes de usar Foto + Assinatura.")
       return
     }
@@ -912,7 +911,7 @@ export default function EmployeesPage() {
         const expiryDate = deliveryDate && delivery.ppe ? addDays(deliveryDate, delivery.ppe.lifespan_days || 180) : null
         const signatureSource = delivery.signature_storage_path || delivery.signature_url || signedDocument?.signature_storage_path || signedDocument?.signature_url || null
         const photoSource = signedDocument?.photo_evidence_storage_path || signedDocument?.photo_evidence_url || null
-        const fingerprintEvidence = authMethod === "fingerprint"
+        const fingerprintEvidence = !forPaper && authMethod === "fingerprint"
           ? await api.getDeliveryFingerprintEvidence(delivery.id)
           : null
 
@@ -924,9 +923,9 @@ export default function EmployeesPage() {
           reason: delivery.reason,
           returnedAt: delivery.returned_at,
           isExpired: expiryDate ? isPast(expiryDate) : false,
-          authMethod,
-          signatureUrl: signatureSource ? await api.getPrivateAssetUrl(signatureSource, "view") : null,
-          photoEvidenceUrl: photoSource ? await api.getPrivateAssetUrl(photoSource, "view") : null,
+          authMethod: forPaper ? "manual" as const : authMethod,
+          signatureUrl: !forPaper && signatureSource ? await api.getPrivateAssetUrl(signatureSource, "view") : null,
+          photoEvidenceUrl: !forPaper && photoSource ? await api.getPrivateAssetUrl(photoSource, "view") : null,
           fingerprintEvidenceCode: fingerprintEvidence?.evidence.code,
         }
       })
@@ -939,13 +938,14 @@ export default function EmployeesPage() {
         workplaceName: getWorkplaceName(emp.workplace_id),
         admissionDate: emp.admission_date ? format(new Date(`${emp.admission_date}T12:00:00`), "dd/MM/yyyy") : "Nao informado",
         items: pdfItems,
-        tstSigner: {
+        forPaper,
+        tstSigner: !forPaper && signatureBase64 ? {
           name: tstName,
           role: tstRole,
           signatureBase64,
           authMethod: tstAuthMethod,
           photoBase64: tstPhotoBase64 || undefined,
-        }
+        } : undefined
       })
 
       const safeEmployee = emp.full_name
@@ -954,16 +954,18 @@ export default function EmployeesPage() {
         .replace(/[^a-zA-Z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "")
 
-      const fileName = `Ficha_NR06_${safeEmployee}.pdf`
+      const fileName = `Ficha_NR06_${safeEmployee}${forPaper ? "_para_assinar_no_papel" : ""}.pdf`
 
       // The document is usable immediately; slow storage must not hide the
       // user's open/download choice behind the existing profile dialog.
       setIsTstModalOpen(false)
       openPdfDialog(pdfBlob, fileName, {
-        title: "Prontuário NR-06 pronto",
-        description: "Escolha se deseja visualizar a ficha em uma nova aba ou baixar o PDF agora.",
+        title: forPaper ? "Ficha para assinatura no papel" : "Prontuário NR-06 pronto",
+        description: forPaper ? "Via sem assinaturas eletrônicas. Imprima, colha as assinaturas e guarde o original. Esta emissão não confirma assinatura no sistema." : "Escolha se deseja visualizar a ficha em uma nova aba ou baixar o PDF agora.",
       })
       setIsGeneratingPdf(false)
+
+      if (forPaper) return
 
       void api.archiveSignedDocument({
         documentType: "nr06",
@@ -1906,8 +1908,8 @@ export default function EmployeesPage() {
                     <button type="button" onClick={() => void handleRemoveBiometricData()} disabled={isSaving || approvingEnrollment} className="min-h-11 text-sm font-semibold text-red-700 underline disabled:opacity-50">Remover dados biométricos</button>
                   )}
                 </div> : <div className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
-                  <p className="text-sm font-semibold text-slate-800">Verificação facial indisponível</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-600">O cadastro do colaborador e as entregas com assinatura manual continuam disponíveis. Uma foto, isoladamente, não comprova a identidade.</p>
+                  <p className="text-sm font-semibold text-slate-800">Foto de apoio</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">As entregas usam assinatura manual, com foto opcional de apoio. A foto não realiza reconhecimento facial nem substitui a assinatura.</p>
                 </div>}
                 
                 {facialV2Enabled && (formData.id ? (
@@ -2021,9 +2023,6 @@ export default function EmployeesPage() {
                 </div>
               )}
 
-              {formData.id && canEdit && (
-                <FingerprintEnrollmentManager employeeId={formData.id} employeeName={formData.name} />
-              )}
 
               <div className="space-y-2">
                 <label htmlFor="workplace_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Obra / Canteiro</label>
@@ -2425,7 +2424,8 @@ export default function EmployeesPage() {
                 {isGeneratingPdf && <p role="status" className="text-xs text-slate-500">Preparando o prontuário e suas assinaturas…</p>}
               </div>
                 <footer className={signatureStyles.footer}>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
+                  <button type="button" disabled={isGeneratingPdf} onClick={() => void exportNR06PDF(null, true)} className="order-last col-span-2 min-h-11 rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 disabled:opacity-50">Imprimir para assinar no papel</button>
                   <button
                     disabled={isGeneratingPdf}
                     onClick={() => { setTstStep(1); setTstSignatureBase64(null); setTstHasSignature(false) }}

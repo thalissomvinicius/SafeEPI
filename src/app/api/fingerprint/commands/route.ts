@@ -9,6 +9,7 @@ import {
   serializeFingerprintEvidence,
 } from "@/lib/serverFingerprint"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { isBiometricOperationAllowed } from "@/lib/signaturePolicy"
 
 const commandSchema = z.object({
   company_id: z.string().uuid().nullable().optional(),
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
   try {
     const parsed = commandSchema.safeParse(await readJsonWithLimit(request, 8 * 1024))
     if (!parsed.success) return NextResponse.json({ error: "Comando biométrico inválido." }, { status: 400 })
+    if (!isBiometricOperationAllowed(parsed.data.operation)) {
+      return NextResponse.json({ error: "A modalidade digital USB foi retirada. Use assinatura manual ou foto + assinatura.", code: "BIOMETRIC_RETIRED" }, { status: 410 })
+    }
     if (parsed.data.operation !== "verify" && auth.user.role === "ALMOXARIFE") {
       return NextResponse.json({ error: "Apenas administradores podem alterar cadastros digitais." }, { status: 403 })
     }

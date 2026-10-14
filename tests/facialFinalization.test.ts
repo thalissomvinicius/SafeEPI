@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+// Exercise the retained historical protocol independently of its retired gate.
+vi.mock("@/lib/facialFeature", () => ({ isFacialV2Enabled: () => process.env.FACIAL_V2_ENABLED === "true" }))
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(), rpc: vi.fn(), authorize: vi.fn(),

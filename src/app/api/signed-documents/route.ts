@@ -340,7 +340,7 @@ export async function POST(request: Request) {
       auth_method: authMethod,
       signature_url: signatureUrl,
       photo_evidence_url: photoEvidenceUrl,
-      ip_address: String(formData.get("ip_address") || "") || null,
+      ip_address: getClientIp(request),
       geo_location: geoLocation || null,
       user_agent: request.headers.get("user-agent"),
       metadata,

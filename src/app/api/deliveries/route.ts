@@ -4,6 +4,8 @@ import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
 import { assessFingerprintEvidence } from "@/lib/fingerprintSecurity"
+import { getClientIp } from "@/lib/getClientIp"
+import { isBiometricOperationAllowed } from "@/lib/signaturePolicy"
 
 function resolveCompanyId(
   authUser: { role: string; company_id: string | null },
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
     )) return NextResponse.json({ error: "Este identificador pertence a outro pedido ou a uma entrega estornada. Consulte o historico.", code: "DELIVERY_OPERATION_CONFLICT" }, { status: 409 })
 
     if (!existingDelivery) {
+      if (input.auth_method === "fingerprint" && !isBiometricOperationAllowed("verify")) return NextResponse.json({ error: "A modalidade digital USB foi retirada. Use assinatura manual ou foto + assinatura.", code: "BIOMETRIC_RETIRED" }, { status: 410 })
       // Existing RPC validates employee/PPE ownership, but these optional foreign
       // keys also need an explicit tenant boundary before a new delivery.
       const references = [["workplaces", input.workplace_id], ["third_parties", input.third_party_id]] as const
@@ -190,7 +193,7 @@ export async function POST(request: NextRequest) {
       p_quantity: input.quantity,
       p_signature_url: signaturePath,
       p_auth_method: input.auth_method || "manual",
-      p_ip_address: input.ip_address || "",
+      p_ip_address: getClientIp(request),
       p_delivery_date: input.delivery_date || new Date().toISOString(),
       p_idempotency_key: input.idempotency_key,
       p_created_by_id: auth.user.id,

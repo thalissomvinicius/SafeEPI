@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+// Retained historical fingerprint receipt/linking protocol, not new UI availability.
+vi.mock("@/lib/signaturePolicy", () => ({ isBiometricOperationAllowed: () => true }));
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), from: vi.fn(), rpc: vi.fn(), remove: vi.fn() }));
 vi.mock("@/lib/serverAuth", () => ({ requireAuthorizedUser: mocks.auth }));

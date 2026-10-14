@@ -5,11 +5,11 @@
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, ExternalLink, FileDown, ShieldAlert, Fingerprint, PenLine, ShieldCheck, UserCheck, Lock } from "lucide-react"
+import { Camera, ExternalLink, FileDown, ShieldAlert, PenLine, ShieldCheck, UserCheck, Lock } from "lucide-react"
 import { api } from "@/services/api"
 import { Delivery, Employee, PPE, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
-import { FacialDeliveryConfirmation, type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmation"
+import { type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmation"
 import { submitFacialDelivery } from "@/components/ui/submitFacialDelivery"
 import { FacialPreflightError } from "@/components/ui/facialClient"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
@@ -86,7 +86,7 @@ function RemoteDeliveryContent() {
   // -- Signing --
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
-  const [facialTransactionLocked, setFacialTransactionLocked] = useState(false)
+  const facialTransactionLocked = false
   const [isSaving, setIsSaving] = useState(false)
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null)
   const [lastPdfFileName, setLastPdfFileName] = useState<string | null>(null)
@@ -754,16 +754,13 @@ function RemoteDeliveryContent() {
           </div>
 
           {/* Auth method toggle */}
-          <fieldset disabled={isSaving || facialTransactionLocked} className="grid w-full min-w-0 max-w-full grid-cols-2 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+          <fieldset disabled={isSaving || facialTransactionLocked} className="grid w-full min-w-0 max-w-full grid-cols-2 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1">
             <legend className="sr-only">Forma de assinatura</legend>
             <button onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
               <PenLine className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Manual
             </button>
             <button onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
               <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Foto + Assin.
-            </button>
-            <button disabled={process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"} onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }} className={`col-span-2 sm:col-span-1 flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-xs font-semibold transition-colors sm:gap-2 sm:py-3 disabled:opacity-40 ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
-              <Fingerprint className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Biometria
             </button>
           </fieldset>
 
@@ -813,17 +810,7 @@ function RemoteDeliveryContent() {
               )}
             </div>
           ) : (
-            <div className="space-y-4 animate-in zoom-in-95">
-                <FacialDeliveryConfirmation
-                  employeeId={employee!.id}
-                  employeeLabel={employee!.full_name}
-                  token={linkToken}
-                  items={deliveryItems.length ? deliveryItems.map(item => ({name:item.ppeName,quantity:item.quantity,ca:item.ppeCaNumber})) : [{name:ppe?.name || "EPI",quantity:deliveryData?.q || 1,ca:ppe?.ca_number}]}
-                  onConfirm={(submission,image) => saveDelivery(image,submission)}
-                  onManual={() => setAuthMethod('manual')}
-                  onTransactionLocked={setFacialTransactionLocked}
-                />
-            </div>
+            <p role="alert">Modalidade retirada. Use assinatura manual ou foto + assinatura.</p>
           )}
         </div>
         

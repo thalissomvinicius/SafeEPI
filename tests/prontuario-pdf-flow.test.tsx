@@ -45,6 +45,16 @@ async function signAndGenerate() {
 }
 
 describe("prontuário pronto e arquivamento", () => {
+  it("gera via para coleta no papel sem exigir assinatura e sem arquivar como assinado", async () => {
+    render(<EmployeesPage />)
+    fireEvent.click((await screen.findAllByRole("button", { name: "Prontuário" }))[0])
+    fireEvent.click(await screen.findByRole("button", { name: /Ficha NR-06/i }))
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Assinar prontuario" })).getByRole("button", { name: /RESPONSÁVEL TESTE/i }))
+    fireEvent.click(await screen.findByRole("button", { name: "Imprimir para assinar no papel" }))
+    expect(await screen.findByRole("dialog", { name: "Ficha para assinatura no papel" })).toBeInTheDocument()
+    expect(mocks.generate).toHaveBeenCalledWith(expect.objectContaining({ forPaper: true, tstSigner: undefined }))
+    expect(mocks.archive).not.toHaveBeenCalled()
+  })
   it("oferece abrir ou baixar enquanto o arquivamento ainda está pendente, acima do perfil", async () => {
     mocks.archive.mockReturnValue(new Promise(() => {}))
     await signAndGenerate()

@@ -5,17 +5,16 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle, Search } from "lucide-react"
+import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle, Search } from "lucide-react"
 import { format, addDays } from "date-fns"
 import { api, type PendingDeliveryRemoteLink, type FingerprintEvidence } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { FaceCamera } from "@/components/ui/FaceCamera"
-import { FacialDeliveryConfirmation, type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmation"
+import { type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmation"
 import { submitFacialDelivery } from "@/components/ui/submitFacialDelivery"
 import { FacialPreflightError } from "@/components/ui/facialClient"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
-import { FingerprintCommandPanel } from "@/components/biometrics/FingerprintCommandPanel"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { DataLoadError } from "@/components/ui/DataLoadError"
 import type { BiometricReceiptMetadata } from "@/utils/pdfGenerator"
@@ -140,7 +139,7 @@ export default function DeliveryPage() {
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial' | 'fingerprint'>('manual')
   const [fingerprintEvidence, setFingerprintEvidence] = useState<FingerprintEvidence | null>(null)
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
-  const [facialTransactionLocked, setFacialTransactionLocked] = useState(false)
+  const facialTransactionLocked = false
   const companyId = user?.role === "MASTER" ? api.getMasterCompanyContext() || user.company_id : user?.company_id
   const operationStorageKey = user?.id && companyId ? deliveryOperationStorageKey(user.id, companyId) : null
   const persistOperation = useCallback((next: DeliveryOperation) => {
@@ -1880,18 +1879,8 @@ export default function DeliveryPage() {
                 >
                   <Camera className="w-4 h-4" /> Foto + Assinatura
                 </button>
-                <button 
-                  disabled={isSaving || facialTransactionLocked || !!operation || process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"}
-                  onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }}
-                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-xs font-semibold transition-all sm:text-xs ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <Fingerprint className="w-4 h-4" /> Biometria Facial
-                </button>
-                <button type="button" disabled={isSaving || facialTransactionLocked || !!operation} onClick={() => { setAuthMethod('fingerprint'); setFingerprintEvidence(null) }} className={`min-h-11 rounded-xl px-3 py-3 text-sm font-semibold ${authMethod === 'fingerprint' ? 'bg-white text-[var(--brand-color)] shadow-sm' : 'text-slate-600'}`}>
-                  <span className="flex items-center justify-center gap-2"><Fingerprint className="h-4 w-4" />Leitor de digital USB</span>
-                </button>
               </div>
-              {process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true" && <p className="text-xs text-slate-500">Reconhecimento facial em preparação. Use assinatura na tela, foto de apoio ou leitor USB configurado.</p>}
+              <p className="text-xs text-slate-500">A foto é evidência de apoio e não substitui a assinatura manual.</p>
               {locationStatus === "granted" && <p className="text-xs text-slate-500">{locationSource === "network" ? "Localização aproximada da rede (não GPS)" : "Localização informada pelo dispositivo"}</p>}
 
               {!operation && <details open={remoteOptionsOpen} onToggle={(event) => setRemoteOptionsOpen(event.currentTarget.open)} className="rounded-xl border border-slate-200 p-3 text-sm">
@@ -1950,24 +1939,8 @@ export default function DeliveryPage() {
                     </>
                   )}
                 </div>
-              ) : authMethod === 'fingerprint' ? (
-                <div className="space-y-4">
-                  {!operation && <FingerprintCommandPanel employeeId={selectedEmployeeId} employeeName={selectedEmployee?.full_name || "Colaborador"} operation="verify" onCompleted={setFingerprintEvidence} onReset={() => setFingerprintEvidence(null)} />}
-                  <button type="button" disabled={isSaving || (!operation?.fingerprintEventId && fingerprintEvidence?.status !== 'completed')} onClick={() => void saveDelivery(undefined, undefined, fingerprintEvidence || undefined)} className="min-h-12 w-full rounded-xl bg-[var(--brand-color)] px-4 py-3 font-semibold text-white disabled:opacity-50">{isSaving ? "Registrando entrega…" : operation ? "Retomar pedido com a digital registrada" : `Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 's' : ''})`}</button>
-                </div>
               ) : (
-                <div className="space-y-4 animate-in zoom-in-95">
-                      <FacialDeliveryConfirmation
-                        employeeId={selectedEmployeeId}
-                        employeeLabel={selectedEmployee?.full_name || "Colaborador selecionado"}
-                        context={{ employee_id: selectedEmployeeId, workplace_id: selectedWorkplaceId || null, third_party_id: selectedThirdPartyId, delivery_date: facialDeliveryDateIso, items: cart.map(item => ({ ppe_id: item.ppeId, quantity: item.quantity, reason: item.reason })) }}
-                        items={cart.map(item => ({name:item.ppeName,quantity:item.quantity,ca:item.ppeCaNumber}))}
-                        onConfirm={(submission,image) => saveDelivery(image,submission)}
-                        onManual={() => setAuthMethod('manual')}
-                        onTransactionLocked={setFacialTransactionLocked}
-                      />
-                      {cart.some(item => item.autoReturnAllocations?.length) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Na modalidade facial, devoluções anteriores devem ser registradas separadamente em Movimentações. Esta confirmação registra somente os EPIs recebidos agora.</p>}
-                </div>
+                <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Este pedido antigo usa uma modalidade biométrica retirada. Consulte os itens já registrados no histórico antes de criar uma nova entrega com assinatura manual.</p>
               )}
 
               <div className="pt-6 flex justify-center border-t border-slate-100">

@@ -602,6 +602,7 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
 }
 
 export interface NR06PDFData {
+  forPaper?: boolean
   employeeName: string
   employeeCpf: string
   employeeRole: string
@@ -648,7 +649,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
 
-  addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
+  addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", data.forPaper ? "VIA PARA COLETA NO PAPEL - sem assinatura eletrônica nesta via" : "Documento de Prontuário Individual do Colaborador")
 
   const paragraphLineHeight = 8.5 * 25.4 / 72 * 1.35
   doc.setFont("helvetica", "normal")
@@ -703,6 +704,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   }
 
   const itemsWithSigs = await mapConcurrent(data.items, 4, async (item) => {
+      if (data.forPaper) return { ...item, authMethod: "manual" as const, signatureBase64: undefined, photoBase64: undefined, signatureUrl: null, photoEvidenceUrl: null }
       let signatureBase64 = item.signatureBase64
       let photoBase64 = item.photoBase64
 
@@ -819,7 +821,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     theme: "striped",
     rowPageBreak: "avoid",
     didDrawPage: () => {
-      addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
+      addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", data.forPaper ? "VIA PARA COLETA NO PAPEL - sem assinatura eletrônica nesta via" : "Documento de Prontuário Individual do Colaborador")
     },
   })
 
@@ -827,7 +829,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   let finalY = doc.lastAutoTable?.finalY || 200
   finalY += 8
 
-  if (data.tstSigner) {
+  if (data.tstSigner && !data.forPaper) {
     const tst = data.tstSigner
     const blockWidth = pageWidth - 28
     const blockX = (pageWidth - blockWidth) / 2

@@ -240,3 +240,5 @@ describe("facial routes fail closed", () => {
     expect(db.infer).not.toHaveBeenCalled(); expect(db.upload).not.toHaveBeenCalled()
   })
 })
+// Historical protocol regression coverage; active retirement is tested separately.
+vi.mock("@/lib/facialFeature", () => ({ isFacialV2Enabled: () => process.env.FACIAL_V2_ENABLED === "true" }))

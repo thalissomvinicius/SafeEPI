@@ -181,7 +181,7 @@ export async function POST(request: Request) {
         p_delivery_ids: deliveryIds,
         p_signature_url: uploadedSignaturePath,
         p_auth_method: authMethod,
-        p_ip_address: fields.ip_address || getClientIp(request),
+        p_ip_address: getClientIp(request),
         p_workplace_id: workplaceId,
         p_third_party_id: safeThirdPartyId,
       })
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
       p_quantity: expectedItem.quantity,
       p_signature_url: uploadedSignaturePath,
       p_auth_method: authMethod,
-      p_ip_address: fields.ip_address || getClientIp(request),
+      p_ip_address: getClientIp(request),
       p_delivery_date: normalizeDeliveryDate(getString(linkData, "deliveryDate")),
       p_idempotency_key: `remote:${link.id}`,
       p_created_by_id: null,
