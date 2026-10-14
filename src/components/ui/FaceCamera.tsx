@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Camera, Loader2, SwitchCamera, X } from "lucide-react"
 import { api } from "@/services/api"
+import { useVisualViewport } from "@/hooks/useVisualViewport"
 import { cameraErrorMessage, normalizeFacialDecision, type FacialContext, type FacialEnrollment, type FacialProof } from "./facialClient"
 
 interface FaceCameraProps {
@@ -45,6 +46,7 @@ export function FaceCamera({ onCapture, employeeId, verifyEmployeeId, verifyToke
   const [portal, setPortal] = useState<HTMLElement | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
+  useVisualViewport(dialogRef, open)
   const streamRef = useRef<MediaStream | null>(null)
   const requestRef = useRef<AbortController | null>(null)
   const busyRef = useRef(false)
@@ -236,7 +238,7 @@ export function FaceCamera({ onCapture, employeeId, verifyEmployeeId, verifyToke
       <button type="button" disabled={mode !== "evidence" && !targetEmployee} onClick={openCamera} className="min-h-12 w-full rounded-xl bg-blue-700 px-4 py-3 font-bold text-white disabled:opacity-50">Abrir câmera em tela inteira</button>
       <button type="button" onClick={onCancel} className="mt-2 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-semibold text-slate-600">{cancelLabel}</button>
     </section>
-    {open && portal && createPortal(<div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={headingId} aria-describedby={descriptionId} className="fixed inset-0 z-[10000] flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-slate-950 text-white outline-none">
+    {open && portal && createPortal(<div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={headingId} aria-describedby={descriptionId} className="safeepi-viewport-overlay fixed inset-x-0 z-[10000] flex min-h-0 flex-col overflow-hidden bg-slate-950 text-white outline-none">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/15 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] [@media(max-height:499px)_and_(orientation:landscape)]:pb-2 [@media(max-height:499px)_and_(orientation:landscape)]:pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="min-w-0"><h2 id={headingId} className="text-base font-bold sm:text-xl">{title}</h2>{employeeLabel && <p className="truncate text-sm text-slate-300">{employeeLabel}</p>}</div>
         <button type="button" onClick={close} className="flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white/10" aria-label="Fechar câmera"><X aria-hidden="true" /></button>

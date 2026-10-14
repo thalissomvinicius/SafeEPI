@@ -7,6 +7,7 @@ import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
 import { remoteCaptureSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUploadBuffer } from "@/lib/validateUpload"
+import { isRemoteLinkExpired, RemoteLinkScopeError, validateRemoteLinkScope } from "@/lib/remoteLinkScope"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
@@ -76,16 +77,18 @@ async function loadValidLink(token: string, expectedEmployeeId: string, expected
   if (linkType !== expectedType) {
     return { ok: false as const, status: 403, error: "Tipo de link incompativel." }
   }
-  if (new Date(link.expires_at) < new Date()) {
+  if (isRemoteLinkExpired(link.expires_at)) {
     await supabaseAdmin.from("remote_links").update({ status: "expired" }).eq("id", link.id)
     return { ok: false as const, status: 410, error: "Este link expirou." }
   }
+  await validateRemoteLinkScope(link)
   if (link.status !== "pending") {
     if (expectedType === "capture" && link.status === "completed") {
       const { data: employee } = await supabaseAdmin
         .from("employees")
         .select("photo_url")
         .eq("id", expectedEmployeeId)
+        .eq("company_id", link.company_id)
         .maybeSingle()
 
       if (!employee?.photo_url) return { ok: true as const, link }
@@ -128,6 +131,7 @@ export async function GET(request: Request) {
       .from("employees")
       .select("id, full_name, photo_url")
       .eq("id", id)
+      .eq("company_id", validation.link.company_id)
       .maybeSingle()
 
     if (error || !employee) {
@@ -140,6 +144,7 @@ export async function GET(request: Request) {
       photo_url: await signStorageValue(employee.photo_url, { bucket: BIOMETRIC_BUCKET }),
     })
   } catch (error: unknown) {
+    if (error instanceof RemoteLinkScopeError) return NextResponse.json({ error: error.message }, { status: error.status })
     console.error("[/api/remote-capture][GET] error:", error)
     return NextResponse.json({ error: "Erro interno do servidor." }, { status: 500 })
   }
@@ -210,6 +215,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, employee: data })
   } catch (error: unknown) {
+    if (error instanceof RemoteLinkScopeError) return NextResponse.json({ error: error.message }, { status: error.status })
     if (error instanceof RequestTooLargeError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }

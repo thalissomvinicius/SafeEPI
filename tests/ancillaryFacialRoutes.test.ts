@@ -28,7 +28,7 @@ beforeEach(() => {
   mocks.from.mockImplementation(() => {
     const chain: Record<string, unknown> = {}
     const take = () => mocks.results.shift() || { data: null, error: null }
-    for (const method of ["select", "eq", "order"]) chain[method] = () => chain
+    for (const method of ["select", "eq", "gt", "order"]) chain[method] = () => chain
     for (const method of ["insert", "update"]) chain[method] = (payload: unknown) => { mocks.writes.push({ method, payload }); return chain }
     chain.maybeSingle = () => Promise.resolve(take())
     chain.then = (resolve: (value: unknown) => unknown) => Promise.resolve(take()).then(resolve)
@@ -62,7 +62,14 @@ describe("Treinamentos não aceitam foto isolada como assinatura facial", () => 
   })
 
   it("preserva assinatura manual remota", async () => {
-    mocks.results.push({ data: { id: "link-1", type: "training_signature", status: "pending", expires_at: new Date(Date.now() + 60000).toISOString(), data: {} }, error: null }, { data: { id: "link-1" }, error: null })
+    const companyId = "11111111-1111-4111-8111-111111111111"
+    const employeeId = "22222222-2222-4222-8222-222222222222"
+    mocks.results.push(
+      { data: { id: "link-1", company_id: companyId, employee_id: employeeId, type: "training_signature", status: "pending", expires_at: new Date(Date.now() + 60000).toISOString(), data: {} }, error: null },
+      { data: { id: companyId, active: true }, error: null },
+      { data: { id: employeeId, company_id: companyId, active: true }, error: null },
+      { data: { id: "link-1" }, error: null },
+    )
     expect((await remoteSignature(request({ token, signatureBase64: signature, authMethod: "manual" }))).status).toBe(200)
     expect(mocks.writes[0]).toMatchObject({ method: "update", payload: { status: "completed", data: { authMethod: "manual", signatureBase64: signature } } })
   })

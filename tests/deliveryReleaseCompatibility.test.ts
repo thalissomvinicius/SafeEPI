@@ -16,6 +16,10 @@ const batchId = "55555555-5555-4555-8555-555555555555";
 const deliveryId = "66666666-6666-4666-8666-666666666666";
 let command: Record<string, unknown>;
 let linkError: { code: string; message: string } | null;
+let existingDelivery: Record<string, unknown> | null;
+let existingLink: { command_id: string; batch_id: string } | null;
+let concurrentLink: boolean;
+let missingScope: string | null;
 
 function request(overrides: Record<string, unknown> = {}) {
   return new NextRequest("https://safeepi.example/api/deliveries", {
@@ -31,6 +35,10 @@ function fingerprintRequest(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   linkError = null;
+  existingDelivery = null;
+  existingLink = null;
+  concurrentLink = false;
+  missingScope = null;
   command = {
     id: commandId, employee_id: employeeId, matched_employee_id: employeeId,
     operation: "verify", status: "completed", completed_at: new Date(Date.now() - 30_000).toISOString(),
@@ -43,8 +51,8 @@ beforeEach(() => {
     const result: { data: unknown; error: unknown } = { data: [], error: null };
     const query: Record<string, unknown> = {};
     for (const method of ["select", "eq", "limit", "is", "update"]) query[method] = () => query;
-    query.insert = () => { result.error = linkError; return query; };
-    query.maybeSingle = async () => ({ data: table === "fingerprint_commands" ? command : null, error: null });
+    query.insert = () => { result.error = linkError; if (concurrentLink) existingLink = { command_id: commandId, batch_id: batchId }; return query; };
+    query.maybeSingle = async () => ({ data: table === "workplaces" || table === "third_parties" ? table === missingScope ? null : { id: "scoped" } : table === "fingerprint_commands" ? command : table === "deliveries" ? existingDelivery : existingLink, error: null });
     query.then = (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve);
     return query;
   });
@@ -53,7 +61,7 @@ beforeEach(() => {
 describe("delivery release preserves production capabilities without a v2 database migration", () => {
   it("continues creating manual deliveries through the existing atomic RPC", async () => {
     expect((await POST(request())).status).toBe(200);
-    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.from).toHaveBeenCalledWith("deliveries");
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith("safeepi_create_delivery", expect.objectContaining({ p_auth_method: "manual", p_company_id: companyId, p_employee_id: employeeId }));
   });
 
@@ -62,6 +70,20 @@ describe("delivery release preserves production capabilities without a v2 databa
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: "FACIAL_PROOF_REQUIRED" });
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(["workplaces", "third_parties"])("rejects a %s reference outside the current company before changing stock", async (table) => {
+    missingScope = table;
+    const payload = table === "workplaces" ? { workplace_id: batchId } : { third_party_id: batchId };
+    expect((await POST(request(payload))).status).toBe(404);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("accepts workplace and contractor references validated for the current company", async () => {
+    expect((await POST(request({ workplace_id: batchId, third_party_id: commandId }))).status).toBe(200);
+    expect(mocks.from).toHaveBeenCalledWith("workplaces");
+    expect(mocks.from).toHaveBeenCalledWith("third_parties");
+    expect(mocks.rpc).toHaveBeenCalledWith("safeepi_create_delivery", expect.objectContaining({ p_workplace_id: batchId, p_third_party_id: commandId }));
   });
 
   it("continues accepting valid fingerprint evidence and links it to the receipt", async () => {
@@ -77,9 +99,38 @@ describe("delivery release preserves production capabilities without a v2 databa
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
-  it("compensates the delivery when its fingerprint evidence cannot be linked", async () => {
+  it("preserves a committed delivery when evidence linking fails, so the same operation can repair it", async () => {
     linkError = { code: "23503", message: "synthetic link failure" };
-    expect((await POST(fingerprintRequest())).status).toBe(500);
-    expect(mocks.rpc).toHaveBeenNthCalledWith(2, "safeepi_void_delivery", expect.objectContaining({ p_delivery_id: deliveryId, p_company_id: companyId }));
+    const response = await POST(fingerprintRequest());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "DELIVERY_EVIDENCE_PENDING" });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("recognizes a concurrent successful fingerprint link without voiding the delivery", async () => {
+    linkError = { code: "23505", message: "unique delivery link" };
+    concurrentLink = true;
+    expect((await POST(fingerprintRequest())).status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an existing fingerprint delivery even after the original challenge expires", async () => {
+    existingDelivery = { id: deliveryId, employee_id: employeeId, ppe_id: ppeId, quantity: 1, reason: "Primeira Entrega", auth_method: "fingerprint" };
+    existingLink = { command_id: commandId, batch_id: batchId };
+    command.expires_at = "2001-01-01T00:00:00Z";
+    expect((await POST(fingerprintRequest())).status).toBe(200);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects reuse of an idempotency key with different items", async () => {
+    existingDelivery = { id: deliveryId, employee_id: employeeId, ppe_id: ppeId, quantity: 2, reason: "Primeira Entrega", auth_method: "manual" };
+    expect((await POST(request())).status).toBe(409);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("does not delete signature evidence when the database response is lost", async () => {
+    mocks.rpc.mockRejectedValueOnce(new Error("connection interrupted after commit"));
+    expect((await POST(request({ signature_url: `${companyId}/signature.png` }))).status).toBe(500);
+    expect(mocks.remove).not.toHaveBeenCalled();
   });
 });

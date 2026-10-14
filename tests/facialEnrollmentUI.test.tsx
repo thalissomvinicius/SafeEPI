@@ -92,7 +92,7 @@ describe("Revisão do cadastro facial na empresa", () => {
   it("exige salvar o colaborador antes de permitir a captura facial", async () => {
     render(<EmployeesPage />)
     await screen.findAllByText("ANA SILVA")
-    fireEvent.click(screen.getByRole("button", { name: "Novo" }))
+    fireEvent.click(screen.getByRole("button", { name: "Novo colaborador" }))
     expect(screen.getByText(/Salve primeiro o colaborador/i)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /cadastrar rosto presencialmente/i })).toBeDisabled()
   })

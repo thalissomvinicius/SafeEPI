@@ -7,6 +7,7 @@ import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUpload } from "@/lib/validateUpload"
 import { isValidGeoLocation } from "@/utils/geolocation"
 import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
+import { isRemoteLinkExpired, normalizeRemoteReason, RemoteLinkScopeError, validateRemoteLinkScope } from "@/lib/remoteLinkScope"
 
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -39,36 +40,11 @@ function getStringArray(data: LinkData, key: string): string[] {
     : []
 }
 
-function getDeliveryIds(data: LinkData): string[] {
-  return [...new Set([
-    ...getStringArray(data, "deliveryIds"),
-    ...getStringArray(data, "delivery_ids"),
-  ].filter(isValidUuid))]
-}
-
-function isSignatureOnly(data: LinkData): boolean {
-  return data?.signatureOnly === true || data?.signature_only === true
-}
-
-function normalizeReason(value: string) {
-  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-  if (normalized.includes("substituicao")) return "Substituição (Desgaste/Validade)"
-  if (normalized.includes("perda")) return "Perda"
-  if (normalized.includes("dano")) return "Dano"
-  return "Primeira Entrega"
-}
-
 function getAutoReturnMotive(reason: string): string | null {
   if (reason === "Primeira Entrega") return null
   if (reason === "Perda") return "Baixa automatica por perda/extravio"
   if (reason === "Dano") return "Baixa automatica por dano/quebra"
   return "Baixa automatica por substituicao"
-}
-
-function shouldRestock(motive: string | null): boolean {
-  if (!motive) return false
-  const normalized = motive.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-  return !["perda", "extravio", "dano", "quebra"].some((term) => normalized.includes(term))
 }
 
 function normalizeDeliveryDate(value: string | null): string {
@@ -79,9 +55,12 @@ function normalizeDeliveryDate(value: string | null): string {
 
 export async function POST(request: Request) {
   let uploadedSignaturePath: string | null = null
+  let deliveryMutationStarted = false
 
   const removeUploadedSignature = async () => {
-    if (!uploadedSignaturePath) return
+    // A timeout or gateway error does not prove that the database rolled back.
+    // Once dispatched, either RPC may have committed this signature reference.
+    if (!uploadedSignaturePath || deliveryMutationStarted) return
     await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([uploadedSignaturePath])
     uploadedSignaturePath = null
   }
@@ -111,8 +90,7 @@ export async function POST(request: Request) {
     const employeeId = fields.employee_id
     const ppeId = fields.ppe_id
     const token = fields.token
-    const reason = normalizeReason(fields.reason || "Primeira Entrega")
-    const workplaceId = fields.workplace_id && fields.workplace_id !== "null" ? fields.workplace_id : null
+    const submittedWorkplaceId = fields.workplace_id && fields.workplace_id !== "null" ? fields.workplace_id : null
     const geoLocation = String(formData.get("geo_location") || "").trim()
     const authMethod = fields.auth_method || "manual"
     const signatureFile = formData.get("signatureFile")
@@ -127,7 +105,7 @@ export async function POST(request: Request) {
     if (!isValidUuid(employeeId) || !isValidUuid(ppeId)) {
       return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 })
     }
-    if (workplaceId && !isValidUuid(workplaceId)) {
+    if (submittedWorkplaceId && !isValidUuid(submittedWorkplaceId)) {
       return NextResponse.json({ error: "Local de trabalho invalido." }, { status: 400 })
     }
     if (!isValidToken(token)) {
@@ -158,10 +136,25 @@ export async function POST(request: Request) {
     if (link.status !== "pending") {
       return NextResponse.json({ error: "Este link ja foi utilizado." }, { status: 410 })
     }
-    if (!link.expires_at || new Date(link.expires_at) <= new Date()) {
+    if (isRemoteLinkExpired(link.expires_at)) {
       await supabaseAdmin.from("remote_links").update({ status: "expired" }).eq("id", link.id).eq("status", "pending")
       return NextResponse.json({ error: "Este link expirou." }, { status: 410 })
     }
+
+    const scope = await validateRemoteLinkScope(link)
+    if (!scope.isDelivery) return NextResponse.json({ error: "Tipo de link incompatível com entrega de EPI." }, { status: 403 })
+    const expectedItem = scope.items[0]
+    const submittedThirdParty = fields.third_party_id && fields.third_party_id !== "null" ? fields.third_party_id : null
+    if (!expectedItem || ppeId !== expectedItem.ppeId || fields.quantity !== expectedItem.quantity ||
+      (fields.reason !== undefined && normalizeRemoteReason(fields.reason) !== expectedItem.reason) ||
+      (submittedWorkplaceId !== null && submittedWorkplaceId !== scope.workplaceId) ||
+      (submittedThirdParty !== null && submittedThirdParty !== scope.thirdPartyId)) {
+      return NextResponse.json({ error: "Os dados da confirmação diferem da entrega autorizada. Reabra o link e confira os itens." }, { status: 409 })
+    }
+    const reason = expectedItem.reason
+    const workplaceId = scope.workplaceId
+    const safeThirdPartyId = scope.thirdPartyId
+    const deliveryIds = scope.deliveryIds
 
     const validatedSignature = await validateUpload(signatureFile, "image")
     const signaturePrefix = authMethod === "facial" ? "bio" : "sig"
@@ -177,15 +170,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Falha ao salvar assinatura." }, { status: 500 })
     }
 
-    const linkData = asLinkData(link.data)
-    const thirdPartyIdFromForm = fields.third_party_id
-    const thirdPartyId = isValidUuid(thirdPartyIdFromForm)
-      ? thirdPartyIdFromForm
-      : getString(linkData, "thirdPartyId")
-    const safeThirdPartyId = isValidUuid(thirdPartyId) ? thirdPartyId : null
-    const deliveryIds = getDeliveryIds(linkData)
+    const linkData = asLinkData(scope.data)
 
-    if (isSignatureOnly(linkData) && deliveryIds.length > 0) {
+    if (scope.signatureOnly) {
+      deliveryMutationStarted = true
       const { data, error } = await supabaseAdmin.rpc("safeepi_complete_delivery_signature", {
         p_company_id: link.company_id,
         p_employee_id: employeeId,
@@ -216,6 +204,7 @@ export async function POST(request: Request) {
     }
 
     const autoReturnMotive = getAutoReturnMotive(reason)
+    deliveryMutationStarted = true
     const { data, error } = await supabaseAdmin.rpc("safeepi_create_delivery", {
       p_company_id: link.company_id,
       p_employee_id: employeeId,
@@ -223,7 +212,7 @@ export async function POST(request: Request) {
       p_workplace_id: workplaceId,
       p_third_party_id: safeThirdPartyId,
       p_reason: reason,
-      p_quantity: fields.quantity,
+      p_quantity: expectedItem.quantity,
       p_signature_url: uploadedSignaturePath,
       p_auth_method: authMethod,
       p_ip_address: fields.ip_address || getClientIp(request),
@@ -233,7 +222,8 @@ export async function POST(request: Request) {
       p_created_by_name: "Sistema (Entrega Remota)",
       p_remote_link_id: link.id,
       p_auto_return_motive: autoReturnMotive,
-      p_auto_return_restock: shouldRestock(autoReturnMotive),
+      // A replacement for wear, loss or damage is never reusable stock by default.
+      p_auto_return_restock: false,
     })
 
     if (error) {
@@ -256,6 +246,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     await removeUploadedSignature()
+    if (error instanceof RemoteLinkScopeError) return NextResponse.json({ error: error.message }, { status: error.status })
     if (error instanceof RequestTooLargeError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }

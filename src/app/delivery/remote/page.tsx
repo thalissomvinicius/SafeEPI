@@ -90,6 +90,9 @@ function RemoteDeliveryContent() {
   const [isSaving, setIsSaving] = useState(false)
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null)
   const [lastPdfFileName, setLastPdfFileName] = useState<string | null>(null)
+  const [completionMessage, setCompletionMessage] = useState("O recebimento deste link já foi confirmado. O gestor pode consultar o registro no sistema.")
+  const savingRef = useRef(false)
+  const deliveryConfirmedRef = useRef(false)
 
   // -- Metadata --
   const [ipAddress, setIpAddress] = useState("")
@@ -136,7 +139,7 @@ function RemoteDeliveryContent() {
 
   // -- Auto-scroll to top on phase/method change --
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'auto' })
   }, [phase, authMethod])
 
   useEffect(() => {
@@ -298,7 +301,7 @@ function RemoteDeliveryContent() {
             reason: decoded?.r || "Entrega Remota",
           }]
         )
-        setPhase('verify') // Go to identity verification
+        if (!disposed) setPhase('verify')
       } catch (err) {
         console.error("[remote] Erro inesperado ao processar o link:", err)
         const message = err instanceof Error ? err.message : "erro desconhecido"
@@ -320,7 +323,8 @@ function RemoteDeliveryContent() {
     setVerifyError("")
   }
 
-  // -- Identity verification --
+  // CPF is a data confirmation step. Possession of the link and the submitted
+  // signature are the evidence; this comparison is not independent identity proof.
   const handleVerify = () => {
     if (!employee) return
     
@@ -352,6 +356,7 @@ function RemoteDeliveryContent() {
 
   // -- Save delivery --
   const saveDelivery = useCallback(async (signatureDataUrl: string, facialSubmission?: FacialSubmission) => {
+    if (savingRef.current || deliveryConfirmedRef.current) return
     if (!employee || !ppe) return
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
       toast.error("Capture a foto de evidência antes de confirmar a assinatura manual.")
@@ -361,6 +366,8 @@ function RemoteDeliveryContent() {
     const locationEvidence = await requestLocationForSignature()
     if (!locationEvidence) { if (facialSubmission) throw new FacialPreflightError("Autorize a localização antes de confirmar o recebimento."); return }
     const requiredLocation = locationEvidence.value
+    if (savingRef.current || deliveryConfirmedRef.current) return
+    savingRef.current = true
     try {
       setIsSaving(true)
       const validationHash = generateAuditCode()
@@ -391,6 +398,10 @@ function RemoteDeliveryContent() {
           if (!apiRes.ok) throw new Error(result.error || "Erro ao salvar na nuvem")
           return result
         })()
+      // Document generation is a later step: never invite a second delivery if
+      // the operation succeeded but PDF creation or archiving subsequently fails.
+      deliveryConfirmedRef.current = true
+      setCompletionMessage("Recebimento confirmado. Preparando o comprovante.")
       const autoReturnedDeliveryIds = Array.isArray(responseData.autoReturnedDeliveryIds)
         ? responseData.autoReturnedDeliveryIds as string[]
         : deliveryData?.autoReturnedDeliveryIds || []
@@ -446,6 +457,7 @@ function RemoteDeliveryContent() {
       const safePpe = (ppe.name || "EPI").split(' ')[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       const fileName = `Comprovante_${shortId}_${safeName}_${safePpe}.pdf`
 
+      let archived = false
       try {
         await api.archiveSignedDocument({
           documentType: "remote_delivery",
@@ -479,6 +491,7 @@ function RemoteDeliveryContent() {
             autoReturnNote,
           },
         })
+        archived = true
       } catch (archiveError) {
         const message = archiveError instanceof Error ? archiveError.message : "Nao foi possivel arquivar o PDF assinado."
         const lowerMessage = message.toLowerCase()
@@ -505,6 +518,9 @@ function RemoteDeliveryContent() {
         return pdfUrl
       })
       setLastPdfFileName(fileName)
+      setCompletionMessage(archived
+        ? "O recebimento e o PDF foram registrados. Você pode visualizar ou baixar o comprovante."
+        : "O recebimento foi registrado. Baixe o comprovante e avise o gestor: o arquivamento do PDF ficou pendente.")
 
       toast.success(autoReturnedDeliveryIds.length > 0
         ? "Assinatura salva, baixa automatica feita e comprovante gerado!"
@@ -514,9 +530,14 @@ function RemoteDeliveryContent() {
     } catch (err: unknown) {
       console.error(err)
       const message = err instanceof Error ? err.message : "Erro desconhecido";
-      toast.error("Erro ao salvar assinatura: " + message)
+      if (deliveryConfirmedRef.current) {
+        setCompletionMessage("O recebimento foi registrado, mas não foi possível gerar o PDF nesta janela. Avise o gestor para emitir o comprovante pelo histórico. Não é necessário assinar novamente.")
+        setPhase('done')
+        toast.warning("Assinatura salva. A emissão do comprovante ficou pendente.")
+      } else toast.error("Erro ao salvar assinatura: " + message)
       if (facialSubmission) throw err
     } finally {
+      savingRef.current = false
       setIsSaving(false)
     }
   }, [employee, ppe, workplace, deliveryData, deliveryItems, authMethod, capturedPhotoBase64, ipAddress, linkToken, requestLocationForSignature])
@@ -549,13 +570,12 @@ function RemoteDeliveryContent() {
   // RENDER: Done
   // ---------------------------------------
   if (phase === 'done') return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] overflow-x-hidden bg-slate-50 p-6 text-center animate-in zoom-in">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] overflow-x-hidden bg-slate-50 px-4 py-8 text-center">
       <div className="bg-green-100 p-4 rounded-full mb-6 text-green-600">
         <ShieldCheck className="w-16 h-16" />
       </div>
       <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Assinatura Confirmada</h2>
-      <p className="text-slate-400 text-xs font-medium mb-2">Escolha se deseja visualizar o PDF em uma nova aba ou baixa-lo agora.</p>
-      <p className="text-slate-500 max-w-md italic text-sm">O comprovante foi registrado e está disponível para download.</p>
+      <p role="status" className="text-slate-600 max-w-md text-sm leading-relaxed">{completionMessage}</p>
       <div className="mt-8 flex flex-col gap-4 w-full max-w-xs">
         {lastPdfUrl && (
           <>
@@ -576,12 +596,12 @@ function RemoteDeliveryContent() {
   // RENDER: Identity Verification (CPF)
   // ---------------------------------------
   if (phase === 'verify') return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex flex-col items-center justify-center px-4 py-8 pb-[max(2rem,env(safe-area-inset-bottom))] sm:p-6">
       <div className="w-full max-w-md space-y-3 sm:space-y-6">
         <div className="text-center space-y-1.5">
-          <div className="inline-block bg-[#2563EB] text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">Verificação de Identidade</div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirme seus Dados</h1>
-          <p className="text-slate-500 text-xs sm:text-sm">Para sua segurança, informe seus dados pessoais antes de assinar.</p>
+          <div className="inline-block rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 mb-2">Recebimento de EPI</div>
+          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">Confira seus dados</h1>
+          <p className="text-slate-600 text-sm leading-relaxed">Informe o CPF do colaborador indicado para continuar a assinatura.</p>
         </div>
 
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl shadow-slate-200/50 border border-slate-200 space-y-4 sm:space-y-5">
@@ -610,7 +630,7 @@ function RemoteDeliveryContent() {
           <div className="hidden items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3 sm:flex">
             <Lock className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <p className="text-[10px] sm:text-[11px] text-blue-700 leading-tight">
-              Informe seu <strong>CPF</strong> para confirmar sua identidade e liberar a assinatura.
+              O <strong>CPF</strong> confere o cadastro vinculado ao link. A assinatura registra o aceite dos itens apresentados.
             </p>
           </div>
 
@@ -622,7 +642,7 @@ function RemoteDeliveryContent() {
 
           {/* CPF input */}
           <div className="space-y-1.5">
-            <label htmlFor="remote-cpf" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CPF</label>
+            <label htmlFor="remote-cpf" className="text-sm font-semibold text-slate-700">CPF</label>
             <input 
               id="remote-cpf"
               type="text"
@@ -630,10 +650,13 @@ function RemoteDeliveryContent() {
               placeholder="000.000.000-00"
               value={inputCpf}
               onChange={(e) => handleCpfChange(e.target.value)}
-              className="w-full bg-slate-50 border-2 border-slate-100 text-slate-900 rounded-xl p-3 sm:p-4 outline-none focus:border-[#2563EB] transition-all font-bold text-sm tracking-wider"
+              className="w-full min-h-12 bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-3 outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100 transition-colors text-base tabular-nums"
               maxLength={14}
               autoComplete="off"
-              autoFocus
+              enterKeyHint="next"
+              onKeyDown={(event) => { if (event.key === "Enter") handleVerify() }}
+              aria-invalid={Boolean(verifyError)}
+              aria-describedby={verifyError ? "remote-cpf-error" : undefined}
             />
           </div>
 
@@ -641,7 +664,7 @@ function RemoteDeliveryContent() {
           {verifyError && (
             <div className="bg-red-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 animate-in fade-in">
               <ShieldAlert className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-red-700 text-[11px] sm:text-xs font-bold">{verifyError}</p>
+              <p id="remote-cpf-error" role="alert" className="text-red-700 text-sm">{verifyError}</p>
             </div>
           )}
 
@@ -652,7 +675,7 @@ function RemoteDeliveryContent() {
             className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#501010] disabled:bg-slate-300 text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[11px] sm:text-xs transition-all shadow-lg flex items-center justify-center gap-2"
           >
             <UserCheck className="w-4 h-4" />
-            Verificar Identidade
+            Conferir dados e continuar
           </button>
         </div>
 
@@ -667,7 +690,7 @@ function RemoteDeliveryContent() {
   // RENDER: Signing Area (after CPF verified)
   // ---------------------------------------
   return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex flex-col items-center p-3 pt-4 sm:p-4 sm:pt-12">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex flex-col items-center px-3 pt-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-10">
       <div className="w-full min-w-0 max-w-lg space-y-3 sm:space-y-6">
         <div className="text-center space-y-1.5">
           <div className="inline-block rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 mb-2">Dados conferidos</div>
@@ -683,7 +706,7 @@ function RemoteDeliveryContent() {
                 <div className="min-w-0">
                   <p className="text-sm font-black uppercase tracking-wide text-amber-900">Localização obrigatória</p>
                   <p className="mt-1 text-sm font-medium leading-relaxed text-amber-800">
-                    {locationError || "Permita a localização para concluir a assinatura e validar o PDF."}
+                    {locationError || "Permita a localização para registrá-la junto à assinatura."}
                   </p>
                 </div>
               </div>
@@ -708,21 +731,21 @@ function RemoteDeliveryContent() {
         )}
 
         <div className="w-full min-w-0 max-w-full space-y-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/50 sm:space-y-6 sm:rounded-3xl sm:p-6">
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 sm:hidden">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 hidden">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recebimento</p>
             <p className="mt-1 text-sm font-black text-slate-900">
               {deliveryItems.length} item{deliveryItems.length !== 1 ? "s" : ""} para confirmar
             </p>
           </div>
 
-          <div className="hidden bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100 sm:block">
-            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Item(ns) a ser assinado(s):</p>
+          <div className="bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-100">
+            <p className="text-sm font-semibold text-slate-700 mb-3">Confira os itens recebidos</p>
             <div className="space-y-2">
-              {deliveryItems.map((item) => (
-                <div key={item.ppeId} className="rounded-xl border border-slate-100 bg-white px-3 py-2">
+              {deliveryItems.map((item, index) => (
+                <div key={`${item.ppeId}-${index}`} className="rounded-xl border border-slate-100 bg-white px-3 py-3">
                   <div className="flex justify-between gap-3">
-                    <span className="font-bold text-slate-800 text-sm">{item.ppeName}</span>
-                    <span className="bg-slate-200 text-slate-600 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded self-start">Qtd: {item.quantity}</span>
+                    <span className="min-w-0 break-words font-semibold text-slate-800 text-sm">{item.ppeName}</span>
+                    <span className="shrink-0 bg-slate-100 text-slate-700 text-xs font-semibold px-2 py-1 rounded self-start">Qtd: {item.quantity}</span>
                   </div>
                   <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">C.A.: {item.ppeCaNumber}</p>
                 </div>
@@ -731,14 +754,15 @@ function RemoteDeliveryContent() {
           </div>
 
           {/* Auth method toggle */}
-          <fieldset disabled={isSaving || facialTransactionLocked} className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+          <fieldset disabled={isSaving || facialTransactionLocked} className="grid w-full min-w-0 max-w-full grid-cols-2 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+            <legend className="sr-only">Forma de assinatura</legend>
             <button onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
               <PenLine className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Manual
             </button>
             <button onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
               <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Foto + Assin.
             </button>
-            <button disabled={process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"} onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 disabled:opacity-40 ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
+            <button disabled={process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"} onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }} className={`col-span-2 sm:col-span-1 flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-xs font-semibold transition-colors sm:gap-2 sm:py-3 disabled:opacity-40 ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
               <Fingerprint className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Biometria
             </button>
           </fieldset>

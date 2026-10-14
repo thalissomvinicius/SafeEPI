@@ -3,6 +3,8 @@ import { format } from "date-fns"
 import { COMPANY_CONFIG } from "@/config/company"
 import { DeliveryWithRelations, PPE } from "@/types/database"
 import { formatDateOnly, formatDeliveryDate } from "@/lib/dateOnly"
+import { movementEventDate, movementEventLabel, movementEventQuantity, MOVEMENT_HISTORY_NOTE, type MovementEvent } from "@/lib/movementEvents"
+import { LOW_STOCK_THRESHOLD } from "@/lib/stockPolicy"
 
 type ExcelValue = string | number | null
 type ExcelRow = Record<string, ExcelValue>
@@ -13,7 +15,7 @@ function addReportSheet(workbook: ExcelJS.Workbook, sheetName: string, title: st
 
   worksheet.addRow([`${COMPANY_CONFIG.name.toUpperCase()} - ${COMPANY_CONFIG.systemName.toUpperCase()}`])
   worksheet.addRow([`Relatorio: ${title}`])
-  worksheet.addRow([`Exportado em: ${format(new Date(), "dd/MM/yyyy HH:mm")} | Compliance NR-06`])
+  worksheet.addRow([`Exportado em: ${format(new Date(), "dd/MM/yyyy HH:mm")} | Relatório para conferência`])
   worksheet.addRow([])
   worksheet.addRow(headers)
 
@@ -131,6 +133,25 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
   void saveWorkbook(workbook, `Relatorio_EPIs_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
 }
 
+export function exportMovementEventsToExcel(events: MovementEvent[]) {
+  const workbook = new ExcelJS.Workbook()
+  const rows = events.map((event) => ({
+    "Data do evento": event.event_type === "return" ? new Date(movementEventDate(event)).toLocaleString("pt-BR") : formatDeliveryDate(movementEventDate(event)),
+    Evento: movementEventLabel(event),
+    Colaborador: event.employee?.full_name || "",
+    CPF: event.employee?.cpf || "",
+    EPI: event.ppe?.name || "",
+    CA: event.ppe?.ca_number || "",
+    Quantidade: movementEventQuantity(event),
+    "Interpretação da quantidade": event.event_type === "return" ? "Total acumulado devolvido; parcelas sem data no histórico legado" : "Unidades entregues no evento",
+    Unidade: event.workplace?.name || "Sede",
+    "ID da entrega": event.id,
+  }))
+  addReportSheet(workbook, "Movimentos", "Entregas e conclusões de devolução", rows)
+  addReportSheet(workbook, "Leitura do histórico", "Limitações dos registros legados", [{ Observação: MOVEMENT_HISTORY_NOTE }])
+  void saveWorkbook(workbook, `Movimentacoes_EPI_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
+}
+
 export function exportEmployeeToExcel(
   employeeName: string,
   deliveries: DeliveryWithRelations[]
@@ -167,7 +188,7 @@ export function exportInventoryStockToExcel(ppes: PPE[], filterLabel = "Estoque 
       "Validade C.A.": formatDateOnly(ppe.ca_expiry_date),
       Fabricante: ppe.manufacturer || "",
       Saldo: stock,
-      Status: stock <= 5 ? "Estoque baixo" : "OK",
+      Status: stock <= LOW_STOCK_THRESHOLD ? "Estoque baixo" : "OK",
       "Custo Unitario": currency.format(cost),
       "Valor em Estoque": currency.format(stock * cost),
     }
@@ -186,7 +207,7 @@ export function exportInventoryStockToExcel(ppes: PPE[], filterLabel = "Estoque 
     },
     {
       Indicador: "Itens com estoque baixo",
-      Valor: ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length,
+      Valor: ppes.filter((ppe) => Number(ppe.current_stock || 0) <= LOW_STOCK_THRESHOLD).length,
     },
     {
       Indicador: "Valor estimado",

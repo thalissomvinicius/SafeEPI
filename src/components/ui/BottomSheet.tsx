@@ -1,10 +1,11 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { ReactNode, useId } from "react"
+import { ReactNode, useId, useRef } from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useDialogAccessibility } from "@/hooks/useDialogAccessibility"
+import { useVisualViewport } from "@/hooks/useVisualViewport"
 
 type BottomSheetProps = {
   open: boolean
@@ -30,6 +31,8 @@ export function BottomSheet({
   desktop = "dialog",
 }: BottomSheetProps) {
   const dialogRef = useDialogAccessibility<HTMLElement>(open, onClose)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  useVisualViewport(overlayRef, open)
   const titleId = useId()
   const descriptionId = useId()
 
@@ -45,7 +48,8 @@ export function BottomSheet({
 
   return (
     <div
-      className={cn("fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-sm animate-in fade-in duration-200", desktopLayout)}
+      ref={overlayRef}
+      className={cn("safeepi-viewport-overlay fixed inset-x-0 z-[90] flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-sm", desktopLayout)}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -59,7 +63,7 @@ export function BottomSheet({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "safeepi-panel-enter flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_24px_80px_rgb(15_23_42/18%)]",
+          "safeepi-panel-enter safeepi-sheet-panel flex w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_24px_80px_rgb(15_23_42/18%)]",
           desktopPanel,
           className,
         )}
@@ -81,7 +85,7 @@ export function BottomSheet({
             </button>
           </header>
         )}
-        <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 pt-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:p-6", contentClassName)}>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:p-6", contentClassName)}>
           {children}
         </div>
       </section>

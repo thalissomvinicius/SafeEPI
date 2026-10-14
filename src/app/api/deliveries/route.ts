@@ -3,7 +3,6 @@ import { z } from "zod"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
-import { PRIVATE_STORAGE_BUCKET } from "@/lib/privateStorage"
 import { assessFingerprintEvidence } from "@/lib/fingerprintSecurity"
 
 function resolveCompanyId(
@@ -55,13 +54,6 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "ALMOXARIFE"])
   if (!auth.authorized) return auth.response
 
-  let signaturePath: string | null = null
-  const cleanupSignature = async () => {
-    if (!signaturePath) return
-    await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([signaturePath])
-    signaturePath = null
-  }
-
   try {
     const parsed = createDeliverySchema.safeParse(await readJsonWithLimit(request, 32 * 1024))
     if (!parsed.success) {
@@ -80,9 +72,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
     }
 
-    signaturePath = input.signature_url || null
+    const signaturePath = input.signature_url || null
     if (signaturePath && !signaturePath.startsWith(`${companyId}/`)) {
       return NextResponse.json({ error: "Assinatura nao pertence a empresa atual." }, { status: 403 })
+    }
+
+    // Read before validating expiring evidence: a confirmed operation must remain
+    // retrievable with its original key even after the scanner challenge expires.
+    const { data: existingDelivery, error: existingError } = await supabaseAdmin
+      .from("deliveries").select("*")
+      .eq("company_id", companyId).eq("idempotency_key", input.idempotency_key).maybeSingle()
+    if (existingError) return NextResponse.json({ error: "Nao foi possivel consultar a tentativa anterior. Tente novamente com o mesmo pedido." }, { status: 503 })
+    if (existingDelivery && (
+      existingDelivery.employee_id !== input.employee_id || existingDelivery.ppe_id !== input.ppe_id ||
+      existingDelivery.quantity !== input.quantity || existingDelivery.reason !== input.reason ||
+      (existingDelivery.workplace_id || null) !== (input.workplace_id || null) ||
+      (existingDelivery.third_party_id || null) !== (input.third_party_id || null) ||
+      existingDelivery.auth_method !== (input.auth_method || "manual") || existingDelivery.deleted_at
+    )) return NextResponse.json({ error: "Este identificador pertence a outro pedido ou a uma entrega estornada. Consulte o historico.", code: "DELIVERY_OPERATION_CONFLICT" }, { status: 409 })
+
+    if (!existingDelivery) {
+      // Existing RPC validates employee/PPE ownership, but these optional foreign
+      // keys also need an explicit tenant boundary before a new delivery.
+      const references = [["workplaces", input.workplace_id], ["third_parties", input.third_party_id]] as const
+      const checks = await Promise.all(references.map(async ([table, id]) => {
+        if (!id) return null
+        return supabaseAdmin.from(table).select("id").eq("id", id).eq("company_id", companyId).maybeSingle()
+      }))
+      if (checks.some(check => check?.error)) {
+        return NextResponse.json({ error: "Nao foi possivel conferir a obra ou o terceiro. Retome este mesmo pedido." }, { status: 503 })
+      }
+      if (checks.some(check => check && !check.data)) {
+        return NextResponse.json({ error: "Obra ou terceiro nao encontrado na empresa atual." }, { status: 404 })
+      }
     }
 
     let fingerprintCommand: DeliveryFingerprintCommand | null = null
@@ -112,7 +134,8 @@ export async function POST(request: NextRequest) {
         completedAt: command.completed_at,
         expiresAt: command.expires_at,
       }, { expectedEmployeeId: input.employee_id })
-      if (!assessment.valid || !command.result_hash) {
+      const resumedSameBatch = existingDelivery && command.delivery_batch_id === input.fingerprint_batch_id
+      if ((!assessment.valid && !(assessment.reason === "expired" && resumedSameBatch)) || !command.result_hash) {
         return NextResponse.json({ error: "Leitura biometrica expirada ou invalida. Faça uma nova leitura." }, { status: 409 })
       }
 
@@ -157,7 +180,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Evidencia biometrica nao corresponde ao metodo informado." }, { status: 400 })
     }
 
-    const { data, error } = await supabaseAdmin.rpc("safeepi_create_delivery", {
+    const { data, error } = existingDelivery ? { data: { delivery: existingDelivery }, error: null } : await supabaseAdmin.rpc("safeepi_create_delivery", {
       p_company_id: companyId,
       p_employee_id: input.employee_id,
       p_ppe_id: input.ppe_id,
@@ -178,7 +201,6 @@ export async function POST(request: NextRequest) {
     })
 
     if (error) {
-      await cleanupSignature()
       const status = error.message.includes("insufficient_stock") ? 409 : error.message.includes("not_found") ? 404 : 500
       return NextResponse.json({
         error: status === 409 ? "Estoque insuficiente para concluir a entrega." :
@@ -193,28 +215,33 @@ export async function POST(request: NextRequest) {
       if (!delivery?.id || !z.string().uuid().safeParse(delivery.id).success) {
         return NextResponse.json({ error: "Entrega criada sem identificador auditavel." }, { status: 500 })
       }
-      const { error: linkError } = await supabaseAdmin.from("fingerprint_delivery_links").insert({
+      const readLink = () => supabaseAdmin.from("fingerprint_delivery_links")
+        .select("command_id,batch_id").eq("company_id", companyId).eq("delivery_id", delivery.id).maybeSingle()
+      const matchesLink = (link: { command_id: string; batch_id: string } | null) =>
+        link?.command_id === fingerprintCommand!.id && link.batch_id === input.fingerprint_batch_id
+      const priorLink = await readLink()
+      if (priorLink.error) return NextResponse.json({ error: "Entrega registrada; nao foi possivel conferir o vinculo da digital. Retome este mesmo pedido.", code: "DELIVERY_EVIDENCE_PENDING" }, { status: 503 })
+      if (priorLink.data && !matchesLink(priorLink.data)) return NextResponse.json({ error: "Entrega ja vinculada a outra evidencia. Consulte o historico.", code: "DELIVERY_EVIDENCE_CONFLICT" }, { status: 409 })
+      const { error: linkError } = priorLink.data ? { error: null } : await supabaseAdmin.from("fingerprint_delivery_links").insert({
         company_id: companyId,
         command_id: fingerprintCommand.id,
         delivery_id: delivery.id,
         batch_id: input.fingerprint_batch_id,
       })
       if (linkError) {
-        const { error: voidError } = await supabaseAdmin.rpc("safeepi_void_delivery", {
-          p_company_id: companyId,
-          p_delivery_id: delivery.id,
-          p_deleted_by: auth.user.id,
-          p_deleted_reason: "Falha no vinculo da evidencia biometrica",
-        })
-        if (voidError) console.error("[API deliveries] biometric compensation failed", voidError.message)
-        return NextResponse.json({ error: "Nao foi possivel vincular a leitura. A entrega foi estornada." }, { status: 500 })
+        // A concurrent retry may already have inserted the same link. Never void
+        // an existing delivery: the current RPC does not report who created it.
+        const concurrentLink = await readLink()
+        if (concurrentLink.error || !matchesLink(concurrentLink.data)) {
+          return NextResponse.json({ error: "Entrega registrada, mas o vinculo da digital ainda precisa ser confirmado. Retome este mesmo pedido; o estoque nao sera baixado novamente.", code: "DELIVERY_EVIDENCE_PENDING" }, { status: 503 })
+        }
       }
     }
 
-    signaturePath = null
     return NextResponse.json({ data: result?.delivery || null })
   } catch (error) {
-    await cleanupSignature()
+    // A network error can happen after commit. Deleting the uploaded signature
+    // here could destroy evidence referenced by a successfully saved delivery.
     if (error instanceof RequestTooLargeError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }

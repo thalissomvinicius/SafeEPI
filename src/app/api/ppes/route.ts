@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { ppeCatalogUpdateSchema } from "@/lib/ppeCatalogSchema"
+import { z } from "zod"
 
 function resolveCompanyId(authUser: { role: string; company_id: string | null }, requestedCompanyId: unknown) {
   if (authUser.role === "MASTER") return typeof requestedCompanyId === "string" && requestedCompanyId ? requestedCompanyId : null
@@ -45,7 +47,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
+  const auth = await requireAuthorizedUser(request, ["MASTER", "ADMIN", "ALMOXARIFE"])
   if (!auth.authorized) {
     return auth.response
   }
@@ -56,7 +58,7 @@ export async function PUT(request: NextRequest) {
     const companyId = resolveCompanyId(auth.user, body.company_id)
     const rawUpdates = body.updates && typeof body.updates === "object" ? body.updates : {}
 
-    if (!id) {
+    if (!z.uuid().safeParse(id).success) {
       return NextResponse.json({ error: "ID do EPI/CA e obrigatorio." }, { status: 400 })
     }
 
@@ -64,22 +66,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
     }
 
-    const allowedFields = [
-      "name",
-      "manufacturer",
-      "ca_number",
-      "ca_expiry_date",
-      "lifespan_days",
-      "cost",
-      "active",
-      "current_stock",
-    ]
-    const updates = Object.fromEntries(
-      Object.entries(rawUpdates).filter(([key]) => allowedFields.includes(key)),
-    )
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "Nenhum campo valido para atualizar." }, { status: 400 })
+    if (Object.hasOwn(rawUpdates, "current_stock")) {
+      return NextResponse.json({ error: "Ajuste o saldo pela movimentação de estoque, informando o motivo." }, { status: 400 })
+    }
+    const parsedUpdates = ppeCatalogUpdateSchema.safeParse(rawUpdates)
+    if (!parsedUpdates.success) {
+      return NextResponse.json({ error: "Dados do EPI inválidos. Confira os campos informados." }, { status: 400 })
+    }
+    const updates = parsedUpdates.data
+    if (updates.active !== undefined && auth.user.role !== "MASTER") {
+      return NextResponse.json({ error: "Somente o administrador da plataforma pode ativar ou desativar EPIs." }, { status: 403 })
     }
 
     const { data, error } = await supabaseAdmin

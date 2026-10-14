@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { getClientIp } from "@/lib/getClientIp"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
+import { isRemoteLinkExpired, RemoteLinkScopeError, validateRemoteLinkScope } from "@/lib/remoteLinkScope"
 
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
 
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     const { data: link, error: linkError } = await supabaseAdmin
       .from("remote_links")
-      .select("id, status, expires_at, type, data")
+      .select("id, company_id, employee_id, status, expires_at, type, data")
       .eq("token", token)
       .maybeSingle()
 
@@ -71,13 +72,14 @@ export async function POST(request: NextRequest) {
     const linkLimited = await rateLimit(`remote-training-signature:link:${link.id}`, 5, 60 * 60 * 1000)
     if (!linkLimited.success) return rateLimitExceededResponse(linkLimited.retryAfter)
 
-    if (new Date(link.expires_at) < new Date()) {
+    if (isRemoteLinkExpired(link.expires_at)) {
       await supabaseAdmin.from("remote_links").update({ status: "expired" }).eq("id", link.id)
       return NextResponse.json(
         { error: "Este link expirou.", status: "expired" },
         { status: 410 },
       )
     }
+    await validateRemoteLinkScope(link)
 
     if (link.status !== "pending") {
       return NextResponse.json(
@@ -104,6 +106,7 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", link.id)
       .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
       .select("id")
       .maybeSingle()
 
@@ -113,6 +116,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
+    if (err instanceof RemoteLinkScopeError) return NextResponse.json({ error: err.message }, { status: err.status })
     if (err instanceof RequestTooLargeError) {
       return NextResponse.json({ error: err.message }, { status: err.status })
     }

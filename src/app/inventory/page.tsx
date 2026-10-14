@@ -16,6 +16,7 @@ import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { generateInventoryStockReportPDF } from "@/utils/pdfGenerator"
 import { exportInventoryStockToExcel } from "@/utils/excelExporter"
 import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
+import { LOW_STOCK_THRESHOLD, isValidStockQuantity } from "@/lib/stockPolicy"
 
 export default function InventoryPage() {
   const { user } = useAuth()
@@ -28,6 +29,9 @@ export default function InventoryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [hasMoreMovements, setHasMoreMovements] = useState(false)
+  const [movementTotal, setMovementTotal] = useState<number | null>(null)
+  const [loadingMoreMovements, setLoadingMoreMovements] = useState(false)
 
   // Form State
   const [formData, setFormData] = useState({
@@ -43,10 +47,12 @@ export default function InventoryPage() {
       // Removed synchronous setLoading(true)
       const [ppeData, moveData] = await Promise.all([
         api.getPpes(),
-        api.getStockMovements()
+        api.getStockMovementsPage({ limit: 100, offset: 0 })
       ])
       setPpes(ppeData)
-      setMovements(moveData)
+      setMovements(moveData.movements)
+      setHasMoreMovements(moveData.hasMore)
+      setMovementTotal(moveData.total ?? null)
       if (ppeData.length > 0) setFormData(prev => ({ ...prev, ppe_id: ppeData[0].id }))
     } catch (error) {
       console.error("Erro ao carregar estoque:", error)
@@ -54,6 +60,18 @@ export default function InventoryPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadMoreMovements = async () => {
+    try {
+      setLoadingMoreMovements(true)
+      const page = await api.getStockMovementsPage({ limit: 100, offset: movements.length })
+      setMovements((current) => Array.from(new Map([...current, ...page.movements].map((movement) => [movement.id, movement])).values()))
+      setHasMoreMovements(page.hasMore)
+      setMovementTotal(page.total ?? null)
+    } catch {
+      toast.error("Não foi possível carregar a próxima página. O histórico anterior foi mantido.")
+    } finally { setLoadingMoreMovements(false) }
   }
 
   useEffect(() => {
@@ -65,8 +83,8 @@ export default function InventoryPage() {
 
   const handleAddMovement = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.ppe_id || formData.quantity <= 0) {
-      toast.error("Informe um EPI e uma quantidade válida para ajustar o estoque.")
+    if (!formData.ppe_id || !isValidStockQuantity(formData.type, formData.quantity)) {
+      toast.error("Informe uma quantidade inteira. Saldo zero é permitido somente para ajuste de inventário.")
       return
     }
 
@@ -110,7 +128,7 @@ export default function InventoryPage() {
 
   const getStockBadge = (stock: number) => {
     if (stock <= 0) return { label: "Zerado", variant: "border-red-200 bg-red-50 text-red-700" }
-    if (stock <= 10) return { label: `${stock} baixo`, variant: "border-amber-200 bg-amber-50 text-amber-700" }
+    if (stock <= LOW_STOCK_THRESHOLD) return { label: `${stock} baixo`, variant: "border-amber-200 bg-amber-50 text-amber-700" }
     return { label: `${stock} ok`, variant: "border-green-200 bg-green-50 text-green-700" }
   }
 
@@ -162,20 +180,20 @@ export default function InventoryPage() {
       <div className={`p-2 rounded-xl shrink-0 ${movement.type === 'ENTRADA' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-blue-300'}`}>
         {movement.type === 'ENTRADA' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
       </div>
-      <div className="flex-1 space-y-1">
+      <div className="min-w-0 flex-1 space-y-1">
         <div className="flex justify-between items-start gap-3">
-          <p className="text-[11px] font-black text-white uppercase tracking-tighter truncate max-w-[150px]">{movement.ppe?.name}</p>
+          <p className="text-sm font-semibold text-white break-words">{movement.ppe?.name || "EPI removido"}{movement.ppe?.active === false ? " · Inativo" : ""}</p>
           <span className={`text-xs font-black italic ${movement.type === 'ENTRADA' ? 'text-green-400' : 'text-blue-300'}`}>
-            {movement.type === 'ENTRADA' ? '+' : '-'}{Math.abs(movement.quantity)}
+            {movement.type === 'AJUSTE' ? '= ' : movement.type === 'ENTRADA' ? '+' : '-'}{Math.abs(movement.quantity)}
           </span>
         </div>
-        <p className="text-[10px] text-slate-500 italic leading-tight">{movement.motive}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">
+        <p className="text-xs text-slate-300 leading-5">{movement.motive}</p>
+        <div className="flex flex-wrap items-center gap-2 mt-1">
+          <p className="text-xs text-slate-400">
             {format(new Date(movement.created_at || ""), "dd/MM/yyyy • HH:mm", { locale: ptBR })}
           </p>
           {movement.created_by_name && (
-            <span className="text-[8px] text-slate-500 italic">· {movement.created_by_name}</span>
+            <span className="text-xs text-slate-400">· {movement.created_by_name}</span>
           )}
         </div>
       </div>
@@ -188,20 +206,20 @@ export default function InventoryPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-             <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Almoxarifado SafeEPI</span>
+             <span className="text-xs font-semibold text-slate-500">Almoxarifado</span>
           </div>
-          <h1 className="text-3xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center">
             <Package className="w-8 h-8 mr-3 text-[#2563EB]" />
             Controle de Estoque
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium italic">Gestão de saldo físico e auditoria de entradas e saídas de EPIs.</p>
+          <p className="text-slate-500 text-sm mt-2 leading-6">Saldo disponível e histórico de entradas, saídas e ajustes.</p>
         </div>
-        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
           <button
             type="button"
             onClick={handleExportInventoryExcel}
             disabled={loading || filteredPpes.length === 0}
-            className="w-full sm:w-auto border border-slate-200 bg-white px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 rounded-xl flex items-center justify-center gap-2"
+            className="min-h-11 w-full sm:w-auto border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 rounded-xl flex items-center justify-center gap-2"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             Excel
@@ -210,7 +228,7 @@ export default function InventoryPage() {
             type="button"
             onClick={handleExportInventoryPDF}
             disabled={loading || filteredPpes.length === 0}
-            className="w-full sm:w-auto border border-red-200 bg-red-50 px-5 py-4 text-xs font-black uppercase tracking-widest text-[#2563EB] shadow-sm transition-all hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 rounded-xl flex items-center justify-center gap-2"
+            className="min-h-11 w-full sm:w-auto border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 rounded-xl flex items-center justify-center gap-2"
           >
             <FileDown className="w-4 h-4" />
             PDF
@@ -218,10 +236,10 @@ export default function InventoryPage() {
           <button
             onClick={() => setIsModalOpen(true)}
             title="Abrir formulário de entrada de estoque"
-            className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center shadow-lg shadow-blue-900/15"
+            className="col-span-2 min-h-11 w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center"
           >
             <Plus className="w-4 h-4 mr-2" />
-            Registrar Entrada
+            Movimentar estoque
           </button>
         </div>
       </div>
@@ -311,15 +329,15 @@ export default function InventoryPage() {
                                     </td>
                                     <td className="hidden md:table-cell px-4 md:px-6 py-5 text-slate-400 font-medium italic text-xs">Unidade (Und)</td>
                                     <td className="px-4 md:px-6 py-5 text-center">
-                                        <span className={`text-lg sm:text-xl font-black tracking-tighter ${ppe.current_stock > 10 ? 'text-slate-800' : 'text-[#2563EB]'}`}>
+                                        <span className={`text-lg sm:text-xl font-semibold tabular-nums ${ppe.current_stock > LOW_STOCK_THRESHOLD ? 'text-slate-800' : 'text-amber-700'}`}>
                                             {ppe.current_stock}
                                         </span>
                                     </td>
                                     <td className="px-4 md:px-6 py-5 text-center">
-                                        {ppe.current_stock <= 10 ? (
-                                            <span className="px-1.5 sm:px-2 py-1 bg-blue-50 text-[#2563EB] text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-blue-100 block sm:inline-block">Estoque<br className="sm:hidden"/> Baixo</span>
+                                        {ppe.current_stock <= LOW_STOCK_THRESHOLD ? (
+                                            <span className="px-2 py-1 bg-amber-50 text-amber-800 text-xs font-semibold rounded border border-amber-100">Estoque baixo</span>
                                         ) : (
-                                            <span className="px-1.5 sm:px-2 py-1 bg-green-50 text-green-700 text-[7px] sm:text-[8px] font-black rounded uppercase tracking-widest border border-green-100 block sm:inline-block">Ok</span>
+                                            <span className="px-2 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded border border-green-100">OK</span>
                                         )}
                                     </td>
                                 </tr>
@@ -370,14 +388,14 @@ export default function InventoryPage() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Auditoria de Estoque</p>
                 <h2 className="mt-1 text-xl font-black text-white uppercase tracking-tighter">Histórico completo</h2>
                 <p className="mt-1 text-xs text-slate-500 font-bold">
-                  {movements.length} movimentação(ões) de EPIs ativos.
+                  {movements.length}{movementTotal !== null ? ` de ${movementTotal}` : ""} registros carregados, incluindo EPIs inativos.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsHistoryModalOpen(false)}
                 aria-label="Fechar histórico completo"
-                className="p-2 rounded-xl border border-slate-800 text-slate-500 hover:text-white hover:border-slate-600 transition-all"
+                className="min-h-11 min-w-11 p-2 rounded-xl border border-slate-800 text-slate-300 hover:text-white hover:border-slate-600 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -389,6 +407,7 @@ export default function InventoryPage() {
                 {movements.length === 0 && (
                   <p className="text-slate-600 text-xs text-center py-20 italic">Sem histórico registrado.</p>
                 )}
+                {hasMoreMovements && <button type="button" onClick={() => void loadMoreMovements()} disabled={loadingMoreMovements} className="min-h-11 w-full rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">{loadingMoreMovements ? "Carregando…" : "Carregar mais 100 movimentos"}</button>}
               </div>
             </div>
           </div>
@@ -398,7 +417,7 @@ export default function InventoryPage() {
       {/* Modal Adicionar Movimento */}
       {isModalOpen && (
         <AccessibleOverlay label="Ajuste de saldo" onClose={() => setIsModalOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto border border-slate-200">
             <div className="p-5 sm:p-8 border-b border-slate-100 flex justify-between items-center">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-2xl">Ajuste de Saldo</h2>
@@ -408,7 +427,7 @@ export default function InventoryPage() {
                 onClick={() => setIsModalOpen(false)} 
                 title="Fechar modal"
                 aria-label="Fechar modal de ajuste de saldo"
-                className="text-slate-300 hover:text-slate-600 p-2"
+                className="min-h-11 min-w-11 text-slate-500 hover:text-slate-700 p-2"
               >
                 <Plus className="w-6 h-6 rotate-45" />
               </button>
@@ -430,7 +449,7 @@ export default function InventoryPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div className="space-y-2">
                     <label htmlFor="type_select" className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tipo</label>
                     <select 
@@ -451,9 +470,11 @@ export default function InventoryPage() {
                         id="quantity_input"
                         title="Informar quantidade"
                         type="number" 
+                        min={formData.type === "AJUSTE" ? 0 : 1}
+                        step={1}
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:border-[#2563EB] focus:bg-white transition-all font-bold text-center"
                         value={formData.quantity}
-                        onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
+                        onChange={(e) => setFormData({...formData, quantity: Number(e.target.value)})}
                     />
                  </div>
               </div>

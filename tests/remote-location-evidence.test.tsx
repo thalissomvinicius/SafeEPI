@@ -41,7 +41,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 async function openSigning() {
   render(<RemoteDeliveryPage />)
   fireEvent.change(await screen.findByLabelText("CPF"), { target: { value: "00000000000" } })
-  fireEvent.click(screen.getByRole("button", { name: "Verificar Identidade" }))
+  fireEvent.click(screen.getByRole("button", { name: "Conferir dados e continuar" }))
 }
 
 describe("remote location evidence", () => {
@@ -62,5 +62,25 @@ describe("remote location evidence", () => {
     await openSigning()
     expect(await screen.findByRole("status")).toHaveTextContent("precisão informada: 18 m")
     expect(screen.queryByText(/Não representa a posição GPS/)).not.toBeInTheDocument()
+  })
+
+  it("não oferece nova entrega quando o PDF falha depois da assinatura gravada", async () => {
+    mocks.geolocation.mockResolvedValue({ ok: true, value: "-23.5505, -46.6333", source: "network" })
+    mocks.pdf.mockRejectedValue(new Error("Falha sintética no PDF"))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    await openSigning()
+    fireEvent.click(await screen.findByRole("button", { name: "Assinar e confirmar" }))
+    expect(await screen.findByText(/Não é necessário assinar novamente/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Assinar e confirmar" })).not.toBeInTheDocument()
+    expect(mocks.fetch.mock.calls.filter(([url]) => url === "/api/remote-delivery")).toHaveLength(1)
+  })
+
+  it("distingue assinatura salva e PDF não arquivado no resultado", async () => {
+    mocks.geolocation.mockResolvedValue({ ok: true, value: "-23.5505, -46.6333", source: "network" })
+    mocks.archive.mockRejectedValue(new Error("Arquivo pendente"))
+    await openSigning()
+    fireEvent.click(await screen.findByRole("button", { name: "Assinar e confirmar" }))
+    expect(await screen.findByText(/o arquivamento do PDF ficou pendente/)).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Baixar PDF" })).toBeInTheDocument()
   })
 })

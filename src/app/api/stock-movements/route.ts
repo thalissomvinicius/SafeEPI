@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { isValidStockQuantity } from "@/lib/stockPolicy"
 
 type MovementType = "ENTRADA" | "SAIDA" | "AJUSTE"
 
@@ -23,6 +24,11 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const companyId = resolveCompanyId(auth.user, searchParams.get("company_id"))
+    const limit = Number(searchParams.get("limit") ?? 100)
+    const offset = Number(searchParams.get("offset") ?? 0)
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500 || !Number.isInteger(offset) || offset < 0) {
+      return NextResponse.json({ error: "Paginação de estoque inválida." }, { status: 400 })
+    }
 
     if (auth.user.role !== "MASTER" && !companyId) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
@@ -30,21 +36,22 @@ export async function GET(request: NextRequest) {
 
     let query = supabaseAdmin
       .from("stock_movements")
-      .select("*, ppe:ppes(name, active)")
+      .select("*, ppe:ppes(name, active)", { count: "exact" })
       .order("created_at", { ascending: false })
-      .limit(500)
+      .order("id", { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (companyId) query = query.eq("company_id", companyId)
 
-    const { data, error } = await query
+    const { data, error, count } = await query
 
     if (error) {
       console.error("[API stock-movements] List error:", error)
       return NextResponse.json({ error: "Erro interno, tente novamente" }, { status: 500 })
     }
 
-    const movements = (data || []).filter((movement) => !movement.ppe || movement.ppe.active !== false)
-    return NextResponse.json({ movements })
+    const movements = data || []
+    return NextResponse.json({ movements, hasMore: count === null ? movements.length === limit : offset + movements.length < count, total: count, limit, offset }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("[API stock-movements] Unexpected list error:", err)
     return NextResponse.json({ error: "Erro interno ao carregar auditoria de estoque." }, { status: 500 })
@@ -73,7 +80,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Tipo de movimentacao de estoque invalido." }, { status: 400 })
     }
 
-    if (!Number.isFinite(quantity) || quantity < 0 || (type !== "AJUSTE" && quantity <= 0)) {
+    if (!isValidStockQuantity(type, quantity)) {
       return NextResponse.json({ error: "Quantidade de estoque invalida para esta movimentacao." }, { status: 400 })
     }
 

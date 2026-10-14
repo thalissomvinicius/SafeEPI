@@ -18,11 +18,12 @@ beforeEach(() => {
   m.limit.mockResolvedValue({ success: false, retryAfter: 3600 })
   m.upload.mockResolvedValue({ error: null })
   m.target.mockResolvedValue({ data: { token: "upload-token", signedUrl: "https://example.org/upload" }, error: null })
-  m.from.mockImplementation(() => {
+  m.from.mockImplementation((table: string) => {
     const query: Record<string, unknown> = {}
-    for (const op of ["update", "eq", "insert", "select"]) query[op] = () => query
+    for (const op of ["update", "eq", "in", "insert", "select"]) query[op] = () => query
     query.single = async () => ({ data: { id: "link", employee_id: employee, company_id: company }, error: null })
-    query.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve)
+    query.maybeSingle = async () => ({ data: table === "companies" ? { id: company, active: true, subscription_status: "ACTIVE" } : { id: employee, company_id: company, active: true }, error: null })
+    query.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: table === "ppes" ? [{ id: "33333333-3333-4333-8333-333333333333", company_id: company, active: true, name: "EPI teste" }] : null, error: null }).then(resolve)
     return query
   })
 })
@@ -59,7 +60,7 @@ describe("entregas não têm cota por hora", () => {
 
   it("permite 30 links de entrega e preserva a política dos outros tipos", async () => {
     const { POST } = await import("@/app/api/remote-links/route")
-    const request = (type: string) => new NextRequest("https://safeepi.example/api/remote-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employee_id: employee, type }) })
+    const request = (type: string) => new NextRequest("https://safeepi.example/api/remote-links", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employee_id: employee, type, data: { p: "33333333-3333-4333-8333-333333333333", q: 1 } }) })
     for (let i = 0; i < 30; i++) expect((await POST(request("delivery"))).status).toBe(200)
     expect(m.limit).not.toHaveBeenCalled()
     expect((await POST(request("capture"))).status).toBe(429)

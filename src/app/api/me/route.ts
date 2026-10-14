@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server"
 import { getSupabaseAdminConfigError, supabaseAdmin } from "@/lib/supabaseAdmin"
 import { signStorageValue } from "@/lib/privateStorage"
-import type { Company, Profile } from "@/types/database"
-
-type AppRole = Profile["role"]
-
-const VALID_ROLES = new Set<AppRole>(["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
-
-/**
- * Retorna AppRole se o valor for um role válido, ou null caso contrário.
- * NUNCA defaulta para um role privilegiado.
- */
-function normalizeRole(role: unknown): AppRole | null {
-  return VALID_ROLES.has(role as AppRole) ? (role as AppRole) : null
-}
+import type { Company } from "@/types/database"
+import { resolveAuthorizedRole } from "@/lib/authorizedRole"
 
 async function loadActiveMembership(userId: string) {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("company_users")
     .select("company_id, role, company:companies(*)")
     .eq("user_id", userId)
@@ -25,13 +14,17 @@ async function loadActiveMembership(userId: string) {
     .limit(1)
     .maybeSingle()
 
-  if (!data?.company_id) return null
+  if (error) return { membership: null, error }
+  if (!data?.company_id) return { membership: null, error: null }
 
   const company = Array.isArray(data.company) ? data.company[0] || null : data.company
   return {
-    companyId: data.company_id as string,
-    company: (company as unknown as Company | null) ?? null,
-    role: normalizeRole(data.role),
+    membership: {
+      companyId: data.company_id as string,
+      company: (company as unknown as Company | null) ?? null,
+      role: data.role,
+    },
+    error: null,
   }
 }
 
@@ -70,11 +63,14 @@ export async function GET(request: Request) {
 
   // Resolução de role — apenas fontes confiáveis. user_metadata é IGNORADO.
   const appMetadataRole = (user.app_metadata as { role?: unknown } | null | undefined)?.role
-  const membership = await loadActiveMembership(user.id)
-  const role =
-    normalizeRole(appMetadataRole) ||
-    membership?.role ||
-    normalizeRole(profile?.role)
+  const isPlatformMaster = resolveAuthorizedRole(appMetadataRole, null, profile?.role) === "MASTER"
+  const { membership, error: membershipError } = isPlatformMaster
+    ? { membership: null, error: null }
+    : await loadActiveMembership(user.id)
+  if (membershipError) {
+    return NextResponse.json({ error: "Falha ao validar vínculo com a empresa. Tente novamente." }, { status: 503 })
+  }
+  const role = resolveAuthorizedRole(appMetadataRole, membership?.role, profile?.role)
 
   if (!role) {
     return NextResponse.json(
@@ -102,7 +98,7 @@ export async function GET(request: Request) {
     company = membership.company
   }
 
-  if (company && (!company.active || company.subscription_status === "SUSPENDED")) {
+  if (role !== "MASTER" && (!company?.active || company.subscription_status === "SUSPENDED")) {
     return NextResponse.json(
       { error: "Acesso da empresa desativado. Entre em contato com o suporte SafeEPI." },
       { status: 403 },

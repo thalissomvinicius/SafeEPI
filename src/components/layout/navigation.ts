@@ -6,7 +6,7 @@ import {
 
 export const navigationItems = [
   { href: "/", label: "Visão geral", shortLabel: "Início", icon: Home, group: "Operação", roles: ["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"] },
-  { href: "/delivery", label: "Nova entrega", shortLabel: "Entrega", icon: PenTool, group: "Operação", roles: ["MASTER", "ADMIN"] },
+  { href: "/delivery", label: "Nova entrega", shortLabel: "Entrega", icon: PenTool, group: "Operação", roles: ["MASTER", "ADMIN", "ALMOXARIFE"] },
   { href: "/inventory", label: "Estoque", shortLabel: "Estoque", icon: Package, group: "Operação", roles: ["MASTER", "ADMIN", "ALMOXARIFE"] },
   { href: "/movements", label: "Movimentações", shortLabel: "Movimentações", icon: ArrowRightLeft, group: "Operação", roles: ["MASTER", "ADMIN", "DIRETORIA"] },
   { href: "/employees", label: "Colaboradores", shortLabel: "Equipe", icon: Users, group: "Cadastros", roles: ["MASTER", "ADMIN", "DIRETORIA"] },
@@ -27,7 +27,7 @@ export const navigationGroups = ["Operação", "Cadastros", "Controle", "Adminis
 
 export function visibleNavigation(role?: string, trainingEnabled?: boolean) {
   return navigationItems.filter((item) =>
-    (item.roles as readonly string[]).includes(role || "ADMIN") &&
+    (item.roles as readonly string[]).includes(role || "") &&
     (item.href !== "/training" || role === "MASTER" || trainingEnabled !== false),
   )
 }

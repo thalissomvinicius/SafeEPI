@@ -5,7 +5,8 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Users, Plus, Search, X, Loader2, HardDrive, FileDown, ShieldAlert, History, UserMinus, ShieldCheck, Lock, Camera, Link2, PenTool, BriefcaseBusiness, Fingerprint, Clipboard, RefreshCw, Hourglass, XCircle, Trash2, ExternalLink, FileUp, Download, Handshake, ChevronDown } from "lucide-react"
-import SignatureCanvas from "react-signature-canvas"
+import type SignatureCanvas from "react-signature-canvas"
+import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import ExcelJS from "exceljs"
 import { api } from "@/services/api"
 import { Employee, Workplace, DeliveryWithRelations, CatalogItem, ThirdParty } from "@/types/database"
@@ -1122,17 +1123,17 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in relative">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-4 md:space-y-6 relative">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center">
             <Users className="w-6 h-6 mr-2 text-[#2563EB]" />
-            Equipe {COMPANY_CONFIG.shortName}
+            Colaboradores
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de prontuários de EPI sincronizada com o {COMPANY_CONFIG.systemName}.</p>
+          <p className="text-slate-500 text-sm mt-1">Encontre uma pessoa e acompanhe seu histórico de EPIs.</p>
         </div>
         {canEdit ? (
-          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2">
+          <div className="w-full sm:w-auto flex items-start gap-2">
             <input
               ref={importInputRef}
               type="file"
@@ -1143,34 +1144,41 @@ export default function EmployeesPage() {
                 if (file) void handleImportEmployees(file)
               }}
             />
+            <details className="relative flex-1 sm:flex-none">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 focus-visible:outline-2">
+                Mais ações <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </summary>
+              <div className="absolute left-0 top-full z-30 mt-2 grid min-w-48 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
             <button
               onClick={downloadImportTemplate}
-              className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center"
+              className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               <Download className="w-4 h-4 mr-2" />
-              Modelo
+              Baixar modelo
             </button>
             <button
               onClick={() => importInputRef.current?.click()}
               disabled={isSaving}
-              className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-60"
+              className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
             >
               {importProgress ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileUp className="w-4 h-4 mr-2" />}
               {importProgress ? "Importando" : "Importar"}
             </button>
             <button
               onClick={exportEmployeesReport}
-              className="bg-white border border-blue-100 text-[#2563EB] hover:bg-blue-50 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center"
+              className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               <FileDown className="w-4 h-4 mr-2" />
-              PDF
+              Exportar PDF
             </button>
+              </div>
+            </details>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center whitespace-nowrap"
+              className="flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-xl bg-[#2563EB] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] sm:flex-none"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Novo
+              Novo colaborador
             </button>
           </div>
         ) : (
@@ -1181,89 +1189,30 @@ export default function EmployeesPage() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-200/70">
-        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1 ${
-              loading
-                ? "bg-slate-100 text-slate-300 ring-slate-200"
-                : "bg-[#2563EB]/10 text-[#2563EB] ring-[#2563EB]/10"
-            }`}>
-              <Users className="h-7 w-7" />
+      <details className="group rounded-xl border border-slate-200 bg-white">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm text-slate-600">
+          <span>{loading ? "Carregando equipe…" : <><strong className="font-semibold text-slate-900">{activeEmployeesCount}</strong> em atividade · {totalEmployeesCount} no vínculo selecionado</>}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <div className="space-y-3 border-t border-slate-100 px-4 pb-4 pt-3">
+          <p className="text-sm text-slate-500">{scopeTitle}: {totalEmployeesCount} {scopeDescription}</p>
+          {hasThirdPartyFeature && (
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: "own" as const, label: "Próprios", count: ownEmployeesCount, active: ownActiveEmployeesCount },
+                { value: "third_party" as const, label: "Terceiros", count: thirdPartyEmployeesCount, active: thirdPartyActiveEmployeesCount },
+                { value: "all" as const, label: "Todos", count: employees.length, active: employees.filter(emp => emp.active).length },
+              ].map((item) => (
+                <button key={item.value} type="button" aria-pressed={employeeScopeFilter === item.value} onClick={() => setEmployeeScopeFilter(item.value)}
+                  className={`min-h-11 rounded-lg border px-2 py-2 text-sm ${employeeScopeFilter === item.value ? "border-[#2563EB]/20 bg-[#2563EB]/10 font-semibold text-[#2563EB]" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                  {item.label} <span className="block text-xs">{item.active}/{item.count}</span>
+                </button>
+              ))}
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{scopeTitle}</p>
-              {loading ? (
-                <div className="mt-3 space-y-3">
-                  <div className="h-8 w-36 animate-pulse rounded-xl bg-slate-100" />
-                  <div className="h-3 w-64 max-w-full animate-pulse rounded-full bg-slate-100" />
-                </div>
-              ) : (
-                <>
-                  <div className="mt-1 flex items-end gap-3">
-                    <span className="text-4xl font-black leading-none tracking-tight text-slate-900">
-                      {activeEmployeesCount}
-                    </span>
-                    <span className="pb-1 text-xs font-black uppercase tracking-widest text-emerald-600">
-                      em atividade
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs font-bold text-slate-500">
-                    {totalEmployeesCount} {scopeDescription}
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="w-full space-y-3 sm:max-w-md">
-            {hasThirdPartyFeature && (
-              <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
-                {[
-                  { value: "own" as const, label: "Proprios", count: ownEmployeesCount, active: ownActiveEmployeesCount },
-                  { value: "third_party" as const, label: "Terceiros", count: thirdPartyEmployeesCount, active: thirdPartyActiveEmployeesCount },
-                  { value: "all" as const, label: "Todos", count: employees.length, active: employees.filter(emp => emp.active).length },
-                ].map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setEmployeeScopeFilter(item.value)}
-                    className={`min-h-[52px] rounded-xl px-2 py-2 text-left transition-all ${
-                      employeeScopeFilter === item.value
-                        ? "bg-white text-[#2563EB] shadow-sm ring-1 ring-slate-200"
-                        : "text-slate-500 hover:bg-white/70"
-                    }`}
-                  >
-                    <span className="block text-[9px] font-black uppercase tracking-widest">{item.label}</span>
-                    <span className="mt-1 block text-sm font-black">{item.active}/{item.count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="rounded-2xl bg-slate-50 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quadro ativo</span>
-              {loading ? (
-                <span className="h-4 w-10 animate-pulse rounded-full bg-slate-200" />
-              ) : (
-                <span className="text-sm font-black text-[#2563EB]">{activeEmployeesPercent}%</span>
-              )}
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${loading ? "animate-pulse bg-slate-300" : "bg-[#2563EB]"}`}
-                style={{ width: loading ? "42%" : `${activeEmployeesPercent}%` }}
-              />
-            </div>
-            <div className="mt-3 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <span>{loading ? "Atualizando dados" : `${totalEmployeesCount - activeEmployeesCount} inativo(s)`}</span>
-              <span>{employeeScopeFilter === "third_party" ? "Terceiros" : employeeScopeFilter === "all" ? "Todos" : "Proprios"}</span>
-            </div>
-            </div>
-          </div>
+          )}
+          <p className="text-xs text-slate-500">{activeEmployeesPercent}% ativos · {totalEmployeesCount - activeEmployeesCount} inativo(s)</p>
         </div>
-      </div>
-
+      </details>
       {importProgress && (
         <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm shadow-blue-900/5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1312,7 +1261,7 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      {(facialV2Enabled || pendingCaptureDrafts.length > 0) && <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
           <button
             onClick={() => setViewMode("employees")}
@@ -1333,7 +1282,7 @@ export default function EmployeesPage() {
           </button>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-4 shadow-sm">
+        {facialV2Enabled && viewMode === "pending" && <div className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-4 shadow-sm">
           <div>
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Espera do registro</p>
             <p className="text-[10px] text-slate-400 font-bold">Validade do link facial.</p>
@@ -1351,8 +1300,8 @@ export default function EmployeesPage() {
             <option value={24}>24h</option>
             <option value={48}>48h</option>
           </select>
-        </div>
-      </div>
+        </div>}
+      </div>}
 
       {viewMode === "pending" ? (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40 animate-in fade-in">
@@ -1473,11 +1422,12 @@ export default function EmployeesPage() {
       ) : (
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-        <div className="p-5 border-b border-slate-200 bg-slate-50/30 space-y-4">
-          <div className="relative w-full md:max-w-md">
+        <div className="p-3 sm:p-5 border-b border-slate-200 bg-slate-50/30 space-y-3">
+          <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1 md:max-w-md">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
-              type="text" 
+              type="search"
               placeholder="Buscar nome, CPF ou matrícula..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1489,12 +1439,13 @@ export default function EmployeesPage() {
           <button
             type="button"
             onClick={() => setAreMobileFiltersOpen((current) => !current)}
-            className="flex min-h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-slate-600 md:hidden"
+            className="flex min-h-11 shrink-0 items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 md:hidden"
             aria-expanded={areMobileFiltersOpen}
           >
             Filtros
             <ChevronDown className={`h-4 w-4 transition-transform ${areMobileFiltersOpen ? "rotate-180" : ""}`} />
           </button>
+          </div>
           <div className={`${areMobileFiltersOpen ? "grid" : "hidden"} grid-cols-1 gap-3 md:grid md:grid-cols-6 xl:grid-cols-7`}>
             {hasThirdPartyFeature && (
               <select value={employeeScopeFilter} onChange={(e) => setEmployeeScopeFilter(e.target.value as EmployeeScopeFilter)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
@@ -1846,7 +1797,7 @@ export default function EmployeesPage() {
 
       {isModalOpen && !isFaceCameraOpen && (
         <AccessibleOverlay label={formData.id ? "Editar colaborador" : "Novo colaborador"} onClose={closeEditModal} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-t-3xl md:my-4 md:rounded-3xl shadow-2xl w-full max-w-md max-h-[92dvh] md:max-h-[calc(100dvh-2rem)] overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200 flex flex-col">
+          <div className="safeepi-sheet-panel bg-white rounded-t-3xl md:my-4 md:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200 flex flex-col">
             <div className="shrink-0 flex justify-between items-center p-5 sm:p-6 border-b border-slate-100">
               <h2 className="font-black text-slate-800 uppercase tracking-tighter text-xl">{formData.id ? 'Editar Colaborador' : `Novo Cadastro ${COMPANY_CONFIG.shortName}`}</h2>
               <button 
@@ -2155,7 +2106,7 @@ export default function EmployeesPage() {
 
       {isProfileOpen && selectedEmployeeId && (
         <AccessibleOverlay label="Prontuario do colaborador" onClose={() => setIsProfileOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-t-[28px] md:my-3 md:rounded-[28px] shadow-2xl w-full max-w-6xl max-h-[92dvh] md:max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200">
+          <div className="safeepi-sheet-panel bg-white rounded-t-[28px] md:my-3 md:rounded-[28px] shadow-2xl w-full max-w-6xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200">
             {(() => {
               const emp = employees.find(e => e.id === selectedEmployeeId)
               const profileDetails = [
@@ -2320,7 +2271,7 @@ export default function EmployeesPage() {
       )}
       {isTstModalOpen && (
         <AccessibleOverlay label="Assinar prontuario" onClose={() => setIsTstModalOpen(false)} className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col border border-slate-200 animate-in zoom-in-95 duration-200">
+          <div className="safeepi-sheet-panel bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
               <div>
                 <h2 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Assinar Prontuário</h2>
@@ -2451,44 +2402,17 @@ export default function EmployeesPage() {
                         <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-600 uppercase tracking-widest bg-green-50 px-2 py-0.5 rounded">✓ Assinatura Capturada</div>
                       </div>
                     ) : (
-                      <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
-                        <SignatureCanvas
-                          ref={tstSigCanvas}
-                          canvasProps={{
-                            className: "block w-full h-28 max-w-full touch-none overscroll-contain",
-                            style: {
-                              width: "100%",
-                              height: "112px",
-                              touchAction: "none",
-                              WebkitUserSelect: "none",
-                              userSelect: "none",
-                            },
-                          }}
-                          penColor="#1e293b"
-                        />
-                      </div>
-                    )}
-                    {!tstSignatureBase64 && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => { if (tstSigCanvas.current) tstSigCanvas.current.clear() }}
-                          className="flex-1 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50"
-                        >
-                          Limpar
-                        </button>
-                        <button
-                          onClick={() => {
+                      <SignatureCapture
+                        signatureRef={tstSigCanvas}
+                        confirmLabel="Confirmar assinatura do responsável"
+                        onConfirm={() => {
                             if (!tstSigCanvas.current || tstSigCanvas.current.isEmpty()) {
                               toast.error("Por favor, assine antes de confirmar.")
                               return
                             }
                             setTstSignatureBase64(tstSigCanvas.current.toDataURL('image/png'))
-                          }}
-                          className="flex-1 py-2 text-[10px] font-black text-white bg-[#2563EB] uppercase tracking-widest rounded-xl hover:bg-[#1D4ED8]"
-                        >
-                          Confirmar
-                        </button>
-                      </div>
+                        }}
+                      />
                     )}
                   </div>
                 )}

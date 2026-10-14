@@ -1,7 +1,7 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Shield, UserCog, Mail, Calendar, Loader2, AlertCircle, Plus, Key, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
 import { Profile } from "@/types/database"
@@ -11,12 +11,15 @@ import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { LoadingRows, LoadingState } from "@/components/ui/LoadingState"
+import { AdminLoadError } from "@/components/ui/AdminLoadError"
 
 export default function UsersPage() {
   const { user: currentUser, loading: authLoading } = useAuth()
   const router = useRouter()
   const [users, setUsers] = useState<(Profile & { email: string; created_at: string; last_sign_in_at: string })[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const loadSequence = useRef(0)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   // Modal State
@@ -39,15 +42,18 @@ export default function UsersPage() {
   }, [authLoading, canManageUsers, currentUser, router])
 
   const loadUsers = useCallback(async () => {
+    const sequence = ++loadSequence.current
     try {
       setLoading(true)
+      setLoadError(null)
       const data = await api.getUsers(masterCompanyId)
+      if (sequence !== loadSequence.current) return
       setUsers(data)
     } catch (error) {
       console.error("Erro ao carregar usuários:", error)
-      toast.error("Erro ao carregar lista de usuários.")
+      if (sequence === loadSequence.current) setLoadError("Não foi possível atualizar os usuários. Os registros anteriores foram preservados.")
     } finally {
-      setLoading(false)
+      if (sequence === loadSequence.current) setLoading(false)
     }
   }, [masterCompanyId])
 
@@ -104,8 +110,8 @@ export default function UsersPage() {
         toast.success("Senha atualizada com sucesso.")
       } else {
         // Create user
-        if (!formData.password || formData.password.length < 6) {
-          toast.error("A senha deve ter pelo menos 6 caracteres.")
+        if (!formData.password || formData.password.length < 8) {
+          toast.error("A senha deve ter pelo menos 8 caracteres.")
           setIsSubmitting(false)
           return
         }
@@ -144,14 +150,14 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-8">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-5 animate-in fade-in duration-200">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-5">
         <div>
-          <h1 className="text-3xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
-            <UserCog className="w-8 h-8 mr-3 text-[#2563EB]" />
-            Gestão de Acessos SafeEPI
+          <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center">
+            <UserCog className="w-6 h-6 mr-2 shrink-0 text-[#2563EB]" />
+            Usuários e acesso
           </h1>
-          <p className="text-slate-500 font-medium mt-1">Controle de níveis de segurança, senhas e permissões da plataforma.</p>
+          <p className="text-sm text-slate-500 mt-1">Gerencie a equipe e as permissões da empresa.</p>
         </div>
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
             <div className="hidden sm:block bg-blue-50 text-[#2563EB] px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-100">
@@ -166,8 +172,9 @@ export default function UsersPage() {
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {loading ? (
+      {loadError && <AdminLoadError message={loadError} retry={() => void loadUsers()} busy={loading} />}
+      <div className="grid gap-4" aria-busy={loading}>
+        {loading && users.length === 0 ? (
           <LoadingRows rows={5} />
         ) : (
           <>
@@ -181,9 +188,8 @@ export default function UsersPage() {
                 expandable
                 fields={[
                   { label: "Email", value: user.email },
-                  { label: "Empresa", value: user.company_id || masterCompanyId || "-" },
                   { label: "Cadastro", value: new Date(user.created_at).toLocaleDateString() },
-                  { label: "Role", value: user.role || "-" },
+                  { label: "Permissão", value: user.role || "-" },
                 ]}
                 actions={
                   <div className="grid w-full grid-cols-[1fr_auto_auto] gap-2">
@@ -192,16 +198,16 @@ export default function UsersPage() {
                       disabled={updatingId === user.id || user.id === currentUser?.id}
                       onChange={(e) => handleRoleChange(user.id, e.target.value)}
                       title="Alterar permissão"
-                      className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 disabled:opacity-50"
+                      className="min-h-11 min-w-0 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm font-medium text-slate-600 disabled:opacity-50"
                     >
                       <option value="ADMIN">Administrador</option>
                       <option value="ALMOXARIFE">Almoxarife</option>
                       <option value="DIRETORIA">Diretoria</option>
                     </select>
-                    <button onClick={() => openResetPasswordModal(user)} disabled={updatingId === user.id} className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
+                    <button aria-label={`Redefinir senha de ${user.full_name || user.email}`} onClick={() => openResetPasswordModal(user)} disabled={updatingId === user.id} className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
                       <Key className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleDelete(user.id)} disabled={updatingId === user.id || user.id === currentUser?.id} className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 disabled:opacity-50">
+                    <button aria-label={`Excluir usuário ${user.full_name || user.email}`} onClick={() => handleDelete(user.id)} disabled={updatingId === user.id || user.id === currentUser?.id} className="flex min-h-11 w-11 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 disabled:opacity-50">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -288,6 +294,8 @@ export default function UsersPage() {
         )}
       </div>
 
+      {!loading && !loadError && users.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">Nenhum usuário cadastrado nesta empresa.</p>}
+
       {/* Dica */}
       <div className="bg-slate-50 rounded-2xl p-5 sm:p-8 border-2 border-dashed border-slate-200 flex flex-col sm:flex-row items-start gap-4 mt-8">
         <div className="p-3 bg-amber-50 rounded-xl">
@@ -296,7 +304,7 @@ export default function UsersPage() {
         <div>
           <h4 className="font-black text-slate-800 uppercase tracking-tighter text-sm mb-1">Políticas de Acesso da Plataforma</h4>
           <p className="text-xs text-slate-500 leading-relaxed font-medium">
-            <strong className="text-slate-700">ADMIN:</strong> Acesso total. 
+            <strong className="text-slate-700">ADMIN:</strong> Gerencia a operação e os acessos da própria empresa.
             <strong className="text-slate-700 ml-2">ALMOXARIFE:</strong> Opera entregas, baixas, estoque e cadastro de EPIs/CAs (Sem acesso a relatórios e usuários). 
             <strong className="text-slate-700 ml-2">DIRETORIA:</strong> Apenas visualiza relatórios e histórico (Não faz entregas).
           </p>
@@ -362,12 +370,12 @@ export default function UsersPage() {
                       {formData.id ? 'Nova Senha' : 'Senha Provisória'}
                   </label>
                   <input 
-                      type="password" required minLength={6}
+                      type="password" required minLength={8}
                       autoComplete="new-password"
                       value={formData.password}
                       onChange={e => setFormData({...formData, password: e.target.value})}
                       className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
-                      placeholder="Mínimo de 6 caracteres"
+                      placeholder="Mínimo de 8 caracteres"
                   />
               </div>
 

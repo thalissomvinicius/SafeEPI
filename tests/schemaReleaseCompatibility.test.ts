@@ -66,15 +66,20 @@ describe("release works with the established employee schema", () => {
     expect(isMissingDatabaseColumn({ code: "42703", message: "column employees.registration_number does not exist" }, "registration_number")).toBe(true)
   })
   it("lists pending links without selecting optional registration or biometric templates", async () => {
+    mock.results.companies = [{ data: { id: companyId, active: true, subscription_status: "ACTIVE" }, error: null }]
     mock.results.remote_links = [{ data: [], error: null }]
     expect((await getRemoteLinks(new NextRequest("https://safe-epi.example/api/remote-links"))).status).toBe(200)
     const select = mock.calls.find(call => call.table === "remote_links" && call.method === "select")?.args[0]
-    expect(select).toContain("employee:employees(id, full_name, cpf)")
+    expect(select).toContain("employee:employees(id, full_name, cpf, company_id, active)")
     expect(select).not.toContain("registration_number")
     expect(select).not.toContain("face_descriptor")
   })
   it("opens a valid remote manual link against the classic employee schema", async () => {
-    mock.results.remote_links = [{ data: { id: "link", type: "delivery", status: "pending", expires_at: "2099-01-01T00:00:00Z", data: null, employee: { id: employeeId, full_name: "TESTE", cpf: "12345678900", photo_url: null } }, error: null }]
+    const ppeId = "33333333-3333-4333-8333-333333333333"
+    mock.results.companies = [{ data: { id: companyId, active: true, subscription_status: "ACTIVE" }, error: null }]
+    mock.results.employees = [{ data: { id: employeeId, company_id: companyId, active: true, full_name: "TESTE", cpf: "12345678900", photo_url: null }, error: null }]
+    mock.results.ppes = [{ data: [{ id: ppeId, company_id: companyId, active: true, name: "Teste" }], error: null }]
+    mock.results.remote_links = [{ data: { id: "link", company_id: companyId, employee_id: employeeId, type: "delivery", status: "pending", expires_at: "2099-01-01T00:00:00Z", data: { p: ppeId, q: 1 } }, error: null }]
     const response = await getRemoteLinks(new NextRequest(`https://safe-epi.example/api/remote-links?token=${"a".repeat(64)}`))
     expect(response.status).toBe(200)
     expect((await response.json()).link.employee.full_name).toBe("TESTE")

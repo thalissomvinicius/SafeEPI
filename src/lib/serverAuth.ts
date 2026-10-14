@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import type { Profile } from "@/types/database"
+import { resolveAuthorizedRole } from "@/lib/authorizedRole"
 
 type AppRole = Profile["role"]
 
@@ -14,36 +15,6 @@ type AuthorizedUser = {
 type AuthorizationResult =
   | { authorized: true; user: AuthorizedUser }
   | { authorized: false; response: NextResponse }
-
-const VALID_ROLES = new Set<AppRole>(["MASTER", "ADMIN", "ALMOXARIFE", "DIRETORIA"])
-
-/**
- * Default seguro: nunca atribuir um role privilegiado quando o valor é
- * desconhecido. NULL faz com que requireAuthorizedUser rejeite a sessão
- * a menos que o caller seja MASTER.
- */
-function normalizeRole(role: unknown): AppRole | null {
-  return VALID_ROLES.has(role as AppRole) ? (role as AppRole) : null
-}
-
-/**
- * Lê role exclusivamente de fontes confiáveis (em ordem):
- *   1. app_metadata.role  — gravável apenas via service_role
- *   2. company_users      — vínculo de empresa
- *   3. profiles.role      — espelho local
- * Nunca confia em user_metadata.role (gravável pelo cliente no signup).
- */
-function resolveRoleFromTrustedSources(
-  appMetadataRole: unknown,
-  membershipRole: unknown,
-  profileRole: unknown,
-): AppRole | null {
-  return (
-    normalizeRole(appMetadataRole) ||
-    normalizeRole(membershipRole) ||
-    normalizeRole(profileRole)
-  )
-}
 
 export async function requireAuthorizedUser(
   request: Request,
@@ -71,13 +42,20 @@ export async function requireAuthorizedUser(
     }
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("role,company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  const { data: membership } = await supabaseAdmin
+  const appMetadataRole = (user.app_metadata as { role?: unknown } | null | undefined)?.role
+  const { data: profile, error: profileError } = appMetadataRole === "MASTER"
+    ? { data: null, error: null }
+    : await supabaseAdmin.from("profiles").select("role").eq("id", user.id).maybeSingle()
+  if (profileError) {
+    return {
+      authorized: false,
+      response: NextResponse.json({ error: "Falha ao validar perfil. Tente novamente." }, { status: 503 }),
+    }
+  }
+  const isPlatformMaster = resolveAuthorizedRole(appMetadataRole, null, profile?.role) === "MASTER"
+  const { data: membership, error: membershipError } = isPlatformMaster
+    ? { data: null, error: null }
+    : await supabaseAdmin
     .from("company_users")
     .select("company_id,role")
     .eq("user_id", user.id)
@@ -86,12 +64,14 @@ export async function requireAuthorizedUser(
     .limit(1)
     .maybeSingle()
 
-  const appMetadataRole = (user.app_metadata as { role?: unknown } | null | undefined)?.role
-  const role = resolveRoleFromTrustedSources(
-    appMetadataRole,
-    membership?.role,
-    profile?.role,
-  )
+  if (membershipError) {
+    return {
+      authorized: false,
+      response: NextResponse.json({ error: "Falha ao validar vínculo com a empresa. Tente novamente." }, { status: 503 }),
+    }
+  }
+
+  const role = resolveAuthorizedRole(appMetadataRole, membership?.role, profile?.role)
 
   // Sem role válido em fonte confiável → não autorizado.
   if (!role) {
@@ -107,7 +87,7 @@ export async function requireAuthorizedUser(
   const companyId =
     role === "MASTER"
       ? null
-      : (membership?.company_id || profile?.company_id || null) as string | null
+      : (membership?.company_id || null) as string | null
 
   // Usuário não-master tem que estar vinculado a uma empresa ativa.
   if (role !== "MASTER" && !companyId) {

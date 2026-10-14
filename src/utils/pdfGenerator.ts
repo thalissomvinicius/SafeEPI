@@ -10,6 +10,9 @@ import { getStoredBrand, hexToRgb } from "@/lib/brandTheme"
 import { formatDateOnly, formatDeliveryDate, formatDeliveryTime, getDaysUntilDateOnly } from "@/lib/dateOnly"
 import { calculateTrainingValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
 import { fetchImageDataUrl } from "@/utils/imageDataUrl"
+import { mapConcurrent } from "@/lib/mapConcurrent"
+import { movementEventDate, movementEventLabel, movementEventQuantity, MOVEMENT_HISTORY_NOTE, type MovementReportRow } from "@/lib/movementEvents"
+import { LOW_STOCK_THRESHOLD } from "@/lib/stockPolicy"
 
 let [r, g, b] = COMPANY_CONFIG.primaryColorRgb
 type AuthMethod = 'manual' | 'facial' | 'manual_facial' | 'fingerprint'
@@ -460,9 +463,12 @@ export interface ReturnPDFData {
   employeeCpf: string
   workplaceName: string
   returnedItemName: string
+  returnedQuantity?: number
   returnMotive: string
   newItemName?: string
   newItemCa?: string
+  newItemQuantity?: number
+  stockDestination?: string
   authMethod: AuthMethod
   signatureBase64?: string
   photoBase64?: string
@@ -477,7 +483,8 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   const pageHeight = doc.internal.pageSize.getHeight()
   const contentWidth = pageWidth - 28
   let currentY = 49
-  const header = () => addPageHeader(doc, "RECIBO DE DEVOLUÇÃO / SUBSTITUIÇÃO", "Movimentação de equipamento e confirmação do colaborador")
+  const isLoss = /perda|extravio/i.test(data.returnMotive)
+  const header = () => addPageHeader(doc, isLoss ? "RECIBO DE BAIXA / SUBSTITUIÇÃO" : "RECIBO DE DEVOLUÇÃO / SUBSTITUIÇÃO", "Movimentação de equipamento e confirmação do colaborador")
   header()
   const ensureSpace = (height: number) => {
     if (currentY + height <= pageHeight - 24) return
@@ -515,15 +522,15 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   const firstTablePage = doc.getCurrentPageInfo().pageNumber
   autoTable(doc, {
     startY: currentY,
-    head: [["Movimentação", "Equipamento", "Detalhes"]],
+    head: [["Movimentação", "Equipamento", "Qtd", "Detalhes"]],
     body: [
-      ["Devolução / baixa", normalizeLegacyPdfText(data.returnedItemName), `Motivo: ${normalizeLegacyPdfText(data.returnMotive)}`],
-      ...(data.newItemName ? [["Nova entrega", normalizeLegacyPdfText(data.newItemName), `CA: ${data.newItemCa || "Não informado"}`]] : []),
+      [isLoss ? "Baixa sem retorno físico" : "Devolução / baixa", normalizeLegacyPdfText(data.returnedItemName), data.returnedQuantity === undefined ? "Não informada" : String(data.returnedQuantity), `Motivo: ${normalizeLegacyPdfText(data.returnMotive)}${data.stockDestination ? `\nDestino: ${data.stockDestination}` : ""}`],
+      ...(data.newItemName ? [["Nova entrega", normalizeLegacyPdfText(data.newItemName), data.newItemQuantity === undefined ? "Não informada" : String(data.newItemQuantity), `CA: ${data.newItemCa || "Não informado"}`]] : []),
     ],
     styles: { font: "helvetica", fontSize: 8, cellPadding: 4, textColor: [30, 41, 59], overflow: "linebreak", lineColor: [226, 232, 240], lineWidth: 0.15 },
     headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: "bold", fontSize: 7 },
     alternateRowStyles: { fillColor: [250, 251, 253] },
-    columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 88, fontStyle: "bold" } },
+    columnStyles: { 0: { cellWidth: 32 }, 1: { cellWidth: 63, fontStyle: "bold" }, 2: { cellWidth: 21, halign: "center" } },
     margin: { left: 14, right: 14, top: 46, bottom: 24 },
     rowPageBreak: "avoid",
     theme: "striped",
@@ -531,9 +538,8 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   })
   currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12
   section("CONFIRMAÇÃO DA MOVIMENTAÇÃO")
-  const term = data.newItemName
-    ? "Confirmo a devolução do item antigo e o recebimento do novo equipamento listado acima em perfeitas condições de uso."
-    : "Confirmo a devolução do item acima, encerrando minha responsabilidade sobre o mesmo. Estou ciente das implicações legais conforme NR-06."
+  const confirmation = isLoss ? "Confirmo o registro de baixa por perda ou extravio do equipamento listado acima, sem devolução física." : "Confirmo a devolução ou baixa do equipamento listado acima, pelo motivo e destino registrados neste documento."
+  const term = data.newItemName ? `${confirmation} Confirmo também o recebimento da quantidade indicada do novo equipamento em condições de uso.` : confirmation
   write(term, 8)
   currentY += 9
   const facePhoto = data.authMethod === "facial" ? data.photoBase64 || data.signatureBase64 : undefined
@@ -684,8 +690,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     fieldsY += rowHeight
   }
 
-  const itemsWithSigs = await Promise.all(
-    data.items.map(async (item) => {
+  const itemsWithSigs = await mapConcurrent(data.items, 4, async (item) => {
       let signatureBase64 = item.signatureBase64
       let photoBase64 = item.photoBase64
 
@@ -706,7 +711,6 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       if (signatureBase64 || photoBase64) return { ...item, signatureBase64, photoBase64 }
       return item
     })
-  )
 
   const tableY = fieldsY + 4
   autoTable(doc, {
@@ -969,7 +973,7 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
 
     autoTable(doc, {
       startY: 123,
-      head: [["Terceiro", "Registros", "Itens", "Total para cobrança"]],
+      head: [["Terceiro", "Registros", "Itens", "Custo estimado (catálogo atual)"]],
       body: data.thirdPartySummary.map((item) => [
         item.name,
         String(item.deliveries),
@@ -1383,7 +1387,7 @@ export interface MovementsStats {
 }
 
 export interface MovementsReportData {
-  movements: DeliveryWithRelations[]
+  movements: MovementReportRow[]
   stats: MovementsStats
   period: string
   technicianName?: string
@@ -1544,8 +1548,8 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
     const statusA = getStatus(a)
     const statusB = getStatus(b)
     if (statusA.rank !== statusB.rank) return statusA.rank - statusB.rank
-    const stockA = Number(a.current_stock || 0) <= 5 ? 0 : 1
-    const stockB = Number(b.current_stock || 0) <= 5 ? 0 : 1
+    const stockA = Number(a.current_stock || 0) <= LOW_STOCK_THRESHOLD ? 0 : 1
+    const stockB = Number(b.current_stock || 0) <= LOW_STOCK_THRESHOLD ? 0 : 1
     if (stockA !== stockB) return stockA - stockB
     return a.name.localeCompare(b.name, "pt-BR")
   })
@@ -1553,7 +1557,7 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
   const totalValue = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0) * Number(ppe.cost || 0), 0)
   const expiredCount = ppes.filter((ppe) => getStatus(ppe).rank === 0).length
   const expiringCount = ppes.filter((ppe) => getStatus(ppe).rank === 1).length
-  const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length
+  const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= LOW_STOCK_THRESHOLD).length
   const regularCount = Math.max(0, ppes.length - expiredCount - expiringCount)
 
   const drawContinuationHeader = () => {
@@ -1652,7 +1656,7 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
         hookData.cell.styles.fillColor = status.fill
         hookData.cell.styles.fontStyle = "bold"
       }
-      if (hookData.column.index === 4 && Number(hookData.cell.raw || 0) <= 5) {
+      if (hookData.column.index === 4 && Number(hookData.cell.raw || 0) <= LOW_STOCK_THRESHOLD) {
         hookData.cell.styles.textColor = [37, 99, 235]
         hookData.cell.styles.fillColor = [239, 246, 255]
       }
@@ -1684,12 +1688,12 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
   const ppes = [...data.ppes].sort((a, b) => {
     const stockA = Number(a.current_stock || 0)
     const stockB = Number(b.current_stock || 0)
-    if ((stockA <= 5) !== (stockB <= 5)) return stockA <= 5 ? -1 : 1
+    if ((stockA <= LOW_STOCK_THRESHOLD) !== (stockB <= LOW_STOCK_THRESHOLD)) return stockA <= LOW_STOCK_THRESHOLD ? -1 : 1
     return a.name.localeCompare(b.name, "pt-BR")
   })
   const totalStock = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0), 0)
   const totalValue = ppes.reduce((acc, ppe) => acc + Number(ppe.current_stock || 0) * Number(ppe.cost || 0), 0)
-  const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length
+  const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= LOW_STOCK_THRESHOLD).length
   const zeroStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 0).length
 
   const drawContinuationHeader = () => {
@@ -1735,7 +1739,7 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
         ppe.ca_number || "N/A",
         ppe.manufacturer || "-",
         String(stock),
-        stock <= 5 ? "ESTOQUE BAIXO" : "OK",
+        stock <= LOW_STOCK_THRESHOLD ? "ESTOQUE BAIXO" : "OK",
         currency.format(cost),
         currency.format(stock * cost),
       ]
@@ -1763,7 +1767,7 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
         hookData.cell.styles.textColor = lowStock ? [185, 28, 28] : [4, 120, 87]
         hookData.cell.styles.fillColor = lowStock ? [254, 242, 242] : [236, 253, 245]
       }
-      if (hookData.column.index === 3 && Number(hookData.cell.raw || 0) <= 5) {
+      if (hookData.column.index === 3 && Number(hookData.cell.raw || 0) <= LOW_STOCK_THRESHOLD) {
         hookData.cell.styles.textColor = [185, 28, 28]
       }
     },
@@ -1788,7 +1792,24 @@ function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, accent
 }
 
 async function imageUrlToBase64(url?: string | null): Promise<string | null> {
-  return fetchImageDataUrl(url)
+  return fetchImageDataUrl(url, { required: true, label: "a assinatura do relatório" })
+}
+
+function formatMovementEventDate(row: MovementReportRow) {
+  return row.event_type === "return" ? new Date(movementEventDate(row)).toLocaleDateString("pt-BR") : formatDeliveryDate(movementEventDate(row))
+}
+
+function formatMovementEventTime(row: MovementReportRow) {
+  return row.event_type === "return" ? new Date(movementEventDate(row)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : formatDeliveryTime(movementEventDate(row))
+}
+
+function drawMovementHistoryNote(doc: jsPDF, y: number) {
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(6.5)
+  doc.setTextColor(100, 116, 139)
+  const lines = doc.splitTextToSize(MOVEMENT_HISTORY_NOTE, doc.internal.pageSize.getWidth() - 28) as string[]
+  doc.text(lines, 14, y, { lineHeightFactor: 1.2 })
+  return y + lines.length * 3 + 3
 }
 
 export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
@@ -1804,7 +1825,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
   const kpis = [
     { label: "Entregas", value: String(data.stats.deliveries), color: [r, g, b] as [number, number, number] },
     { label: "Devoluções", value: String(data.stats.returns), color: [217, 119, 6] as [number, number, number] },
-    { label: "Itens", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
+    { label: "Unid. entregues", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
     { label: "Pessoas", value: String(data.stats.uniqueEmployees), color: [5, 150, 105] as [number, number, number] },
   ]
 
@@ -1822,14 +1843,14 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
   })
 
   autoTable(doc, {
-    startY: cardY + cardH + 8,
+    startY: drawMovementHistoryNote(doc, cardY + cardH + 7),
     head: [["Data", "Colaborador", "EPI / CA", "Qtd", "Tipo", "Unidade"]],
     body: data.movements.map(m => [
-      formatDeliveryDate(m.delivery_date),
+      formatMovementEventDate(m),
       m.employee?.full_name || "-",
       `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
-      String(m.quantity),
-      m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
+      `${movementEventQuantity(m)}${m.event_type === "return" ? " total" : ""}`,
+      movementEventLabel(m).toUpperCase(),
       m.workplace?.name || "Geral"
     ]),
     headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: "bold", fontSize: 7, cellPadding: 3 },
@@ -1854,7 +1875,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
           hookData.cell.styles.textColor = [5, 150, 105]
           hookData.cell.styles.fontStyle = "bold"
         }
-        if (val === "DEVOLUÇÃO") {
+        if (val.startsWith("DEVOLUÇÃO")) {
           hookData.cell.styles.textColor = [217, 119, 6]
           hookData.cell.styles.fontStyle = "bold"
         }
@@ -1873,10 +1894,15 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   const ph = doc.internal.pageSize.getHeight()
   const signatureImages = new Map<string, string>()
 
-  await Promise.all(data.movements.map(async (movement) => {
+  await mapConcurrent(data.movements, 4, async (movement) => {
+    if (movement.event_type === "return") return
     const image = await imageUrlToBase64(movement.signature_url)
-    if (image) signatureImages.set(movement.id, image)
-  }))
+    if (image) {
+      // Decode before drawing any pages. A corrupt signed image must not become a blank signature cell.
+      doc.getImageProperties(image)
+      signatureImages.set(movement.event_id || movement.id, image)
+    }
+  })
 
   addReportHeader(doc, "RELATÓRIO DE MOVIMENTAÇÕES DE EPI", "Visão operacional do período e detalhamento dos registros", data.period)
 
@@ -1886,7 +1912,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   const kpis = [
     { label: "Total de Entregas", value: String(data.stats.deliveries), color: [r, g, b] as [number, number, number] },
     { label: "Devoluções", value: String(data.stats.returns), color: [217, 119, 6] as [number, number, number] },
-    { label: "Itens Movimentados", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
+    { label: "Unidades entregues", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
     { label: "Colaboradores", value: String(data.stats.uniqueEmployees), color: [5, 150, 105] as [number, number, number] },
   ]
 
@@ -1912,13 +1938,14 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(30, 41, 59)
-  doc.text("TOP EPIS MAIS MOVIMENTADOS", 24, chartsY + 12)
+  doc.text("TOP EPIS MAIS ENTREGUES", 24, chartsY + 12)
   doc.setDrawColor(241, 245, 249)
   doc.setLineWidth(0.3)
   doc.line(24, chartsY + 15, 18 + leftW - 6, chartsY + 15)
 
   const epiCount: Record<string, number> = {}
   data.movements.forEach(m => {
+    if (m.event_type === "return") return
     const name = m.ppe?.name || "Outros"
     epiCount[name] = (epiCount[name] || 0) + m.quantity
   })
@@ -2046,16 +2073,16 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   detailHeader()
 
   autoTable(doc, {
-    startY: 46,
-    head: [["#", "Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade", "Assinatura"]],
+    startY: drawMovementHistoryNote(doc, 46),
+    head: [["#", "Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade", "Assinatura da entrega"]],
     body: data.movements.map((m, idx) => [
       String(idx + 1),
-      `${formatDeliveryDate(m.delivery_date)} ${formatDeliveryTime(m.delivery_date)}`,
+      `${formatMovementEventDate(m)} ${formatMovementEventTime(m)}`,
       m.employee?.full_name || "-",
       m.employee?.cpf || "-",
       `${m.ppe?.name || "-"} (CA: ${m.ppe?.ca_number || "-"})`,
-      String(m.quantity),
-      m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
+      `${movementEventQuantity(m)}${m.event_type === "return" ? " total" : ""}`,
+      movementEventLabel(m).toUpperCase(),
       m.workplace?.name || "Geral",
       ""
     ]),
@@ -2085,7 +2112,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
           hookData.cell.styles.textColor = [5, 150, 105]
           hookData.cell.styles.fontStyle = "bold"
         }
-        if (val === "DEVOLUÇÃO") {
+        if (val.startsWith("DEVOLUÇÃO")) {
           hookData.cell.styles.textColor = [217, 119, 6]
           hookData.cell.styles.fontStyle = "bold"
         }
@@ -2094,7 +2121,14 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     didDrawCell: (hookData) => {
       if (hookData.section !== "body" || hookData.column.index !== 8) return
       const movement = data.movements[hookData.row.index]
-      const image = movement ? signatureImages.get(movement.id) : null
+      if (movement?.event_type === "return") {
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(6)
+        doc.setTextColor(100, 116, 139)
+        doc.text("Conclusão registrada", hookData.cell.x + 2, hookData.cell.y + 8)
+        return
+      }
+      const image = movement ? signatureImages.get(movement.event_id || movement.id) : null
       if (!image) {
         drawSignatureCellLine(doc, hookData.cell)
         return
@@ -2111,7 +2145,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
         const y = hookData.cell.y + (hookData.cell.height - drawH) / 2
         const fmt = image.startsWith("data:image/png") ? "PNG" : "JPEG"
         doc.addImage(image, fmt, x, y, drawW, drawH)
-      } catch {}
+      } catch { throw new Error("Não foi possível inserir uma assinatura no PDF. O relatório não foi concluído.") }
     }
   })
 

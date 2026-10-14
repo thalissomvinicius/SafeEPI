@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
+import { LOW_STOCK_THRESHOLD } from "@/lib/stockPolicy"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SCOPES = new Set(["own", "third_party", "all"])
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
   let signedDocumentCountQuery = supabaseAdmin.from("signed_documents").select("id", { count: "exact", head: true })
   const criticalCutoff = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10)
   let criticalCAsQuery = supabaseAdmin.from("ppes").select("id", { count: "exact", head: true }).eq("active", true).lte("ca_expiry_date", criticalCutoff)
-  let lowStockQuery = supabaseAdmin.from("ppes").select("id", { count: "exact", head: true }).eq("active", true).lte("current_stock", 5)
+  let lowStockQuery = supabaseAdmin.from("ppes").select("id", { count: "exact", head: true }).eq("active", true).lte("current_stock", LOW_STOCK_THRESHOLD)
   let recentDeliveriesQuery = supabaseAdmin
     .from("deliveries")
     .select("id,delivery_date,employee:employees(full_name),ppe:ppes(name)")

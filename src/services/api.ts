@@ -49,6 +49,27 @@ export type SystemNotification = {
   severity: "high" | "medium";
 };
 
+export type StockMovementPage = {
+  movements: StockMovement[];
+  hasMore: boolean;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type ReturnDeliveryOptions = {
+  quantity?: number;
+  restock?: boolean;
+  employeeId?: string;
+  expectedReturnedQuantity?: number;
+};
+
+export type ReturnDeliveryResult = {
+  ok?: boolean;
+  returned_quantity?: number;
+  quantity_returned_now?: number;
+};
+
 export type FingerprintTerminal = {
   id: string;
   name: string;
@@ -1590,19 +1611,35 @@ export const api = {
   },
 
   // --- Estoque (Stock Movements) ---
-  async getStockMovements() {
+  async getStockMovementsPage(options: { limit?: number; offset?: number } = {}): Promise<StockMovementPage> {
     const companyId = await getCurrentCompanyId();
     const params = new URLSearchParams();
     if (companyId) params.set("company_id", companyId);
+    const limit = Math.min(500, Math.max(1, Math.trunc(options.limit ?? 100)));
+    const offset = Math.max(0, Math.trunc(options.offset ?? 0));
+    params.set("limit", String(limit));
+    params.set("offset", String(offset));
 
     const response = await fetchWithAuthRetry(`/api/stock-movements${params.size ? `?${params.toString()}` : ""}`);
-    const result = await readResponseJson<{ error?: string; movements?: StockMovement[] }>(response);
+    const result = await readResponseJson<Partial<StockMovementPage> & { error?: string }>(response);
 
     if (!response.ok) {
       throw new Error(result.error || "Erro ao carregar auditoria de estoque.");
     }
 
-    return result.movements || [];
+    const movements = result.movements || [];
+    return {
+      movements,
+      hasMore: result.hasMore ?? movements.length === limit,
+      total: result.total ?? offset + movements.length,
+      limit: result.limit ?? limit,
+      offset: result.offset ?? offset,
+    };
+  },
+
+  async getStockMovements() {
+    const result = await this.getStockMovementsPage({ limit: 500 });
+    return result.movements;
   },
 
   async addStockMovement(movement: Omit<StockMovement, 'id' | 'created_at' | 'ppe'>) {
@@ -1699,7 +1736,10 @@ export const api = {
     return { evidence: result.evidence, batchId: result.batchId || null };
   },
 
-  async getDeliveries(options: { all?: boolean; limit?: number; offset?: number; signAssets?: boolean } = {}) {
+  async getDeliveries(options: {
+    all?: boolean; limit?: number; offset?: number; signAssets?: boolean;
+    startDate?: string; endDate?: string; dateField?: "delivery_date" | "returned_at";
+  } = {}) {
     const companyId = await getCurrentCompanyId();
     const pageSize = options.all ? 1000 : Math.min(Math.max(options.limit || 500, 1), 1000);
     const rows: Record<string, unknown>[] = [];
@@ -1711,8 +1751,16 @@ export const api = {
         .select(`*, employee:employees(full_name, cpf, job_title, third_party_id), ppe:ppes(name, ca_number, ca_expiry_date, cost, lifespan_days), workplace:workplaces(name, third_party_id)`)
         .is('deleted_at', null)
         .order('delivery_date', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, from + pageSize - 1);
       if (companyId) query = query.eq('company_id', companyId);
+      const dateField = options.dateField || "delivery_date";
+      if (options.startDate) query = query.gte(dateField, options.startDate);
+      if (options.endDate) {
+        const endDate = /^\d{4}-\d{2}-\d{2}$/.test(options.endDate)
+          ? `${options.endDate}T23:59:59.999` : options.endDate;
+        query = query.lte(dateField, endDate);
+      }
       const { data, error } = await withSessionRetry(() => query);
       if (error) throw error;
 
@@ -1726,9 +1774,11 @@ export const api = {
     return signStorageFields(rows, ["signature_url"]) as Promise<DeliveryWithRelations[]>;
   },
 
-  async getEmployeeHistory(employeeId: string) {
-    const { data, error } = await withSessionRetry(() =>
-      supabase
+  async getEmployeeHistory(employeeId: string, options: { signAssets?: boolean } = {}) {
+    const companyId = await getCurrentCompanyId();
+    const rows = await collectSupabasePages<Record<string, unknown>>((from, to) =>
+      withSessionRetry(() => {
+        let query = supabase
         .from('deliveries')
         .select(`
           *,
@@ -1739,16 +1789,21 @@ export const api = {
         .eq('employee_id', employeeId)
         .is('deleted_at', null)
         .order('delivery_date', { ascending: false })
+        .order('id', { ascending: false });
+        if (companyId) query = query.eq('company_id', companyId);
+        return query.range(from, to);
+      }),
+      { resourceName: "entregas do colaborador" },
     );
-    
-    if (error) throw error;
-    return signStorageFields((data || []) as unknown as Record<string, unknown>[], ["signature_url"]) as Promise<DeliveryWithRelations[]>;
+    if (options.signAssets === false) return rows as unknown as DeliveryWithRelations[];
+    return signStorageFields(rows, ["signature_url"]) as Promise<DeliveryWithRelations[]>;
   },
 
   async saveDelivery(
     delivery: Omit<Delivery, 'id' | 'created_at'>,
     signatureFile?: File,
     evidence?: { fingerprintEventId: string; fingerprintBatchId: string },
+    options: { idempotencyKey?: string } = {},
   ) {
     let signatureUrl = null;
     await ensureActiveSession();
@@ -1763,7 +1818,7 @@ export const api = {
       reason: normalizedReason,
       signature_url: signatureUrl,
       delivery_date: delivery.delivery_date || new Date().toISOString(),
-      idempotency_key: crypto.randomUUID(),
+      idempotency_key: options.idempotencyKey || crypto.randomUUID(),
       fingerprint_event_id: evidence?.fingerprintEventId || null,
       fingerprint_batch_id: evidence?.fingerprintBatchId || null,
     } as Record<string, unknown>);
@@ -1798,26 +1853,26 @@ export const api = {
     return result;
   },
 
-  async returnDelivery(deliveryId: string, motive: string) {
+  async returnDelivery(deliveryId: string, motive: string, options: ReturnDeliveryOptions = {}): Promise<ReturnDeliveryResult> {
     const response = await fetchWithAuthRetry("/api/deliveries/return", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deliveryId, motive, company_id: getStoredMasterCompanyId() }),
+      body: JSON.stringify({
+        deliveryId, motive, company_id: getStoredMasterCompanyId(),
+        quantity: options.quantity,
+        restock: options.restock,
+        employee_id: options.employeeId,
+        expected_returned_quantity: options.expectedReturnedQuantity,
+      }),
     });
-    const result = await readResponseJson<{ error?: string }>(response);
+    const result = await readResponseJson<ReturnDeliveryResult & { error?: string }>(response);
     if (!response.ok) throw new Error(result.error || "Erro ao devolver entrega.");
+    return result;
   },
 
-  async returnDeliveryQuantity(deliveryId: string, motive: string, quantity: number) {
+  async returnDeliveryQuantity(deliveryId: string, motive: string, quantity: number, options: Omit<ReturnDeliveryOptions, "quantity"> = {}) {
     if (quantity <= 0) return;
-
-    const response = await fetchWithAuthRetry("/api/deliveries/return", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deliveryId, motive, quantity, company_id: getStoredMasterCompanyId() }),
-    });
-    const result = await readResponseJson<{ error?: string }>(response);
-    if (!response.ok) throw new Error(result.error || "Erro ao devolver entrega.");
+    return this.returnDelivery(deliveryId, motive, { ...options, quantity });
   },
 
   async returnMultipleDeliveries(deliveryIds: string[], motive: string) {

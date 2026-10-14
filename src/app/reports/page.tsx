@@ -1,7 +1,7 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, FileSpreadsheet, Calendar } from "lucide-react"
 import { api } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
@@ -16,6 +16,7 @@ import { DeliveryWithRelations, Employee, PPE, ThirdParty, Training, Workplace }
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { getDaysUntilDateOnly, parseDeliveryDateTime } from "@/lib/dateOnly"
 import { useActiveBrand } from "@/hooks/useActiveBrand"
+import { getReportPeriod, timestampInReportPeriod } from "@/lib/reportPeriod"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 type ReportScopeFilter = 'own' | 'third_party' | 'all'
@@ -48,12 +49,13 @@ export default function ReportsPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('month')
   const [customStartDate, setCustomStartDate] = useState<string>('')
   const [customEndDate, setCustomEndDate] = useState<string>('')
-  const [specificMonth, setSpecificMonth] = useState<string>('')
+  const [specificMonth, setSpecificMonth] = useState<string>(() => `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`)
   const [specificMonthSel, setSpecificMonthSel] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
   const [reportScopeFilter, setReportScopeFilter] = useState<ReportScopeFilter>('own')
   const [selectedThirdPartyIds, setSelectedThirdPartyIds] = useState<string[]>([])
   const [isCompactCharts, setIsCompactCharts] = useState(false)
+  const period = useMemo(() => getReportPeriod(dateFilter, customStartDate, customEndDate, specificMonth), [dateFilter, customStartDate, customEndDate, specificMonth])
   
   // Computed Data State
   const [allDeliveries, setAllDeliveries] = useState<DeliveryWithRelations[]>([])
@@ -85,19 +87,22 @@ export default function ReportsPage() {
 
   // Fetch Raw Data
   useEffect(() => {
+    let cancelled = false
     async function loadData() {
       if (!user || user.role === 'ALMOXARIFE') return
+      if (!period.valid) { setLoading(false); return }
       try {
         setLoading(true)
         setLoadError(null)
         const [ppeData, deliveryData, trainingData, wpData, employeeData, thirdPartyData] = await Promise.all([
           api.getPpes(),
-          api.getDeliveries({ all: true, signAssets: false }),
+          api.getDeliveries({ all: true, signAssets: false, startDate: period.start?.toISOString(), endDate: period.end?.toISOString() }),
           api.getTrainings(),
           api.getWorkplaces(),
           api.getEmployees({ signPhotos: false }),
           api.getThirdParties(),
         ])
+        if (cancelled) return
         setRawPpes(ppeData)
         setRawDeliveries(deliveryData)
         setRawTrainings(trainingData)
@@ -105,18 +110,19 @@ export default function ReportsPage() {
         setRawEmployees(employeeData)
         setThirdParties(thirdPartyData)
       } catch (err) {
+        if (cancelled) return
         console.error("Erro ao carregar dados:", err)
         setLoadError(err instanceof Error ? err.message : "Falha ao carregar o relatorio.")
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     
     const timer = setTimeout(() => {
         loadData()
     }, 0)
-    return () => clearTimeout(timer)
-  }, [user, reloadVersion])
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [user, reloadVersion, period])
 
   // Compute stats based on filter
   useEffect(() => {
@@ -140,35 +146,8 @@ export default function ReportsPage() {
       return !thirdPartyId || matchesThirdPartySelection(thirdPartyId)
     }
 
-    let filteredDeliveries = rawDeliveries
-    let filteredTrainings = rawTrainings
-    if (dateFilter !== 'all') {
-      if (dateFilter === 'custom' && customStartDate && customEndDate) {
-        filteredDeliveries = rawDeliveries.filter(d => d.delivery_date >= customStartDate && d.delivery_date <= customEndDate + 'T23:59:59')
-        filteredTrainings = rawTrainings.filter(t => t.completion_date >= customStartDate && t.completion_date <= customEndDate + 'T23:59:59')
-      } else if (dateFilter === 'specific_month' && specificMonth) {
-        filteredDeliveries = rawDeliveries.filter(d => d.delivery_date.startsWith(specificMonth))
-        filteredTrainings = rawTrainings.filter(t => t.completion_date.startsWith(specificMonth))
-      } else if (dateFilter !== 'custom' && dateFilter !== 'specific_month') {
-        const cutoff = new Date()
-        if (dateFilter === 'month') {
-          cutoff.setDate(1)
-          cutoff.setHours(0,0,0,0)
-        } else if (dateFilter === 'last30') {
-          cutoff.setDate(cutoff.getDate() - 30)
-        } else if (dateFilter === 'last60') {
-          cutoff.setDate(cutoff.getDate() - 60)
-        } else if (dateFilter === 'last90') {
-          cutoff.setDate(cutoff.getDate() - 90)
-        }
-        
-        filteredDeliveries = rawDeliveries.filter(d => {
-          const deliveryDate = parseDeliveryDateTime(d.delivery_date)
-          return deliveryDate ? deliveryDate >= cutoff : false
-        })
-        filteredTrainings = rawTrainings.filter(t => new Date(t.completion_date) >= cutoff)
-      }
-    }
+    let filteredDeliveries = rawDeliveries.filter((delivery) => timestampInReportPeriod(parseDeliveryDateTime(delivery.delivery_date)?.getTime() ?? Number.NaN, period))
+    let filteredTrainings = rawTrainings.filter((training) => timestampInReportPeriod(parseDeliveryDateTime(training.completion_date)?.getTime() ?? Number.NaN, period))
 
     filteredDeliveries = filteredDeliveries.filter((delivery) => matchesScope(getDeliveryThirdPartyId(delivery)))
     filteredTrainings = filteredTrainings.filter((training) => matchesScope(training.third_party_id || null))
@@ -182,7 +161,7 @@ export default function ReportsPage() {
     // 2. CAs Críticos (Vencendo nos próximos 90 dias) - Geral
     const criticalCount = rawPpes.filter(p => {
       const diffDays = getDaysUntilDateOnly(p.ca_expiry_date)
-      return diffDays < 90
+      return p.active && diffDays <= 90
     }).length
 
     // 3. Investimento por Canteiro (no período filtrado)
@@ -251,12 +230,12 @@ export default function ReportsPage() {
     }
 
     setStats([
-      { label: `Custo EPIs (${labelMap[dateFilter]})`, value: `R$ ${periodTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `${scopeLabelMap[reportScopeFilter]}` },
+      { label: `Custo estimado (${labelMap[dateFilter]})`, value: `R$ ${periodTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, change: `Preço atual do catálogo · ${scopeLabelMap[reportScopeFilter]}` },
       { label: `Entregas (${labelMap[dateFilter]})`, value: filteredDeliveries.length.toString(), change: `${filteredDeliveries.reduce((acc, delivery) => acc + Number(delivery.quantity || 0), 0)} itens` },
       { label: "EPIs em Alerta (C.A.)", value: criticalCount.toString(), change: "Atenção (Geral)" },
       { label: `Treinamentos (${labelMap[dateFilter]})`, value: filteredTrainings.length.toString(), change: scopeLabelMap[reportScopeFilter] },
     ])
-  }, [rawDeliveries, rawEmployees, rawPpes, rawTrainings, rawWorkplaces, thirdParties, dateFilter, customStartDate, customEndDate, specificMonth, reportScopeFilter, selectedThirdPartyIds])
+  }, [rawDeliveries, rawEmployees, rawPpes, rawTrainings, rawWorkplaces, thirdParties, dateFilter, period, reportScopeFilter, selectedThirdPartyIds])
 
   if (authLoading || (user && user.role === 'ALMOXARIFE')) {
     return (
@@ -268,7 +247,7 @@ export default function ReportsPage() {
     )
   }
 
-  if (loading) {
+  if (loading && rawPpes.length === 0 && rawDeliveries.length === 0) {
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in">
             <div className="flex justify-between border-b border-slate-100 pb-8">
@@ -341,6 +320,7 @@ export default function ReportsPage() {
   }
 
   const handleExportPDF = () => {
+    if (!period.valid || loading) return
     let periodTitle = 'Todo o Histórico'
     if (dateFilter === 'month') periodTitle = 'Neste Mês'
     if (dateFilter === 'last30') periodTitle = 'Últimos 30 Dias'
@@ -376,13 +356,13 @@ export default function ReportsPage() {
       <div className="flex min-w-0 flex-col items-start justify-between gap-4 overflow-hidden md:flex-row md:items-end">
         <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-                <span className="bg-[#2563EB] text-white text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase italic">Analytics / Supabase</span>
+                <span className="text-xs font-semibold text-slate-500">Gestão e planejamento</span>
             </div>
-            <h1 className="flex min-w-0 items-start text-xl font-black uppercase leading-tight tracking-tight text-slate-800 sm:text-2xl md:tracking-tighter">
+            <h1 className="flex min-w-0 items-start text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl">
                 <TrendingDown className="mr-2 mt-0.5 h-5 w-5 shrink-0 text-[#2563EB] sm:h-6 sm:w-6" />
-                BI & Inteligência SafeEPI
+                Relatórios de EPI
             </h1>
-            <p className="text-slate-500 text-sm mt-1 font-medium italic">Extração de custos operacionais e conformidade normativa.</p>
+            <p className="text-slate-500 text-sm mt-2 leading-6">Entregas, consumo e custos estimados no período selecionado.</p>
         </div>
         <div className="flex flex-col gap-3 w-full sm:w-auto">
           <div className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
@@ -534,6 +514,7 @@ export default function ReportsPage() {
           )}
           <button 
             onClick={handleExportPDF}
+            disabled={!period.valid || loading || allDeliveries.length === 0}
             className="min-h-11 w-full bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm"
           >
               <Download className="w-4 h-4 mr-2 text-[#2563EB]" />
@@ -542,10 +523,14 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {!period.valid && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Informe um período completo com datas válidas. Exportação indisponível até corrigir o filtro.</p>}
+      {loading && <p role="status" className="text-sm text-slate-600">Atualizando o período selecionado…</p>}
+      <p className="text-xs leading-5 text-slate-500">Custos estimados pelo preço atual do catálogo, sem recompor preços históricos. Alertas de CA consideram todo o catálogo ativo; os demais indicadores respeitam os filtros.</p>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {stats.map((stat, i) => (
           <div key={i} className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:shadow-md sm:p-5">
-            <p className="text-[10px] font-black uppercase leading-snug tracking-[0.14em] text-slate-400 sm:tracking-[0.2em]">{stat.label}</p>
+            <p className="text-xs font-semibold leading-5 text-slate-500">{stat.label}</p>
             <div className="mt-3 min-w-0 space-y-2">
                 <span className="block max-w-full break-words text-2xl font-bold leading-tight tracking-tight text-slate-800 sm:text-3xl">{stat.value}</span>
                 <span className="inline-flex max-w-full rounded bg-red-50 px-2 py-0.5 text-[10px] font-bold leading-snug text-[#2563EB]">
@@ -576,7 +561,7 @@ export default function ReportsPage() {
                 <p className="truncate text-sm font-black uppercase tracking-tight text-slate-800" title={thirdParty.name}>{thirdParty.name}</p>
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total para cobrança</p>
+                    <p className="text-xs font-semibold text-slate-500">Custo estimado</p>
                     <p className="mt-1 text-xl font-black text-emerald-700">
                       R$ {thirdParty.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
@@ -726,13 +711,13 @@ export default function ReportsPage() {
             </div>
             <div>
                 <h2 className="text-xl font-black uppercase tracking-tighter">Exportação Gerencial</h2>
-                <p className="text-slate-400 text-sm font-medium">Arquivos validados para compliance NR-06.</p>
+                <p className="text-slate-300 text-sm">Relatórios do conjunto selecionado para conferência da empresa.</p>
             </div>
         </div>
         <div className="flex gap-4 w-full sm:w-auto relative z-10">
             <button 
               onClick={() => exportDeliveriesToExcel(deliveriesForExport)}
-              disabled={deliveriesForExport.length === 0}
+              disabled={loading || !period.valid || deliveriesForExport.length === 0}
               className="flex-1 sm:flex-none border border-slate-700 bg-slate-800 text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center justify-center disabled:opacity-40 gap-2"
             >
                 <FileSpreadsheet className="w-4 h-4 text-green-400" />
@@ -740,6 +725,7 @@ export default function ReportsPage() {
             </button>
             <button 
                 onClick={handleExportPDF}
+                disabled={loading || !period.valid || deliveriesForExport.length === 0}
                 className="flex-1 sm:flex-none bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-slate-50 transition-all flex items-center justify-center border-b-4 border-slate-200 gap-2"
             >
                 <Download className="w-4 h-4 text-[#2563EB]" />

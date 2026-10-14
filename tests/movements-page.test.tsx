@@ -53,7 +53,8 @@ describe("MovementsPage", () => {
     render(<MovementsPage />)
 
     await screen.findByText(/nenhuma movimentação neste período/i)
-    expect(apiMocks.getDeliveries).toHaveBeenCalledWith({ signAssets: false })
+    expect(apiMocks.getDeliveries).toHaveBeenCalledWith({ signAssets: false, startDate: expect.any(String), endDate: expect.any(String) })
+    expect(apiMocks.getDeliveries).toHaveBeenCalledWith({ signAssets: false, startDate: expect.any(String), endDate: expect.any(String), dateField: "returned_at" })
     expect(apiMocks.getSignedDocuments).toHaveBeenCalledWith({ signAssets: false })
     expect(apiMocks.getEmployees).toHaveBeenCalledWith({ signPhotos: false })
   })
@@ -76,14 +77,14 @@ describe("MovementsPage", () => {
       id: `delivery-${index}`, employee_id: "employee-1", quantity: 1,
       delivery_date: new Date().toISOString(), employee: { full_name: "RENATO MOREIRA", cpf: "" }, ppe: { name: "Luva" },
     }))
-    apiMocks.getDeliveries.mockResolvedValueOnce(entries).mockResolvedValueOnce([])
+    apiMocks.getDeliveries.mockImplementation(async (options) => options.dateField === "returned_at" || options.offset ? [] : entries)
     render(<MovementsPage />)
     expect(await screen.findByText("Histórico carregado parcialmente")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Mostrar mais 100 movimentações" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Excel" })).toBeDisabled()
     await userEvent.click(screen.getByRole("button", { name: "Carregar mais 500 registros" }))
     await waitFor(() => expect(screen.queryByText("Histórico carregado parcialmente")).not.toBeInTheDocument())
-    expect(apiMocks.getDeliveries).toHaveBeenLastCalledWith({ offset: 500, limit: 500, signAssets: false })
+    expect(apiMocks.getDeliveries).toHaveBeenLastCalledWith({ offset: 500, limit: 500, signAssets: false, startDate: expect.any(String), endDate: expect.any(String) })
     expect(screen.getByRole("button", { name: "Excel" })).toBeEnabled()
   }, 15000)
 

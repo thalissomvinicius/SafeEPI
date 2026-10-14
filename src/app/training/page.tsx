@@ -8,7 +8,8 @@ import { Employee, TrainingWithRelations } from "@/types/database"
 import { format } from "date-fns"
 import { toast } from "@/lib/toast"
 import { useRef } from "react"
-import SignatureCanvas from "react-signature-canvas"
+import type SignatureCanvas from "react-signature-canvas"
+import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
@@ -69,6 +70,7 @@ export default function TrainingPage() {
   const [trainings, setTrainings] = useState<TrainingWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -245,6 +247,8 @@ export default function TrainingPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
+      setLoadError(null)
+      const failures: string[] = []
       const [trainingsResult, employeesResult] = await Promise.allSettled([
         api.getTrainings(),
         api.getEmployees()
@@ -254,8 +258,7 @@ export default function TrainingPage() {
         setTrainings(trainingsResult.value)
       } else {
         console.error("Erro ao carregar treinamentos:", trainingsResult.reason)
-        setTrainings([])
-        toast.warning("Nao foi possivel carregar o historico de treinamentos agora. O cadastro continua disponivel.")
+        failures.push("Não foi possível atualizar o histórico de treinamentos.")
       }
 
       if (employeesResult.status === "fulfilled") {
@@ -270,11 +273,12 @@ export default function TrainingPage() {
         }))
       } else {
         console.error("Erro ao carregar colaboradores:", employeesResult.reason)
-        setEmployees([])
-        toast.error("Falha ao carregar os colaboradores no Supabase.")
+        failures.push("Não foi possível atualizar a lista de colaboradores.")
       }
+      setLoadError(failures.length ? failures.join(" ") : null)
     } catch (error) {
       console.error("Erro inesperado ao carregar dados de treinamentos:", error)
+      setLoadError("Não foi possível carregar os treinamentos. Tente novamente.")
     } finally {
       setLoading(false)
     }
@@ -855,7 +859,7 @@ export default function TrainingPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
               <Award className="w-6 h-6 mr-2 text-[#2563EB]" />
-              Treinamentos SafeEPI
+              Treinamentos
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de competências e normas regulamentadoras (NRs).</p>
         </div>
@@ -867,6 +871,11 @@ export default function TrainingPage() {
           Registrar Treinamento
         </button>
       </div>
+
+      {loadError && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-sm font-semibold text-amber-900">{loadError}</p><p className="mt-1 text-sm text-amber-800">Os registros já carregados foram mantidos. A lista pode estar desatualizada.</p></div>
+        <button type="button" disabled={loading} onClick={() => void loadData()} className="min-h-11 shrink-0 rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 disabled:opacity-50">{loading ? "Atualizando…" : "Tentar novamente"}</button>
+      </div>}
 
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 border-b border-slate-200 bg-slate-50/30">
@@ -885,7 +894,7 @@ export default function TrainingPage() {
         </div>
         
         <div className="min-h-[300px] md:overflow-x-auto">
-          {loading ? (
+          {loading && trainings.length === 0 ? (
             <LoadingState
               variant="panel"
               label="Acessando treinamentos"
@@ -962,7 +971,7 @@ export default function TrainingPage() {
               })}
               {filteredPendingDrafts.length === 0 && filteredTrainings.length === 0 && (
                 <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-400 italic">
-                  Nenhum treinamento registrado no banco de dados.
+                  {loadError ? "Histórico indisponível. Use Tentar novamente acima." : "Nenhum treinamento encontrado para esta busca."}
                 </div>
               )}
             </div>
@@ -1067,7 +1076,7 @@ export default function TrainingPage() {
                 {filteredPendingDrafts.length === 0 && filteredTrainings.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-6 py-10 text-center text-slate-400 italic font-medium">
-                        Nenhum treinamento registrado no banco de dados.
+                        {loadError ? "Histórico indisponível. Use Tentar novamente acima." : "Nenhum treinamento encontrado para esta busca."}
                     </td>
                   </tr>
                 )}
@@ -1096,7 +1105,7 @@ export default function TrainingPage() {
       >
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {step === 1 && (
-                  <form onSubmit={(e) => { e.preventDefault(); setStep(2); }} className="p-8 space-y-5">
+                  <form onSubmit={(e) => { e.preventDefault(); setStep(2); }} className="p-4 sm:p-8 space-y-5">
                     <div className="space-y-2">
                       <label id="label-colaborador" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador Treinado</label>
                       <select 
@@ -1183,7 +1192,7 @@ export default function TrainingPage() {
                 )}
 
                 {step === 2 && (
-                  <div className="p-8 space-y-4">
+                  <div className="p-4 sm:p-8 space-y-4">
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
                       <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
                       <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest">
@@ -1249,7 +1258,7 @@ export default function TrainingPage() {
                 )}
 
                 {step === 3 && tstSelectedEmployee && (
-                  <div className="p-8 space-y-5">
+                  <div className="p-4 sm:p-8 space-y-5">
                     {!getTrainedEmployee()?.photo_url && !tstSignatureBase64 && !participantBlankSignature && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
                         <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -1359,43 +1368,18 @@ export default function TrainingPage() {
                             </button>
                           </div>
                         ) : (
-                          <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
-                            <SignatureCanvas
-                              ref={tstSigCanvas}
-                              canvasProps={{
-                                className: "block w-full h-32 max-w-full touch-none overscroll-contain",
-                                style: {
-                                  touchAction: "none",
-                                  WebkitUserSelect: "none",
-                                  userSelect: "none",
-                                },
-                              }}
-                              penColor="#1e293b"
-                            />
-                          </div>
-                        )}
-                        {!tstSignatureBase64 && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => tstSigCanvas.current?.clear()}
-                              className="flex-1 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
-                            >
-                              Limpar
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (tstSigCanvas.current?.isEmpty()) {
+                          <SignatureCapture
+                            signatureRef={tstSigCanvas}
+                            confirmLabel="Confirmar assinatura do colaborador"
+                            onConfirm={() => {
+                                if (!tstSigCanvas.current || tstSigCanvas.current.isEmpty()) {
                                   toast.error("Assine antes de confirmar.")
                                   return
                                 }
                                 setParticipantBlankSignature(false)
-                                setTstSignatureBase64(tstSigCanvas.current?.toDataURL('image/png') || null)
-                              }}
-                              className="flex-1 py-3 text-[10px] font-black text-white bg-[#2563EB] uppercase tracking-widest rounded-xl hover:bg-[#1D4ED8] transition-all"
-                            >
-                              Confirmar Assinatura
-                            </button>
-                          </div>
+                                setTstSignatureBase64(tstSigCanvas.current.toDataURL('image/png'))
+                            }}
+                          />
                         )}
                         <button
                           onClick={generateTrainingRemoteSignatureLink}
@@ -1482,7 +1466,7 @@ export default function TrainingPage() {
                 )}
 
                 {step === 4 && tstSelectedEmployee && (
-                  <div className="p-8 space-y-5">
+                  <div className="p-4 sm:p-8 space-y-5">
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Instrutor responsavel</p>
                       <p className="font-black text-slate-800 text-sm uppercase mt-1">{tstSelectedEmployee.full_name}</p>
@@ -1524,43 +1508,17 @@ export default function TrainingPage() {
                           </button>
                         </div>
                       ) : (
-                        <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
-                          <SignatureCanvas
-                            ref={instructorSigCanvas}
-                            canvasProps={{
-                              className: "block w-full h-32 max-w-full touch-none overscroll-contain",
-                              style: {
-                                touchAction: "none",
-                                WebkitUserSelect: "none",
-                                userSelect: "none",
-                              },
-                            }}
-                            penColor="#1e293b"
-                          />
-                        </div>
-                      )}
-
-                      {!instructorSignatureBase64 && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => instructorSigCanvas.current?.clear()}
-                            className="flex-1 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
-                          >
-                            Limpar
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (instructorSigCanvas.current?.isEmpty()) {
+                        <SignatureCapture
+                          signatureRef={instructorSigCanvas}
+                          confirmLabel="Confirmar assinatura do instrutor"
+                          onConfirm={() => {
+                              if (!instructorSigCanvas.current || instructorSigCanvas.current.isEmpty()) {
                                 toast.error("O instrutor precisa assinar antes de finalizar.")
                                 return
                               }
-                              setInstructorSignatureBase64(instructorSigCanvas.current?.toDataURL('image/png') || null)
-                            }}
-                            className="flex-1 py-3 text-[10px] font-black text-white bg-[#2563EB] uppercase tracking-widest rounded-xl hover:bg-[#1D4ED8] transition-all"
-                          >
-                            Confirmar Assinatura
-                          </button>
-                        </div>
+                              setInstructorSignatureBase64(instructorSigCanvas.current.toDataURL('image/png'))
+                          }}
+                        />
                       )}
                       <button
                         onClick={generateInstructorRemoteSignatureLink}

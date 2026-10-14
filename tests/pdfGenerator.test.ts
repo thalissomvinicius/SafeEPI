@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { jsPDF, TextOptionsLight } from "jspdf"
 import QRCode from "qrcode"
 import type { DeliveryWithRelations, PPE } from "@/types/database"
+import { buildMovementEvents, summarizeMovementEvents, MOVEMENT_HISTORY_NOTE } from "@/lib/movementEvents"
 
 const rendered = vi.hoisted(() => ({
   texts: [] as { value: string; x: number; y: number; width: number; page: number; align: string }[],
@@ -177,6 +178,34 @@ describe("paginação e margens do comprovante de entrega", () => {
     for (let page = 1; page <= rendered.pages; page += 1) {
       expect(rendered.texts.some(entry => entry.page === page && entry.value === "RELATÓRIO DE MOVIMENTAÇÕES")).toBe(true)
     }
+  })
+
+  it("mostra entrega e conclusão da devolução nas respectivas datas sem reutilizar o estado como tipo", () => {
+    const events = buildMovementEvents([{ ...syntheticMovements(1)[0], delivery_date: "2026-09-12T12:00:00Z", returned_at: "2026-10-02T12:00:00Z", returned_quantity: 1 }])
+    generateMovementsSimplePDF({ movements: events, stats: summarizeMovementEvents(events), period: "Setembro e outubro" })
+    const text = rendered.texts.map((entry) => entry.value).join(" ").replace(/\s+/g, " ")
+    expect(text).toContain("12/09/2026")
+    expect(text).toContain("02/10/2026")
+    expect(text).toContain("DEVOLUÇÃO CONCLUÍDA")
+    expect(text).toContain(MOVEMENT_HISTORY_NOTE)
+    expectTextInsideHorizontalMargins(210)
+  })
+
+  it("mostra quantidade e destino na baixa por perda sem declarar retorno físico", async () => {
+    await generateReturnPDF({ employeeName: "COLABORADOR TESTE", employeeCpf: "000.000.000-00", workplaceName: "UNIDADE", returnedItemName: "CAPACETE", returnedQuantity: 3, returnMotive: "Perda", stockDestination: "Sem retorno físico (perda/extravio)", newItemName: "CAPACETE NOVO", newItemQuantity: 3, newItemCa: "12345", authMethod: "manual" })
+    const text = rendered.texts.map((entry) => entry.value).join(" ").replace(/\s+/g, " ")
+    expect(text).toContain("RECIBO DE BAIXA / SUBSTITUIÇÃO")
+    expect(text).toContain("Sem retorno físico (perda/extravio)")
+    expect(text).not.toContain("Confirmo a devolução")
+    expectTextInsideHorizontalMargins(210)
+    expectNumberedPages()
+  })
+
+  it("interrompe o PDF completo se a assinatura armazenada não puder ser carregada", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }))
+    try {
+      await expect(generateMovementsPresentationPDF({ movements: [{ ...syntheticMovements(1)[0], signature_url: "https://example.org/private-signature.png" }], stats: { deliveries: 1, returns: 0, totalItems: 1, uniqueEmployees: 1 }, period: "Teste" })).rejects.toThrow("HTTP 403")
+    } finally { vi.unstubAllGlobals() }
   })
 
   it("reserva o responsável técnico depois da última linha e usa a quantidade real de páginas no relatório completo", async () => {

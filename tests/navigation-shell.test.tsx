@@ -16,7 +16,8 @@ afterEach(cleanup)
 
 describe("navigation hierarchy", () => {
   it("preserves permission boundaries and company training visibility", () => {
-    expect(visibleNavigation("ALMOXARIFE").map((item) => item.href)).not.toContain("/delivery")
+    expect(visibleNavigation("ALMOXARIFE").map((item) => item.href)).toContain("/delivery")
+    expect(visibleNavigation("DIRETORIA").map((item) => item.href)).not.toContain("/delivery")
     expect(visibleNavigation("ADMIN").map((item) => item.href)).not.toContain("/companies")
     expect(visibleNavigation("ADMIN", false).map((item) => item.href)).not.toContain("/training")
     expect(visibleNavigation("MASTER", false).map((item) => item.href)).toContain("/training")

@@ -27,7 +27,8 @@ import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { isValidGeoLocation, requestRequiredGeolocation } from "@/utils/geolocation"
-import { imageDataUrlToFile } from "@/utils/imageDataUrl"
+import { fetchImageDataUrl, imageDataUrlToFile } from "@/utils/imageDataUrl"
+import { createDeliveryOperation, deliveryOperationStorageKey, readDeliveryOperation, runDeliveryOperation, type DeliveryOperation } from "@/lib/deliveryOperation"
 
 interface CartItem {
   ppeId: string
@@ -95,6 +96,11 @@ export default function DeliveryPage() {
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null)
   const [lastPdfFileName, setLastPdfFileName] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const savingRef = useRef(false)
+  const operationRef = useRef<DeliveryOperation | null>(null)
+  const [operation, setOperation] = useState<DeliveryOperation | null>(null)
+  const [operationError, setOperationError] = useState<string | null>(null)
+  const [remoteOptionsOpen, setRemoteOptionsOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"new" | "pending">("new")
   const [pendingDrafts, setPendingDrafts] = useState<PendingDeliveryDraft[]>([])
   const [pendingSearchTerm, setPendingSearchTerm] = useState("")
@@ -135,6 +141,20 @@ export default function DeliveryPage() {
   const [fingerprintEvidence, setFingerprintEvidence] = useState<FingerprintEvidence | null>(null)
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
   const [facialTransactionLocked, setFacialTransactionLocked] = useState(false)
+  const companyId = user?.role === "MASTER" ? api.getMasterCompanyContext() || user.company_id : user?.company_id
+  const operationStorageKey = user?.id && companyId ? deliveryOperationStorageKey(user.id, companyId) : null
+  const persistOperation = useCallback((next: DeliveryOperation) => {
+    if (!operationStorageKey) throw new Error("Confirme a empresa antes de registrar a entrega.")
+    window.sessionStorage.setItem(operationStorageKey, JSON.stringify(next))
+    operationRef.current = next
+    setOperation(structuredClone(next))
+  }, [operationStorageKey])
+  const clearOperation = () => {
+    if (operationStorageKey) window.sessionStorage.removeItem(operationStorageKey)
+    operationRef.current = null
+    setOperation(null)
+    setOperationError(null)
+  }
 
   const requestLocationForSignature = useCallback(async (showToast = true) => {
     if (isValidGeoLocation(location)) {
@@ -211,7 +231,22 @@ export default function DeliveryPage() {
         setPpes(ppeData.filter(p => p.active))
         setWorkplaces(wpData)
         
-        if (empData.length > 0) {
+        const recovering = operationStorageKey ? readDeliveryOperation(window.sessionStorage, operationStorageKey) : null
+        if (recovering) {
+          operationRef.current = recovering
+          setOperation(recovering)
+          setSelectedEmployeeId(recovering.employeeId)
+          setSelectedWorkplaceId(recovering.workplaceId)
+          setDeliveryDate(format(new Date(recovering.deliveryDate), "yyyy-MM-dd"))
+          setAuthMethod(recovering.authMethod)
+          setCart(recovering.items.map((entry) => {
+            const ppe = ppeData.find((candidate) => candidate.id === entry.ppeId)
+            return { ppeId: entry.ppeId, ppeName: ppe?.name || "EPI do pedido", ppeCaNumber: ppe?.ca_number || "", ppeCaExpiry: ppe?.ca_expiry_date || "", quantity: entry.quantity, reason: entry.reason,
+              autoReturnAllocations: entry.returns.map((allocation) => ({ deliveryId: allocation.deliveryId, quantity: allocation.quantity, deliveryDate: "" })),
+            }
+          }))
+          setStep(2)
+        } else if (empData.length > 0) {
             setSelectedEmployeeId(empData[0].id)
             setSelectedWorkplaceId(empData[0].workplace_id || "")
         }
@@ -225,7 +260,7 @@ export default function DeliveryPage() {
     }
 
     loadOptions()
-  }, [optionsReload])
+  }, [optionsReload, operationStorageKey])
 
   useEffect(() => {
     return () => {
@@ -236,6 +271,7 @@ export default function DeliveryPage() {
   }, [lastPdfUrl])
 
   useEffect(() => {
+    let cancelled = false
     if (!selectedEmployeeId) {
       const timer = window.setTimeout(() => setActiveDeliveries([]), 0)
       return () => window.clearTimeout(timer)
@@ -246,19 +282,19 @@ export default function DeliveryPage() {
         try {
           setLoadingActiveDeliveries(true)
           const history = await api.getEmployeeHistory(selectedEmployeeId)
-          setActiveDeliveries(history.filter(delivery => !delivery.returned_at && getRemainingDeliveryQuantity(delivery) > 0))
+          if (!cancelled) setActiveDeliveries(history.filter(delivery => !delivery.returned_at && getRemainingDeliveryQuantity(delivery) > 0))
         } catch (err) {
           console.error("Erro ao carregar EPIs ativos do colaborador:", err)
-          setActiveDeliveries([])
+          if (!cancelled) setActiveDeliveries([])
         } finally {
-          setLoadingActiveDeliveries(false)
+          if (!cancelled) setLoadingActiveDeliveries(false)
         }
       }
 
       void loadEmployeeActiveDeliveries()
     }, 0)
 
-    return () => window.clearTimeout(timer)
+    return () => { cancelled = true; window.clearTimeout(timer) }
   }, [selectedEmployeeId])
 
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
@@ -474,6 +510,10 @@ export default function DeliveryPage() {
   }, [pendingDrafts, pendingSearchTerm])
 
   const handleEmployeeChange = (empId: string) => {
+    if (operationRef.current) return
+    setActiveDeliveries([])
+    setCart([])
+    setFingerprintEvidence(null)
     setSelectedEmployeeId(empId)
     setCapturedPhotoBase64(null)
     const emp = employees.find(e => e.id === empId)
@@ -498,7 +538,12 @@ export default function DeliveryPage() {
   }, [pendingDrafts])
 
   const addToCart = () => {
+    if (operationRef.current) return
     if (!currentPpe) return
+    if (!Number.isInteger(currentQuantity) || currentQuantity < 1 || currentQuantity > 1000) {
+      toast.error("Informe uma quantidade inteira entre 1 e 1.000.")
+      return
+    }
     if (isCurrentPpeExpired) {
       toast.error("EPI com CA vencido não pode ser entregue.")
       return
@@ -554,13 +599,19 @@ export default function DeliveryPage() {
   }
 
   const removeFromCart = (ppeId: string) => {
+    if (operationRef.current) return
     setCart(prev => prev.filter(item => item.ppeId !== ppeId))
   }
 
   const validateCartForDelivery = useCallback(() => {
+    if (operationRef.current) return true // Resume the frozen intention, not today's already-decreased stock.
+    if (!selectedEmployee?.active || cart.length === 0 || !Number.isFinite(Date.parse(facialDeliveryDateIso))) {
+      toast.error("Confira colaborador, data e itens antes de confirmar.")
+      return false
+    }
     for (const item of cart) {
       const ppe = ppes.find((candidate) => candidate.id === item.ppeId)
-      if (!ppe) {
+      if (!ppe?.active || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 1000) {
         toast.error(`EPI ${item.ppeName} nao encontrado no catalogo.`)
         return false
       }
@@ -578,7 +629,64 @@ export default function DeliveryPage() {
     }
 
     return true
-  }, [cart, ppes])
+  }, [cart, ppes, selectedEmployee, facialDeliveryDateIso])
+
+  const getOperation = (mode: "signed" | "later", fingerprintEventId?: string) => {
+    const current = operationRef.current
+    if (current) {
+      if (current.mode !== mode) throw new Error("Retome a mesma modalidade do pedido iniciado.")
+      return current
+    }
+    const next = createDeliveryOperation({
+      employeeId: selectedEmployeeId, workplaceId: selectedWorkplaceId, thirdPartyId: selectedThirdPartyId,
+      deliveryDate: facialDeliveryDateIso, mode, authMethod: mode === "later" ? "manual" : authMethod as "manual" | "manual_facial" | "fingerprint",
+      fingerprintEventId: fingerprintEventId || null,
+      items: cart.map((entry) => ({ ppeId: entry.ppeId, quantity: entry.quantity, reason: entry.reason,
+        returns: (entry.autoReturnAllocations || []).map((allocation) => {
+          const previous = activeDeliveries.find((delivery) => delivery.id === allocation.deliveryId)
+          if (!previous || previous.employee_id !== selectedEmployeeId || previous.ppe_id !== entry.ppeId) throw new Error("O historico de substituicao mudou. Atualize os itens antes de confirmar.")
+          return { deliveryId: allocation.deliveryId, quantity: allocation.quantity, baseline: previous.returned_quantity || 0 }
+        }),
+      })),
+    })
+    persistOperation(next)
+    return next
+  }
+
+  const runOperation = async (current: DeliveryOperation, signatureFile?: File) => {
+    let history: DeliveryWithRelations[] | null = null
+    const getHistory = async () => history ??= await api.getEmployeeHistory(current.employeeId, { signAssets: false })
+    let operationSignature = signatureFile
+    const restoreOriginalSignature = async (delivery: Delivery | undefined) => {
+      if (delivery?.signature_url && current.mode === "signed" && current.authMethod !== "fingerprint") {
+        const url = await api.getPrivateAssetUrl(delivery.signature_url)
+        const image = await fetchImageDataUrl(url, { required: true, label: "assinatura original do pedido" })
+        if (!image) throw new Error("A assinatura original nao esta disponivel. Retome mais tarde; a entrega ja registrada sera preservada.")
+        operationSignature = await dataUrlToImageFile(image, "signature")
+      }
+      return delivery
+    }
+    return runDeliveryOperation<Delivery>(current, {
+      persist: persistOperation,
+      create: async (entry, index) => {
+        const result = await api.saveDelivery({ employee_id: current.employeeId, third_party_id: current.thirdPartyId,
+        ppe_id: entry.ppeId, workplace_id: current.workplaceId || null, reason: entry.reason as Delivery["reason"], quantity: entry.quantity,
+        ip_address: ipAddress || "Desconhecido", auth_method: current.authMethod, signature_url: null, delivery_date: current.deliveryDate,
+        }, operationSignature, current.fingerprintEventId ? { fingerprintEventId: current.fingerprintEventId, fingerprintBatchId: current.id } : undefined, { idempotencyKey: entry.key })
+        if (index === 0) await restoreOriginalSignature(result)
+        return result
+      },
+      read: async (id) => restoreOriginalSignature((await getHistory()).find((entry) => entry.id === id)),
+      returnedQuantity: async (id) => {
+        history = null
+        const entry = (await getHistory()).find((entry) => entry.id === id)
+        if (!entry) throw new Error("Nao foi possivel conferir a baixa anterior. Consulte o historico.")
+        return entry.returned_quantity || 0
+      },
+      returnItem: (allocation, entry) => api.returnDeliveryQuantity(allocation.deliveryId, getAutoReturnMotive(entry.reason), allocation.quantity,
+        { restock: false, employeeId: current.employeeId, expectedReturnedQuantity: allocation.baseline }),
+    })
+  }
 
   const clearSignature = () => {
     if (sigCanvas.current) {
@@ -586,7 +694,8 @@ export default function DeliveryPage() {
     }
   }
 
-  const saveDelivery = useCallback(async (signatureDataUrl?: string, facialSubmission?: FacialSubmission, verifiedFingerprint?: FingerprintEvidence) => {
+  const saveDelivery = async (signatureDataUrl?: string, facialSubmission?: FacialSubmission, verifiedFingerprint?: FingerprintEvidence) => {
+    if (savingRef.current) return
     if (cart.length === 0) {
       toast.error("Adicione pelo menos um EPI à lista de entrega.")
       if (facialSubmission) throw new FacialPreflightError("Adicione os EPIs antes de confirmar.")
@@ -594,23 +703,26 @@ export default function DeliveryPage() {
     }
     if (!validateCartForDelivery()) { if (facialSubmission) throw new FacialPreflightError("Confira os itens e o estoque antes de confirmar."); return }
     if (authMethod === 'facial' && !facialSubmission) throw new Error("Verifique o rosto e confirme os itens antes de finalizar.")
-    const requiredLocation = await requestLocationForSignature()
-    if (!requiredLocation) { if (facialSubmission) throw new FacialPreflightError("Autorize a localização antes de confirmar o recebimento."); return }
-
+    savingRef.current = true
     try {
       setIsSaving(true)
+      setOperationError(null)
+      const requiredLocation = await requestLocationForSignature()
+      if (!requiredLocation) { if (facialSubmission) throw new FacialPreflightError("Autorize a localização antes de confirmar o recebimento."); return }
       
       const validationHash = generateAuditCode()
       
-      const biometricEvidence = authMethod === 'fingerprint' ? verifiedFingerprint || fingerprintEvidence : null
-      if (authMethod === 'fingerprint' && (!biometricEvidence || biometricEvidence.status !== 'completed' || biometricEvidence.operation !== 'verify' || biometricEvidence.employeeId !== selectedEmployeeId || biometricEvidence.matchedEmployeeId !== selectedEmployeeId)) {
+      const biometricEvidence = authMethod === 'fingerprint'
+        ? operationRef.current?.fingerprintEventId ? await api.getFingerprintCommand(operationRef.current.fingerprintEventId) : verifiedFingerprint || fingerprintEvidence
+        : null
+      if (authMethod === 'fingerprint' && !operationRef.current?.fingerprintEventId && (!biometricEvidence || biometricEvidence.status !== 'completed' || biometricEvidence.operation !== 'verify' || biometricEvidence.employeeId !== selectedEmployeeId || biometricEvidence.matchedEmployeeId !== selectedEmployeeId)) {
         throw new Error("Confirme a digital do colaborador antes de concluir a entrega.")
       }
-      const fingerprintBatchId = biometricEvidence ? crypto.randomUUID() : null
       const signatureFile = facialSubmission || !signatureDataUrl ? undefined : await dataUrlToImageFile(signatureDataUrl, "signature")
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
-      const persistedAuthMethod: Delivery['auth_method'] = authMethod
-      const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)
+      const currentOperation = facialSubmission ? null : getOperation("signed", biometricEvidence?.id)
+      const fingerprintBatchId = currentOperation?.fingerprintEventId ? currentOperation.id : null
+      const selectedDeliveryDateIso = currentOperation?.deliveryDate || facialDeliveryDateIso
 
       const savedDeliveries: Delivery[] = []
       const autoReturnedDeliveryIds: string[] = []
@@ -620,33 +732,14 @@ export default function DeliveryPage() {
         const result = await submitFacialDelivery(facialSubmission)
         savedDeliveries.push(...result.deliveries)
         biometricReceipt = result.receipt
-      } else for (const item of cart) {
-        const savedDelivery = await api.saveDelivery({
-          employee_id: selectedEmployeeId,
-          third_party_id: selectedThirdPartyId,
-          ppe_id: item.ppeId,
-          workplace_id: selectedWorkplaceId || null,
-          reason: item.reason as Delivery['reason'],
-          quantity: item.quantity,
-          ip_address: ipAddress || "Desconhecido",
-          auth_method: persistedAuthMethod,
-          signature_url: null,
-          delivery_date: selectedDeliveryDateIso
-        }, signatureFile, biometricEvidence && fingerprintBatchId ? { fingerprintEventId: biometricEvidence.id, fingerprintBatchId } : undefined)
-        savedDeliveries.push(savedDelivery as Delivery)
-
-        const previousAllocations = item.autoReturnAllocations || (item.autoReturnDeliveryIds || []).map(deliveryId => ({
-          deliveryId,
-          quantity: item.quantity,
-          deliveryDate: "",
-        }))
-        for (const allocation of previousAllocations) {
-          if (allocation.deliveryId === (savedDelivery as Delivery).id) continue
-          await api.returnDeliveryQuantity(allocation.deliveryId, getAutoReturnMotive(item.reason), allocation.quantity)
-          autoReturnedDeliveryIds.push(allocation.deliveryId)
-        }
+      } else if (currentOperation) {
+        savedDeliveries.push(...await runOperation(currentOperation, signatureFile))
+        autoReturnedDeliveryIds.push(...currentOperation.items.flatMap((entry) => entry.returns.filter((allocation) => allocation.state === "done").map((allocation) => allocation.deliveryId)))
       }
 
+      const originalSignature = !facialSubmission && savedDeliveries[0]?.signature_url
+        ? await fetchImageDataUrl(await api.getPrivateAssetUrl(savedDeliveries[0].signature_url), { required: true, label: "assinatura registrada" })
+        : signatureDataUrl
       const { generateDeliveryPDF } = await import("@/utils/pdfGenerator")
       const pdfBlob = await generateDeliveryPDF({
         employeeName: selectedEmployee?.full_name || "",
@@ -669,7 +762,7 @@ export default function DeliveryPage() {
         authMethod,
         biometricReceipt,
         fingerprintEvidence: biometricEvidence ? { code: biometricEvidence.code, terminalName: biometricEvidence.terminalName || "Terminal SafeEPI", completedAt: biometricEvidence.completedAt || "", resultHash: biometricEvidence.resultHash || "" } : undefined,
-        signatureBase64: signatureDataUrl,
+        signatureBase64: originalSignature || undefined,
         photoBase64,
         ipAddress,
         location: requiredLocation,
@@ -738,6 +831,7 @@ export default function DeliveryPage() {
       })
       setLastPdfFileName(fileName)
       setIsSaved(true)
+      clearOperation()
       if (autoReturnedDeliveryIds.length > 0) {
         setActiveDeliveries(prev => prev
           .map(delivery => {
@@ -763,12 +857,14 @@ export default function DeliveryPage() {
     } catch (err: unknown) {
       console.error("Erro ao finalizar entrega:", err)
       const message = err instanceof Error ? err.message : "Erro ao salvar entrega."
+      setOperationError(message)
       toast.error(message)
       if (facialSubmission) throw err
     } finally {
       setIsSaving(false)
+      savingRef.current = false
     }
-  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, authMethod, capturedPhotoBase64, fingerprintEvidence, selectedEmployee, selectedWorkplace, deliveryDate, facialDeliveryDateIso, validateCartForDelivery, requestLocationForSignature])
+  }
 
   const handleManualSave = () => {
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
@@ -788,6 +884,7 @@ export default function DeliveryPage() {
   }
 
   const generateRemoteLink = async () => {
+      if (operationRef.current) { toast.warning("Retome o pedido em andamento antes de gerar outro link."); return }
       if (facialTransactionLocked) { toast.warning("Conclua ou consulte a confirmação facial em andamento antes de gerar outro link."); return }
       if (cart.length === 0) {
         toast.error("Adicione pelo menos um EPI à lista antes de gerar o link.")
@@ -846,6 +943,7 @@ export default function DeliveryPage() {
   }
 
   const saveForLaterSignature = async () => {
+    if (savingRef.current) return
     if (facialTransactionLocked) { toast.warning("Consulte a confirmação facial em andamento antes de registrar outra entrega."); return }
     if (cart.length === 0) {
       toast.error("Adicione pelo menos um EPI à lista de entrega.")
@@ -857,38 +955,14 @@ export default function DeliveryPage() {
     }
     if (!validateCartForDelivery()) return
 
+    savingRef.current = true
     try {
       setIsSaving(true)
-      const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)
-      const savedDeliveries: Delivery[] = []
-      const autoReturnedDeliveryIds: string[] = []
-
-      for (const item of cart) {
-        const savedDelivery = await api.saveDelivery({
-          employee_id: selectedEmployeeId,
-          third_party_id: selectedThirdPartyId,
-          ppe_id: item.ppeId,
-          workplace_id: selectedWorkplaceId || null,
-          reason: item.reason as Delivery['reason'],
-          quantity: item.quantity,
-          ip_address: ipAddress || "Desconhecido",
-          auth_method: "manual",
-          signature_url: null,
-          delivery_date: selectedDeliveryDateIso
-        })
-        savedDeliveries.push(savedDelivery as Delivery)
-
-        const previousAllocations = item.autoReturnAllocations || (item.autoReturnDeliveryIds || []).map(deliveryId => ({
-          deliveryId,
-          quantity: item.quantity,
-          deliveryDate: "",
-        }))
-        for (const allocation of previousAllocations) {
-          if (allocation.deliveryId === (savedDelivery as Delivery).id) continue
-          await api.returnDeliveryQuantity(allocation.deliveryId, getAutoReturnMotive(item.reason), allocation.quantity)
-          autoReturnedDeliveryIds.push(allocation.deliveryId)
-        }
-      }
+      setOperationError(null)
+      const currentOperation = getOperation("later")
+      const selectedDeliveryDateIso = currentOperation.deliveryDate
+      const savedDeliveries = await runOperation(currentOperation)
+      const autoReturnedDeliveryIds = currentOperation.items.flatMap((entry) => entry.returns.filter((allocation) => allocation.state === "done").map((allocation) => allocation.deliveryId))
 
       const deliveryIds = savedDeliveries.map((delivery) => delivery.id).filter(Boolean)
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
@@ -934,6 +1008,7 @@ export default function DeliveryPage() {
       setViewMode("pending")
       setStep(1)
       setCart([])
+      clearOperation()
       setActiveDeliveries(prev => prev
         .map(delivery => {
           const returnedForDelivery = cart
@@ -957,9 +1032,11 @@ export default function DeliveryPage() {
     } catch (err: unknown) {
       console.error("Erro ao registrar entrega pendente de assinatura:", err)
       const message = err instanceof Error ? err.message : "Erro ao registrar entrega pendente."
+      setOperationError(message)
       toast.error(message)
     } finally {
       setIsSaving(false)
+      savingRef.current = false
     }
   }
 
@@ -1168,12 +1245,12 @@ export default function DeliveryPage() {
     setViewMode("new")
   }
 
-  if (user && user.role !== "MASTER" && user.role !== "ADMIN") {
+  if (user && !["MASTER", "ADMIN", "ALMOXARIFE"].includes(user.role || "")) {
     return (
       <div className="flex flex-col items-center justify-center py-40 text-center">
         <ShieldAlert className="w-14 h-14 text-slate-300 mb-4" />
         <h2 className="text-xl font-black text-slate-700 uppercase tracking-tighter">Acesso Restrito</h2>
-        <p className="text-slate-400 text-sm font-medium mt-2">Apenas Administradores e Masters podem registrar entregas de EPI.</p>
+        <p className="text-slate-400 text-sm font-medium mt-2">Seu perfil permite consulta. Solicite a um operador autorizado o registro da entrega.</p>
       </div>
     )
   }
@@ -1237,53 +1314,42 @@ export default function DeliveryPage() {
 
   return (
     <div className="mx-auto max-w-7xl overflow-x-hidden p-4 pb-24 md:p-5 lg:p-6 lg:pb-8">
-      <div className="mb-5 border-l-4 border-[#2563EB] pl-4">
-        <h1 className="text-2xl lg:text-[28px] font-black text-slate-800 uppercase tracking-tighter">Terminal de Entregas Digital {COMPANY_CONFIG.shortName}</h1>
-        <p className="text-slate-500 font-medium text-sm lg:text-base mt-1">Compliance NR-06 com Rastreabilidade de Autoria.</p>
+      <div className="mb-5">
+        <h1 className="text-2xl lg:text-[28px] font-bold text-slate-900 tracking-tight">Nova entrega de EPIs</h1>
+        <p className="text-slate-500 text-sm mt-1">Selecione o colaborador, confira os equipamentos e registre o recebimento.</p>
       </div>
+
+      {operation && <div role="status" className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <p className="font-semibold">Pedido em andamento · {operation.items.filter((entry) => entry.deliveryId).length} de {operation.items.length} itens confirmados</p>
+        <p className="mt-1">O pedido está preservado nesta aba. Retome abaixo; os itens já registrados não serão entregues novamente. A edição fica bloqueada até a conclusão.</p>
+        {operationError && <p role="alert" className="mt-2 font-medium">{operationError}</p>}
+        {operation.mode === "later" && <button type="button" disabled={isSaving} onClick={() => void saveForLaterSignature()} className="mt-3 min-h-11 rounded-xl bg-amber-800 px-4 py-2 font-semibold text-white disabled:opacity-50">{isSaving ? "Retomando…" : "Retomar entrega e gerar link"}</button>}
+        <a className="mt-3 inline-flex min-h-11 items-center px-3 font-semibold underline" href="/history" target="_blank" rel="noopener noreferrer">Conferir histórico</a>
+      </div>}
 
       <div className="mb-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
           <button
-            disabled={isSaving || facialTransactionLocked}
+            disabled={isSaving || facialTransactionLocked || !!operation}
             onClick={() => setViewMode("new")}
-            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "new" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-xs sm:text-xs font-semibold flex items-center justify-center gap-2 transition-all ${viewMode === "new" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
           >
             <Plus className="w-4 h-4" /> Nova Entrega
           </button>
           <button
-            disabled={isSaving || facialTransactionLocked}
+            disabled={isSaving || facialTransactionLocked || !!operation}
             onClick={() => setViewMode("pending")}
-            className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "pending" ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+            className={`px-4 sm:px-6 py-3 rounded-xl text-xs sm:text-xs font-semibold flex items-center justify-center gap-2 transition-all ${viewMode === "pending" ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
           >
             <Hourglass className="w-4 h-4" /> Pendencias
             {pendingDrafts.length > 0 && (
-              <span className="min-w-5 h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] flex items-center justify-center">
+              <span className="min-w-5 h-5 px-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-xs flex items-center justify-center">
                 {pendingDrafts.length}
               </span>
             )}
           </button>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex items-center justify-between gap-4 shadow-sm">
-          <div>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Espera da assinatura</p>
-            <p className="text-[10px] text-slate-400 font-bold">Validade do link remoto.</p>
-          </div>
-          <select
-            value={remoteWaitHours}
-            onChange={(event) => setRemoteWaitHours(Number(event.target.value))}
-            className="min-h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-[#2563EB]"
-            title="Tempo de espera da assinatura"
-          >
-            <option value={1}>1h</option>
-            <option value={4}>4h</option>
-            <option value={8}>8h</option>
-            <option value={12}>12h</option>
-            <option value={24}>24h</option>
-            <option value={48}>48h</option>
-          </select>
-        </div>
       </div>
 
       {viewMode === "pending" && (
@@ -1304,7 +1370,7 @@ export default function DeliveryPage() {
               </h2>
               <p className="text-xs text-amber-700 font-bold mt-1 flex items-center gap-2 flex-wrap">
                 Entregas de EPI aguardando assinatura do colaborador.
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-[9px] uppercase tracking-widest">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-xs uppercase tracking-widest">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                   Auto-refresh 15s
                 </span>
@@ -1324,7 +1390,7 @@ export default function DeliveryPage() {
               <button
                 onClick={() => void checkVisiblePendingDrafts()}
                 disabled={filteredPendingDrafts.length === 0 || checkingPendingToken !== null}
-                className="min-h-11 bg-white border border-amber-200 text-amber-700 px-4 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
+                className="min-h-11 bg-white border border-amber-200 text-amber-700 px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 hover:bg-amber-50 transition-all disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${checkingPendingToken ? "animate-spin" : ""}`} /> Atualizar Status
               </button>
@@ -1361,9 +1427,9 @@ export default function DeliveryPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-black text-slate-800 uppercase tracking-tight truncate">{draft.employeeName}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{draft.workplaceName} - {new Date(`${getDateOnlyValue(draft.deliveryDate)}T12:00:00`).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">{draft.workplaceName} - {new Date(`${getDateOnlyValue(draft.deliveryDate)}T12:00:00`).toLocaleDateString("pt-BR")}</p>
                         </div>
-                        <span className={`px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 whitespace-nowrap ${statusStyle}`}>
+                        <span className={`px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap ${statusStyle}`}>
                           <StatusIcon className="w-3 h-3" />
                           {draft.status === "completed" ? "Assinada" : draft.status === "expired" ? "Expirada" : "Aguardando"}
                         </span>
@@ -1372,27 +1438,27 @@ export default function DeliveryPage() {
                       <div className="mt-3 bg-slate-50 border border-slate-100 rounded-2xl p-3">
                         <p className="font-black text-xs text-slate-800 uppercase tracking-tight">{draft.item.ppeName}</p>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {draft.item.ppeCaNumber}</span>
-                          <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {draft.item.quantity}</span>
-                          <span className="text-[9px] font-bold text-slate-400">{draft.item.reason}</span>
+                          <span className="text-xs font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {draft.item.ppeCaNumber}</span>
+                          <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {draft.item.quantity}</span>
+                          <span className="text-xs font-bold text-slate-400">{draft.item.reason}</span>
                           {draft.items && draft.items.length > 1 && (
-                            <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-2 py-0.5 rounded">+{draft.items.length - 1} EPI(s)</span>
+                            <span className="text-xs font-black bg-slate-200 text-slate-600 px-2 py-0.5 rounded">+{draft.items.length - 1} EPI(s)</span>
                           )}
                           {draft.signaturePendingOnly && (
-                            <span className="text-[9px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">Entregue</span>
+                            <span className="text-xs font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">Entregue</span>
                           )}
                           {draft.item.autoReturnDeliveryIds && draft.item.autoReturnDeliveryIds.length > 0 && (
-                            <span className="text-[9px] font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">Baixa automática</span>
+                            <span className="text-xs font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">Baixa automática</span>
                           )}
                         </div>
                         {draft.item.autoReturnNote && (
-                          <p className="mt-3 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex">
+                          <p className="mt-3 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex">
                             {draft.item.autoReturnNote}
                           </p>
                         )}
                       </div>
 
-                      <div className="mt-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                      <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                         <Clock className="w-3.5 h-3.5" />
                         {draft.status === "pending" ? `Assinatura do colaborador aguardando ate ${formatRemoteExpiry(draft.expiresAt)}` : `Ultimo prazo: ${formatRemoteExpiry(draft.expiresAt)}`}
                       </div>
@@ -1406,7 +1472,7 @@ export default function DeliveryPage() {
                               toast.warning("Nao foi possivel copiar automaticamente. Abra o link e copie pela barra do navegador.")
                             }
                           })}
-                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-semibold text-xs flex items-center justify-center gap-1.5"
                         >
                           <Clipboard className="w-3.5 h-3.5" /> Copiar
                         </button>
@@ -1414,14 +1480,14 @@ export default function DeliveryPage() {
                           href={draft.linkUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-semibold text-xs flex items-center justify-center gap-1.5"
                         >
                           <ExternalLink className="w-3.5 h-3.5" /> Abrir
                         </a>
                         <button
                           onClick={() => void checkPendingDraft(draft)}
                           disabled={isChecking}
-                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? "animate-spin" : ""}`} /> Checar
                         </button>
@@ -1429,7 +1495,7 @@ export default function DeliveryPage() {
                           <button
                             onClick={() => void reopenExpiredPendingDraft(draft)}
                             disabled={isReopening}
-                            className="min-h-11 sm:col-span-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 shadow-sm font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="min-h-11 sm:col-span-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 shadow-sm font-semibold text-xs flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             {isReopening ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1441,14 +1507,14 @@ export default function DeliveryPage() {
                         ) : (
                           <button
                             onClick={() => restorePendingDraft(draft)}
-                            className="min-h-11 sm:col-span-2 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5 whitespace-nowrap"
+                            className="min-h-11 sm:col-span-2 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
                           >
                             <Package className="w-3.5 h-3.5" /> {draft.signaturePendingOnly ? "Copiar" : "Reabrir"}
                           </button>
                         )}
                         <button
                           onClick={() => removePendingDraft(draft.token)}
-                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-1.5"
+                          className="min-h-11 sm:col-span-1 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs flex items-center justify-center gap-1.5"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Limpar
                         </button>
@@ -1464,8 +1530,8 @@ export default function DeliveryPage() {
 
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/40">
         <div className="flex bg-slate-50 border-b border-slate-100">
-          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 1 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-400 border-b-2 border-transparent'}`}>1. Seleção e Carrinho</div>
-          <div className={`flex-1 text-center py-4 lg:py-5 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${step === 2 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-400 border-b-2 border-transparent'}`}>2. Autenticação e Assinatura</div>
+          <div className={`flex-1 text-center px-2 py-4 text-sm font-semibold ${step === 1 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-500 border-b-2 border-transparent'}`}>1. Colaborador e EPIs</div>
+          <div className={`flex-1 text-center px-2 py-4 text-sm font-semibold ${step === 2 ? 'bg-white text-[#2563EB] border-b-2 border-[#2563EB]' : 'text-slate-500 border-b-2 border-transparent'}`}>2. Conferência e assinatura</div>
         </div>
 
         <div className="p-4 sm:p-6 lg:p-8">
@@ -1484,7 +1550,7 @@ export default function DeliveryPage() {
                       <Calendar className="w-4 h-4 text-[#2563EB]" />
                       Data da Entrega
                     </h3>
-                    <p className="text-[10px] font-medium text-slate-500 italic mt-0.5">Entregas retroativas.</p>
+                    <p className="text-xs font-medium text-slate-500 italic mt-0.5">Entregas retroativas.</p>
                   </div>
                   <input 
                     type="date"
@@ -1496,7 +1562,7 @@ export default function DeliveryPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <label htmlFor="employee-select" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
+                  <label htmlFor="employee-select" className="text-xs font-black text-slate-400 uppercase tracking-widest flex justify-between">
                     <span>Colaborador Ativo</span>
                   </label>
                   <div className="flex flex-col gap-2 relative">
@@ -1527,7 +1593,7 @@ export default function DeliveryPage() {
                                   </p>
                                   {emp.cpf && (
                                     <div className="flex items-center gap-2 mt-1.5">
-                                      <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">
+                                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">
                                         CPF: {formatCpf(emp.cpf)}
                                       </span>
                                     </div>
@@ -1544,10 +1610,10 @@ export default function DeliveryPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <span>Unidade / Local</span>
                     {selectedWorkplace && (
-                      <span className="text-[9px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-black uppercase tracking-widest">
+                      <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold">
                         Auto-preenchido
                       </span>
                     )}
@@ -1600,9 +1666,9 @@ export default function DeliveryPage() {
                                   <div>
                                     <p className={`font-black text-xs uppercase tracking-tight ${isSelected ? 'text-[#2563EB]' : 'text-slate-700'}`}>{ppe.name}</p>
                                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                      <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded">CA {ppe.ca_number}</span>
-                                      {expired && <span className="text-[8px] font-black bg-red-100 text-red-600 px-2 py-0.5 rounded">Vencido</span>}
-                                      {inCart && <span className="text-[8px] font-black bg-green-100 text-green-600 px-2 py-0.5 rounded">Na lista</span>}
+                                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded">CA {ppe.ca_number}</span>
+                                      {expired && <span className="text-xs font-black bg-red-100 text-red-600 px-2 py-0.5 rounded">Vencido</span>}
+                                      {inCart && <span className="text-xs font-black bg-green-100 text-green-600 px-2 py-0.5 rounded">Na lista</span>}
                                     </div>
                                   </div>
                                   {isSelected && !inCart && <CheckCircle2 className="w-4 h-4 text-[#2563EB]" />}
@@ -1617,7 +1683,7 @@ export default function DeliveryPage() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label htmlFor="quantity-input" className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Quantidade</label>
+                          <label htmlFor="quantity-input" className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">Quantidade</label>
                           <input 
                             id="quantity-input" type="number" min="1" max="100" title="Quantidade do EPI"
                             className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-4 md:py-3 outline-none focus:border-[#2563EB] focus:bg-white transition-all font-bold text-sm text-center"
@@ -1626,11 +1692,11 @@ export default function DeliveryPage() {
                           />
                         </div>
                         <div>
-                          <label htmlFor="reason-select" className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Motivo</label>
+                          <label htmlFor="reason-select" className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">Motivo</label>
                           <select
                             id="reason-select" title="Motivo da entrega"
                             value={currentReason} onChange={(e) => setCurrentReason(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-4 md:py-3 outline-none focus:border-[#2563EB] font-bold text-[11px]"
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-4 md:py-3 outline-none focus:border-[#2563EB] font-bold text-sm"
                           >
                             <option value="Primeira Entrega">Prim. Entrega</option>
                             <option value={SUBSTITUTION_REASON}>Substituição</option>
@@ -1643,7 +1709,7 @@ export default function DeliveryPage() {
                       {loadingActiveDeliveries && selectedEmployeeId && (
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-3">
                           <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consultando EPIs em posse...</p>
+                          <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Consultando EPIs em posse...</p>
                         </div>
                       )}
 
@@ -1653,7 +1719,7 @@ export default function DeliveryPage() {
                             <ShieldAlert className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">
+                            <p className="text-xs font-black text-amber-800 uppercase tracking-widest">
                               {shouldAutoReturn(currentReason) ? "Baixa automática confirmada" : "Motivo definido manualmente"}
                             </p>
                             <p className="text-xs text-amber-700 font-semibold mt-1 leading-relaxed">
@@ -1668,11 +1734,11 @@ export default function DeliveryPage() {
                       {currentPpe && currentPpe.lifespan_days > 0 && (
                         <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Vida Útil (NR-06)</span>
+                            <span className="text-xs font-black text-orange-600 uppercase tracking-widest">Vida Útil (NR-06)</span>
                             <span className="text-xs font-bold text-orange-800">{currentPpe.lifespan_days} dias</span>
                           </div>
                           <div className="flex items-center justify-between mt-1 pt-3 border-t border-orange-200/50">
-                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
+                            <span className="text-xs font-black text-orange-600 uppercase tracking-widest flex items-center gap-1">
                               <Clock className="w-3 h-3" /> Próxima Troca
                             </span>
                             <span className="text-xs font-black text-[#2563EB]">
@@ -1685,7 +1751,7 @@ export default function DeliveryPage() {
                       <button 
                         onClick={addToCart}
                         disabled={!currentPpe || isCurrentPpeExpired}
-                        className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 mt-2"
+                        className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-4 rounded-xl font-semibold text-xs sm:text-xs transition-all flex items-center justify-center gap-2 mt-2"
                       >
                         <Plus className="w-4 h-4" /> Adicionar à Entrega
                       </button>
@@ -1695,7 +1761,7 @@ export default function DeliveryPage() {
 
                 {cart.length > 0 && (
                   <div className="space-y-3 pt-4 border-t border-slate-100">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                       <Package className="w-4 h-4" />
                       EPIs Adicionados ({cart.length})
                     </label>
@@ -1705,15 +1771,15 @@ export default function DeliveryPage() {
                           <div>
                             <p className="font-black text-sm text-slate-800 uppercase tracking-tight">{item.ppeName}</p>
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              <span className="text-[9px] font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {item.ppeCaNumber}</span>
-                              <span className="text-[9px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {item.quantity}</span>
-                              <span className="text-[9px] font-bold text-slate-400">{item.reason}</span>
+                              <span className="text-xs font-bold bg-white text-slate-500 px-2 py-0.5 rounded border border-slate-200">CA {item.ppeCaNumber}</span>
+                              <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Qtd: {item.quantity}</span>
+                              <span className="text-xs font-bold text-slate-400">{item.reason}</span>
                               {item.autoReturnDeliveryIds && item.autoReturnDeliveryIds.length > 0 && (
-                                <span className="text-[9px] font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">Baixa automática</span>
+                                <span className="text-xs font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">Baixa automática</span>
                               )}
                             </div>
                             {item.autoReturnNote && (
-                              <p className="mt-2 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex">
+                              <p className="mt-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 inline-flex">
                                 {item.autoReturnNote}
                               </p>
                             )}
@@ -1739,7 +1805,7 @@ export default function DeliveryPage() {
                     onClick={() => {
                       if (validateCartForDelivery()) setStep(2)
                     }}
-                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/10 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
+                    className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white disabled:bg-slate-300 py-5 rounded-2xl font-semibold text-xs transition-all shadow-xl shadow-blue-900/10 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
                   >
                     Avançar para Assinatura ({cart.length} EPI{cart.length !== 1 ? 's' : ''})
                   </button>
@@ -1752,8 +1818,8 @@ export default function DeliveryPage() {
             <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-right-4">
               <div className="bg-slate-50 p-6 rounded-2xl text-sm border border-slate-200 shadow-inner">
                 <div className="flex items-center gap-2 mb-3">
-                    <span className="bg-[#2563EB] text-white text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest">NR-06 Compliance</span>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{selectedWorkplace?.name || "Sede"}</span>
+                    <span className="bg-[#2563EB] text-white text-xs font-black px-2 py-1 rounded uppercase tracking-widest">NR-06 Compliance</span>
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest italic">{selectedWorkplace?.name || "Sede"}</span>
                 </div>
                 <p className="font-medium text-slate-700 leading-relaxed text-sm">
                   &ldquo;Eu, <strong className="font-black text-slate-900 uppercase">{selectedEmployee?.full_name}</strong>, recebo nesta data os seguintes EPIs, declarando ter sido treinado para seu uso adequado:&rdquo;
@@ -1763,9 +1829,9 @@ export default function DeliveryPage() {
                     <li key={item.ppeId} className="text-xs text-slate-600 font-bold flex items-start gap-2 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
                       <span className="w-1.5 h-1.5 bg-[#2563EB] rounded-full flex-shrink-0 mt-1.5" />
                       <span>
-                        {item.ppeName} <span className="text-slate-400 font-medium">(CA {item.ppeCaNumber})</span> <br className="sm:hidden" /><span className="sm:ml-2 text-[#2563EB] bg-red-50 px-2 py-0.5 rounded text-[10px] tracking-widest">Qtd: {item.quantity}</span>
+                        {item.ppeName} <span className="text-slate-400 font-medium">(CA {item.ppeCaNumber})</span> <br className="sm:hidden" /><span className="sm:ml-2 text-[#2563EB] bg-red-50 px-2 py-0.5 rounded text-xs tracking-widest">Qtd: {item.quantity}</span>
                         {item.autoReturnNote && (
-                          <span className="block mt-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
+                          <span className="block mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
                             {item.autoReturnNote}
                           </span>
                         )}
@@ -1781,7 +1847,7 @@ export default function DeliveryPage() {
                     <div className="flex min-w-0 items-start gap-3">
                       <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
                       <div className="min-w-0">
-                        <p className="text-sm font-black uppercase tracking-wide text-amber-900">Localização obrigatória</p>
+                        <p className="text-sm font-semibold text-amber-900">Localização obrigatória</p>
                         <p className="mt-1 text-sm font-medium leading-relaxed text-amber-800">
                           {locationError || "Permita a localização do navegador antes de concluir a assinatura auditável."}
                         </p>
@@ -1791,7 +1857,7 @@ export default function DeliveryPage() {
                       type="button"
                       onClick={() => void requestLocationForSignature(true)}
                       disabled={locationStatus === "requesting"}
-                      className="min-h-[44px] w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-amber-900/10 transition-all hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
+                      className="min-h-[44px] w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-semibold text-white shadow-lg shadow-amber-900/10 transition-all hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
                     >
                       {locationStatus === "requesting" ? "Solicitando..." : "Permitir localização"}
                     </button>
@@ -1799,36 +1865,49 @@ export default function DeliveryPage() {
                 </div>
               )}
 
-              <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-2">
+              <div className="grid w-full min-w-0 max-w-full grid-cols-2 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5">
                 <button 
-                  disabled={isSaving || facialTransactionLocked}
+                  disabled={isSaving || facialTransactionLocked || !!operation}
                   onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
-                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-xs font-semibold transition-all sm:text-xs ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <PenLine className="w-4 h-4" /> Assinatura na Tela
                 </button>
                 <button 
-                  disabled={isSaving || facialTransactionLocked}
+                  disabled={isSaving || facialTransactionLocked || !!operation}
                   onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }}
-                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-xs font-semibold transition-all sm:text-xs ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Camera className="w-4 h-4" /> Foto + Assinatura
                 </button>
                 <button 
-                  disabled={isSaving || facialTransactionLocked || process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"}
+                  disabled={isSaving || facialTransactionLocked || !!operation || process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"}
                   onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }}
-                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-xs font-semibold transition-all sm:text-xs ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Fingerprint className="w-4 h-4" /> Biometria Facial
                 </button>
-                <button type="button" disabled={isSaving || facialTransactionLocked} onClick={() => { setAuthMethod('fingerprint'); setFingerprintEvidence(null) }} className={`min-h-11 rounded-xl px-3 py-3 text-sm font-semibold ${authMethod === 'fingerprint' ? 'bg-white text-[var(--brand-color)] shadow-sm' : 'text-slate-600'}`}>
+                <button type="button" disabled={isSaving || facialTransactionLocked || !!operation} onClick={() => { setAuthMethod('fingerprint'); setFingerprintEvidence(null) }} className={`min-h-11 rounded-xl px-3 py-3 text-sm font-semibold ${authMethod === 'fingerprint' ? 'bg-white text-[var(--brand-color)] shadow-sm' : 'text-slate-600'}`}>
                   <span className="flex items-center justify-center gap-2"><Fingerprint className="h-4 w-4" />Leitor de digital USB</span>
                 </button>
               </div>
               {process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true" && <p className="text-xs text-slate-500">Reconhecimento facial em preparação. Use assinatura na tela, foto de apoio ou leitor USB configurado.</p>}
               {locationStatus === "granted" && <p className="text-xs text-slate-500">{locationSource === "network" ? "Localização aproximada da rede (não GPS)" : "Localização informada pelo dispositivo"}</p>}
 
-              {authMethod === 'manual' || authMethod === 'manual_facial' ? (
+              {!operation && <details open={remoteOptionsOpen} onToggle={(event) => setRemoteOptionsOpen(event.currentTarget.open)} className="rounded-xl border border-slate-200 p-3 text-sm">
+                <summary className="min-h-11 cursor-pointer py-3 font-semibold text-slate-700">Assinar por link ou depois</summary>
+                <label className="flex flex-wrap items-center justify-between gap-3 py-3">Validade do link
+                  <select aria-label="Validade do link remoto" value={remoteWaitHours} onChange={(event) => setRemoteWaitHours(Number(event.target.value))} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-base">
+                    {[1, 4, 8, 12, 24, 48].map((hours) => <option key={hours} value={hours}>{hours} horas</option>)}
+                  </select>
+                </label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button type="button" disabled={isSaving} onClick={() => void generateRemoteLink()} className="min-h-11 rounded-xl border border-slate-300 px-3 py-3 font-semibold">Enviar link para assinatura</button>
+                  <button type="button" disabled={isSaving} onClick={() => void saveForLaterSignature()} className="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 font-semibold text-amber-900">Entregar agora e assinar depois</button>
+                </div>
+              </details>}
+
+              {operation?.mode === "later" ? <p className="text-sm text-slate-600">Continue pelo botão “Retomar entrega e gerar link” acima.</p> : authMethod === 'manual' || authMethod === 'manual_facial' ? (
                 <div className="space-y-4 animate-in fade-in">
                   {authMethod === 'manual_facial' && !capturedPhotoBase64 && (
                       <>
@@ -1838,19 +1917,12 @@ export default function DeliveryPage() {
                           onCapture={(_, img) => setCapturedPhotoBase64(img)}
                           onCancel={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
                         />
-                        <button
-                          onClick={generateRemoteLink}
-                          disabled={cart.length === 0 || isSaving}
-                          className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
-                        >
-                          <Link2 className="w-4 h-4 text-blue-500" /> Enviar link para assinatura
-                        </button>
                       </>
                   )}
                   {authMethod === 'manual_facial' && capturedPhotoBase64 && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
                       <Image src={capturedPhotoBase64} alt="Foto capturada agora" width={44} height={44} className="w-11 h-11 rounded-xl object-cover border border-emerald-200" unoptimized />
-                      <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
+                      <p className="text-xs font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
                         Foto registrada como evidência visual, sem verificação biométrica. Assine manualmente abaixo.
                       </p>
                       <button
@@ -1865,8 +1937,8 @@ export default function DeliveryPage() {
                   {(authMethod === 'manual' || capturedPhotoBase64) && (
                     <>
                   <div className="hidden justify-between items-end px-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Área de Assinatura</label>
-                    <button onClick={clearSignature} className="text-[10px] font-black text-[#2563EB] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Área de Assinatura</label>
+                    <button onClick={clearSignature} className="text-xs font-black text-[#2563EB] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>
                   </div>
                   <SignatureCapture
                     signatureRef={sigCanvas}
@@ -1875,27 +1947,13 @@ export default function DeliveryPage() {
                     onClear={clearSignature}
                     onConfirm={handleManualSave}
                   />
-                  <button
-                    onClick={generateRemoteLink}
-                    disabled={cart.length === 0 || isSaving}
-                    className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
-                  >
-                    <Link2 className="w-4 h-4 text-blue-500" /> Enviar link para assinatura
-                  </button>
-                  <button
-                    onClick={() => void saveForLaterSignature()}
-                    disabled={cart.length === 0 || isSaving}
-                    className="w-full bg-amber-50 border border-amber-200 text-amber-800 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-100 transition-all disabled:opacity-40"
-                  >
-                    <Hourglass className="w-4 h-4" /> Entregar agora e assinar depois
-                  </button>
                     </>
                   )}
                 </div>
               ) : authMethod === 'fingerprint' ? (
                 <div className="space-y-4">
-                  <FingerprintCommandPanel employeeId={selectedEmployeeId} employeeName={selectedEmployee?.full_name || "Colaborador"} operation="verify" onCompleted={setFingerprintEvidence} onReset={() => setFingerprintEvidence(null)} />
-                  <button type="button" disabled={isSaving || fingerprintEvidence?.status !== 'completed'} onClick={() => void saveDelivery(undefined, undefined, fingerprintEvidence || undefined)} className="min-h-12 w-full rounded-xl bg-[var(--brand-color)] px-4 py-3 font-semibold text-white disabled:opacity-50">{isSaving ? "Registrando entrega…" : `Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 's' : ''})`}</button>
+                  {!operation && <FingerprintCommandPanel employeeId={selectedEmployeeId} employeeName={selectedEmployee?.full_name || "Colaborador"} operation="verify" onCompleted={setFingerprintEvidence} onReset={() => setFingerprintEvidence(null)} />}
+                  <button type="button" disabled={isSaving || (!operation?.fingerprintEventId && fingerprintEvidence?.status !== 'completed')} onClick={() => void saveDelivery(undefined, undefined, fingerprintEvidence || undefined)} className="min-h-12 w-full rounded-xl bg-[var(--brand-color)] px-4 py-3 font-semibold text-white disabled:opacity-50">{isSaving ? "Registrando entrega…" : operation ? "Retomar pedido com a digital registrada" : `Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 's' : ''})`}</button>
                 </div>
               ) : (
                 <div className="space-y-4 animate-in zoom-in-95">
@@ -1909,25 +1967,11 @@ export default function DeliveryPage() {
                         onTransactionLocked={setFacialTransactionLocked}
                       />
                       {cart.some(item => item.autoReturnAllocations?.length) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Na modalidade facial, devoluções anteriores devem ser registradas separadamente em Movimentações. Esta confirmação registra somente os EPIs recebidos agora.</p>}
-                      <button
-                        onClick={generateRemoteLink}
-                        disabled={cart.length === 0 || isSaving}
-                        className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-50 transition-all disabled:opacity-40"
-                      >
-                        <Link2 className="w-4 h-4 text-blue-500" /> Enviar link para assinatura
-                      </button>
-                      <button
-                        onClick={() => void saveForLaterSignature()}
-                        disabled={cart.length === 0 || isSaving}
-                        className="w-full bg-amber-50 border border-amber-200 text-amber-800 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-amber-100 transition-all disabled:opacity-40"
-                      >
-                        <Hourglass className="w-4 h-4" /> Entregar agora e assinar depois
-                      </button>
                 </div>
               )}
 
               <div className="pt-6 flex justify-center border-t border-slate-100">
-                <button disabled={isSaving || facialTransactionLocked} onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-800 transition-colors bg-slate-50 px-6 py-3 rounded-xl disabled:opacity-50">
+                <button disabled={isSaving || facialTransactionLocked || !!operation} onClick={() => setStep(1)} className="text-slate-600 font-semibold text-sm hover:text-slate-800 transition-colors bg-slate-50 px-6 py-3 rounded-xl disabled:opacity-50">
                   ← Voltar e Alterar EPIs
                 </button>
               </div>
@@ -1958,7 +2002,7 @@ function SignatureSummaryCard({
 
   return (
     <div className={`rounded-2xl border px-4 py-3 shadow-sm ${toneClass}`}>
-      <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{label}</p>
+      <p className="text-xs font-semibold opacity-70">{label}</p>
       <p className="mt-1 text-2xl font-black leading-none">{value}</p>
     </div>
   )

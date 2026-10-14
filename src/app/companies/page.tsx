@@ -1,7 +1,7 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type React from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -34,6 +34,7 @@ import type { Profile } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { LoadingRows, LoadingState } from "@/components/ui/LoadingState"
+import { AdminLoadError } from "@/components/ui/AdminLoadError"
 
 type CompanyForm = {
   id?: string
@@ -98,6 +99,12 @@ export default function CompaniesPage() {
   const [logoPreview, setLogoPreview] = useState("")
   const [loading, setLoading] = useState(true)
   const [usersLoading, setUsersLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [usersError, setUsersError] = useState<string | null>(null)
+  const [usersCompanyId, setUsersCompanyId] = useState("")
+  const companyLoadSequence = useRef(0)
+  const usersLoadSequence = useRef(0)
+  const companyFormRef = useRef<HTMLFormElement>(null)
   const [submittingCompany, setSubmittingCompany] = useState(false)
   const [submittingUser, setSubmittingUser] = useState(false)
 
@@ -131,31 +138,38 @@ export default function CompaniesPage() {
   }, [authLoading, router, user])
 
   const loadCompanies = async () => {
+    const sequence = ++companyLoadSequence.current
     try {
       setLoading(true)
+      setLoadError(null)
       const data = await api.getCompanies()
+      if (sequence !== companyLoadSequence.current) return
       setCompanies(data)
-      setSelectedCompanyId((current) => current || data[0]?.id || "")
+      setSelectedCompanyId((current) => data.some(company => company.id === current) ? current : data[0]?.id || "")
     } catch (error) {
       console.error("Erro ao carregar empresas:", error)
-      toast.error("Nao foi possivel carregar as empresas.")
+      if (sequence === companyLoadSequence.current) setLoadError("Não foi possível consultar as empresas. Os dados anteriores foram preservados.")
     } finally {
-      setLoading(false)
+      if (sequence === companyLoadSequence.current) setLoading(false)
     }
   }
 
   const loadCompanyUsers = async (companyId: string) => {
     if (!companyId) return
+    const sequence = ++usersLoadSequence.current
 
     try {
       setUsersLoading(true)
+      setUsersError(null)
       const data = await api.getUsers(companyId)
+      if (sequence !== usersLoadSequence.current) return
       setCompanyUsers(data)
+      setUsersCompanyId(companyId)
     } catch (error) {
       console.error("Erro ao carregar usuarios da empresa:", error)
-      toast.error("Nao foi possivel carregar os usuarios da empresa.")
+      if (sequence === usersLoadSequence.current) setUsersError("Não foi possível consultar os usuários desta empresa.")
     } finally {
-      setUsersLoading(false)
+      if (sequence === usersLoadSequence.current) setUsersLoading(false)
     }
   }
 
@@ -170,6 +184,7 @@ export default function CompaniesPage() {
   }, [user])
 
   useEffect(() => {
+    const requestCounter = usersLoadSequence
     const timer = window.setTimeout(() => {
       if (selectedCompanyId) {
         void loadCompanyUsers(selectedCompanyId)
@@ -178,7 +193,10 @@ export default function CompaniesPage() {
       }
     }, 0)
 
-    return () => window.clearTimeout(timer)
+    return () => {
+      window.clearTimeout(timer)
+      ++requestCounter.current
+    }
   }, [selectedCompanyId])
 
   const clearCompanyForm = () => {
@@ -206,6 +224,7 @@ export default function CompaniesPage() {
     })
     setLogoFile(null)
     setLogoPreview(company.logo_url || "")
+    companyFormRef.current?.scrollIntoView({ block: "start", behavior: "auto" })
   }
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,13 +331,16 @@ export default function CompaniesPage() {
     )
   }
 
+  const metricsUnavailable = (loading || Boolean(loadError)) && companies.length === 0
+  const visibleCompanyUsers = usersCompanyId === selectedCompanyId ? companyUsers : []
+
   return (
-    <div className="mx-auto max-w-7xl space-y-5 overflow-x-hidden px-3 py-4 pb-28 animate-in fade-in duration-500 md:space-y-6 md:p-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-7">
+    <div className="mx-auto max-w-7xl space-y-5 px-4 py-4 pb-28 animate-in fade-in duration-200 md:space-y-6 md:p-8">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Painel Master</p>
-            <h1 className="mt-1 flex items-center gap-2 text-xl font-black uppercase leading-tight tracking-tight text-slate-800 md:gap-3 md:text-4xl md:tracking-tighter">
+            <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold leading-tight tracking-tight text-slate-800">
               <Building2 className="h-7 w-7 shrink-0 text-[#2563EB] md:h-8 md:w-8" />
               Empresas Clientes
             </h1>
@@ -328,7 +350,10 @@ export default function CompaniesPage() {
           </div>
 
           <button
-            onClick={clearCompanyForm}
+            onClick={() => {
+              clearCompanyForm()
+              companyFormRef.current?.scrollIntoView({ block: "start", behavior: "auto" })
+            }}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[#1D4ED8] md:w-auto"
           >
             <Plus className="h-4 w-4" />
@@ -337,15 +362,15 @@ export default function CompaniesPage() {
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3 md:mt-6 md:grid-cols-4">
-          <Metric icon={Building2} label="Empresas" value={totals.companies} />
-          <Metric icon={CheckCircle2} label="Ativas" value={totals.activeCompanies} />
-          <Metric icon={Users} label="Colaboradores" value={totals.employees} />
-          <Metric icon={FileBadge2} label="Evidencias" value={totals.documents} />
+          <Metric icon={Building2} label="Empresas" value={metricsUnavailable ? "—" : totals.companies} />
+          <Metric icon={CheckCircle2} label="Ativas" value={metricsUnavailable ? "—" : totals.activeCompanies} />
+          <Metric icon={Users} label="Colaboradores" value={metricsUnavailable ? "—" : totals.employees} />
+          <Metric icon={FileBadge2} label="Entregas" value={metricsUnavailable ? "—" : totals.documents} />
         </div>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4" aria-busy={loading}>
           <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">Carteira de clientes</h2>
@@ -356,17 +381,19 @@ export default function CompaniesPage() {
               <input
                 className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm font-bold outline-none focus:border-[#2563EB]"
                 placeholder="Buscar empresa..."
+                aria-label="Buscar empresa"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
             </label>
           </div>
 
-          {loading ? (
+          {loadError && <AdminLoadError message={loadError} retry={() => void loadCompanies()} busy={loading} />}
+          {loading && companies.length === 0 ? (
             <div className="rounded-2xl border border-slate-100 bg-white p-4">
               <LoadingRows rows={5} />
             </div>
-          ) : filteredCompanies.length === 0 ? (
+          ) : filteredCompanies.length === 0 && !loadError ? (
             <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
               <Building2 className="mx-auto h-10 w-10 text-slate-300" />
               <h3 className="mt-4 text-sm font-black uppercase tracking-widest text-slate-700">Nenhuma empresa encontrada</h3>
@@ -385,7 +412,7 @@ export default function CompaniesPage() {
                       variant: company.subscription_status === "SUSPENDED" ? "bg-red-50 text-red-700" : company.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500",
                     }}
                     fields={[
-                      { label: "Plano", value: company.training_enabled ? "Premium" : "Basico" },
+                      { label: "Treinamentos", value: company.training_enabled ? "Habilitado" : "Não habilitado" },
                       { label: "Status", value: company.subscription_status || "ACTIVE" },
                       { label: "Usuarios", value: String(company.users_count || 0) },
                       { label: "Colaboradores", value: String(company.employees_count || 0) },
@@ -421,8 +448,8 @@ export default function CompaniesPage() {
           )}
         </section>
 
-        <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-          <form onSubmit={handleCompanySubmit} className="max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 [&_select]:min-h-11 [&_select]:w-full">
+        <aside className="min-w-0 space-y-6 xl:sticky xl:top-24 xl:self-start">
+          <form ref={companyFormRef} onSubmit={handleCompanySubmit} className="scroll-mt-24 max-w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 [&_input]:min-w-0 [&_input]:w-full [&_select]:min-h-11 [&_select]:w-full">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Dados do cliente</p>
@@ -593,16 +620,16 @@ export default function CompaniesPage() {
             </div>
 
             <div className="mb-4 grid grid-cols-3 gap-2">
-              <MiniMetric icon={Users} label="Colab." value={selectedCompany?.employees_count || 0} />
-              <MiniMetric icon={Package} label="EPIs" value={selectedCompany?.ppes_count || 0} />
-              <MiniMetric icon={UserCog} label="Users" value={selectedCompany?.users_count || 0} />
+              <MiniMetric icon={Users} label="Colab." value={selectedCompany ? selectedCompany.employees_count || 0 : "—"} />
+              <MiniMetric icon={Package} label="EPIs" value={selectedCompany ? selectedCompany.ppes_count || 0 : "—"} />
+              <MiniMetric icon={UserCog} label="Usuários" value={selectedCompany ? selectedCompany.users_count || 0 : "—"} />
             </div>
 
             <form onSubmit={handleUserSubmit} className="grid gap-3">
               <input disabled={!selectedCompanyId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required placeholder="Nome do administrador" value={userForm.full_name} onChange={(event) => setUserForm({ ...userForm, full_name: event.target.value })} />
               <input disabled={!selectedCompanyId} inputMode="email" className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required type="email" placeholder="E-mail de acesso" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} />
               <div className="grid gap-3 sm:grid-cols-[1fr_0.85fr]">
-                <input disabled={!selectedCompanyId} autoComplete="new-password" className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required minLength={6} type="password" placeholder="Senha provisoria" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
+                <input disabled={!selectedCompanyId} autoComplete="new-password" className="min-h-11 min-w-0 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB] disabled:opacity-50" required minLength={8} type="password" placeholder="Senha (mínimo 8 caracteres)" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
                 <select disabled={!selectedCompanyId} className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#2563EB] disabled:opacity-50" value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value as UserForm["role"] })} title="Nivel de acesso">
                   <option value="ADMIN">Admin</option>
                   <option value="ALMOXARIFE">Almoxarife</option>
@@ -624,8 +651,9 @@ export default function CompaniesPage() {
                 {usersLoading && <Loader2 className="h-4 w-4 animate-spin text-[#2563EB]" />}
               </div>
 
-              <div className="space-y-2">
-                {companyUsers.map((companyUser) => (
+              {usersError && <AdminLoadError message={usersError} retry={() => void loadCompanyUsers(selectedCompanyId)} busy={usersLoading} />}
+              <div className="space-y-2" aria-busy={usersLoading}>
+                {visibleCompanyUsers.map((companyUser) => (
                   <div key={companyUser.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-slate-800">{companyUser.full_name || "Usuario sem nome"}</p>
@@ -638,7 +666,7 @@ export default function CompaniesPage() {
                   </div>
                 ))}
 
-                {!usersLoading && companyUsers.length === 0 && (
+                {!usersLoading && !usersError && usersCompanyId === selectedCompanyId && visibleCompanyUsers.length === 0 && (
                   <p className="rounded-xl bg-slate-50 p-4 text-center text-xs font-bold uppercase tracking-widest text-slate-400">
                     Sem usuarios vinculados
                   </p>
@@ -652,7 +680,7 @@ export default function CompaniesPage() {
   )
 }
 
-function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number | string }) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
       <Icon className="h-5 w-5 text-[#2563EB]" />
@@ -662,7 +690,7 @@ function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string;
   )
 }
 
-function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number | string }) {
   return (
     <div className="rounded-xl bg-slate-50 p-3">
       <Icon className="h-4 w-4 text-[#2563EB]" />
@@ -684,8 +712,7 @@ function CompanyCard({
   onEdit: () => void
 }) {
   return (
-    <button
-      onClick={onSelect}
+    <article
       className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-all ${
         active ? "border-[#2563EB]/30 bg-white ring-4 ring-[#2563EB]/10" : "border-slate-200 bg-white hover:border-slate-300"
       }`}
@@ -716,7 +743,7 @@ function CompanyCard({
                 company.training_enabled ? "bg-blue-50 text-[#2563EB]" : "bg-slate-100 text-slate-500"
               }`}>
                 <GraduationCap className="h-3 w-3" />
-                {company.training_enabled ? "Premium" : "Sem treino"}
+                {company.training_enabled ? "Treinamentos" : "Sem treinamentos"}
               </span>
               <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${
                 company.third_parties_enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
@@ -754,18 +781,20 @@ function CompanyCard({
           <span className="rounded-xl bg-slate-50 px-3 py-2 text-center text-[10px] font-black uppercase tracking-widest text-slate-500">
             {company.ppes_count || 0} epis
           </span>
-          <span
-            onClick={(event) => {
-              event.stopPropagation()
-              onEdit()
-            }}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-[#2563EB]"
+          <button type="button" onClick={onSelect} aria-pressed={active} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600">
+            {active ? "Selecionada" : "Selecionar"}
+          </button>
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label={`Editar empresa ${company.trade_name || company.name}`}
+            className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-[#2563EB]"
             title="Editar empresa"
           >
             <Pencil className="h-4 w-4" />
-          </span>
+          </button>
         </div>
       </div>
-    </button>
+    </article>
   )
 }

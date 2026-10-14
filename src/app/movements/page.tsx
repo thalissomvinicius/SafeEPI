@@ -7,13 +7,16 @@ import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, Loader2, Arr
 import { api } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
-import { format, startOfMonth, endOfMonth, subDays, isWithinInterval } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { DeliveryWithRelations, Employee, SignedDocument, Workplace } from "@/types/database"
-import { exportDeliveriesToExcel } from "@/utils/excelExporter"
+import { exportMovementEventsToExcel } from "@/utils/excelExporter"
 import { generateDeliveryPDF, generateMovementsSimplePDF, generateMovementsPresentationPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
-import { formatDeliveryDate, formatDeliveryTime, parseDeliveryDateTime, parseLocalDateOnly } from "@/lib/dateOnly"
+import { formatDeliveryDate, formatDeliveryTime } from "@/lib/dateOnly"
+import { buildMovementEvents, movementEventTime, summarizeMovementEvents, MOVEMENT_HISTORY_NOTE } from "@/lib/movementEvents"
+import { getReportPeriod, timestampInReportPeriod } from "@/lib/reportPeriod"
+import { mapConcurrent } from "@/lib/mapConcurrent"
 import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { LoadingState } from "@/components/ui/LoadingState"
@@ -32,7 +35,8 @@ export default function MovementsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [hasMoreRecords, setHasMoreRecords] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [nextOffset, setNextOffset] = useState(0)
+  const [pages, setPages] = useState({ deliveryOffset: 0, returnOffset: 0, deliveryMore: false, returnMore: false })
+  const queryGeneration = useRef(0)
   const [visibleMovementCount, setVisibleMovementCount] = useState(100)
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -52,13 +56,14 @@ export default function MovementsPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('month')
   const [customStartDate, setCustomStartDate] = useState<string>('')
   const [customEndDate, setCustomEndDate] = useState<string>('')
-  const [specificMonth, setSpecificMonth] = useState<string>('')
+  const [specificMonth, setSpecificMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'))
   const [specificMonthSel, setSpecificMonthSel] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
   const [searchTerm, setSearchTerm] = useState("")
   const [employeeFilterId, setEmployeeFilterId] = useState("")
   const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>('own')
-  const invalidCustomPeriod = dateFilter === "custom" && (!customStartDate || !customEndDate || customStartDate > customEndDate)
+  const period = useMemo(() => getReportPeriod(dateFilter, customStartDate, customEndDate, specificMonth), [dateFilter, customStartDate, customEndDate, specificMonth])
+  const invalidCustomPeriod = !period.valid
   const hasThirdPartyFeature = Boolean(user)
 
   // Auth protection
@@ -70,30 +75,36 @@ export default function MovementsPage() {
 
   const loadData = useCallback(async () => {
     if (!user || user.role === 'ALMOXARIFE') return
+    const generation = ++queryGeneration.current
+    if (!period.valid) { setLoading(false); return }
     try {
       setLoading(true)
       setLoadError(null)
-      const [deliveryData, documentData, employeeData, workplaceData] = await Promise.all([
+      const [deliveryPage, returnPage, documentData, employeeData, workplaceData] = await Promise.all([
         // Os arquivos privados so recebem URL temporaria quando o usuario os abre.
         // Isso evita dezenas de lotes de assinatura e o limite do endpoint na carga da tela.
-        api.getDeliveries({ signAssets: false }),
+        api.getDeliveries({ signAssets: false, startDate: period.start?.toISOString(), endDate: period.end?.toISOString() }),
+        period.start ? api.getDeliveries({ signAssets: false, startDate: period.start.toISOString(), endDate: period.end?.toISOString(), dateField: "returned_at" }) : Promise.resolve([] as DeliveryWithRelations[]),
         api.getSignedDocuments({ signAssets: false }),
         hasThirdPartyFeature ? api.getEmployees({ signPhotos: false }) : Promise.resolve([] as Employee[]),
         hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
       ])
+      if (generation !== queryGeneration.current) return
+      const deliveryData = Array.from(new Map([...deliveryPage, ...returnPage].map((delivery) => [delivery.id, delivery])).values())
       setRawDeliveries(deliveryData)
-      setHasMoreRecords(deliveryData.length === 500)
-      setNextOffset(deliveryData.length)
+      setHasMoreRecords(deliveryPage.length === 500 || returnPage.length === 500)
+      setPages({ deliveryOffset: deliveryPage.length, returnOffset: returnPage.length, deliveryMore: deliveryPage.length === 500, returnMore: returnPage.length === 500 })
       setSignedDocuments(documentData)
       setEmployees(employeeData)
       setWorkplaces(workplaceData)
     } catch (err) {
+      if (generation !== queryGeneration.current) return
       console.error("Erro ao carregar movimentações:", err)
       setLoadError(err instanceof Error ? err.message : "Falha ao consultar as movimentacoes.")
     } finally {
-      setLoading(false)
+      if (generation === queryGeneration.current) setLoading(false)
     }
-  }, [user, hasThirdPartyFeature])
+  }, [user, hasThirdPartyFeature, period])
 
   // Load Data
   useEffect(() => {
@@ -102,15 +113,21 @@ export default function MovementsPage() {
   }, [loadData])
 
   const loadMoreRecords = async () => {
+    const generation = queryGeneration.current
     try {
       setLoadingMore(true)
-      const nextPage = await api.getDeliveries({ offset: nextOffset, limit: 500, signAssets: false })
+      const filters = { limit: 500, signAssets: false, startDate: period.start?.toISOString(), endDate: period.end?.toISOString() }
+      const [deliveryPage, returnPage] = await Promise.all([
+        pages.deliveryMore ? api.getDeliveries({ ...filters, offset: pages.deliveryOffset }) : Promise.resolve([] as DeliveryWithRelations[]),
+        pages.returnMore ? api.getDeliveries({ ...filters, offset: pages.returnOffset, dateField: "returned_at" }) : Promise.resolve([] as DeliveryWithRelations[]),
+      ])
+      if (generation !== queryGeneration.current) return
+      const nextPage = [...deliveryPage, ...returnPage]
       setRawDeliveries((current) => {
-        const knownIds = new Set(current.map((delivery) => delivery.id))
-        return [...current, ...nextPage.filter((delivery) => !knownIds.has(delivery.id))]
+        return Array.from(new Map([...current, ...nextPage].map((delivery) => [delivery.id, delivery])).values())
       })
-      setNextOffset((offset) => offset + nextPage.length)
-      setHasMoreRecords(nextPage.length === 500)
+      setPages((current) => ({ deliveryOffset: current.deliveryOffset + deliveryPage.length, returnOffset: current.returnOffset + returnPage.length, deliveryMore: deliveryPage.length === 500, returnMore: returnPage.length === 500 }))
+      setHasMoreRecords(deliveryPage.length === 500 || returnPage.length === 500)
     } catch (error) {
       console.error("Erro ao carregar mais movimentações:", error)
       toast.error("Não foi possível carregar mais registros. Os dados anteriores foram mantidos.")
@@ -157,40 +174,8 @@ export default function MovementsPage() {
 
   // Filter Logic
   const getFilteredData = () => {
-    let filtered = rawDeliveries
+    let filtered = buildMovementEvents(rawDeliveries).filter((event) => timestampInReportPeriod(movementEventTime(event), period))
     if (employeeFilterId) filtered = filtered.filter((delivery) => delivery.employee_id === employeeFilterId)
-    const now = new Date()
-
-    if (dateFilter !== 'all') {
-      let start: Date | null = null
-      let end: Date = now
-
-      if (dateFilter === 'month') {
-        start = startOfMonth(now)
-        end = endOfMonth(now)
-      } else if (dateFilter === 'last30') {
-        start = subDays(now, 30)
-      } else if (dateFilter === 'last60') {
-        start = subDays(now, 60)
-      } else if (dateFilter === 'last90') {
-        start = subDays(now, 90)
-      } else if (dateFilter === 'custom' && customStartDate && customEndDate) {
-        start = parseLocalDateOnly(customStartDate)
-        const localEnd = parseLocalDateOnly(customEndDate)
-        end = localEnd ? new Date(localEnd.getFullYear(), localEnd.getMonth(), localEnd.getDate(), 23, 59, 59, 999) : end
-      } else if (dateFilter === 'specific_month' && specificMonth) {
-        start = parseLocalDateOnly(`${specificMonth}-01`)
-        end = start ? endOfMonth(start) : end
-      }
-
-      if (start) {
-        filtered = filtered.filter(d => {
-          const dDate = parseDeliveryDateTime(d.delivery_date)
-          if (!dDate) return false
-          return isWithinInterval(dDate, { start: start!, end })
-        })
-      }
-    }
 
     if (hasThirdPartyFeature && deliveryScopeFilter !== 'all') {
       filtered = filtered.filter((delivery) => {
@@ -208,11 +193,7 @@ export default function MovementsPage() {
       )
     }
 
-    return filtered.sort((a, b) => {
-      const dateA = parseDeliveryDateTime(a.delivery_date)?.getTime() || 0
-      const dateB = parseDeliveryDateTime(b.delivery_date)?.getTime() || 0
-      return dateB - dateA
-    })
+    return filtered.sort((a, b) => movementEventTime(b) - movementEventTime(a))
   }
 
   const filteredMovements = getFilteredData()
@@ -376,12 +357,7 @@ export default function MovementsPage() {
     }
   }
 
-  const stats = {
-    deliveries: filteredMovements.filter(m => !m.returned_at).length,
-    returns: filteredMovements.filter(m => m.returned_at).length,
-    totalItems: filteredMovements.reduce((acc, m) => acc + m.quantity, 0),
-    uniqueEmployees: new Set(filteredMovements.map(m => m.employee_id)).size
-  }
+  const stats = summarizeMovementEvents(filteredMovements)
 
   const getPeriodLabel = () => {
     if (dateFilter === 'month') return `Mês de ${format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}`
@@ -405,6 +381,7 @@ export default function MovementsPage() {
   }
 
   const handleSimplePDF = () => {
+    if (loading || hasMoreRecords || invalidCustomPeriod) return
     const blob = generateMovementsSimplePDF({ movements: filteredMovements, stats, period: getPeriodLabel() })
     openPdfDialog(blob, `Movimentacoes_Simples_${new Date().toISOString().slice(0,10)}.pdf`, {
       title: "PDF Simples - Movimentações",
@@ -414,6 +391,7 @@ export default function MovementsPage() {
   }
 
   const handlePresentationPDF = async () => {
+    if (loading || hasMoreRecords || invalidCustomPeriod) return
     if (!technicianName.trim()) {
       toast.error("Selecione o responsável técnico cadastrado no sistema.")
       return
@@ -424,8 +402,14 @@ export default function MovementsPage() {
     }
     try {
       setGeneratingPresentationPdf(true)
+      const movementsWithAssets = await mapConcurrent(filteredMovements, 4, async (movement) => {
+        if (movement.event_type === "return" || !movement.signature_url) return { ...movement, signature_url: null }
+        const url = await api.getPrivateAssetUrl(movement.signature_storage_path || movement.signature_url, "download")
+        if (!url) throw new Error("Não foi possível acessar uma assinatura. Tente gerar o PDF novamente.")
+        return { ...movement, signature_url: url }
+      })
       const blob = await generateMovementsPresentationPDF({
-        movements: filteredMovements,
+        movements: movementsWithAssets,
         stats,
         period: getPeriodLabel(),
         technicianName: technicianName || user?.user_metadata?.full_name || user?.email || "Responsável técnico",
@@ -437,6 +421,8 @@ export default function MovementsPage() {
       description: `Período: ${getPeriodLabel()} · ${filteredMovements.length} registros`
     })
     setShowPdfModal(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o PDF completo.")
     } finally {
       setGeneratingPresentationPdf(false)
     }
@@ -465,7 +451,7 @@ export default function MovementsPage() {
 
         <div className="w-full md:w-auto flex gap-2">
           <button
-            onClick={() => exportDeliveriesToExcel(filteredMovements)}
+            onClick={() => exportMovementEventsToExcel(filteredMovements)}
             disabled={loading || hasMoreRecords || invalidCustomPeriod || filteredMovements.length === 0}
             title="Exportar para planilha Excel"
             className="min-h-11 flex-1 md:flex-none border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
@@ -486,11 +472,12 @@ export default function MovementsPage() {
       </div>
 
       {loadError && rawDeliveries.length > 0 && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">A consulta falhou. Mantivemos os registros carregados; tente atualizar novamente.</div>}
+      <p className="rounded-xl border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">{MOVEMENT_HISTORY_NOTE}</p>
       {hasMoreRecords && !loading && (
         <div role="status" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-amber-900">Histórico carregado parcialmente</p>
-            <p className="mt-1 text-xs leading-5 text-amber-800">{rawDeliveries.length} registros carregados. Totais e busca consideram apenas estes registros; carregue os restantes para liberar relatórios completos.</p>
+              <p className="mt-1 text-xs leading-5 text-amber-800">{rawDeliveries.length} entregas de origem carregadas. Totais e busca consideram apenas estes registros; carregue os restantes para liberar relatórios completos.</p>
           </div>
           <button type="button" onClick={() => void loadMoreRecords()} disabled={loadingMore} className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">
             {loadingMore ? "Carregando registros…" : "Carregar mais 500 registros"}
@@ -499,13 +486,13 @@ export default function MovementsPage() {
       )}
 
       {/* Filter Bar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
           <div className="flex-1 space-y-2 w-full">
             <label id="label-periodo" className="text-xs font-semibold text-slate-400  tracking-normal flex items-center">
               <Calendar className="w-3 h-3 mr-1" /> Período
             </label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { id: 'month', label: 'Mês Atual' },
                 { id: 'last30', label: '30 Dias' },
@@ -532,7 +519,7 @@ export default function MovementsPage() {
             <label id="label-outros" className="text-xs font-semibold text-slate-400  tracking-normal flex items-center">
               <Filter className="w-3 h-3 mr-1" /> Outros Filtros
             </label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 title="Filtrar por mês específico"
                 onClick={() => setDateFilter('specific_month')}
@@ -684,12 +671,12 @@ export default function MovementsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Entregas", value: loading && rawDeliveries.length === 0 ? "—" : stats.deliveries, icon: ArrowUpRight, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "Devoluções", value: loading && rawDeliveries.length === 0 ? "—" : stats.returns, icon: ArrowDownLeft, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "Itens Movimentados", value: loading && rawDeliveries.length === 0 ? "—" : stats.totalItems, icon: Shield, color: "text-[#2563EB]", bg: "bg-red-50" },
+          { label: "Devoluções concluídas", value: loading && rawDeliveries.length === 0 ? "—" : stats.returns, icon: ArrowDownLeft, color: "text-amber-600", bg: "bg-amber-50" },
+          { label: "Unidades entregues", value: loading && rawDeliveries.length === 0 ? "—" : stats.totalItems, icon: Shield, color: "text-[#2563EB]", bg: "bg-red-50" },
           { label: "Pessoas Atendidas", value: loading && rawDeliveries.length === 0 ? "—" : stats.uniqueEmployees, icon: Users, color: "text-slate-600", bg: "bg-slate-50" },
         ].map((s, i) => (
-          <div key={i} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center gap-4">
-            <div className={`p-3 rounded-2xl ${s.bg}`}>
+          <div key={i} className="min-w-0 bg-white border border-slate-200 p-3 sm:p-5 rounded-2xl shadow-sm flex items-center gap-2 sm:gap-4">
+            <div className={`hidden sm:block p-3 rounded-2xl ${s.bg}`}>
               <s.icon className={`w-5 h-5 ${s.color}`} />
             </div>
             <div>
@@ -725,22 +712,23 @@ export default function MovementsPage() {
                   const isDownloading = downloadingDeliveryId === move.id
                   const isCreatingSignatureLink = creatingSignatureLinkId === move.id
                   const isThirdPartyMovement = Boolean(getDeliveryThirdPartyId(move))
-                  const movementTypeClass = move.returned_at
+                  const isReturn = move.event_type === "return"
+                  const movementTypeClass = isReturn
                     ? "border-amber-200 bg-amber-50 text-amber-700"
                     : "border-green-200 bg-green-50 text-green-700"
 
                   return (
-                    <div key={move.id || i} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+                    <div key={move.event_id || i} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300">
                       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold  tracking-normal ${movementTypeClass}`}>
-                              {move.returned_at ? (
+                              {isReturn ? (
                                 <ArrowDownLeft className="h-3 w-3" />
                               ) : (
                                 <ArrowUpRight className="h-3 w-3" />
                               )}
-                              {move.returned_at ? "Devolução" : "Entrega"}
+                              {isReturn ? "Devolução concluída" : "Entrega"}
                             </span>
                             <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold  tracking-normal text-slate-500">
                               {isThirdPartyMovement ? "Terceiro" : "Próprio"}
@@ -751,8 +739,8 @@ export default function MovementsPage() {
                               <Calendar className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold  tracking-tight text-slate-900">{formatDeliveryDate(move.delivery_date)}</p>
-                              <p className="mt-0.5 text-xs font-semibold  tracking-normal text-slate-400">{formatDeliveryTime(move.delivery_date)}h</p>
+                              <p className="text-sm font-semibold tracking-tight text-slate-900">{isReturn ? new Date(move.event_date).toLocaleDateString("pt-BR") : formatDeliveryDate(move.event_date)}</p>
+                              <p className="mt-0.5 text-xs text-slate-500">{isReturn ? new Date(move.event_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : formatDeliveryTime(move.event_date)}h</p>
                             </div>
                           </div>
                         </div>
@@ -776,8 +764,8 @@ export default function MovementsPage() {
 
                           <div className="grid grid-cols-[auto_1fr] gap-3">
                             <div className="flex min-h-[74px] min-w-16 flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 px-3">
-                              <p className="text-xs font-semibold  tracking-normal text-slate-400">Qtd</p>
-                              <p className="mt-1 text-2xl font-semibold leading-none text-slate-900">{move.quantity}</p>
+                              <p className="text-xs font-semibold text-slate-500">{isReturn ? "Total devolvido" : "Qtd"}</p>
+                              <p className="mt-1 text-2xl font-semibold leading-none text-slate-900">{move.event_quantity}</p>
                             </div>
                             <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
                               <p className="text-xs font-semibold  tracking-normal text-slate-400">Unidade</p>
@@ -789,7 +777,7 @@ export default function MovementsPage() {
                         </div>
 
                         <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
-                          {move.signature_url ? (
+                          {move.signature_url || move.auth_method === "fingerprint" ? (
                             <button
                               onClick={() => void handleDeliveryReceiptPDF(move)}
                               disabled={isDownloading}
@@ -801,7 +789,7 @@ export default function MovementsPage() {
                               ) : (
                                 <FileDown className="h-4 w-4" />
                               )}
-                              PDF
+                              {isReturn ? "PDF da entrega" : "PDF"}
                             </button>
                           ) : (
                             <>

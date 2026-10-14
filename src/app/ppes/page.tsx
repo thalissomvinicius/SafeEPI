@@ -14,6 +14,7 @@ import { COMPANY_CONFIG } from "@/config/company"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "@/lib/toast"
 import { formatDateOnly, getDateOnlyValue, getDaysUntilDateOnly } from "@/lib/dateOnly"
+import { LOW_STOCK_THRESHOLD } from "@/lib/stockPolicy"
 import { generatePpeCatalogReportPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 
@@ -21,6 +22,7 @@ export default function PpesPage() {
   const { user } = useAuth()
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const canDeletePpe = user?.role === "MASTER"
+  const canEditPpe = ["MASTER", "ADMIN", "ALMOXARIFE"].includes(user?.role || "")
   const canAdjustPpeStock = user?.role === "MASTER" || user?.role === "ADMIN"
   const canGeneratePpeReport = user?.role === "MASTER" || user?.role === "ADMIN" || user?.role === "DIRETORIA"
   const [ppes, setPpes] = useState<PPE[]>([])
@@ -219,7 +221,7 @@ export default function PpesPage() {
           </h1>
           <p className="text-slate-500 text-sm mt-1 font-medium">Gestão técnica de conformidade no {COMPANY_CONFIG.systemName}.</p>
         </div>
-        <div className="flex gap-3 w-full sm:w-auto">
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto">
             {canGeneratePpeReport && (
               <button
                 onClick={generatePpeReport}
@@ -230,23 +232,23 @@ export default function PpesPage() {
                 Relatório PDF
               </button>
             )}
-            <Link 
+            {canEditPpe && <Link
                 href="/inventory"
                 className="flex-1 sm:flex-none border border-slate-200 bg-white text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center hover:bg-slate-50"
             >
                 <Package className="w-4 h-4 mr-2 text-[#2563EB]" />
                 Estoque
-            </Link>
-            <button 
+            </Link>}
+            {canEditPpe && <button
                 onClick={() => {
                   setFormData({ id: undefined, name: "", ca: "", valCa: "", cost: "", stock: "" })
                   setIsModalOpen(true)
                 }}
-                className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center shadow-lg shadow-blue-900/15"
+                className="col-span-2 flex min-h-11 items-center justify-center rounded-xl bg-[#2563EB] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] sm:flex-none"
             >
                 <Plus className="w-4 h-4 mr-2" />
                 Novo EPI
-            </button>
+            </button>}
         </div>
       </div>
 
@@ -305,7 +307,7 @@ export default function PpesPage() {
                       { label: "Fornecedor", value: ppe.manufacturer || "Genérico" },
                       { label: "Observações", value: `Saldo ${ppe.current_stock || 0} - R$ ${ppe.cost.toFixed(2)}` },
                     ]}
-                    actions={
+                    actions={canEditPpe ? (
                       <div className="flex w-full gap-2">
                         <button
                           onClick={() => openEditPpe(ppe)}
@@ -323,7 +325,7 @@ export default function PpesPage() {
                           </button>
                         )}
                       </div>
-                    }
+                    ) : undefined}
                   />
                 )
               })}
@@ -370,23 +372,23 @@ export default function PpesPage() {
                     </td>
                     <td className="px-6 py-5 text-center">
                         <div className="flex flex-col items-center">
-                            <span className={`text-lg font-black tracking-tighter ${ppe.current_stock <= 5 ? 'text-[#2563EB]' : 'text-slate-700'}`}>
+                            <span className={`text-lg font-black tracking-tighter ${ppe.current_stock <= LOW_STOCK_THRESHOLD ? 'text-amber-700' : 'text-slate-700'}`}>
                                 {ppe.current_stock || 0}
                             </span>
-                            {ppe.current_stock <= 5 && (
-                                <span className="text-[8px] font-black text-[#2563EB] uppercase tracking-widest bg-red-50 px-1.5 py-0.5 rounded border border-blue-100">Repor!</span>
+                            {ppe.current_stock <= LOW_STOCK_THRESHOLD && (
+                                <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Repor</span>
                             )}
                         </div>
                     </td>
                     <td className="px-6 py-5 text-slate-600 font-bold italic">R$ {ppe.cost.toFixed(2)}</td>
                     <td className="px-6 py-5">
                       <div className="flex items-center justify-end gap-2">
-                        <button 
+                        {canEditPpe && <button
                             onClick={() => openEditPpe(ppe)}
                             className="text-slate-500 hover:bg-slate-100 font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white px-3 py-2 rounded-lg shadow-sm transition-all"
                         >
                             Editar
-                        </button>
+                        </button>}
                         {canDeletePpe && (
                           <button
                             onClick={() => requestDeletePpe(ppe)}
@@ -397,13 +399,14 @@ export default function PpesPage() {
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
-                        <Link 
+                        {canEditPpe && <Link
                             href="/inventory"
                             title="Gerenciar estoque deste item"
-                            className="text-slate-400 hover:text-[#2563EB] font-black text-[10px] uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100 italic"
+                            className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-slate-500 hover:text-[#2563EB]"
                         >
                         Estoque
-                        </Link>
+                        </Link>}
+                        {!canEditPpe && <span className="text-xs text-slate-500">Somente leitura</span>}
                       </div>
                     </td>
                     </tr>
