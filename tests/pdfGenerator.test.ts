@@ -73,6 +73,7 @@ const syntheticMovements = (count: number): DeliveryWithRelations[] => Array.fro
 function expectNumberedPages() {
   for (let page = 1; page <= rendered.pages; page += 1) {
     expect(rendered.texts.some(entry => entry.page === page && entry.value === `Página ${page} de ${rendered.pages}`)).toBe(true)
+    expect(rendered.texts.some(entry => entry.page === page && entry.value === "Desenvolvido por Vinicius Dev")).toBe(true)
   }
 }
 
@@ -119,6 +120,18 @@ describe("paginação e margens do comprovante de entrega", () => {
     }
     const signatureLabel = rendered.texts.find(entry => entry.value === "ASSINATURA DO RESPONSÁVEL TÉCNICO")!
     expect(signatureLabel.y).toBeLessThan(247)
+  })
+
+  it("mantém três entregas e a assinatura do responsável na mesma página do prontuário", async () => {
+    await generateNR06PDF({
+      employeeName: "COLABORADOR TESTE", employeeCpf: "000.000.000-00", employeeRole: "OPERADOR",
+      employeeDepartment: "OBRA", workplaceName: "UNIDADE", admissionDate: "01/01/2026",
+      items: Array.from({ length: 3 }, (_, index) => ({ deliveryDate: "13/10/2026", ppeName: `CAPACETE ${index}`, caNr: "12345", quantity: 1, reason: "Primeira Entrega", isExpired: false, signatureBase64: "data:image/png;base64,synthetic" })),
+      tstSigner: { name: "RESPONSÁVEL TÉCNICO", role: "Técnico de segurança", signatureBase64: "data:image/png;base64,synthetic", authMethod: "manual" },
+    })
+    expect(rendered.pages).toBe(1)
+    expectNumberedPages()
+    expectTextInsideHorizontalMargins(210)
   })
 
   it("mantém a entrega curta com assinatura, foto e QR em uma página", async () => {

@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { COMPANY_CONFIG } from "@/config/company"
+import { DEVELOPER_CREDIT } from "@/config/developer"
 import QRCode from "qrcode"
 import { DeliveryWithRelations, Employee, PPE } from "@/types/database"
 import { generateAuditCode } from "@/utils/auditCode"
@@ -105,6 +106,16 @@ function addPageHeader(doc: jsPDF, title: string, subtitle: string) {
   doc.setTextColor(30, 41, 59)
 }
 
+function addDeveloperCredit(doc: jsPDF) {
+  for (let page = 1; page <= doc.getNumberOfPages(); page += 1) {
+    doc.setPage(page)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(6)
+    doc.setTextColor(148, 163, 184)
+    doc.text(DEVELOPER_CREDIT, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 6, { align: "center" })
+  }
+}
+
 function addDocumentFooters(doc: jsPDF, label: string) {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -121,6 +132,7 @@ function addDocumentFooters(doc: jsPDF, label: string) {
     doc.text(footerLines, 14, pageHeight - 12, { lineHeightFactor: 1.1 })
     doc.text(`Página ${page} de ${totalPages}`, pageWidth - 14, pageHeight - 12, { align: "right" })
   }
+  addDeveloperCredit(doc)
 }
 
 function addReportHeader(doc: jsPDF, title: string, subtitle: string, context: string) {
@@ -803,7 +815,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
         } catch { /* skip */ }
       }
     },
-    margin: { left: 14, right: 14, top: 46, bottom: 36 },
+    margin: { left: 14, right: 14, top: 46, bottom: 24 },
     theme: "striped",
     rowPageBreak: "avoid",
     didDrawPage: () => {
@@ -813,7 +825,7 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
 
   // @ts-expect-error - jsPDF-autotable adds lastAutoTable to doc
   let finalY = doc.lastAutoTable?.finalY || 200
-  finalY += 12
+  finalY += 8
 
   if (data.tstSigner) {
     const tst = data.tstSigner
@@ -821,19 +833,21 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     const blockX = (pageWidth - blockWidth) / 2
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8.5)
-    const signerNameLines = doc.splitTextToSize(tst.name.toUpperCase(), blockWidth - 33) as string[]
+    const contentX = blockX + 12
+    const signatureWidth = 70
+    const signerX = contentX + signatureWidth + 10
+    const signerWidth = blockWidth - 24 - signatureWidth - 10
+    const signerNameLines = doc.splitTextToSize(tst.name.toUpperCase(), signerWidth) as string[]
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
-    const signerRoleLines = doc.splitTextToSize(tst.role, blockWidth - 33) as string[]
-    const blockHeight = Math.max(50, 44 + signerNameLines.length * 4 + signerRoleLines.length * 3)
-    if (finalY + blockHeight > pageHeight - 36) {
+    const signerRoleLines = doc.splitTextToSize(tst.role, signerWidth) as string[]
+    const blockHeight = Math.max(36, 21 + signerNameLines.length * 4 + signerRoleLines.length * 3)
+    if (finalY + blockHeight > pageHeight - 24) {
       doc.addPage()
       addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
       finalY = 48
     }
     const blockY = finalY
-    const contentX = blockX + 16
-    const contentWidth = blockWidth - 32
     doc.setDrawColor(226, 232, 240)
     doc.setLineWidth(0.25)
     doc.roundedRect(blockX, blockY, blockWidth, blockHeight, 2, 2)
@@ -847,45 +861,38 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       const imgProps = doc.getImageProperties(tst.signatureBase64)
       const ratio = imgProps.width / imgProps.height
       if (tst.authMethod === 'manual_facial' && tst.photoBase64) {
-        const photoSize = 18
-        doc.addImage(tst.photoBase64, 'JPEG', blockX + 16, blockY + 11, photoSize, photoSize)
-        const drawH = 12
-        let drawW = drawH * ratio
-        const sigAreaW = contentWidth - photoSize - 8
-        if (drawW > sigAreaW) {
-          drawW = sigAreaW
-        }
-        const sigX = blockX + 16 + photoSize + 8 + (sigAreaW - drawW) / 2
-        const sigY = blockY + 15
+        const photoSize = 16
+        doc.addImage(tst.photoBase64, 'JPEG', contentX, blockY + 10, photoSize, photoSize)
+        const sigAreaW = signatureWidth - photoSize - 6
+        const drawW = Math.min(14 * ratio, sigAreaW)
+        const drawH = drawW / ratio
+        const sigX = contentX + photoSize + 6 + (sigAreaW - drawW) / 2
+        const sigY = blockY + 11 + (14 - drawH) / 2
         const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
         doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
       } else {
-        const isPhoto = ratio <= 1.5
-        const drawH = isPhoto ? 20 : 12
-        let drawW = drawH * ratio
-        if (drawW > contentWidth) {
-          drawW = contentWidth
-        }
-        const sigX = blockX + (blockWidth - drawW) / 2
-        const sigY = blockY + 12
+        const drawW = Math.min(14 * ratio, signatureWidth)
+        const drawH = drawW / ratio
+        const sigX = contentX + (signatureWidth - drawW) / 2
+        const sigY = blockY + 11 + (14 - drawH) / 2
         const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
         doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
       }
-    } catch { /* skip */ }
+    } catch { throw new Error("Não foi possível incluir a assinatura do responsável no prontuário. Assine novamente.") }
 
     doc.setDrawColor(203, 213, 225)
     doc.setLineWidth(0.3)
-    doc.line(contentX, blockY + 34, contentX + contentWidth, blockY + 34)
+    doc.line(contentX, blockY + 29, contentX + signatureWidth, blockY + 29)
 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8.5)
     doc.setTextColor(30, 41, 59)
-    doc.text(signerNameLines, contentX, blockY + 40, { lineHeightFactor: 1.33 })
+    doc.text(signerNameLines, signerX, blockY + 15, { lineHeightFactor: 1.33 })
 
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(102, 102, 102)
-    doc.text(signerRoleLines, contentX, blockY + 42 + signerNameLines.length * 4, { lineHeightFactor: 1.2 })
+    doc.text(signerRoleLines, signerX, blockY + 17 + signerNameLines.length * 4, { lineHeightFactor: 1.2 })
 
     finalY += blockHeight + 6
   }
@@ -1376,6 +1383,7 @@ export async function generateTrainingCertificate(data: TrainingCertificateData)
     doc.text("pelo QR Code", pageWidth - marginX - 12.5, versoFooterY + 30, { align: "center" })
   } catch {}
 
+  addDeveloperCredit(doc)
   return doc.output("blob")
 }
 

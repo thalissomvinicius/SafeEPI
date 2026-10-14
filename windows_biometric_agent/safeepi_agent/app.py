@@ -68,6 +68,8 @@ class SafeEpiFingerprintApp:
         tk.Label(self.header, text="SAFEEPI", bg="#111827", fg="white", font=("Segoe UI", 21, "bold")).pack(anchor="w", padx=28, pady=(16, 0))
         tk.Label(self.header, text="TERMINAL DE CONFIRMAÇÃO POR IMPRESSÃO DIGITAL", bg="#111827", fg="#cbd5e1", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=29)
 
+        tk.Label(self.root, text="Desenvolvido por Vinicius Dev", bg="#f8fafc", fg="#94a3b8", font=("Segoe UI", 8)).pack(side="bottom", pady=(0, 10))
+
         self.content = tk.Frame(self.root, bg="#f8fafc")
         self.content.pack(fill="both", expand=True, padx=30, pady=24)
 

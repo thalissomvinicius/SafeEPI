@@ -54,7 +54,8 @@
 .submit:disabled { cursor: wait; opacity: 0.8; }
 .accessNote { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 25px 0 0; color: #8b97aa; font-size: 11px; line-height: 1.5; }
 .accessNote svg { flex-shrink: 0; width: 15px; height: 15px; }
-.help { margin: 0; text-align: center; color: #8b97aa; font-size: 11px; line-height: 1.6; }
+.help { display: grid; gap: 7px; margin: 0; text-align: center; color: #8b97aa; font-size: 11px; line-height: 1.6; }
+.helpDetails { margin: 0; }
 .help span { display: block; color: #64748b; }
 .error { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 16px; padding: 11px 12px; border: 1px solid #f3d2d5; border-radius: 10px; background: #fff4f4; color: #ad3541; font-size: 12px; line-height: 1.5; }
 .error svg { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; }
@@ -112,7 +113,7 @@
   .help span { display: inline; }
 }
 @container login (max-height: 440px) {
-  .mobileBrand, .help, .formDescription, .workflow, .brandFooter { display: none; }
+  .mobileBrand, .helpDetails, .formDescription, .workflow, .brandFooter { display: none; }
   .loginPanel { padding-block: 12px; }
   .formContainer { padding-block: 0; }
   .formIntro { margin-bottom: 14px; }

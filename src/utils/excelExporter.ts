@@ -5,12 +5,16 @@ import { DeliveryWithRelations, PPE } from "@/types/database"
 import { formatDateOnly, formatDeliveryDate } from "@/lib/dateOnly"
 import { movementEventDate, movementEventLabel, movementEventQuantity, MOVEMENT_HISTORY_NOTE, type MovementEvent } from "@/lib/movementEvents"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stockPolicy"
+import { DEVELOPER_CREDIT, DEVELOPER_NAME } from "@/config/developer"
 
 type ExcelValue = string | number | null
 type ExcelRow = Record<string, ExcelValue>
 
 function addReportSheet(workbook: ExcelJS.Workbook, sheetName: string, title: string, rows: ExcelRow[]) {
   const worksheet = workbook.addWorksheet(sheetName)
+  workbook.creator = DEVELOPER_NAME
+  worksheet.headerFooter.oddFooter = `&C&"Arial,Regular"&8${DEVELOPER_CREDIT}`
+  worksheet.headerFooter.evenFooter = worksheet.headerFooter.oddFooter
   const headers = Object.keys(rows[0] || {})
 
   worksheet.addRow([`${COMPANY_CONFIG.name.toUpperCase()} - ${COMPANY_CONFIG.systemName.toUpperCase()}`])

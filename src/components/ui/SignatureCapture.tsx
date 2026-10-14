@@ -14,6 +14,9 @@ type SignatureCaptureProps = {
   isSaving?: boolean
   confirmLabel?: string
   className?: string
+  compact?: boolean
+  showConfirmButton?: boolean
+  onSignatureChange?: (hasSignature: boolean) => void
 }
 
 function copyCanvas(canvas: HTMLCanvasElement) {
@@ -24,7 +27,7 @@ function copyCanvas(canvas: HTMLCanvasElement) {
   return copy
 }
 
-export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = false, confirmLabel = "Confirmar assinatura", className = "" }: SignatureCaptureProps) {
+export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = false, confirmLabel = "Confirmar assinatura", className = "", compact = false, showConfirmButton = true, onSignatureChange }: SignatureCaptureProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const expandButtonRef = useRef<HTMLButtonElement | null>(null)
   const snapshotRef = useRef<HTMLCanvasElement | null>(null)
@@ -33,6 +36,7 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
   const [typedSignature, setTypedSignature] = useState("")
   const [expanded, setExpanded] = useState(false)
   const [portal, setPortal] = useState<HTMLElement | null>(null)
+  useEffect(() => { onSignatureChange?.(hasSignature) }, [hasSignature, onSignatureChange])
   const typedSignatureId = useId()
   const headingId = useId()
   const closeExpanded = useCallback(() => { if (!isSaving) setExpanded(false) }, [isSaving])
@@ -127,13 +131,13 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
 
   const editor = <div className={`flex w-full min-w-0 flex-col gap-3 ${expanded ? "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6" : className}`}>
     <div className="flex items-center justify-between gap-3">
-      <p className="text-sm font-medium text-slate-600">Desenhe sua assinatura</p>
+      <p className="text-sm font-medium text-slate-600">{compact ? "Assinatura" : "Desenhe sua assinatura"}</p>
       <div className="flex gap-1">
         {!expanded && <button ref={expandButtonRef} type="button" onClick={openExpanded} disabled={isSaving} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600"><Expand className="h-4 w-4" aria-hidden="true" />Tela inteira</button>}
-        <button type="button" onClick={clear} disabled={isSaving} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50" aria-label="Limpar assinatura"><RotateCcw className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Limpar</span></button>
+        <button type="button" onClick={clear} disabled={isSaving} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50" aria-label="Limpar assinatura"><RotateCcw className="h-4 w-4" aria-hidden="true" />{!compact && <span className="hidden sm:inline">Limpar</span>}</button>
       </div>
     </div>
-    <div ref={wrapperRef} className={`relative w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed bg-white ${expanded ? "h-[min(42dvh,360px)] min-h-[160px]" : "h-[220px] sm:h-[280px]"} ${hasSignature ? "border-emerald-400" : "border-slate-300"}`}>
+    <div ref={wrapperRef} data-signature-canvas className={`relative w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed bg-white ${expanded ? "h-[min(42dvh,360px)] min-h-[160px]" : compact ? "h-[140px] sm:h-[180px]" : "h-[220px] sm:h-[280px]"} ${hasSignature ? "border-emerald-400" : "border-slate-300"}`}>
       {!hasSignature && <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center"><p className="text-sm text-slate-400">Assine aqui com o dedo ou mouse</p></div>}
       <SignatureCanvas ref={signatureRef} clearOnResize={false} penColor="#0f172a"
         onBegin={() => { drawingRef.current = true; setHasSignature(true) }}
@@ -156,9 +160,9 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
         </div>
       </div>
     </details>
-    <button type="button" onClick={onConfirm} disabled={isSaving || !hasSignature} className="flex min-h-[52px] w-full shrink-0 items-center justify-center rounded-xl bg-[#2563EB] px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:bg-slate-300 disabled:shadow-none">
+    {(showConfirmButton || expanded) && <button type="button" onClick={onConfirm} disabled={isSaving || !hasSignature} className="flex min-h-[52px] w-full shrink-0 items-center justify-center rounded-xl bg-[#2563EB] px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:bg-slate-300 disabled:shadow-none">
       {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="mr-2 h-5 w-5" aria-hidden="true" />}{isSaving ? "Salvando…" : confirmLabel}
-    </button>
+    </button>}
     {expanded && <p className="pb-[env(safe-area-inset-bottom)] text-center text-xs text-slate-500">Ao voltar, sua assinatura será preservada.</p>}
   </div>
 

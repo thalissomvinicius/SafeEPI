@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { MobileNav } from "@/components/layout/MobileNav"
 import { Header } from "@/components/layout/Header"
+import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
 
 export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -21,6 +22,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     return (
       <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] w-full max-w-full flex-1 flex-col overflow-x-hidden">
         {children}
+        {!isLoginPage && <footer className="mt-auto shrink-0 px-4 py-3 text-center"><DeveloperCredit /></footer>}
       </main>
     )
   }
@@ -37,17 +39,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
             </div>
             <footer className="mt-6 flex w-full shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200/60 px-5 py-4 text-[11px] text-slate-400 md:px-8">
               <span>SafeEPI · Gestão de segurança do trabalho</span>
-              <p className="flex items-center gap-1">
-                Desenvolvido por
-                <a 
-                  href="https://wa.me/5591991697664" 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="font-medium text-slate-500 transition-colors hover:text-[#2563EB]"
-                >
-                  Vinicius Dev
-                </a>
-              </p>
+              <DeveloperCredit />
             </footer>
           </main>
         </div>

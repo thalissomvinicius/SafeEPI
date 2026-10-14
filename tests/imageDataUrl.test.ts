@@ -24,7 +24,18 @@ describe("imageDataUrlToFile", () => {
 })
 
 describe("fetchImageDataUrl", () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
+
+  it("interrompe uma imagem que não responde para o PDF não ficar carregando eternamente", async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal("fetch", vi.fn((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true })
+    })))
+    const rejection = expect(fetchImageDataUrl("https://example.test/stalled", { required: true, label: "a assinatura" })).rejects.toThrow("demorou demais")
+    await vi.advanceTimersByTimeAsync(20_000)
+    await rejection
+    expect(vi.getTimerCount()).toBe(0)
+  })
 
   it("recusa gerar documento silenciosamente quando uma assinatura esperada expirou", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("expired", { status: 403 })))

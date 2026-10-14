@@ -1,8 +1,10 @@
 ﻿"use client"
 
 import { Download, ExternalLink, FileText, X } from "lucide-react"
-import { useId } from "react"
+import { useId, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useDialogAccessibility } from "@/hooks/useDialogAccessibility"
+import { useVisualViewport } from "@/hooks/useVisualViewport"
 
 type PdfActionDialogProps = {
   description?: string
@@ -24,12 +26,16 @@ export function PdfActionDialog({
   url,
 }: PdfActionDialogProps) {
   const dialogRef = useDialogAccessibility<HTMLDivElement>(true, onClose)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  useVisualViewport(overlayRef)
   const titleId = useId()
   const descriptionId = useId()
 
-  return (
+  if (typeof document === "undefined") return null
+  return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      ref={overlayRef}
+      className="safeepi-viewport-overlay fixed inset-x-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -41,7 +47,7 @@ export function PdfActionDialog({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className="safeepi-panel-enter max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgb(15_23_42/18%)]"
+        className="safeepi-panel-enter safeepi-sheet-panel w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgb(15_23_42/18%)]"
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
           <div className="min-w-0">
@@ -91,6 +97,6 @@ export function PdfActionDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>, document.body,
   )
 }

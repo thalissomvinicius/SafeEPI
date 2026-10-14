@@ -26,6 +26,10 @@ import { toast } from "@/lib/toast"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
 import { FingerprintEnrollmentManager } from "@/components/biometrics/FingerprintEnrollmentManager"
+import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
+import { mapConcurrent } from "@/lib/mapConcurrent"
+import signatureStyles from "./prontuarioSignature.module.css"
+import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
@@ -243,6 +247,8 @@ export default function EmployeesPage() {
   const [tstPhotoBase64, setTstPhotoBase64] = useState<string | null>(null)
   const tstSigCanvas = useRef<SignatureCanvas | null>(null)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const [tstHasSignature, setTstHasSignature] = useState(false)
+  const tstPhotoRequest = useRef(0)
   const [isSaving, setIsSaving] = useState(false)
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
@@ -843,43 +849,43 @@ export default function EmployeesPage() {
     setTstRole("Técnico de Segurança do Trabalho")
     setTstAuthMethod('manual')
     setTstSignatureBase64(null)
+    setTstHasSignature(false)
     setTstPhotoBase64(null)
     setTstStep(1)
     setIsTstModalOpen(true)
   }
 
   const handleSelectTst = async (emp: Employee) => {
+    const requestId = ++tstPhotoRequest.current
     setTstSelectedEmployee(emp)
     setTstSignatureBase64(null)
+    setTstHasSignature(false)
     setTstPhotoBase64(null)
+    setTstAuthMethod('manual')
     setTstRole(getJobTitleName(emp.job_title || "Técnico de Segurança do Trabalho"))
     if (emp.photo_url) {
       try {
         const photoUrl = await api.getPrivateAssetUrl(emp.photo_storage_path || emp.photo_url, "download", undefined, "biometric_photos")
-        const res = await fetch(photoUrl || emp.photo_url)
-        const blob = await res.blob()
-        const b64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(blob)
-        })
+        const b64 = await fetchImageDataUrl(photoUrl || emp.photo_url, { required: true, label: "a foto do responsável" })
+        if (requestId !== tstPhotoRequest.current) return
         setTstPhotoBase64(b64)
         setTstAuthMethod('manual_facial')
       } catch {
+        if (requestId !== tstPhotoRequest.current) return
         setTstPhotoBase64(null)
       }
     } else {
       setTstAuthMethod('manual')
     }
-    setTstStep(2)
+    if (requestId === tstPhotoRequest.current) setTstStep(2)
   }
 
   const tstName = tstSelectedEmployee?.full_name || ""
 
-  const exportNR06PDF = async () => {
+  const exportNR06PDF = async (signatureBase64 = tstSignatureBase64) => {
     const emp = employees.find(e => e.id === selectedEmployeeId)
     if (!emp) return
-    if (!tstSignatureBase64) return
+    if (!signatureBase64 || isGeneratingPdf) return
     if (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) {
       toast.error("Cadastre uma foto do responsavel tecnico antes de usar Foto + Assinatura.")
       return
@@ -890,7 +896,7 @@ export default function EmployeesPage() {
       // URLs assinadas expiram rapidamente. Atualizamos as entregas somente
       // no momento da emissao para nunca montar a ficha com links vencidos.
       const [freshEmployeeHistory, signedDocuments] = await Promise.all([
-        api.getEmployeeHistory(emp.id),
+        api.getEmployeeHistory(emp.id, { signAssets: false }),
         api.getSignedDocuments({ employeeId: emp.id, signAssets: false }),
       ])
       const getSignedDocumentForDelivery = (deliveryId: string) =>
@@ -899,12 +905,12 @@ export default function EmployeesPage() {
           (document.delivery_id === deliveryId || document.delivery_ids?.includes(deliveryId))
         )
 
-      const pdfItems = await Promise.all(freshEmployeeHistory.map(async (delivery) => {
+      const pdfItems = await mapConcurrent(freshEmployeeHistory, 4, async (delivery) => {
         const signedDocument = getSignedDocumentForDelivery(delivery.id)
         const authMethod = (signedDocument?.auth_method || delivery.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | 'fingerprint' | null
         const deliveryDate = parseDeliveryDateTime(delivery.delivery_date)
         const expiryDate = deliveryDate && delivery.ppe ? addDays(deliveryDate, delivery.ppe.lifespan_days || 180) : null
-        const signatureSource = delivery.signature_url || signedDocument?.signature_storage_path || signedDocument?.signature_url || null
+        const signatureSource = delivery.signature_storage_path || delivery.signature_url || signedDocument?.signature_storage_path || signedDocument?.signature_url || null
         const photoSource = signedDocument?.photo_evidence_storage_path || signedDocument?.photo_evidence_url || null
         const fingerprintEvidence = authMethod === "fingerprint"
           ? await api.getDeliveryFingerprintEvidence(delivery.id)
@@ -919,13 +925,11 @@ export default function EmployeesPage() {
           returnedAt: delivery.returned_at,
           isExpired: expiryDate ? isPast(expiryDate) : false,
           authMethod,
-          signatureUrl: signatureSource && !delivery.signature_url
-            ? await api.getPrivateAssetUrl(signatureSource, "view")
-            : signatureSource,
+          signatureUrl: signatureSource ? await api.getPrivateAssetUrl(signatureSource, "view") : null,
           photoEvidenceUrl: photoSource ? await api.getPrivateAssetUrl(photoSource, "view") : null,
           fingerprintEvidenceCode: fingerprintEvidence?.evidence.code,
         }
-      }))
+      })
 
       const pdfBlob = await generateNR06PDF({
         employeeName: emp.full_name,
@@ -938,7 +942,7 @@ export default function EmployeesPage() {
         tstSigner: {
           name: tstName,
           role: tstRole,
-          signatureBase64: tstSignatureBase64,
+          signatureBase64,
           authMethod: tstAuthMethod,
           photoBase64: tstPhotoBase64 || undefined,
         }
@@ -951,6 +955,15 @@ export default function EmployeesPage() {
         .replace(/^_+|_+$/g, "")
 
       const fileName = `Ficha_NR06_${safeEmployee}.pdf`
+
+      // The document is usable immediately; slow storage must not hide the
+      // user's open/download choice behind the existing profile dialog.
+      setIsTstModalOpen(false)
+      openPdfDialog(pdfBlob, fileName, {
+        title: "Prontuário NR-06 pronto",
+        description: "Escolha se deseja visualizar a ficha em uma nova aba ou baixar o PDF agora.",
+      })
+      setIsGeneratingPdf(false)
 
       try {
         await api.archiveSignedDocument({
@@ -972,12 +985,6 @@ export default function EmployeesPage() {
         toast.warning(message)
       }
 
-      openPdfDialog(pdfBlob, fileName, {
-        title: "Prontuario NR-06 pronto",
-        description: "Escolha se deseja visualizar a ficha em uma nova aba ou baixar o PDF agora.",
-      })
-
-      setIsTstModalOpen(false)
     } catch (err) {
       console.error("Erro ao gerar PDF:", err)
       toast.error(err instanceof Error ? err.message : "Erro ao gerar o Prontuário NR-06.")
@@ -988,6 +995,14 @@ export default function EmployeesPage() {
 
   const getWorkplaceName = (id: string | null) => {
     return normalizeName(workplaces.find(w => w.id === id)?.name || "Administrativo")
+  }
+
+  const generateSignedProntuario = () => {
+    const signature = tstSignatureBase64 || (tstSigCanvas.current && !tstSigCanvas.current.isEmpty()
+      ? tstSigCanvas.current.toDataURL("image/png") : null)
+    if (!signature) { toast.error("Assine antes de gerar o prontuário."); return }
+    setTstSignatureBase64(signature)
+    void exportNR06PDF(signature)
   }
 
   const getDepartmentName = (department?: string | null) => {
@@ -2270,16 +2285,16 @@ export default function EmployeesPage() {
         </AccessibleOverlay>
       )}
       {isTstModalOpen && (
-        <AccessibleOverlay label="Assinar prontuario" onClose={() => setIsTstModalOpen(false)} className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="safeepi-sheet-panel bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <AccessibleOverlay label="Assinar prontuario" onClose={() => { if (!isGeneratingPdf) setIsTstModalOpen(false) }} className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className={`${signatureStyles.panel} ${tstStep === 1 ? signatureStyles.selection : ""}`}>
+            <div className={signatureStyles.header}>
               <div>
-                <h2 className="font-black text-slate-800 uppercase tracking-tighter text-lg">Assinar Prontuário</h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                <h2 className="font-semibold text-slate-800 tracking-tight text-lg">Assinar Prontuário</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
                   {tstStep === 1 ? "Etapa 1 - Identificação do TST" : "Etapa 2 - Assinatura do Responsável"}
                 </p>
               </div>
-              <button onClick={() => setIsTstModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors" title="Fechar">
+              <button disabled={isGeneratingPdf} onClick={() => setIsTstModalOpen(false)} className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-50" title="Fechar" aria-label="Fechar assinatura do prontuário">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2345,30 +2360,25 @@ export default function EmployeesPage() {
             )}
 
             {tstStep === 2 && (
-              <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
-                {!tstSelectedEmployee?.photo_url && !tstSignatureBase64 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
-                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest leading-relaxed">
-                      Este colaborador não possui foto pré-cadastrada. Use a assinatura manual do responsável técnico. Uma foto isolada não substitui a assinatura.
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+              <>
+              <div className={signatureStyles.body}>
+                <div className="min-w-0"><p className="text-[11px] text-slate-400">Responsável técnico</p><p className="mt-1 break-words text-sm font-semibold leading-5 text-slate-800">{tstName}</p><p className="mt-1 text-xs text-slate-500">{tstRole}</p></div>
+                {tstPhotoBase64 && <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
                   <button
-                    onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); }}
-                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
+                    disabled={isGeneratingPdf}
+                    onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setTstHasSignature(false) }}
+                    className={`min-h-11 rounded-lg text-xs font-semibold transition-colors ${tstAuthMethod === 'manual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}
                   >
                     <PenTool className="w-3.5 h-3.5 inline mr-1" /> Assinatura Manual
                   </button>
                   <button
-                    onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); }}
-                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual_facial' ? 'bg-white shadow text-emerald-700' : 'text-slate-400'}`}
+                    disabled={isGeneratingPdf}
+                    onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); setTstHasSignature(false) }}
+                    className={`min-h-11 rounded-lg text-xs font-semibold transition-colors ${tstAuthMethod === 'manual_facial' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}
                   >
                     <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto + Assinatura
                   </button>
-                </div>
+                </div>}
 
                 {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && (
                   <div className="space-y-2">
@@ -2382,19 +2392,19 @@ export default function EmployeesPage() {
                             <Camera className="w-5 h-5" />
                           </div>
                         )}
-                        <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
-                          O prontuário terá assinatura manual e foto de apoio. A foto não representa verificação biométrica.
+                        <p className="text-xs text-emerald-800 leading-5">
+                          A foto cadastrada será anexada como apoio à assinatura.
                         </p>
                       </div>
                     )}
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tstName} - Assine abaixo:</p>
                     {tstSignatureBase64 ? (
                       <div className="relative border-2 border-green-500 rounded-xl overflow-hidden">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={tstSignatureBase64} alt="Assinatura TST" className="w-full h-28 object-contain bg-slate-50" />
                         <button
-                          onClick={() => setTstSignatureBase64(null)}
-                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                          disabled={isGeneratingPdf}
+                          onClick={() => { setTstSignatureBase64(null); setTstHasSignature(false) }}
+                          className="absolute top-2 right-2 flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 disabled:opacity-50"
                           title="Refazer assinatura"
                         >
                           <X className="w-3 h-3" />
@@ -2404,36 +2414,40 @@ export default function EmployeesPage() {
                     ) : (
                       <SignatureCapture
                         signatureRef={tstSigCanvas}
-                        confirmLabel="Confirmar assinatura do responsável"
-                        onConfirm={() => {
-                            if (!tstSigCanvas.current || tstSigCanvas.current.isEmpty()) {
-                              toast.error("Por favor, assine antes de confirmar.")
-                              return
-                            }
-                            setTstSignatureBase64(tstSigCanvas.current.toDataURL('image/png'))
-                        }}
+                        compact
+                        showConfirmButton={false}
+                        isSaving={isGeneratingPdf}
+                        className={signatureStyles.capture}
+                        confirmLabel="Gerar Prontuário NR-06"
+                        onSignatureChange={setTstHasSignature}
+                        onConfirm={generateSignedProntuario}
                       />
                     )}
                   </div>
                 )}
-
-                <div className="flex gap-2 pt-2 pb-2 shrink-0">
+                {isGeneratingPdf && <p role="status" className="text-xs text-slate-500">Preparando o prontuário e suas assinaturas…</p>}
+              </div>
+                <footer className={signatureStyles.footer}>
+                <div className="flex gap-3">
                   <button
-                    onClick={() => setTstStep(1)}
-                    className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-200 rounded-xl hover:bg-slate-50"
+                    disabled={isGeneratingPdf}
+                    onClick={() => { setTstStep(1); setTstSignatureBase64(null); setTstHasSignature(false) }}
+                    className="min-h-12 px-4 text-sm font-medium text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50"
                   >
                     ← Voltar
                   </button>
                   <button
-                    onClick={exportNR06PDF}
-                    disabled={!tstSignatureBase64 || (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) || isGeneratingPdf}
-                    className="flex-1 py-3 text-[10px] font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                    onClick={generateSignedProntuario}
+                    disabled={(!tstSignatureBase64 && !tstHasSignature) || (tstAuthMethod === 'manual_facial' && !tstPhotoBase64) || isGeneratingPdf}
+                    className="min-h-12 flex-1 px-3 text-sm font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
                   >
                     {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
                     {isGeneratingPdf ? "Gerando PDF..." : "Gerar Prontuário NR-06"}
                   </button>
                 </div>
-              </div>
+                <DeveloperCredit className="mt-3 text-center" />
+                </footer>
+              </>
             )}
           </div>
         </AccessibleOverlay>

@@ -36,19 +36,10 @@ export function usePdfActionDialog() {
   }, [])
 
   const closePdfDialog = useCallback(() => {
-    setState((prev) => {
-      if (prev.url) {
-        window.setTimeout(() => {
-          window.URL.revokeObjectURL(prev.url as string)
-        }, 1000)
-      }
-
-      if (activeUrlRef.current === prev.url) {
-        activeUrlRef.current = null
-      }
-
-      return initialState
-    })
+    // Safari can start reading a new PDF tab after this dialog closes. Keep the
+    // single active URL until the next document or page unmount instead of
+    // invalidating it one second after the user's click.
+    setState(initialState)
   }, [])
 
   const openPdfDialog = useCallback((blob: Blob, fileName: string, options?: PdfDialogOptions) => {

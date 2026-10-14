@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { resolvePostLoginRedirect } from "@/lib/authNavigation"
 import { useVisualViewport } from "@/hooks/useVisualViewport"
 import styles from "./login.module.css"
+import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
 
 function loginDestination() {
   return resolvePostLoginRedirect(new URLSearchParams(window.location.search).get("redirectTo"))
@@ -121,7 +122,7 @@ export default function LoginPage() {
 
           <p className={styles.accessNote}><ShieldCheck aria-hidden="true" strokeWidth={1.7} />Acesso exclusivo para usuários da sua empresa.</p>
         </div>
-        <p className={styles.help}>Precisa de acesso? <span>Fale com o administrador da sua empresa.</span></p>
+        <footer className={styles.help}><p className={styles.helpDetails}>Precisa de acesso? <span>Fale com o administrador da sua empresa.</span></p><DeveloperCredit /></footer>
       </section>
     </div>
   )

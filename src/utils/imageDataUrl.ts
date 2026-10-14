@@ -50,9 +50,11 @@ export async function fetchImageDataUrl(
   if (url.startsWith("data:image/")) return url
 
   const label = options.label || "imagem"
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20_000)
 
   try {
-    const response = await fetch(url, { cache: "no-store" })
+    const response = await fetch(url, { cache: "no-store", signal: controller.signal })
     if (!response.ok) {
       throw new Error(`Nao foi possivel carregar ${label} (HTTP ${response.status}).`)
     }
@@ -70,8 +72,11 @@ export async function fetchImageDataUrl(
     return dataUrl
   } catch (error) {
     if (options.required) {
+      if (controller.signal.aborted) throw new Error(`O carregamento de ${label} demorou demais. Tente gerar o documento novamente.`)
       throw error instanceof Error ? error : new Error(`Nao foi possivel carregar ${label}.`)
     }
     return null
+  } finally {
+    clearTimeout(timeout)
   }
 }
