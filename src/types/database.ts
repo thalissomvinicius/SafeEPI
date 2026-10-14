@@ -4,6 +4,7 @@ export type Employee = {
   third_party_id?: string | null;
   full_name: string;
   cpf: string;
+  registration_number?: string | null;
   job_title: string;
   department: string | null;
   admission_date?: string | null;
@@ -76,6 +77,7 @@ export type Delivery = {
   signature_url: string | null;
   signature_storage_path?: string | null;
   auth_method?: 'manual' | 'facial' | 'manual_facial' | 'fingerprint';
+  biometric_session_id?: string | null;
   ip_address: string | null;
   workplace_id: string | null;
   returned_at?: string | null;

@@ -47,6 +47,14 @@ next-env.d.ts
 
 # local biometric runtime
 /biometric_service/.venv/
+/biometric_service/models/*.onnx
+/biometric_service/models/*.pth
+/biometric_service/models/*.pt
 
 # claude
 /.claude/
+
+# Local packaged installer and generated assistant guidance are not app source.
+/SafeEPI-Leitor-Windows.zip
+/AGENTS.md
+/CLAUDE.md

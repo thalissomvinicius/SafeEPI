@@ -48,7 +48,12 @@ def center_score(face_bbox: np.ndarray, image_shape: tuple[int, int, int]) -> fl
 
 
 def quality_score(image: np.ndarray, face_bbox: np.ndarray) -> tuple[float, dict[str, float]]:
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    height, width = image.shape[:2]
+    x1, y1, x2, y2 = face_bbox.astype(int)
+    crop = image[max(0, y1):min(height, y2), max(0, x1):min(width, x2)]
+    if crop.size == 0:
+        return 0.0, {"face_size": 0.0}
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
     parts = {
         "brightness": brightness_score(gray),
         "blur": blur_score(gray),

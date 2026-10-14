@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin, getSupabaseAdminConfigError } from "@/lib/supabaseAdmin"
 import { PRIVATE_STORAGE_BUCKET } from "@/lib/privateStorage"
 import { getClientIp } from "@/lib/getClientIp"
-import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { remoteDeliveryFieldsSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUpload } from "@/lib/validateUpload"
@@ -89,8 +88,6 @@ export async function POST(request: Request) {
 
   try {
     assertRequestSize(request, 20 * 1024 * 1024)
-    const ipLimited = await rateLimit(`remote-delivery:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
-    if (!ipLimited.success) return rateLimitExceededResponse(ipLimited.retryAfter)
 
     const configError = getSupabaseAdminConfigError()
     if (configError) {
@@ -119,6 +116,13 @@ export async function POST(request: Request) {
     const geoLocation = String(formData.get("geo_location") || "").trim()
     const authMethod = fields.auth_method || "manual"
     const signatureFile = formData.get("signatureFile")
+
+    if (authMethod === "facial") {
+      return NextResponse.json({
+        error: "A entrega facial exige verificacao vinculada aos itens e aceite expresso. Atualize o link ou use assinatura manual.",
+        code: "FACIAL_PROOF_REQUIRED",
+      }, { status: 409 })
+    }
 
     if (!isValidUuid(employeeId) || !isValidUuid(ppeId)) {
       return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 })
@@ -158,9 +162,6 @@ export async function POST(request: Request) {
       await supabaseAdmin.from("remote_links").update({ status: "expired" }).eq("id", link.id).eq("status", "pending")
       return NextResponse.json({ error: "Este link expirou." }, { status: 410 })
     }
-
-    const linkLimited = await rateLimit(`remote-delivery:link:${link.id}`, 5, 60 * 60 * 1000)
-    if (!linkLimited.success) return rateLimitExceededResponse(linkLimited.retryAfter)
 
     const validatedSignature = await validateUpload(signatureFile, "image")
     const signaturePrefix = authMethod === "facial" ? "bio" : "sig"

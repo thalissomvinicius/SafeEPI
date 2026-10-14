@@ -18,6 +18,7 @@ import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { DataLoadError } from "@/components/ui/DataLoadError"
+import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
 type DeliveryScopeFilter = 'own' | 'third_party' | 'all'
@@ -29,6 +30,10 @@ export default function MovementsPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [hasMoreRecords, setHasMoreRecords] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextOffset, setNextOffset] = useState(0)
+  const [visibleMovementCount, setVisibleMovementCount] = useState(100)
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
@@ -51,7 +56,9 @@ export default function MovementsPage() {
   const [specificMonthSel, setSpecificMonthSel] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
   const [specificYearSel, setSpecificYearSel] = useState<string>(String(new Date().getFullYear()))
   const [searchTerm, setSearchTerm] = useState("")
+  const [employeeFilterId, setEmployeeFilterId] = useState("")
   const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>('own')
+  const invalidCustomPeriod = dateFilter === "custom" && (!customStartDate || !customEndDate || customStartDate > customEndDate)
   const hasThirdPartyFeature = Boolean(user)
 
   // Auth protection
@@ -71,10 +78,12 @@ export default function MovementsPage() {
         // Isso evita dezenas de lotes de assinatura e o limite do endpoint na carga da tela.
         api.getDeliveries({ signAssets: false }),
         api.getSignedDocuments({ signAssets: false }),
-        hasThirdPartyFeature ? api.getEmployees() : Promise.resolve([] as Employee[]),
+        hasThirdPartyFeature ? api.getEmployees({ signPhotos: false }) : Promise.resolve([] as Employee[]),
         hasThirdPartyFeature ? api.getWorkplaces() : Promise.resolve([] as Workplace[]),
       ])
       setRawDeliveries(deliveryData)
+      setHasMoreRecords(deliveryData.length === 500)
+      setNextOffset(deliveryData.length)
       setSignedDocuments(documentData)
       setEmployees(employeeData)
       setWorkplaces(workplaceData)
@@ -91,6 +100,24 @@ export default function MovementsPage() {
     const timer = window.setTimeout(() => void loadData(), 0)
     return () => window.clearTimeout(timer)
   }, [loadData])
+
+  const loadMoreRecords = async () => {
+    try {
+      setLoadingMore(true)
+      const nextPage = await api.getDeliveries({ offset: nextOffset, limit: 500, signAssets: false })
+      setRawDeliveries((current) => {
+        const knownIds = new Set(current.map((delivery) => delivery.id))
+        return [...current, ...nextPage.filter((delivery) => !knownIds.has(delivery.id))]
+      })
+      setNextOffset((offset) => offset + nextPage.length)
+      setHasMoreRecords(nextPage.length === 500)
+    } catch (error) {
+      console.error("Erro ao carregar mais movimentações:", error)
+      toast.error("Não foi possível carregar mais registros. Os dados anteriores foram mantidos.")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const employeeThirdPartyById = new Map(employees.map((employee) => [employee.id, employee.third_party_id || null]))
   const workplaceThirdPartyById = new Map(workplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
@@ -131,6 +158,7 @@ export default function MovementsPage() {
   // Filter Logic
   const getFilteredData = () => {
     let filtered = rawDeliveries
+    if (employeeFilterId) filtered = filtered.filter((delivery) => delivery.employee_id === employeeFilterId)
     const now = new Date()
 
     if (dateFilter !== 'all') {
@@ -195,18 +223,8 @@ export default function MovementsPage() {
       (document.delivery_id === deliveryId || document.delivery_ids?.includes(deliveryId))
     )
 
-  const urlToBase64 = async (url: string) => {
-    const response = await fetch(url)
-    const blob = await response.blob()
-    return new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.readAsDataURL(blob)
-    })
-  }
-
   const handleDeliveryReceiptPDF = async (delivery: DeliveryWithRelations) => {
-    if (!delivery.signature_url) {
+    if (!delivery.signature_url && delivery.auth_method !== "fingerprint") {
       toast.error("Esta entrega não possui assinatura digital.")
       return
     }
@@ -223,6 +241,7 @@ export default function MovementsPage() {
         )
         if (!documentUrl) throw new Error("Nao foi possivel gerar o link seguro do PDF.")
         const archivedResponse = await fetch(documentUrl)
+        if (!archivedResponse.ok) throw new Error("Não foi possível carregar o PDF arquivado.")
         const archivedBlob = await archivedResponse.blob()
         openPdfDialog(archivedBlob, signedDocument.file_name || `Comprovante_${delivery.id.slice(0, 8)}.pdf`, {
           title: "Comprovante arquivado",
@@ -244,16 +263,16 @@ export default function MovementsPage() {
         }
       } else {
         const signatureUrl = await api.getPrivateAssetUrl(delivery.signature_storage_path || delivery.signature_url, "download")
-        base64Signature = await urlToBase64(signatureUrl || delivery.signature_url)
+        if (!signatureUrl) throw new Error("Não foi possível gerar o acesso seguro à assinatura.")
+        base64Signature = await fetchImageDataUrl(signatureUrl, { required: true, label: "a assinatura da entrega" }) || undefined
+        if (!base64Signature) throw new Error("Não foi possível carregar a assinatura da entrega.")
       }
-      const photoBase64 = signedDocument?.photo_evidence_url
-        ? await urlToBase64(
-          await api.getPrivateAssetUrl(
-            signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url,
-            "download",
-          ) || signedDocument.photo_evidence_url,
-        ).catch(() => undefined)
-        : undefined
+      let photoBase64: string | undefined
+      if (signedDocument?.photo_evidence_url) {
+        const photoUrl = await api.getPrivateAssetUrl(signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url, "download")
+        if (!photoUrl) throw new Error("Não foi possível gerar o acesso seguro à evidência fotográfica.")
+        photoBase64 = await fetchImageDataUrl(photoUrl, { required: true, label: "a evidência fotográfica da entrega" }) || undefined
+      }
       const authMethod = delivery.auth_method === "fingerprint"
         ? "fingerprint"
         : signedDocument?.auth_method === "manual_facial" || delivery.auth_method === "manual_facial"
@@ -262,7 +281,7 @@ export default function MovementsPage() {
 
       const pdfBlob = await generateDeliveryPDF({
         employeeName: delivery.employee?.full_name || "Desconhecido",
-        employeeCpf: delivery.employee?.cpf || "000.000.000-00",
+        employeeCpf: delivery.employee?.cpf || "Não informado",
         employeeRole: delivery.employee?.job_title || "Geral",
         workplaceName: delivery.workplace?.name || "Sede",
         ppeName: delivery.ppe?.name || "N/A",
@@ -433,29 +452,32 @@ export default function MovementsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tighter text-slate-800 flex items-center uppercase">
+          <p className="mb-2 text-xs font-semibold text-slate-500">Controle operacional</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center">
             <ArrowRightLeft className="w-6 h-6 mr-2 text-[#2563EB]" />
-            Movimentações Mensais
+            Movimentações de EPI
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium italic">Monitoramento completo de entradas e saídas por período.</p>
+          <p className="text-slate-500 text-sm mt-2 leading-6">Acompanhe entregas e devoluções por período, colaborador e vínculo.</p>
         </div>
 
         <div className="w-full md:w-auto flex gap-2">
           <button
             onClick={() => exportDeliveriesToExcel(filteredMovements)}
+            disabled={loading || hasMoreRecords || invalidCustomPeriod || filteredMovements.length === 0}
             title="Exportar para planilha Excel"
-            className="flex-1 md:flex-none bg-[#1e293b] hover:bg-slate-800 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2"
+            className="min-h-11 flex-1 md:flex-none border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Excel
           </button>
           <button
             onClick={() => setShowPdfModal(true)}
+            disabled={loading || hasMoreRecords || invalidCustomPeriod || filteredMovements.length === 0}
             title="Gerar relatório em PDF"
-            className="flex-1 md:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20"
+            className="min-h-11 flex-1 md:flex-none border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <FileDown className="w-4 h-4" />
             PDF
@@ -463,11 +485,24 @@ export default function MovementsPage() {
         </div>
       </div>
 
+      {loadError && rawDeliveries.length > 0 && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">A consulta falhou. Mantivemos os registros carregados; tente atualizar novamente.</div>}
+      {hasMoreRecords && !loading && (
+        <div role="status" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Histórico carregado parcialmente</p>
+            <p className="mt-1 text-xs leading-5 text-amber-800">{rawDeliveries.length} registros carregados. Totais e busca consideram apenas estes registros; carregue os restantes para liberar relatórios completos.</p>
+          </div>
+          <button type="button" onClick={() => void loadMoreRecords()} disabled={loadingMore} className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">
+            {loadingMore ? "Carregando registros…" : "Carregar mais 500 registros"}
+          </button>
+        </div>
+      )}
+
       {/* Filter Bar */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-        <div className="flex flex-col gap-6 md:flex-row md:items-end">
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
           <div className="flex-1 space-y-2 w-full">
-            <label id="label-periodo" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+            <label id="label-periodo" className="text-xs font-semibold text-slate-400  tracking-normal flex items-center">
               <Calendar className="w-3 h-3 mr-1" /> Período
             </label>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
@@ -481,7 +516,7 @@ export default function MovementsPage() {
                   key={opt.id}
                   title={`Filtrar por: ${opt.label}`}
                   onClick={() => setDateFilter(opt.id as DateFilter)}
-                  className={`min-h-11 w-full px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ${
+                  className={`min-h-11 w-full px-3 py-2.5 rounded-xl text-xs font-semibold  transition-colors border ${
                     dateFilter === opt.id
                       ? "bg-[#2563EB] border-[#2563EB] text-white shadow-md shadow-blue-900/20"
                       : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-white hover:border-slate-300"
@@ -494,14 +529,14 @@ export default function MovementsPage() {
           </div>
 
           <div className="flex-1 space-y-2 w-full">
-            <label id="label-outros" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+            <label id="label-outros" className="text-xs font-semibold text-slate-400  tracking-normal flex items-center">
               <Filter className="w-3 h-3 mr-1" /> Outros Filtros
             </label>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 title="Filtrar por mês específico"
                 onClick={() => setDateFilter('specific_month')}
-                className={`min-h-11 w-full px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ${
+                className={`min-h-11 w-full px-3 py-2.5 rounded-xl text-xs font-semibold  transition-colors border ${
                   dateFilter === 'specific_month'
                     ? "bg-[#2563EB] border-[#2563EB] text-white shadow-md shadow-blue-900/20"
                     : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-white hover:border-slate-300"
@@ -512,7 +547,7 @@ export default function MovementsPage() {
               <button
                 title="Filtrar por período personalizado"
                 onClick={() => setDateFilter('custom')}
-                className={`min-h-11 w-full px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ${
+                className={`min-h-11 w-full px-3 py-2.5 rounded-xl text-xs font-semibold  transition-colors border ${
                   dateFilter === 'custom'
                     ? "bg-[#2563EB] border-[#2563EB] text-white shadow-md shadow-blue-900/20"
                     : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-white hover:border-slate-300"
@@ -524,7 +559,7 @@ export default function MovementsPage() {
           </div>
 
           <div className="flex-1 space-y-2 w-full">
-            <label htmlFor="search-mov" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+            <label htmlFor="search-mov" className="text-xs font-semibold text-slate-400  tracking-normal flex items-center">
               <Search className="w-3 h-3 mr-1" /> Pesquisar
             </label>
             <input
@@ -535,20 +570,20 @@ export default function MovementsPage() {
               aria-label="Pesquisar movimentações"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none transition-all"
+              className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-[#2563EB] outline-none transition-colors"
             />
           </div>
 
           {hasThirdPartyFeature && (
             <div className="flex-1 space-y-2 w-full">
-              <label htmlFor="scope-mov" className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+              <label htmlFor="scope-mov" className="text-xs font-semibold text-slate-400  tracking-normal flex items-center">
                 <Users className="w-3 h-3 mr-1" /> Vínculo
               </label>
               <select
                 id="scope-mov"
                 value={deliveryScopeFilter}
                 onChange={(event) => setDeliveryScopeFilter(event.target.value as DeliveryScopeFilter)}
-                className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none transition-all"
+                className="min-h-11 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-[#2563EB] outline-none transition-colors"
               >
                 <option value="own">Próprios</option>
                 <option value="third_party">Terceiros</option>
@@ -558,10 +593,28 @@ export default function MovementsPage() {
           )}
         </div>
 
+        <div className="grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="min-w-0 space-y-2">
+            <label htmlFor="employee-period-mov" className="text-xs font-semibold text-slate-600">Relatório de EPIs por colaborador</label>
+            <select id="employee-period-mov" value={employeeFilterId} onChange={(event) => {
+              setEmployeeFilterId(event.target.value)
+              if (event.target.value) setDeliveryScopeFilter("all")
+            }} className="min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-[#2563EB] focus:outline-none">
+              <option value="">Todos os colaboradores</option>
+              {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+            </select>
+            <p className="text-xs leading-5 text-slate-500">Selecione o colaborador e o período acima para emitir todos os EPIs juntos.</p>
+          </div>
+          <button type="button" onClick={() => setShowPdfModal(true)} disabled={!employeeFilterId || loading || hasMoreRecords || invalidCustomPeriod || filteredMovements.length === 0} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-40">
+            <FileDown className="h-4 w-4" aria-hidden="true" /> Emitir EPIs do período
+          </button>
+        </div>
+        {invalidCustomPeriod && <p role="status" className="text-sm text-amber-700">Informe as datas inicial e final em ordem válida para emitir o período personalizado.</p>}
+
         {/* Custom Inputs */}
         {dateFilter === 'specific_month' && (
           <div className="pt-4 border-t border-slate-50 animate-in slide-in-from-top-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Selecione o Mês</label>
+            <label className="text-xs font-semibold text-slate-400  tracking-normal block mb-2">Selecione o Mês</label>
             <div className="flex gap-2">
               <select
                 id="specific-month-sel"
@@ -572,7 +625,7 @@ export default function MovementsPage() {
                   setSpecificMonthSel(e.target.value)
                   setSpecificMonth(`${specificYearSel}-${e.target.value}`)
                 }}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-[#2563EB] outline-none"
               >
                 {['01','02','03','04','05','06','07','08','09','10','11','12'].map((m, i) => (
                   <option key={m} value={m}>{['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][i]}</option>
@@ -587,7 +640,7 @@ export default function MovementsPage() {
                   setSpecificYearSel(e.target.value)
                   setSpecificMonth(`${e.target.value}-${specificMonthSel}`)
                 }}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-[#2563EB] outline-none"
               >
                 {[2023,2024,2025,2026,2027].map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -600,7 +653,7 @@ export default function MovementsPage() {
         {dateFilter === 'custom' && (
           <div className="pt-4 border-t border-slate-50 flex gap-4 animate-in slide-in-from-top-2">
             <div className="flex-1">
-              <label htmlFor="custom-start" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Início</label>
+              <label htmlFor="custom-start" className="text-xs font-semibold text-slate-400  tracking-normal block mb-2">Início</label>
               <input
                 id="custom-start"
                 type="date"
@@ -608,11 +661,11 @@ export default function MovementsPage() {
                 aria-label="Data de início"
                 value={customStartDate}
                 onChange={e => setCustomStartDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-[#2563EB] outline-none"
               />
             </div>
             <div className="flex-1">
-              <label htmlFor="custom-end" className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Fim</label>
+              <label htmlFor="custom-end" className="text-xs font-semibold text-slate-400  tracking-normal block mb-2">Fim</label>
               <input
                 id="custom-end"
                 type="date"
@@ -620,7 +673,7 @@ export default function MovementsPage() {
                 aria-label="Data de fim"
                 value={customEndDate}
                 onChange={e => setCustomEndDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-[#2563EB] outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-[#2563EB] outline-none"
               />
             </div>
           </div>
@@ -635,20 +688,20 @@ export default function MovementsPage() {
           { label: "Itens Movimentados", value: loading && rawDeliveries.length === 0 ? "—" : stats.totalItems, icon: Shield, color: "text-[#2563EB]", bg: "bg-red-50" },
           { label: "Pessoas Atendidas", value: loading && rawDeliveries.length === 0 ? "—" : stats.uniqueEmployees, icon: Users, color: "text-slate-600", bg: "bg-slate-50" },
         ].map((s, i) => (
-          <div key={i} className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex items-center gap-4">
+          <div key={i} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center gap-4">
             <div className={`p-3 rounded-2xl ${s.bg}`}>
               <s.icon className={`w-5 h-5 ${s.color}`} />
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
-              <p className="text-xl font-black text-slate-800 tracking-tighter mt-0.5">{s.value}</p>
+              <p className="text-xs font-semibold text-slate-400  tracking-normal">{s.label}</p>
+              <p className="text-xl font-semibold text-slate-800 tracking-tighter mt-0.5">{s.value}</p>
             </div>
           </div>
         ))}
       </div>
 
       {/* Main List */}
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="min-h-[400px]">
           {loading ? (
             <LoadingState
@@ -659,16 +712,16 @@ export default function MovementsPage() {
           ) : (
             <div className="bg-slate-50/70 p-4">
               <div className="mb-3 flex flex-col gap-1 px-1 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                <p className="text-xs font-semibold  tracking-normal text-slate-400">
                   {filteredMovements.length} movimentação(ões)
                 </p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <p className="text-xs font-semibold  tracking-normal text-slate-400">
                   {getPeriodLabel()}
                 </p>
               </div>
 
               <div className="space-y-3">
-                {filteredMovements.map((move, i) => {
+                {filteredMovements.slice(0, visibleMovementCount).map((move, i) => {
                   const isDownloading = downloadingDeliveryId === move.id
                   const isCreatingSignatureLink = creatingSignatureLinkId === move.id
                   const isThirdPartyMovement = Boolean(getDeliveryThirdPartyId(move))
@@ -677,11 +730,11 @@ export default function MovementsPage() {
                     : "border-green-200 bg-green-50 text-green-700"
 
                   return (
-                    <div key={move.id || i} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+                    <div key={move.id || i} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
                       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${movementTypeClass}`}>
+                            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold  tracking-normal ${movementTypeClass}`}>
                               {move.returned_at ? (
                                 <ArrowDownLeft className="h-3 w-3" />
                               ) : (
@@ -689,7 +742,7 @@ export default function MovementsPage() {
                               )}
                               {move.returned_at ? "Devolução" : "Entrega"}
                             </span>
-                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold  tracking-normal text-slate-500">
                               {isThirdPartyMovement ? "Terceiro" : "Próprio"}
                             </span>
                           </div>
@@ -698,37 +751,37 @@ export default function MovementsPage() {
                               <Calendar className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-black uppercase tracking-tight text-slate-900">{formatDeliveryDate(move.delivery_date)}</p>
-                              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">{formatDeliveryTime(move.delivery_date)}h</p>
+                              <p className="text-sm font-semibold  tracking-tight text-slate-900">{formatDeliveryDate(move.delivery_date)}</p>
+                              <p className="mt-0.5 text-xs font-semibold  tracking-normal text-slate-400">{formatDeliveryTime(move.delivery_date)}h</p>
                             </div>
                           </div>
                         </div>
 
                         <div className="grid min-w-0 flex-[3] grid-cols-1 gap-3 lg:grid-cols-3">
                           <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Colaborador</p>
-                            <p className="mt-1 text-xs font-black uppercase tracking-tight text-slate-800" title={move.employee?.full_name || "Colaborador"}>
+                            <p className="text-xs font-semibold  tracking-normal text-slate-400">Colaborador</p>
+                            <p className="mt-1 text-xs font-semibold  tracking-tight text-slate-800" title={move.employee?.full_name || "Colaborador"}>
                               {move.employee?.full_name || "Colaborador não informado"}
                             </p>
-                            <p className="mt-0.5 text-[10px] font-bold tracking-widest text-slate-400">{move.employee?.cpf || "CPF não informado"}</p>
+                            <p className="mt-0.5 text-xs font-semibold tracking-normal text-slate-400">{move.employee?.cpf || "CPF não informado"}</p>
                           </div>
 
                           <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">EPI / CA</p>
-                            <p className="mt-1 text-xs font-black uppercase tracking-tight text-slate-800" title={move.ppe?.name || "EPI"}>
+                            <p className="text-xs font-semibold  tracking-normal text-slate-400">EPI / CA</p>
+                            <p className="mt-1 text-xs font-semibold  tracking-tight text-slate-800" title={move.ppe?.name || "EPI"}>
                               {move.ppe?.name || "EPI não informado"}
                             </p>
-                            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">C.A. {move.ppe?.ca_number || "N/A"}</p>
+                            <p className="mt-0.5 text-xs font-semibold  tracking-normal text-slate-400">C.A. {move.ppe?.ca_number || "N/A"}</p>
                           </div>
 
                           <div className="grid grid-cols-[auto_1fr] gap-3">
                             <div className="flex min-h-[74px] min-w-16 flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 px-3">
-                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Qtd</p>
-                              <p className="mt-1 text-2xl font-black leading-none text-slate-900">{move.quantity}</p>
+                              <p className="text-xs font-semibold  tracking-normal text-slate-400">Qtd</p>
+                              <p className="mt-1 text-2xl font-semibold leading-none text-slate-900">{move.quantity}</p>
                             </div>
                             <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Unidade</p>
-                              <p className="mt-1 truncate text-xs font-black uppercase tracking-tight text-slate-800" title={move.workplace?.name || "Geral"}>
+                              <p className="text-xs font-semibold  tracking-normal text-slate-400">Unidade</p>
+                              <p className="mt-1 truncate text-xs font-semibold  tracking-tight text-slate-800" title={move.workplace?.name || "Geral"}>
                                 {move.workplace?.name || "Geral"}
                               </p>
                             </div>
@@ -741,7 +794,7 @@ export default function MovementsPage() {
                               onClick={() => void handleDeliveryReceiptPDF(move)}
                               disabled={isDownloading}
                               title="Emitir comprovante de entrega do EPI"
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-sm shadow-blue-900/15 transition-all hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20 disabled:opacity-40"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-3 text-xs font-semibold  tracking-normal text-white shadow-sm shadow-blue-900/15 transition-colors hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20 disabled:opacity-40"
                             >
                               {isDownloading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -752,12 +805,12 @@ export default function MovementsPage() {
                             </button>
                           ) : (
                             <>
-                              <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Sem assinatura</span>
+                              <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold  tracking-normal text-slate-400">Sem assinatura</span>
                               <button
                                 onClick={() => void openSignatureFlow(move)}
                                 disabled={isCreatingSignatureLink}
                                 title="Abrir assinatura desta entrega"
-                                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-700 transition-all hover:-translate-y-0.5 hover:bg-amber-100 hover:shadow-md disabled:opacity-50"
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold  tracking-normal text-amber-700 transition-colors hover:-translate-y-0.5 hover:bg-amber-100 hover:shadow-md disabled:opacity-50"
                               >
                                 {isCreatingSignatureLink ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -773,10 +826,16 @@ export default function MovementsPage() {
                     </div>
                   )
                 })}
+                {filteredMovements.length > visibleMovementCount && (
+                  <div className="flex flex-col items-center gap-3 border-t border-slate-200 py-5 text-center">
+                    <p className="text-xs text-slate-500">Exibindo {visibleMovementCount} de {filteredMovements.length} movimentações carregadas. Os totais incluem todos os registros carregados.</p>
+                    <button type="button" onClick={() => setVisibleMovementCount((count) => count + 100)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Mostrar mais 100 movimentações</button>
+                  </div>
+                )}
                 {filteredMovements.length === 0 && (
                   <div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center text-slate-400 italic">
                     <ArrowRightLeft className="w-10 h-10 mx-auto mb-4 opacity-20" />
-                    <p className="text-sm font-black uppercase tracking-widest">Nenhuma movimentação neste período.</p>
+                    <p className="text-sm font-semibold  tracking-normal">Nenhuma movimentação neste período.</p>
                   </div>
                 )}
               </div>
@@ -789,31 +848,31 @@ export default function MovementsPage() {
       <BottomSheet
         open={showPdfModal}
         onClose={() => setShowPdfModal(false)}
-        title="Gerar Relatório PDF"
-        description="Escolha o formato ideal para sua necessidade"
+        title={employeeFilterId ? "EPIs do colaborador no período" : "Gerar relatório PDF"}
+        description={employeeFilterId ? `${employees.find((employee) => employee.id === employeeFilterId)?.full_name || "Colaborador"} · ${getPeriodLabel()}` : "Escolha o formato do relatório de movimentações."}
         className="md:max-w-5xl"
       >
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.95fr_1.05fr]">
                 <div className="space-y-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Formato do relatório</p>
+                  <p className="text-xs font-semibold  tracking-normal text-slate-400">Formato do relatório</p>
                   <button
                     type="button"
                     onClick={() => setSelectedPdfType('simple')}
-                    className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                    className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-colors ${
                       selectedPdfType === 'simple'
                         ? 'border-[#2563EB] bg-blue-50 shadow-md shadow-blue-900/10'
                         : 'border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50'
                     }`}
                   >
-                    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-all ${selectedPdfType === 'simple' ? 'bg-[#2563EB]/10' : 'bg-slate-100 group-hover:bg-[#2563EB]/10'}`}>
+                    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${selectedPdfType === 'simple' ? 'bg-[#2563EB]/10' : 'bg-slate-100 group-hover:bg-[#2563EB]/10'}`}>
                       <FileDown className={`h-7 w-7 ${selectedPdfType === 'simple' ? 'text-[#2563EB]' : 'text-slate-500 group-hover:text-[#2563EB]'}`} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm">PDF Simples</h3>
+                      <h3 className="font-semibold text-slate-800  tracking-tighter text-sm">PDF Simples</h3>
                       <p className="mt-1 text-[11px] text-slate-500 font-medium leading-relaxed">
                         Tabela completa e resumo de indicadores para arquivo e controle interno.
                       </p>
-                      <span className={`mt-3 inline-flex text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'simple' ? 'text-[#2563EB] bg-white border border-blue-100' : 'text-slate-400 bg-slate-100'}`}>
+                      <span className={`mt-3 inline-flex text-xs font-semibold  tracking-normal px-3 py-1.5 rounded-lg ${selectedPdfType === 'simple' ? 'text-[#2563EB] bg-white border border-blue-100' : 'text-slate-400 bg-slate-100'}`}>
                         Retrato · 1 página+
                       </span>
                     </div>
@@ -822,21 +881,21 @@ export default function MovementsPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedPdfType('presentation')}
-                    className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+                    className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-colors ${
                       selectedPdfType === 'presentation'
                         ? 'border-[#B91C1C] bg-red-50 shadow-md shadow-red-900/10'
                         : 'border-slate-100 hover:border-red-200 hover:bg-red-50/40'
                     }`}
                   >
-                    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-all ${selectedPdfType === 'presentation' ? 'bg-red-100' : 'bg-slate-100 group-hover:bg-red-100'}`}>
+                    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-colors ${selectedPdfType === 'presentation' ? 'bg-red-100' : 'bg-slate-100 group-hover:bg-red-100'}`}>
                       <Presentation className={`h-7 w-7 ${selectedPdfType === 'presentation' ? 'text-[#B91C1C]' : 'text-slate-500 group-hover:text-[#B91C1C]'}`} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm">PDF Apresentação</h3>
+                      <h3 className="font-semibold text-slate-800  tracking-tighter text-sm">PDF Apresentação</h3>
                       <p className="mt-1 text-[11px] text-slate-500 font-medium leading-relaxed">
                         Gráficos visuais, layout executivo e assinatura para reuniões.
                       </p>
-                      <span className={`mt-3 inline-flex text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${selectedPdfType === 'presentation' ? 'text-[#B91C1C] bg-white border border-red-100' : 'text-slate-400 bg-slate-100'}`}>
+                      <span className={`mt-3 inline-flex text-xs font-semibold  tracking-normal px-3 py-1.5 rounded-lg ${selectedPdfType === 'presentation' ? 'text-[#B91C1C] bg-white border border-red-100' : 'text-slate-400 bg-slate-100'}`}>
                         Paisagem · 2 páginas
                       </span>
                     </div>
@@ -848,13 +907,13 @@ export default function MovementsPage() {
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <PenTool className="w-4 h-4 text-[#B91C1C]" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Assinatura do responsável técnico</p>
+                        <p className="text-xs font-semibold  tracking-normal text-slate-500">Assinatura do responsável técnico</p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-[1.3fr_1fr] gap-3">
                         <select
                           value={selectedTechnicianId}
                           onChange={(e) => handleTechnicianSelect(e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-[#2563EB]"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#2563EB]"
                           title="Selecionar responsável técnico cadastrado"
                         >
                           <option value="">Selecione um técnico cadastrado</option>
@@ -868,7 +927,7 @@ export default function MovementsPage() {
                           value={technicianRole}
                           onChange={(e) => setTechnicianRole(e.target.value)}
                           placeholder="Cargo"
-                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#2563EB]"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-[#2563EB]"
                         />
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -887,7 +946,7 @@ export default function MovementsPage() {
                       <button
                         type="button"
                         onClick={() => movementSigCanvas.current?.clear()}
-                        className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-600"
+                        className="inline-flex items-center gap-2 text-xs font-semibold  tracking-normal text-slate-500 hover:text-red-600"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         Limpar assinatura
@@ -898,8 +957,8 @@ export default function MovementsPage() {
                       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#2563EB]/10 text-[#2563EB]">
                         <FileDown className="h-8 w-8" />
                       </div>
-                      <h3 className="mt-4 text-sm font-black uppercase tracking-tight text-slate-800">Pronto para gerar</h3>
-                      <p className="mt-2 max-w-sm text-xs font-bold leading-relaxed text-slate-500">
+                      <h3 className="mt-4 text-sm font-semibold  tracking-tight text-slate-800">Pronto para gerar</h3>
+                      <p className="mt-2 max-w-sm text-xs font-semibold leading-relaxed text-slate-500">
                         O PDF simples não exige assinatura e será aberto assim que você confirmar.
                       </p>
                     </div>
@@ -907,13 +966,13 @@ export default function MovementsPage() {
                 </div>
               </div>
             <div className="mt-5 flex shrink-0 flex-col gap-3 border-t border-slate-100 bg-white pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[10px] text-slate-400 italic">
+              <p className="text-xs text-slate-400 italic">
                 Período: <strong>{getPeriodLabel()}</strong> · {filteredMovements.length} movimentações
               </p>
               <button
                 onClick={handleGenerateSelectedPDF}
                 disabled={generatingPresentationPdf}
-                className="rounded-2xl bg-[#B91C1C] px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/20 disabled:opacity-60 flex items-center justify-center gap-2"
+                className="min-h-11 rounded-xl bg-[var(--brand-color)] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-color-strong)] disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {generatingPresentationPdf ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

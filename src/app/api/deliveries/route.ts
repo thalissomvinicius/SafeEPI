@@ -69,6 +69,12 @@ export async function POST(request: NextRequest) {
     }
 
     const input = parsed.data
+    if (input.auth_method === "facial") {
+      return NextResponse.json({
+        error: "A entrega facial exige verificacao vinculada aos itens e aceite expresso. Atualize a tela ou use assinatura manual.",
+        code: "FACIAL_PROOF_REQUIRED",
+      }, { status: 409 })
+    }
     const companyId = resolveCompanyId(auth.user, input.company_id)
     if (!companyId) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })

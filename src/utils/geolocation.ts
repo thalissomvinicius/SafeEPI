@@ -70,6 +70,10 @@ function requestDeviceGeolocation(): Promise<RequiredGeolocationResult> {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const value = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`
+        if (!isValidGeoLocation(value)) {
+          resolve({ ok: false, reason: "unavailable", message: "O dispositivo não retornou coordenadas válidas. Tente novamente." })
+          return
+        }
         resolve({
           ok: true,
           value,
@@ -78,8 +82,7 @@ function requestDeviceGeolocation(): Promise<RequiredGeolocationResult> {
         })
       },
       (error) => resolve(resolveGeolocationError(error)),
-      // Uma leitura recente e de baixa precisão responde melhor em PCs sem GPS.
-      // A evidência continua sendo do dispositivo e evita travar o clique por 15 s.
+      // A recent reading responds faster on desktops without dedicated GPS.
       { enableHighAccuracy: false, timeout: 6000, maximumAge: 5 * 60 * 1000 },
     )
   })
@@ -88,19 +91,13 @@ function requestDeviceGeolocation(): Promise<RequiredGeolocationResult> {
 async function requestNetworkGeolocation(): Promise<RequiredGeolocationResult | null> {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), 5000)
-
   try {
-    const response = await fetch("/api/client-location", {
-      cache: "no-store",
-      credentials: "same-origin",
-      signal: controller.signal,
-    })
+    const response = await fetch("/api/client-location", { cache: "no-store", credentials: "same-origin", signal: controller.signal })
     if (!response.ok) return null
-
-    const data = await response.json() as { location?: unknown }
+    const data = await response.json() as { location?: unknown; source?: unknown }
     const value = typeof data.location === "string" ? data.location.trim() : ""
-    if (!isValidGeoLocation(value)) return null
-
+    if (data.source !== "network" || !isValidGeoLocation(value)) return null
+    // Approximate provider-derived network location is not device GPS evidence.
     return { ok: true, value, source: "network" }
   } catch {
     return null
@@ -110,24 +107,18 @@ async function requestNetworkGeolocation(): Promise<RequiredGeolocationResult | 
 }
 
 export async function requestRequiredGeolocation(): Promise<RequiredGeolocationResult> {
-  const unsupportedResult: RequiredGeolocationResult = {
+  const unsupported: RequiredGeolocationResult = {
     ok: false,
     reason: "unsupported",
     message: "Este navegador não oferece localização. Use um navegador com localização habilitada.",
   }
-
-  const deviceResult = typeof navigator === "undefined" || !("geolocation" in navigator)
-    ? unsupportedResult
+  const deviceResult = typeof navigator === "undefined" || !navigator.geolocation
+    ? unsupported
     : await requestDeviceGeolocation()
-
   if (deviceResult.ok) return deviceResult
-
-  // Em PCs sem sensor GPS, a Vercel fornece uma coordenada aproximada da rede.
-  // Isso mantém a trilha de auditoria e impede que a assinatura fique bloqueada.
   if (typeof window !== "undefined") {
     const networkResult = await requestNetworkGeolocation()
     if (networkResult) return networkResult
   }
-
   return deviceResult
 }

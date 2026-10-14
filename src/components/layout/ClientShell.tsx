@@ -27,22 +27,23 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="relative flex h-[100dvh] min-h-[100dvh] w-full max-w-full overflow-hidden">
+      <div className="app-shell relative flex h-[100dvh] min-h-[100dvh] w-full max-w-full overflow-hidden bg-slate-50">
         <Sidebar />
         <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
           <Header />
-          <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-0">
-            <div className="min-w-0 max-w-full flex-1">
+          <main id="main-content" tabIndex={-1} className="app-workspace flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-0">
+            <div className="mx-auto min-w-0 w-full max-w-[1600px] flex-1">
               {children}
             </div>
-            <footer className="w-full p-6 mt-8 border-t border-slate-200/60 bg-slate-50/50 text-center shrink-0">
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-widest flex items-center justify-center gap-1">
+            <footer className="mt-6 flex w-full shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200/60 px-5 py-4 text-[11px] text-slate-400 md:px-8">
+              <span>SafeEPI · Gestão de segurança do trabalho</span>
+              <p className="flex items-center gap-1">
                 Desenvolvido por
                 <a 
                   href="https://wa.me/5591991697664" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="font-black text-[#2563EB] hover:underline transition-all"
+                  className="font-medium text-slate-500 transition-colors hover:text-[#2563EB]"
                 >
                   Vinicius Dev
                 </a>

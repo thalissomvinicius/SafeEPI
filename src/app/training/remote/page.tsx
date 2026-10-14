@@ -5,7 +5,7 @@
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
-import { Camera, CheckCircle2, Fingerprint, PenTool, ShieldAlert } from "lucide-react"
+import { Camera, CheckCircle2, PenTool, ShieldAlert } from "lucide-react"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { LoadingState } from "@/components/ui/LoadingState"
@@ -35,8 +35,9 @@ function RemoteTrainingSignatureContent() {
   const [employee, setEmployee] = useState<RemoteEmployee | null>(null)
   const [data, setData] = useState<RemoteTrainingData>({})
   const [cpfInput, setCpfInput] = useState("")
-  const [authMethod, setAuthMethod] = useState<"manual" | "facial" | "manual_facial">("manual_facial")
+  const [authMethod, setAuthMethod] = useState<"manual" | "manual_facial">("manual_facial")
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
+  const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
@@ -84,6 +85,15 @@ function RemoteTrainingSignatureContent() {
   }
 
   const saveSignature = async (signatureBase64: string, photoBase64?: string | null) => {
+    if (isSaving || !signatureBase64) return
+    if (!["manual", "manual_facial"].includes(authMethod)) {
+      toast.error("Este treinamento exige assinatura manual. A foto isolada não substitui a assinatura.")
+      return
+    }
+    if (authMethod === "manual_facial" && !photoBase64) {
+      toast.error("Capture a foto de apoio antes de confirmar a assinatura.")
+      return
+    }
     try {
       setIsSaving(true)
       const res = await fetch("/api/remote-training-signature", {
@@ -182,38 +192,32 @@ function RemoteTrainingSignatureContent() {
           <p className="text-xs text-slate-500 mt-1">{employee?.full_name}</p>
         </div>
 
-        <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
-          <button onClick={() => setAuthMethod("manual")} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-[10px] font-black uppercase tracking-wide ${authMethod === "manual" ? "bg-white text-slate-800 shadow" : "text-slate-400"}`}>
+        <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-2">
+          <button onClick={() => { setAuthMethod("manual"); setIsPhotoCaptureOpen(false); setCapturedPhotoBase64(null); }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-[10px] font-black uppercase tracking-wide ${authMethod === "manual" ? "bg-white text-slate-800 shadow" : "text-slate-400"}`}>
             <PenTool className="w-4 h-4" /> Manual
           </button>
           <button onClick={() => { setAuthMethod("manual_facial"); setCapturedPhotoBase64(null); }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-[10px] font-black uppercase tracking-wide ${authMethod === "manual_facial" ? "bg-white text-emerald-700 shadow" : "text-slate-400"}`}>
             <Camera className="w-4 h-4" /> Foto + Assin.
           </button>
-          <button onClick={() => setAuthMethod("facial")} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-[10px] font-black uppercase tracking-wide ${authMethod === "facial" ? "bg-white text-blue-700 shadow" : "text-slate-400"}`}>
-            <Fingerprint className="w-4 h-4" /> Facial
-          </button>
         </div>
 
-        {(authMethod === "manual" || authMethod === "manual_facial") ? (
           <div className="space-y-3">
-            {authMethod === "manual_facial" && !capturedPhotoBase64 && employee?.photo_url && (
-              <FaceCamera
-                verifyEmployeeId={employee.id}
-                verifyToken={token}
-                onCapture={(_, img) => setCapturedPhotoBase64(img)}
-                onCancel={() => setAuthMethod("manual")}
-              />
+            {authMethod === "manual_facial" && (
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm text-slate-600">A foto é uma evidência de apoio à assinatura manual. Não há comparação biométrica ou prova de identidade neste treinamento.</p>
+                <button type="button" disabled={isSaving} onClick={() => setIsPhotoCaptureOpen(true)} className="min-h-11 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50">{capturedPhotoBase64 ? "Refazer foto de apoio" : "Capturar foto de apoio"}</button>
+              </div>
+            )}
+            {authMethod === "manual_facial" && isPhotoCaptureOpen && (
+              <FaceCamera mode="evidence" employeeLabel={employee?.full_name}
+                onCapture={(_, img) => { setCapturedPhotoBase64(img); setIsPhotoCaptureOpen(false) }}
+                onCancel={() => setIsPhotoCaptureOpen(false)} cancelLabel="Voltar à assinatura" />
             )}
             {authMethod === "manual_facial" && capturedPhotoBase64 && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={capturedPhotoBase64} alt="Foto capturada" className="w-12 h-12 rounded-xl object-cover border border-emerald-200" />
-                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">Foto confirmada. Agora assine abaixo para concluir.</p>
-              </div>
-            )}
-            {authMethod === "manual_facial" && !employee?.photo_url && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center text-xs font-bold text-amber-800">
-                Biometria facial nao cadastrada. Use assinatura manual.
+                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">Foto de apoio capturada, sem verificação biométrica. Assine abaixo para concluir.</p>
               </div>
             )}
             <SignatureCapture
@@ -221,31 +225,18 @@ function RemoteTrainingSignatureContent() {
               isSaving={isSaving}
               confirmLabel="Confirmar assinatura"
               onConfirm={() => {
-                if (sigCanvas.current?.isEmpty()) {
+                if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
                   toast.error("Assine antes de confirmar.")
                   return
                 }
-                if (authMethod === "manual_facial" && employee?.photo_url && !capturedPhotoBase64) {
+                if (authMethod === "manual_facial" && !capturedPhotoBase64) {
                   toast.error("Capture a foto antes de confirmar.")
                   return
                 }
-                void saveSignature(sigCanvas.current!.toDataURL("image/png"), capturedPhotoBase64)
+                void saveSignature(sigCanvas.current.toDataURL("image/png"), authMethod === "manual_facial" ? capturedPhotoBase64 : null)
               }}
             />
           </div>
-        ) : employee?.photo_url ? (
-          <FaceCamera
-            verifyEmployeeId={employee.id}
-            verifyToken={token}
-            onCapture={(_, img) => void saveSignature(img, img)}
-            onCancel={() => setAuthMethod("manual")}
-          />
-        ) : (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-center">
-            <Camera className="w-8 h-8 text-amber-600 mx-auto mb-2" />
-            <p className="text-sm font-bold text-amber-800">Biometria facial nao cadastrada. Use assinatura manual.</p>
-          </div>
-        )}
       </div>
     </div>
   )

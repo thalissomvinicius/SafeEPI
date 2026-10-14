@@ -4,9 +4,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 
 export const PRIVATE_STORAGE_BUCKET = "ppe_signatures"
 export const BIOMETRIC_BUCKET = "biometric_photos"
-// UI screens and PDF generation can legitimately keep an asset open for
-// several minutes. A 60-second URL routinely expired while the user was still
-// on the page, making logos, signatures and evidence appear intermittently.
+// Screens and PDF generation may keep an asset open for several minutes.
+// Preserve the production lifetime to avoid expiring visible signatures/logos.
 export const STORAGE_VIEW_EXPIRES_IN = 60 * 60
 export const STORAGE_DOWNLOAD_EXPIRES_IN = 300
 

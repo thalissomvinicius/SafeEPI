@@ -16,9 +16,11 @@ const DATA_URL_PREFIX = /^data:image\/(png|jpe?g|webp);base64,/i
 function isValidDataUrl(value: unknown): value is string {
   if (typeof value !== "string") return false
   if (!DATA_URL_PREFIX.test(value)) return false
+  const base64 = value.slice(value.indexOf(",") + 1)
   // Tamanho aproximado em bytes do payload base64.
-  const approxBytes = (value.length - value.indexOf(",") - 1) * 0.75
-  return approxBytes <= MAX_DATA_URL_BYTES
+  const approxBytes = base64.length * 0.75
+  return approxBytes > 0 && approxBytes <= MAX_DATA_URL_BYTES
+    && base64.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64)
 }
 
 export async function POST(request: NextRequest) {
@@ -38,8 +40,17 @@ export async function POST(request: NextRequest) {
     if (photoBase64 !== null && !isValidDataUrl(photoBase64)) {
       return NextResponse.json({ error: "Foto inválida ou muito grande." }, { status: 400 })
     }
-    if (authMethod !== "manual" && authMethod !== "facial" && authMethod !== "manual_facial") {
+    if (authMethod === "facial") {
+      return NextResponse.json({
+        error: "A confirmação facial ainda não está integrada a treinamentos. Use assinatura manual, com foto de apoio opcional.",
+        code: "FACIAL_TRAINING_NOT_SUPPORTED",
+      }, { status: 409 })
+    }
+    if (authMethod !== "manual" && authMethod !== "manual_facial") {
       return NextResponse.json({ error: "Método de autenticação inválido." }, { status: 400 })
+    }
+    if (authMethod === "manual_facial" && !isValidDataUrl(photoBase64)) {
+      return NextResponse.json({ error: "A modalidade foto + assinatura exige a foto de apoio e a assinatura manual." }, { status: 400 })
     }
 
     const { data: link, error: linkError } = await supabaseAdmin

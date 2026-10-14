@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
-import {
-  BIOMETRIC_KEY_VERSION,
-  BiometricEncryptionConfigurationError,
-  encryptBiometricDescriptor,
-} from "@/lib/biometricEncryption"
+import { hasClientBiometricMaterial } from "@/lib/facialContract"
+import { employeeWriteSchema } from "@/lib/securitySchemas"
+import { isMissingDatabaseColumn } from "@/lib/schemaCompatibility"
 
 const EMPLOYEE_ARCHIVE_MARKER = "employee_soft_delete"
 const EMPLOYEE_PUBLIC_SELECT = [
@@ -84,22 +82,21 @@ function cleanEmployeePayload(payload: unknown) {
   )
 }
 
+class ClientBiometricPayloadError extends Error {}
+
 function protectEmployeeBiometricPayload(payload: Record<string, unknown>, companyId: string) {
-  if (!Object.prototype.hasOwnProperty.call(payload, "face_descriptor")) return payload
+  if (hasClientBiometricMaterial(payload)) throw new ClientBiometricPayloadError("Use o cadastro facial supervisionado. Templates enviados pelo navegador não são aceitos.")
+  if (payload.company_id !== undefined && payload.company_id !== companyId) throw new ClientBiometricPayloadError("Não é permitido alterar a empresa do colaborador por este formulário.")
   const protectedPayload = { ...payload }
-  const descriptor = protectedPayload.face_descriptor
-
-  if (descriptor === null || (Array.isArray(descriptor) && descriptor.length === 0)) {
-    protectedPayload.face_descriptor = null
-    protectedPayload.face_descriptor_encrypted = null
-    protectedPayload.biometric_key_version = null
-    return protectedPayload
-  }
-
-  protectedPayload.face_descriptor_encrypted = encryptBiometricDescriptor(descriptor as number[], companyId)
-  protectedPayload.biometric_key_version = BIOMETRIC_KEY_VERSION
-  protectedPayload.face_descriptor = null
-  return protectedPayload
+  // Old photo-only clients send null/[]; ignore them, never alter trusted templates here.
+  for (const key of ["face_descriptor", "face_descriptor_encrypted", "biometric_key_version", "embedding", "embedding_encrypted"]) delete protectedPayload[key]
+  delete protectedPayload.company_id
+  const parsed = employeeWriteSchema.safeParse(protectedPayload)
+  if (!parsed.success) throw new ClientBiometricPayloadError("Campos inválidos no cadastro do colaborador. Recarregue o formulário.")
+  // Classic forms send an empty optional registration field. Do not require a
+  // new database column to save the employee's established public fields.
+  if (parsed.data.registration_number == null) delete parsed.data.registration_number
+  return parsed.data
 }
 
 async function validateThirdPartyAccess(thirdPartyId: unknown, companyId: string) {
@@ -125,6 +122,12 @@ async function validateThirdPartyAccess(thirdPartyId: unknown, companyId: string
 }
 
 function employeeSchemaErrorResponse(error: unknown) {
+  if (isMissingDatabaseColumn(error, "registration_number")) {
+    return NextResponse.json({
+      error: "A matrícula ainda não está disponível neste ambiente. Salve o cadastro sem esse campo. Nenhuma alteração foi aplicada.",
+      code: "EMPLOYEE_REGISTRATION_UNAVAILABLE",
+    }, { status: 503 })
+  }
   if (isMissingThirdPartyColumn(error)) {
     return NextResponse.json({
       error: "O banco ainda nao tem a coluna employees.third_party_id. Rode a migration database/migrations/safeepi_third_parties.sql no Supabase para vincular colaboradores a terceiros.",
@@ -294,9 +297,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ employee: data?.[0] || null })
   } catch (err) {
-    if (err instanceof BiometricEncryptionConfigurationError) {
-      console.error("[API employees/update] biometric encryption is not configured")
-      return NextResponse.json({ error: "Criptografia biometrica nao configurada no servidor." }, { status: 503 })
+    if (err instanceof ClientBiometricPayloadError) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
     }
     console.error("[API employees/update] Unexpected insert error:", err)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
@@ -368,9 +370,8 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ error: "Nenhuma atualização fornecida" }, { status: 400 })
   } catch (err) {
-    if (err instanceof BiometricEncryptionConfigurationError) {
-      console.error("[API employees/update] biometric encryption is not configured")
-      return NextResponse.json({ error: "Criptografia biometrica nao configurada no servidor." }, { status: 503 })
+    if (err instanceof ClientBiometricPayloadError) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
     }
     console.error("[API employees/update] Unexpected error:", err)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })

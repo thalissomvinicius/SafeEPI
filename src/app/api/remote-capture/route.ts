@@ -7,11 +7,6 @@ import { readJsonWithLimit, RequestTooLargeError } from "@/lib/requestSecurity"
 import { remoteCaptureSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUploadBuffer } from "@/lib/validateUpload"
-import {
-  BIOMETRIC_KEY_VERSION,
-  BiometricEncryptionConfigurationError,
-  encryptBiometricDescriptor,
-} from "@/lib/biometricEncryption"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOKEN_REGEX = /^[0-9a-f]{64}$/i
@@ -156,7 +151,7 @@ export async function POST(request: Request) {
     if (!ipLimited.success) return rateLimitExceededResponse(ipLimited.retryAfter)
 
     const { data: body } = validateBody(remoteCaptureSchema, await readJsonWithLimit(request, 5 * 1024 * 1024))
-    const { id, photo_url, face_descriptor, token } = body
+    const { id, photo_url, token } = body
 
     if (!isValidUuid(id)) {
       return NextResponse.json({ error: "ID do colaborador invalido." }, { status: 400 })
@@ -166,18 +161,6 @@ export async function POST(request: Request) {
     }
     if (!isValidToken(token)) {
       return NextResponse.json({ error: "Token invalido." }, { status: 401 })
-    }
-
-    const normalizedDescriptor = Array.isArray(face_descriptor) && face_descriptor.length === 512
-      ? face_descriptor
-      : null
-    if (
-      face_descriptor &&
-      (!Array.isArray(face_descriptor) ||
-        (face_descriptor.length !== 0 && face_descriptor.length !== 512) ||
-        face_descriptor.some(value => !Number.isFinite(value)))
-    ) {
-      return NextResponse.json({ error: "Descritor facial invalido." }, { status: 400 })
     }
 
     const validation = await loadValidLink(token, id, "capture")
@@ -208,28 +191,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const biometricUpdate = normalizedDescriptor
-      ? {
-          face_descriptor: null,
-          face_descriptor_encrypted: encryptBiometricDescriptor(
-            normalizedDescriptor,
-            validation.link.company_id,
-          ),
-          biometric_key_version: BIOMETRIC_KEY_VERSION,
-        }
-      : {
-          face_descriptor: null,
-          face_descriptor_encrypted: null,
-          biometric_key_version: null,
-        }
-
     const { data, error } = await supabaseAdmin.rpc("safeepi_complete_remote_capture", {
       p_remote_link_id: validation.link.id,
       p_employee_id: id,
       p_company_id: validation.link.company_id,
       p_photo_url: storedPhotoPath,
-      p_face_descriptor_encrypted: biometricUpdate.face_descriptor_encrypted,
-      p_biometric_key_version: biometricUpdate.biometric_key_version,
+      p_face_descriptor_encrypted: null,
+      p_biometric_key_version: null,
     })
 
     if (error) {
@@ -246,10 +214,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
     if (isValidationResponse(error)) return error
-    if (error instanceof BiometricEncryptionConfigurationError) {
-      console.error("[/api/remote-capture][POST] biometric encryption is not configured")
-      return NextResponse.json({ error: "Captura biometrica temporariamente indisponivel." }, { status: 503 })
-    }
     console.error("[/api/remote-capture][POST] error:", error)
     return NextResponse.json({ error: "Erro interno do servidor." }, { status: 500 })
   }

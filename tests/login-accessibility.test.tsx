@@ -7,11 +7,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
 }))
 
-vi.mock("@/services/api", () => ({
-  api: {
-    login: vi.fn(),
-    getCurrentUser: vi.fn(),
-  },
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({ user: null, loading: false, signIn: vi.fn() }),
 }))
 
 describe("LoginPage accessibility", () => {

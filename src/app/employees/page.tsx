@@ -31,6 +31,20 @@ const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
 
 type EmployeeImportRow = Record<string, unknown>
 
+type FacialProfile = {
+  status: "active" | "pending" | "not_enrolled" | "recapture_required"
+  model_id: string | null
+  enrollment_id?: string
+  photo_url?: string | null
+}
+
+const facialProfileLabels: Record<FacialProfile["status"], string> = {
+  active: "Cadastro facial ativo",
+  pending: "Cadastro aguardando revisão",
+  not_enrolled: "Sem cadastro facial validado",
+  recapture_required: "Nova captura necessária",
+}
+
 function downloadWorkbookBuffer(buffer: ExcelJS.Buffer, fileName: string) {
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
   const url = window.URL.createObjectURL(blob)
@@ -138,22 +152,23 @@ const getBiometryStatus = (employee: Employee) => {
 
   if (hasPhoto) {
     return {
-      label: "Cadastrada",
-      detail: "Foto e face",
-      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      iconClassName: "text-emerald-600",
+      label: "Foto disponível",
+      detail: "Consulte o cadastro facial",
+      className: "bg-blue-50 text-blue-700 border-blue-200",
+      iconClassName: "text-blue-600",
     }
   }
 
   return {
-    label: "Nao cadastrada",
-    detail: "Sem foto/face",
+    label: "Sem foto",
+    detail: "Consulte o cadastro facial",
     className: "bg-slate-50 text-slate-500 border-slate-200",
     iconClassName: "text-slate-400",
   }
 }
 
 export default function EmployeesPage() {
+  const facialV2Enabled = process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED === "true"
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
@@ -176,6 +191,13 @@ export default function EmployeesPage() {
   const [areMobileFiltersOpen, setAreMobileFiltersOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isFaceCameraOpen, setIsFaceCameraOpen] = useState(false)
+  const [facialProfile, setFacialProfile] = useState<FacialProfile | null>(null)
+  const [facialProfileLoading, setFacialProfileLoading] = useState(false)
+  const [facialProfileError, setFacialProfileError] = useState<string | null>(null)
+  const [facialProfileRefresh, setFacialProfileRefresh] = useState(0)
+  const [identityReviewed, setIdentityReviewed] = useState(false)
+  const [pendingPhotoReady, setPendingPhotoReady] = useState(false)
+  const [approvingEnrollment, setApprovingEnrollment] = useState(false)
   const [viewMode, setViewMode] = useState<"employees" | "pending">("employees")
   const [pendingCaptureDrafts, setPendingCaptureDrafts] = useState<PendingCaptureDraft[]>([])
   const [captureWaitHours, setCaptureWaitHours] = useState(24)
@@ -192,33 +214,32 @@ export default function EmployeesPage() {
     role: string;
     department: string;
     cpf: string;
+    registration_number: string;
     third_party_id: string;
     workplace_id: string;
     admission_date: string;
     termination_date: string;
     photo_url?: string | null;
-    face_descriptor?: number[] | null;
   }>({ 
     name: "", 
     role: "", 
     department: "", 
     cpf: "",
+    registration_number: "",
     third_party_id: "",
     workplace_id: "",
     admission_date: "",
     termination_date: "",
-    photo_url: null,
-    face_descriptor: null
+    photo_url: null
   })
   const [isTstModalOpen, setIsTstModalOpen] = useState(false)
   const [tstStep, setTstStep] = useState<1|2>(1)
   const [tstSelectedEmployee, setTstSelectedEmployee] = useState<Employee | null>(null)
   const [tstSearchTerm, setTstSearchTerm] = useState("")
   const [tstRole, setTstRole] = useState("Técnico de Segurança do Trabalho")
-  const [tstAuthMethod, setTstAuthMethod] = useState<'manual'|'facial'|'manual_facial'>('manual')
+  const [tstAuthMethod, setTstAuthMethod] = useState<'manual'|'manual_facial'>('manual')
   const [tstSignatureBase64, setTstSignatureBase64] = useState<string | null>(null)
   const [tstPhotoBase64, setTstPhotoBase64] = useState<string | null>(null)
-  const [isFaceCameraTstOpen, setIsFaceCameraTstOpen] = useState(false)
   const tstSigCanvas = useRef<SignatureCanvas | null>(null)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -228,6 +249,42 @@ export default function EmployeesPage() {
   const { user } = useAuth()
   const canEdit = user?.role === 'MASTER' || user?.role === 'ADMIN'
   const hasThirdPartyFeature = Boolean(user)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let current = true
+    const timeout = window.setTimeout(() => controller.abort(), 15000)
+    void (async () => {
+      setFacialProfile(null)
+      setFacialProfileError(null)
+      setIdentityReviewed(false)
+      setPendingPhotoReady(false)
+      if (!facialV2Enabled || !isModalOpen || !formData.id) {
+        window.clearTimeout(timeout)
+        setFacialProfileLoading(false)
+        return
+      }
+      const employeeId = formData.id
+      setFacialProfileLoading(true)
+      try {
+        const response = await fetch(`/api/facial/profile?${new URLSearchParams({ employee_id: employeeId })}`, {
+          headers: await api.getAuthHeaders(),
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || "Não foi possível consultar o cadastro facial.")
+        if (!Object.hasOwn(facialProfileLabels, payload.status)) throw new Error("O servidor retornou um status facial desconhecido.")
+        if (current) setFacialProfile(payload as FacialProfile)
+      } catch (error) {
+        if (current) setFacialProfileError(controller.signal.aborted ? "A consulta demorou demais. Tente novamente." : error instanceof Error ? error.message : "Falha ao consultar cadastro facial.")
+      } finally {
+        window.clearTimeout(timeout)
+        if (current) setFacialProfileLoading(false)
+      }
+    })()
+    return () => { current = false; window.clearTimeout(timeout); controller.abort() }
+  }, [isModalOpen, formData.id, facialProfileRefresh, facialV2Enabled])
 
   useEffect(() => {
     return () => {
@@ -337,12 +394,12 @@ export default function EmployeesPage() {
     role: "",
     department: "",
     cpf: "",
+    registration_number: "",
     third_party_id: "",
     workplace_id: "",
     admission_date: "",
     termination_date: "",
-    photo_url: null,
-    face_descriptor: null
+    photo_url: null
   })
 
   const getThirdPartyName = (id: string | null) => {
@@ -352,7 +409,7 @@ export default function EmployeesPage() {
   const filteredEmployees = employees.filter(emp => {
     const search = searchTerm.toLowerCase()
     const thirdPartyName = getThirdPartyName(emp.third_party_id || null)
-    const matchesSearch = emp.full_name.toLowerCase().includes(search) || emp.cpf.includes(searchTerm) || thirdPartyName.toLowerCase().includes(search)
+    const matchesSearch = emp.full_name.toLowerCase().includes(search) || emp.cpf.includes(searchTerm) || emp.registration_number?.toLowerCase().includes(search) || thirdPartyName.toLowerCase().includes(search)
     const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? emp.active : !emp.active)
     const matchesEmployeeScope = !hasThirdPartyFeature ||
       employeeScopeFilter === "all" ||
@@ -392,19 +449,13 @@ export default function EmployeesPage() {
     const normalizedDepartment = normalizeName(formData.department)
     try {
       setIsSaving(true)
-      let photoFile: File | undefined;
-      if (formData.photo_url && formData.photo_url.startsWith('data:')) {
-        const response = await fetch(formData.photo_url);
-        const blob = await response.blob();
-        photoFile = new File([blob], "profile.png", { type: "image/png" });
-      }
-
       if (formData.id) {
         const updates: Record<string, unknown> = {
           full_name: normalizedName,
           job_title: normalizedRole,
           department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
+          ...(facialV2Enabled && formData.registration_number.trim() ? { registration_number: formData.registration_number.trim() } : {}),
           third_party_id: hasThirdPartyFeature ? formData.third_party_id || null : null,
           workplace_id: formData.workplace_id || null,
           admission_date: formData.admission_date || null,
@@ -412,15 +463,7 @@ export default function EmployeesPage() {
           active: !formData.termination_date,
         }
 
-        if (formData.face_descriptor?.length) {
-          updates.face_descriptor = Array.from(formData.face_descriptor)
-        }
-
-        await api.updateEmployee(formData.id, updates as Partial<Employee>, photoFile)
-
-        if (formData.photo_url === null) {
-          await api.deleteEmployeeBiometric(formData.id, "manual_photo_removal")
-        }
+        await api.updateEmployee(formData.id, updates as Partial<Employee>)
 
         await loadData()
 
@@ -433,14 +476,14 @@ export default function EmployeesPage() {
           job_title: normalizedRole,
           department: normalizedDepartment,
           cpf: formData.cpf || "000.000.000-00",
+          ...(facialV2Enabled && formData.registration_number.trim() ? { registration_number: formData.registration_number.trim() } : {}),
           third_party_id: hasThirdPartyFeature ? formData.third_party_id || null : null,
           admission_date: formData.admission_date || null,
           termination_date: formData.termination_date || null,
           active: !formData.termination_date,
           workplace_id: formData.workplace_id || null,
           photo_url: null,
-          face_descriptor: formData.face_descriptor?.length ? Array.from(formData.face_descriptor) : null
-        }, photoFile)
+        })
         toast.success("Colaborador cadastrado com sucesso!")
         setLoading(true)
         await loadData()
@@ -464,17 +507,19 @@ export default function EmployeesPage() {
       role: getJobTitleName(emp.job_title),
       department: getDepartmentName(emp.department),
       cpf: emp.cpf,
+      registration_number: emp.registration_number || "",
       third_party_id: emp.third_party_id || "",
       workplace_id: emp.workplace_id || "",
       admission_date: emp.admission_date ? String(emp.admission_date).slice(0, 10) : "",
       termination_date: emp.termination_date ? String(emp.termination_date).slice(0, 10) : "",
-      photo_url: emp.photo_url || null,
-      face_descriptor: null
+      photo_url: emp.photo_url || null
     })
     setIsModalOpen(true)
   }
 
   const closeEditModal = () => {
+    if (approvingEnrollment) return
+    setIsFaceCameraOpen(false)
     resetFormData()
     setIsModalOpen(false)
   }
@@ -489,7 +534,8 @@ export default function EmployeesPage() {
     try {
       setIsSaving(true)
       await api.deleteEmployeeBiometric(formData.id)
-      setFormData(prev => ({ ...prev, photo_url: null, face_descriptor: null }))
+      setFormData(prev => ({ ...prev, photo_url: null }))
+      setFacialProfileRefresh(value => value + 1)
       setEmployees(prev => prev.map(emp =>
         emp.id === formData.id ? { ...emp, photo_url: null, photo_storage_path: null } : emp
       ))
@@ -500,6 +546,33 @@ export default function EmployeesPage() {
       toast.error(message)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const approvePendingEnrollment = async () => {
+    if (!canEdit || !formData.id || !facialProfile?.enrollment_id || !identityReviewed || !pendingPhotoReady || approvingEnrollment) return
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 20000)
+    try {
+      setApprovingEnrollment(true)
+      const response = await fetch("/api/facial/enroll/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await api.getAuthHeaders()) },
+        body: JSON.stringify({ employee_id: formData.id, enrollment_id: facialProfile.enrollment_id, confirm_identity: true }),
+        signal: controller.signal,
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || "Não foi possível aprovar o cadastro facial.")
+      if (payload.status !== "approved" || payload.enrollment_id !== facialProfile.enrollment_id) throw new Error("O servidor não confirmou a aprovação deste cadastro. Atualize o status antes de tentar novamente.")
+      setIdentityReviewed(false)
+      setFacialProfileRefresh(value => value + 1)
+      void loadData()
+      toast.success("Cadastro facial aprovado após conferência de identidade.")
+    } catch (error) {
+      toast.error(controller.signal.aborted ? "A aprovação demorou demais. Atualize o status para verificar se foi concluída antes de repetir." : error instanceof Error ? error.message : "Falha ao aprovar cadastro facial.")
+    } finally {
+      window.clearTimeout(timeout)
+      setApprovingEnrollment(false)
     }
   }
 
@@ -641,7 +714,6 @@ export default function EmployeesPage() {
             active: status !== "INATIVO" && !termination,
             workplace_id: workplace?.id || null,
             photo_url: null,
-            face_descriptor: null,
           })
           importedCpfs.add(cpfDigits)
           imported += 1
@@ -826,32 +898,30 @@ export default function EmployeesPage() {
           (document.delivery_id === deliveryId || document.delivery_ids?.includes(deliveryId))
         )
 
-      const pdfItems = await Promise.all(freshEmployeeHistory.map(async (d) => {
-        const signedDocument = getSignedDocumentForDelivery(d.id)
-        const authMethod = (signedDocument?.auth_method || d.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | 'fingerprint' | null
-        const deliveryDate = parseDeliveryDateTime(d.delivery_date)
-        const expiryDate = deliveryDate && d.ppe ? addDays(deliveryDate, d.ppe.lifespan_days || 180) : null
-        const signatureSource = d.signature_url || signedDocument?.signature_storage_path || signedDocument?.signature_url || null
+      const pdfItems = await Promise.all(freshEmployeeHistory.map(async (delivery) => {
+        const signedDocument = getSignedDocumentForDelivery(delivery.id)
+        const authMethod = (signedDocument?.auth_method || delivery.auth_method || null) as 'manual' | 'facial' | 'manual_facial' | 'fingerprint' | null
+        const deliveryDate = parseDeliveryDateTime(delivery.delivery_date)
+        const expiryDate = deliveryDate && delivery.ppe ? addDays(deliveryDate, delivery.ppe.lifespan_days || 180) : null
+        const signatureSource = delivery.signature_url || signedDocument?.signature_storage_path || signedDocument?.signature_url || null
         const photoSource = signedDocument?.photo_evidence_storage_path || signedDocument?.photo_evidence_url || null
         const fingerprintEvidence = authMethod === "fingerprint"
-          ? await api.getDeliveryFingerprintEvidence(d.id)
+          ? await api.getDeliveryFingerprintEvidence(delivery.id)
           : null
 
         return {
-          deliveryDate: formatDeliveryDate(d.delivery_date),
-          ppeName: d.ppe?.name || "N/A",
-          caNr: d.ppe?.ca_number || "N/A",
-          quantity: d.quantity,
-          reason: d.reason,
-          returnedAt: d.returned_at,
+          deliveryDate: formatDeliveryDate(delivery.delivery_date),
+          ppeName: delivery.ppe?.name || "N/A",
+          caNr: delivery.ppe?.ca_number || "N/A",
+          quantity: delivery.quantity,
+          reason: delivery.reason,
+          returnedAt: delivery.returned_at,
           isExpired: expiryDate ? isPast(expiryDate) : false,
           authMethod,
-          signatureUrl: signatureSource && !d.signature_url
+          signatureUrl: signatureSource && !delivery.signature_url
             ? await api.getPrivateAssetUrl(signatureSource, "view")
             : signatureSource,
-          photoEvidenceUrl: photoSource
-            ? await api.getPrivateAssetUrl(photoSource, "view")
-            : null,
+          photoEvidenceUrl: photoSource ? await api.getPrivateAssetUrl(photoSource, "view") : null,
           fingerprintEvidenceCode: fingerprintEvidence?.evidence.code,
         }
       }))
@@ -928,6 +998,10 @@ export default function EmployeesPage() {
   }
 
   const generateCaptureRemoteLink = async (emp: Employee) => {
+    if (!facialV2Enabled) {
+      toast.warning("O cadastro facial está indisponível neste ambiente. As entregas com assinatura manual continuam disponíveis.")
+      return
+    }
     try {
       const data = await api.createRemoteLink({
         employee_id: emp.id,
@@ -977,7 +1051,7 @@ export default function EmployeesPage() {
       const status = payload.link?.status as RemoteLinkStatus | undefined
       if (status === "completed") {
         updatePendingCaptureDraft(draft.token, { status: "completed" })
-        toast.success("Registro facial concluido no banco para comparacao biometrica.")
+        toast.info("Captura recebida. Abra o cadastro do colaborador para conferir a identidade e aprovar a biometria.")
         await loadData()
         return
       }
@@ -1019,6 +1093,10 @@ export default function EmployeesPage() {
   const activeEmployeesPercent = totalEmployeesCount > 0
     ? Math.round((activeEmployeesCount / totalEmployeesCount) * 100)
     : 0
+  const savedEnrollmentEmployee = employees.find(employee => employee.id === formData.id)
+  const enrollmentEmployeeLabel = savedEnrollmentEmployee
+    ? `${savedEnrollmentEmployee.full_name}${savedEnrollmentEmployee.registration_number ? ` · Matrícula ${savedEnrollmentEmployee.registration_number}` : ""}`
+    : formData.name
   const scopeTitle = employeeScopeFilter === "third_party"
     ? "Terceiros ativos"
     : employeeScopeFilter === "all"
@@ -1322,7 +1400,7 @@ export default function EmployeesPage() {
                         </div>
                         <span className={`px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 whitespace-nowrap ${statusStyle}`}>
                           <StatusIcon className="w-3 h-3" />
-                          {draft.status === "completed" ? "Registrada" : draft.status === "expired" ? "Expirada" : "Aguardando"}
+                          {draft.status === "completed" ? "Captura recebida" : draft.status === "expired" ? "Expirada" : "Aguardando"}
                         </span>
                       </div>
 
@@ -1400,11 +1478,11 @@ export default function EmployeesPage() {
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Buscar por nome ou CPF..." 
+              placeholder="Buscar nome, CPF ou matrícula..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               title="Buscar colaborador"
-              aria-label="Buscar colaborador por nome ou CPF"
+              aria-label="Buscar colaborador por nome, CPF ou matrícula"
               className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
             />
           </div>
@@ -1440,9 +1518,9 @@ export default function EmployeesPage() {
               {workplaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
             <select value={biometryFilter} onChange={(e) => setBiometryFilter(e.target.value as typeof biometryFilter)} className="min-h-11 bg-white border border-slate-200 rounded-xl px-3 py-3 text-xs font-bold text-slate-600 outline-none focus:border-[#2563EB]">
-              <option value="all">Biometria geral</option>
-              <option value="registered">Cadastrada</option>
-              <option value="pending">Pendente</option>
+              <option value="all">Fotos do cadastro</option>
+              <option value="registered">Com foto</option>
+              <option value="pending">Sem foto</option>
             </select>
             <label className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:border-[#2563EB] transition-colors">
               <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Admissão de</span>
@@ -1533,6 +1611,7 @@ export default function EmployeesPage() {
                             })()}
                           </div>
                           <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{formatCpf(emp.cpf)}</p>
+                          {emp.registration_number && <p className="mt-1 text-xs font-semibold text-slate-600">Matrícula: {emp.registration_number}</p>}
                         </div>
 
                         <div className="grid min-w-0 flex-[2] grid-cols-1 gap-3 lg:grid-cols-3">
@@ -1637,7 +1716,7 @@ export default function EmployeesPage() {
                       { label: "Local", value: getWorkplaceName(emp.workplace_id) },
                       { label: "EPIs ativos", value: "Ver prontuário" },
                       ...(hasThirdPartyFeature ? [{ label: "Tomador", value: getThirdPartyName(emp.third_party_id || null) }] : []),
-                      { label: "Biometria", value: getBiometryStatus(emp).label },
+                      { label: "Foto do cadastro", value: getBiometryStatus(emp).label },
                     ]}
                     actions={
                       <div className="flex w-full gap-2">
@@ -1747,7 +1826,25 @@ export default function EmployeesPage() {
         </AccessibleOverlay>
       )}
 
-      {isModalOpen && (
+      {facialV2Enabled && isModalOpen && isFaceCameraOpen && formData.id && (
+        <FaceCamera
+          mode="enroll"
+          employeeId={formData.id}
+          employeeLabel={enrollmentEmployeeLabel}
+          onCapture={() => { /* The server owns the facial template. */ }}
+          onEnrolled={(result) => {
+            setIsFaceCameraOpen(false)
+            if (result.photo_url) setFormData(previous => ({ ...previous, photo_url: result.photo_url }))
+            setFacialProfileRefresh(value => value + 1)
+            void loadData()
+            toast.success(result.status === "approved" ? "Cadastro facial salvo após conferência de identidade." : "Cadastro recebido e aguardando revisão.")
+          }}
+          onCancel={() => setIsFaceCameraOpen(false)}
+          cancelLabel="Voltar ao colaborador"
+        />
+      )}
+
+      {isModalOpen && !isFaceCameraOpen && (
         <AccessibleOverlay label={formData.id ? "Editar colaborador" : "Novo colaborador"} onClose={closeEditModal} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-t-3xl md:my-4 md:rounded-3xl shadow-2xl w-full max-w-md max-h-[92dvh] md:max-h-[calc(100dvh-2rem)] overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200 flex flex-col">
             <div className="shrink-0 flex justify-between items-center p-5 sm:p-6 border-b border-slate-100">
@@ -1761,19 +1858,6 @@ export default function EmployeesPage() {
               </button>
             </div>
             
-            {isFaceCameraOpen ? (
-              <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
-                <FaceCamera 
-                  requireLiveness={false}
-                  onCapture={(desc, img) => {
-                    setFormData({ ...formData, face_descriptor: Array.from(desc), photo_url: img });
-                    setIsFaceCameraOpen(false);
-                  }}
-                  onCancel={() => setIsFaceCameraOpen(false)}
-                  cancelLabel="Cancelar Biometria"
-                />
-              </div>
-            ) : (
             <form onSubmit={handleSaveEmployee} className="min-h-0 flex flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
               <div className="flex flex-col items-center mb-4">
@@ -1781,7 +1865,7 @@ export default function EmployeesPage() {
                   <div className="relative">
                     <Image 
                       src={formData.photo_url} 
-                      alt="Biometria capturada" 
+                      alt="Foto do cadastro do colaborador"
                       width={96} 
                       height={96} 
                       className="w-24 h-24 rounded-full object-cover border-4 border-green-500" 
@@ -1794,14 +1878,14 @@ export default function EmployeesPage() {
                           void handleRemoveBiometricData()
                           return
                         }
-                        setFormData({...formData, photo_url: null, face_descriptor: null})
+                        setFormData({...formData, photo_url: null})
                       }} 
                       className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
                       title="Remover biometria"
                     >
                       <X className="w-4 h-4" />
                     </button>
-                    <span className="block text-center text-[10px] text-green-600 font-bold uppercase mt-2">Biometria Cadastrada</span>
+                    <span className="block text-center text-[10px] text-slate-500 font-bold uppercase mt-2">Foto do cadastro</span>
                     {formData.id && canEdit && (
                       <button
                         type="button"
@@ -1814,17 +1898,56 @@ export default function EmployeesPage() {
                     )}
                   </div>
                 ) : (
-                  <button 
-                    type="button"
-                    onClick={() => setIsFaceCameraOpen(true)}
-                    className="flex flex-col items-center justify-center w-24 h-24 rounded-full border-2 border-dashed border-slate-300 text-slate-400 hover:text-[#2563EB] hover:border-[#2563EB] transition-all bg-slate-50"
-                  >
+                  <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400">
                     <Camera className="w-8 h-8 mb-1" />
-                    <span className="text-[8px] font-black uppercase tracking-widest text-center px-2">Biometria<br/>Facial</span>
-                  </button>
+                    <span className="px-2 text-center text-[10px]">Sem foto</span>
+                  </div>
                 )}
+
+                {facialV2Enabled ? <div className="mt-4 w-full space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-bold text-slate-900">Cadastro facial no servidor</p>
+                  {!formData.id ? (
+                    <p className="text-sm text-slate-600">Salve primeiro o colaborador. Depois abra Editar para cadastrar o rosto presencialmente ou gerar um link.</p>
+                  ) : facialProfileLoading ? (
+                    <p role="status" className="flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" /> Consultando cadastro facial...</p>
+                  ) : facialProfileError ? (
+                    <div role="alert" className="space-y-2 text-sm text-amber-900">
+                      <p>{facialProfileError} A foto acima não comprova que existe uma biometria ativa.</p>
+                      <button type="button" onClick={() => setFacialProfileRefresh(value => value + 1)} className="min-h-11 font-semibold underline">Consultar novamente</button>
+                    </div>
+                  ) : facialProfile ? (
+                    <>
+                      <p role="status" className={`text-sm font-semibold ${facialProfile.status === "active" ? "text-emerald-700" : "text-amber-800"}`}>{facialProfileLabels[facialProfile.status]}</p>
+                      {facialProfile.status === "recapture_required" && <p className="text-xs text-slate-600">O cadastro anterior não é compatível com o modelo atual. Faça uma nova captura supervisionada.</p>}
+                      {facialProfile.status === "pending" && (
+                        <div className="space-y-3 border-t border-slate-200 pt-3">
+                          {facialProfile.photo_url ? (
+                            <Image src={facialProfile.photo_url} alt="Captura pendente de conferência de identidade" width={240} height={240} unoptimized onLoad={() => setPendingPhotoReady(true)} onError={() => { setPendingPhotoReady(false); setIdentityReviewed(false) }} className="mx-auto max-h-60 w-full rounded-xl object-contain" />
+                          ) : <p className="text-xs text-amber-900">A captura não está disponível para revisão. Atualize o status ou faça uma nova captura presencial.</p>}
+                          <button type="button" onClick={() => setFacialProfileRefresh(value => value + 1)} className="min-h-11 text-sm font-semibold text-blue-700 underline">Atualizar captura para revisão</button>
+                          <label className="flex items-start gap-3 text-sm leading-relaxed text-slate-700">
+                            <input type="checkbox" checked={identityReviewed} disabled={!pendingPhotoReady || approvingEnrollment} onChange={event => setIdentityReviewed(event.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
+                            Conferi a identidade do colaborador por um procedimento autorizado e confirmei que a pessoa da captura corresponde ao cadastro. O link ou CPF, isoladamente, não comprova identidade.
+                          </label>
+                          <button type="button" onClick={() => void approvePendingEnrollment()} disabled={!canEdit || !identityReviewed || !pendingPhotoReady || approvingEnrollment} className="min-h-12 w-full rounded-xl bg-emerald-700 px-3 py-3 text-sm font-bold text-white disabled:opacity-50">
+                            {approvingEnrollment ? "Aprovando cadastro..." : "Aprovar cadastro facial"}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : null}
+                  <button type="button" disabled={!formData.id || !canEdit || facialProfileLoading || Boolean(facialProfileError) || approvingEnrollment || isSaving} onClick={() => setIsFaceCameraOpen(true)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-3 text-sm font-bold text-blue-700 disabled:opacity-50">
+                    <Camera className="h-4 w-4" /> {facialProfile?.status === "active" ? "Recadastrar rosto presencialmente" : "Cadastrar rosto presencialmente"}
+                  </button>
+                  {formData.id && canEdit && facialProfile && facialProfile.status !== "not_enrolled" && !formData.photo_url && (
+                    <button type="button" onClick={() => void handleRemoveBiometricData()} disabled={isSaving || approvingEnrollment} className="min-h-11 text-sm font-semibold text-red-700 underline disabled:opacity-50">Remover dados biométricos</button>
+                  )}
+                </div> : <div className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+                  <p className="text-sm font-semibold text-slate-800">Verificação facial indisponível</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">O cadastro do colaborador e as entregas com assinatura manual continuam disponíveis. Uma foto, isoladamente, não comprova a identidade.</p>
+                </div>}
                 
-                {formData.id ? (
+                {facialV2Enabled && (formData.id ? (
                   <button
                     type="button"
                     onClick={async () => {
@@ -1840,7 +1963,7 @@ export default function EmployeesPage() {
                   <p className="mt-3 text-[9px] font-bold uppercase tracking-widest text-slate-400 italic text-center">
                     Salve o cadastro para gerar<br/>o link de captura remota
                   </p>
-                )}
+                ))}
               </div>
 
               <div className="space-y-2">
@@ -1856,6 +1979,11 @@ export default function EmployeesPage() {
               </div>
               
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {facialV2Enabled && <div className="space-y-2 md:col-span-2">
+                  <label htmlFor="employee_registration_number" className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Matrícula na empresa (opcional)</label>
+                  <input id="employee_registration_number" type="text" maxLength={64} autoComplete="off" value={formData.registration_number} onChange={event => setFormData({ ...formData, registration_number: event.target.value })} className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none focus:border-blue-600" placeholder="Informe a matrícula existente" />
+                  <p className="text-xs text-slate-500">Use a matrícula real da empresa. Não é necessário inventar um número para cadastrar o rosto.</p>
+                </div>}
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between items-center">
                     CPF
@@ -1931,10 +2059,7 @@ export default function EmployeesPage() {
               )}
 
               {formData.id && canEdit && (
-                <FingerprintEnrollmentManager
-                  employeeId={formData.id}
-                  employeeName={formData.name}
-                />
+                <FingerprintEnrollmentManager employeeId={formData.id} employeeName={formData.name} />
               )}
 
               <div className="space-y-2">
@@ -2024,7 +2149,6 @@ export default function EmployeesPage() {
                 </button>
               </div>
             </form>
-            )}
           </div>
         </AccessibleOverlay>
       )}
@@ -2275,33 +2399,27 @@ export default function EmployeesPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
                     <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-amber-800 font-bold uppercase tracking-widest leading-relaxed">
-                      Este colaborador não possui foto pré-cadastrada. Você pode capturar uma foto agora (Foto Biométrica) ou fazer a assinatura na tela (Assinatura Manual).
+                      Este colaborador não possui foto pré-cadastrada. Use a assinatura manual do responsável técnico. Uma foto isolada não substitui a assinatura.
                     </p>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-1 rounded-xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
                   <button
-                    onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(false); }}
+                    onClick={() => { setTstAuthMethod('manual'); setTstSignatureBase64(null); }}
                     className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
                   >
                     <PenTool className="w-3.5 h-3.5 inline mr-1" /> Assinatura Manual
                   </button>
                   <button
-                    onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(false); }}
+                    onClick={() => { setTstAuthMethod('manual_facial'); setTstSignatureBase64(null); }}
                     className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'manual_facial' ? 'bg-white shadow text-emerald-700' : 'text-slate-400'}`}
                   >
                     <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto + Assinatura
                   </button>
-                  <button
-                    onClick={() => { setTstAuthMethod('facial'); setTstSignatureBase64(null); setIsFaceCameraTstOpen(true); }}
-                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${tstAuthMethod === 'facial' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}
-                  >
-                    <Camera className="w-3.5 h-3.5 inline mr-1" /> Foto Biométrica
-                  </button>
                 </div>
 
-                {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && !isFaceCameraTstOpen && (
+                {(tstAuthMethod === 'manual' || tstAuthMethod === 'manual_facial') && (
                   <div className="space-y-2">
                     {tstAuthMethod === 'manual_facial' && (
                       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
@@ -2314,7 +2432,7 @@ export default function EmployeesPage() {
                           </div>
                         )}
                         <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
-                          O prontuario vai sair com foto e assinatura manual do responsavel tecnico.
+                          O prontuário terá assinatura manual e foto de apoio. A foto não representa verificação biométrica.
                         </p>
                       </div>
                     )}
@@ -2371,32 +2489,6 @@ export default function EmployeesPage() {
                           Confirmar
                         </button>
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {tstAuthMethod === 'facial' && (
-                  <div>
-                    {tstSignatureBase64 ? (
-                      <div className="relative border-2 border-green-500 rounded-xl overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={tstSignatureBase64} alt="Foto TST" className="w-full h-36 object-contain bg-slate-900" />
-                        <button
-                          onClick={() => { setTstSignatureBase64(null); setIsFaceCameraTstOpen(true); }}
-                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
-                          title="Refazer foto"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                        <div className="absolute bottom-2 left-2 text-[8px] font-black text-green-400 uppercase tracking-widest bg-green-900/80 px-2 py-0.5 rounded">✓ Foto Capturada</div>
-                      </div>
-                    ) : (
-                      <FaceCamera
-                        requireLiveness={false}
-                        onCapture={(_, img) => { setTstSignatureBase64(img); setIsFaceCameraTstOpen(false); }}
-                        onCancel={() => { setTstAuthMethod('manual'); setIsFaceCameraTstOpen(false); }}
-                        cancelLabel="Usar assinatura manual"
-                      />
                     )}
                   </div>
                 )}

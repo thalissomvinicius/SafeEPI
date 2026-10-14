@@ -1,624 +1,271 @@
 "use client"
 
-// ui: câmera/assinatura redesenhada — mobile-first ✓
-
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
-import {
-  CircleDot,
-  Info,
-  Loader2,
-  RotateCcw,
-  ShieldCheck,
-} from "lucide-react"
-import { supabase } from "@/lib/supabase"
-
-type BiometricDecision = "pending" | "approved" | "retry" | "fallback"
-type BiometricState =
-  | "INSTRUCTIONS"
-  | "REQUESTING_CAMERA"
-  | "WAIT_FACE"
-  | "QUALITY_CHECK"
-  | "CENTER"
-  | "TURN_LEFT"
-  | "TURN_RIGHT"
-  | "MOVE_NEAR"
-  | "MOVE_FAR"
-  | "BLINK"
-  | "VERIFYING"
-  | "APPROVED"
-  | "RETRY"
-  | "FALLBACK_REQUIRED"
-  | "ERROR"
-
-type ScoreBundle = {
-  spoof: number
-  quality: number
-  consistency: number
-  challenge: number
-  context: number
-  final: number
-}
-
-type StartSessionResponse = {
-  session_id: string
-  state: BiometricState
-  decision: BiometricDecision
-  instruction: string
-  progress: number
-  challenge_sequence: string[]
-  frame_interval_ms: number
-}
-
-type FrameResponse = {
-  session_id: string
-  state: BiometricState
-  decision: BiometricDecision
-  instruction: string
-  progress: number
-  frame_interval_ms: number
-  reason?: string | null
-  embedding?: number[] | null
-  scores?: ScoreBundle | null
-  code?: string
-}
-
-type BiometricFetchError = Error & { code?: string; status?: number }
+import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { Camera, Loader2, SwitchCamera, X } from "lucide-react"
+import { api } from "@/services/api"
+import { cameraErrorMessage, normalizeFacialDecision, type FacialContext, type FacialEnrollment, type FacialProof } from "./facialClient"
 
 interface FaceCameraProps {
+  /** Compatibility only: no client descriptors are produced or accepted. */
   onCapture: (descriptor: number[], imageBase64: string) => void
   employeeId?: string
   verifyEmployeeId?: string
   verifyCompanyId?: string | null
   verifyToken?: string | null
   requireLiveness?: boolean
+  mode?: "enroll" | "verify" | "evidence"
+  context?: FacialContext
+  onEnrolled?: (enrollment: FacialEnrollment, imageBase64: string) => void
+  onVerified?: (proof: FacialProof, imageBase64: string) => void
+  employeeLabel?: string
   onCancel: () => void
   cancelLabel?: string
 }
 
-const MIN_FRAME_INTERVAL_MS = 220
-const DEFAULT_FRAME_INTERVAL_MS = 500
-const SERVICE_NOT_CONFIGURED = "BIOMETRIC_SERVICE_NOT_CONFIGURED"
-
-async function getAccessToken() {
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? null
-}
-
-async function fetchBiometric<T>(url: string, formData: FormData, timeoutMs = 8000) {
-  const token = await getAccessToken()
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
-
-  let response: Response
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      body: formData,
-      signal: controller.signal,
-    })
-  } catch (error) {
-    const requestError = new Error(error instanceof DOMException && error.name === "AbortError"
-      ? "Servico biometrico demorou para responder."
-      : "Falha ao conectar com a biometria facial.") as BiometricFetchError
-    requestError.code = SERVICE_NOT_CONFIGURED
-    requestError.status = 503
-    throw requestError
-  } finally {
-    window.clearTimeout(timeout)
-  }
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    const error = new Error(payload?.error || payload?.detail || "Falha na biometria facial.") as BiometricFetchError
-    error.code = payload?.code
-    error.status = response.status
-    throw error
-  }
-
-  return payload as T
-}
-
-function waitForVideoElement(ref: RefObject<HTMLVideoElement | null>, timeoutMs = 3000) {
-  return new Promise<HTMLVideoElement>((resolve, reject) => {
-    const startedAt = Date.now()
-    const tick = () => {
-      if (ref.current) {
-        resolve(ref.current)
-        return
-      }
-      if (Date.now() - startedAt > timeoutMs) {
-        reject(new Error("Tela da camera nao ficou pronta. Tente novamente."))
-        return
-      }
-      window.requestAnimationFrame(tick)
-    }
-    tick()
-  })
-}
-
-function waitForLoadedMetadata(video: HTMLVideoElement, timeoutMs = 4000) {
-  if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve()
-
-  return new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      cleanup()
-      reject(new Error("A camera abriu, mas nao enviou imagem. Feche outros apps que usam camera e tente novamente."))
-    }, timeoutMs)
-
-    const onLoaded = () => {
-      cleanup()
-      resolve()
-    }
-
-    const cleanup = () => {
-      window.clearTimeout(timeout)
-      video.removeEventListener("loadedmetadata", onLoaded)
-      video.removeEventListener("canplay", onLoaded)
-    }
-
-    video.addEventListener("loadedmetadata", onLoaded, { once: true })
-    video.addEventListener("canplay", onLoaded, { once: true })
-  })
-}
-
-function isServiceUnavailable(error: unknown) {
-  const err = error as BiometricFetchError
-  return err?.code === SERVICE_NOT_CONFIGURED || err?.status === 503
-}
-
-function clampProgress(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value)))
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, type: "image/webp" | "image/jpeg", quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob)
-      else reject(new Error("Nao foi possivel gerar a imagem da camera."))
-    }, type, quality)
-  })
-}
-
-function blobToDataUrl(blob: Blob) {
+function toDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error("Nao foi possivel ler a imagem capturada."))
+    reader.onerror = () => reject(new Error("Não foi possível ler a foto."))
     reader.readAsDataURL(blob)
   })
 }
 
-export function FaceCamera({
-  onCapture,
-  employeeId,
-  verifyEmployeeId,
-  verifyCompanyId,
-  verifyToken,
-  requireLiveness,
-  onCancel,
-  cancelLabel = "Voltar para assinatura manual",
-}: FaceCameraProps) {
+export function FaceCamera({ onCapture, employeeId, verifyEmployeeId, verifyToken, mode: requestedMode, context, onEnrolled, onVerified, employeeLabel, onCancel, cancelLabel = "Voltar" }: FaceCameraProps) {
+  const mode = requestedMode ?? (verifyEmployeeId ? "verify" : "enroll")
+  const targetEmployee = verifyEmployeeId || employeeId
+  const [open, setOpen] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [facing, setFacing] = useState<"user" | "environment">("user")
+  const [supervised, setSupervised] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [portal, setPortal] = useState<HTMLElement | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const sessionIdRef = useRef<string | null>(null)
-  const timerRef = useRef<number | null>(null)
-  const scheduleFrameRef = useRef<(delayMs: number) => void>(() => {})
-  const runningRef = useRef(false)
-  const finalizingRef = useRef(false)
-  const lastFrameBlobRef = useRef<Blob | null>(null)
+  const requestRef = useRef<AbortController | null>(null)
+  const busyRef = useRef(false)
+  const captureGeneration = useRef(0)
+  const headingId = useId()
+  const descriptionId = useId()
+  const title = mode === "enroll" ? "Cadastrar rosto" : mode === "verify" ? "Verificar identidade" : "Registrar foto de evidência"
 
-  const [state, setState] = useState<BiometricState>("INSTRUCTIONS")
-  const [instruction, setInstruction] = useState("Siga as instrucoes para registrar a foto facial")
-  const [progress, setProgress] = useState(0)
-  const [scores, setScores] = useState<ScoreBundle | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isCameraReady, setIsCameraReady] = useState(false)
-  const [isCapturing, setIsCapturing] = useState(false)
-  const [isEvidenceMode, setIsEvidenceMode] = useState(false)
-  const [loadingLabel, setLoadingLabel] = useState("Camera")
-
-  const mode = verifyEmployeeId ? "verify" : "enroll"
-  const targetEmployeeId = verifyEmployeeId || employeeId
-  const shouldRequireLiveness = requireLiveness ?? Boolean(verifyEmployeeId)
-
-  const title = useMemo(() => {
-    if (state === "APPROVED") return isEvidenceMode ? "Evidencia registrada" : "Identidade confirmada"
-    if (state === "RETRY") return "Vamos tentar de novo"
-    if (state === "FALLBACK_REQUIRED") return "Use o fallback auditavel"
-    if (state === "ERROR") return "Camera indisponivel"
-    if (isEvidenceMode) return "Evidencia facial"
-    if (mode === "verify") return "Verificacao facial"
-    return "Cadastro facial"
-  }, [isEvidenceMode, mode, state])
-
-  const modeLabel = isEvidenceMode ? "Modo Vercel Free" : mode === "verify" ? "Biometria server-side" : "Cadastro facial"
-  const scorePercent = scores ? Math.round(scores.final * 100) : null
-  const isTerminal = state === "APPROVED" || state === "RETRY" || state === "FALLBACK_REQUIRED" || state === "ERROR"
-  const hasFaceSignal = isCameraReady && (isEvidenceMode || progress >= 45 || state === "APPROVED")
+  function openCamera() {
+    const host = document.createElement("div")
+    host.dataset.facialCamera = "true"
+    document.body.appendChild(host)
+    setPortal(host)
+    setReady(false)
+    setError("")
+    setSupervised(false)
+    setOpen(true)
+  }
 
   const stopCamera = useCallback(() => {
-    runningRef.current = false
-    if (timerRef.current) {
-      window.clearTimeout(timerRef.current)
-      timerRef.current = null
-    }
-    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current?.getTracks().forEach(track => track.stop())
     streamRef.current = null
-    setIsCameraReady(false)
+    if (videoRef.current) videoRef.current.srcObject = null
   }, [])
 
-  useEffect(() => stopCamera, [stopCamera])
-
-  const captureFrame = useCallback(async (maxWidth = 900) => {
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) {
-      throw new Error("Camera ainda nao esta pronta.")
-    }
-
-    const scale = Math.min(1, maxWidth / video.videoWidth)
-    canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
-    canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
-
-    const context = canvas.getContext("2d")
-    if (!context) throw new Error("Canvas da camera indisponivel.")
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-    try {
-      return await canvasToBlob(canvas, "image/webp", 0.84)
-    } catch {
-      return await canvasToBlob(canvas, "image/jpeg", 0.86)
-    }
-  }, [])
-
-  const buildSessionForm = useCallback(() => {
-    const formData = new FormData()
-    formData.set("mode", mode)
-    formData.set("require_liveness", shouldRequireLiveness ? "true" : "false")
-    if (targetEmployeeId) formData.set("employee_id", targetEmployeeId)
-    if (verifyCompanyId) formData.set("company_id", verifyCompanyId)
-    if (verifyToken) formData.set("token", verifyToken)
-    return formData
-  }, [mode, shouldRequireLiveness, targetEmployeeId, verifyCompanyId, verifyToken])
-
-  const buildFrameForm = useCallback((blob: Blob) => {
-    const formData = new FormData()
-    if (sessionIdRef.current) formData.set("session_id", sessionIdRef.current)
-    formData.set("frame", blob, `safeepi-facial-${Date.now()}.webp`)
-    formData.set("mode", mode)
-    formData.set("require_liveness", shouldRequireLiveness ? "true" : "false")
-    if (targetEmployeeId) formData.set("employee_id", targetEmployeeId)
-    if (verifyCompanyId) formData.set("company_id", verifyCompanyId)
-    if (verifyToken) formData.set("token", verifyToken)
-    return formData
-  }, [mode, shouldRequireLiveness, targetEmployeeId, verifyCompanyId, verifyToken])
-
-  const finalizeCapture = useCallback(async (embedding: number[] | null | undefined, evidenceOnly = false) => {
-    if (finalizingRef.current) return
-    finalizingRef.current = true
-    setState("APPROVED")
-    setInstruction(evidenceOnly ? "Foto facial registrada para auditoria." : "Tudo certo. Finalizando captura...")
-    setProgress(100)
-
-    const blob = lastFrameBlobRef.current ?? await captureFrame(1080)
-    const imageBase64 = await blobToDataUrl(blob)
+  const close = useCallback(() => {
+    captureGeneration.current += 1
+    busyRef.current = false
+    setBusy(false)
+    requestRef.current?.abort()
     stopCamera()
-    onCapture(evidenceOnly ? [] : embedding ?? [], imageBase64)
-  }, [captureFrame, onCapture, stopCamera])
-
-  const enterEvidenceMode = useCallback(() => {
-    runningRef.current = false
-    sessionIdRef.current = null
-    setIsEvidenceMode(true)
-    setError(null)
-    setScores(null)
-    setState("CENTER")
-    setProgress(68)
-    setInstruction("Centralize o rosto e registre a evidencia facial.")
-  }, [])
-
-  const scheduleFrame = useCallback((delayMs: number) => {
-    if (!runningRef.current || finalizingRef.current) return
-    const safeDelay = Math.max(MIN_FRAME_INTERVAL_MS, delayMs || DEFAULT_FRAME_INTERVAL_MS)
-    timerRef.current = window.setTimeout(async () => {
-      if (!runningRef.current || finalizingRef.current) return
-      try {
-        setIsCapturing(true)
-        const blob = await captureFrame()
-        lastFrameBlobRef.current = blob
-        const response = await fetchBiometric<FrameResponse>("/api/biometric/session/frame", buildFrameForm(blob))
-
-        setState(response.state)
-        setInstruction(response.instruction)
-        setProgress(clampProgress(response.progress))
-        setScores(response.scores ?? null)
-        setError(null)
-
-        if (response.decision === "approved") {
-          await finalizeCapture(response.embedding)
-          return
-        }
-
-        if (response.decision === "fallback" || response.state === "FALLBACK_REQUIRED") {
-          runningRef.current = false
-          setState("FALLBACK_REQUIRED")
-          setProgress(clampProgress(response.progress || 70))
-          return
-        }
-
-        if (response.decision === "retry" || response.state === "RETRY") {
-          runningRef.current = false
-          setState("RETRY")
-          setProgress(clampProgress(response.progress || 60))
-          return
-        }
-
-        scheduleFrameRef.current(response.frame_interval_ms)
-      } catch (err) {
-        if (isServiceUnavailable(err)) {
-          enterEvidenceMode()
-          return
-        }
-        runningRef.current = false
-        setState("ERROR")
-        setError(err instanceof Error ? err.message : "Falha ao processar a biometria.")
-      } finally {
-        setIsCapturing(false)
-      }
-    }, safeDelay)
-  }, [buildFrameForm, captureFrame, enterEvidenceMode, finalizeCapture])
-
-  useEffect(() => {
-    scheduleFrameRef.current = scheduleFrame
-  }, [scheduleFrame])
-
-  const startCamera = useCallback(async () => {
-    try {
-      setError(null)
-      setScores(null)
-      setIsEvidenceMode(false)
-      finalizingRef.current = false
-      setProgress(2)
-      setState("REQUESTING_CAMERA")
-      setLoadingLabel("Permissao da camera")
-      setInstruction("Solicitando permissao da camera...")
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 960 },
-          height: { ideal: 1280 },
-        },
-        audio: false,
-      })
-
-      streamRef.current = stream
-      setProgress(18)
-      setInstruction("Abrindo imagem da camera...")
-
-      const video = await waitForVideoElement(videoRef)
-      video.setAttribute("playsinline", "true")
-      video.setAttribute("webkit-playsinline", "true")
-      video.srcObject = stream
-      video.muted = true
-      video.playsInline = true
-      await video.play().catch(() => undefined)
-      await waitForLoadedMetadata(video)
-
-      setIsCameraReady(true)
-      setProgress(34)
-      setLoadingLabel("Servico biometrico")
-      setInstruction("Preparando verificacao facial...")
-
-      try {
-        const session = await fetchBiometric<StartSessionResponse>("/api/biometric/session/start", buildSessionForm(), 6000)
-        sessionIdRef.current = session.session_id
-        runningRef.current = true
-        finalizingRef.current = false
-        setState(session.state)
-        setInstruction(session.instruction)
-        setProgress(clampProgress(session.progress))
-        scheduleFrame(session.frame_interval_ms)
-      } catch (err) {
-        if (!isServiceUnavailable(err)) throw err
-        enterEvidenceMode()
-      }
-    } catch (err) {
-      stopCamera()
-      setState("ERROR")
-      setError(err instanceof Error ? err.message : "Nao foi possivel iniciar a camera.")
-      setInstruction("Verifique a permissao da camera e tente novamente.")
-    }
-  }, [buildSessionForm, enterEvidenceMode, scheduleFrame, stopCamera])
-
-  const captureEvidence = useCallback(async () => {
-    try {
-      setIsCapturing(true)
-      lastFrameBlobRef.current = await captureFrame(1080)
-      await finalizeCapture([], true)
-    } catch (err) {
-      setState("ERROR")
-      setError(err instanceof Error ? err.message : "Nao foi possivel registrar a evidencia facial.")
-    } finally {
-      setIsCapturing(false)
-    }
-  }, [captureFrame, finalizeCapture])
-
-  const retry = useCallback(() => {
-    stopCamera()
-    sessionIdRef.current = null
-    lastFrameBlobRef.current = null
-    finalizingRef.current = false
-    setScores(null)
-    setError(null)
-    void startCamera()
-  }, [startCamera, stopCamera])
-
-  const handleCancel = useCallback(() => {
-    stopCamera()
+    setOpen(false)
     onCancel()
   }, [onCancel, stopCamera])
 
-  if (state === "INSTRUCTIONS") {
-    return (
-      <div className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-xl shadow-slate-200/70">
-        <div className="flex min-h-[260px] flex-col justify-between p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:min-h-[340px] sm:p-7">
-          <div className="text-center">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-700 ring-1 ring-red-100 sm:h-16 sm:w-16">
-              <ShieldCheck className="h-7 w-7 sm:h-8 sm:w-8" />
-            </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-700">SafeEPI</p>
-            <h3 className="mt-2 text-xl font-black uppercase tracking-tight text-slate-950 sm:text-2xl">{title}</h3>
-            <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
-              Centralize o rosto em boa luz. A camera ocupa a proxima tela.
-            </p>
-          </div>
+  useEffect(() => {
+    if (!open || !portal) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const host = portal
+    const siblings = Array.from(document.body.children).filter(node => node !== host && node instanceof HTMLElement) as HTMLElement[]
+    const previousInert = siblings.map(node => node.inert)
+    siblings.forEach(node => { node.inert = true })
+    // Lock both possible scrolling roots. html overflow-x:hidden can otherwise
+    // imply overflow-y:auto and leave a scrollbar beside a fullscreen portal.
+    const overflowProperties = ["overflow", "overflow-x", "overflow-y"]
+    const scrollLocks = [document.body, document.documentElement].map(element => {
+      const declarations = Array.from(element.style)
+        .filter(property => overflowProperties.includes(property))
+        .map(property => ({ property, value: element.style.getPropertyValue(property), priority: element.style.getPropertyPriority(property) }))
+      element.style.setProperty("overflow", "hidden")
+      return { element, declarations }
+    })
+    return () => {
+      captureGeneration.current += 1
+      requestRef.current?.abort()
+      stopCamera()
+      siblings.forEach((node, index) => { node.inert = previousInert[index] })
+      scrollLocks.forEach(({element, declarations}) => {
+        overflowProperties.forEach(property => element.style.removeProperty(property))
+        declarations.forEach(({property, value, priority}) => element.style.setProperty(property, value, priority))
+      })
+      host.remove()
+      previousFocus?.focus()
+    }
+  }, [open, portal, stopCamera])
 
-          <div className="mt-5 flex flex-col gap-2.5">
-            <button
-              type="button"
-              onClick={() => void startCamera()}
-              className="min-h-[52px] w-full rounded-2xl bg-red-700 px-5 py-4 text-sm font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-red-900/20 transition hover:bg-red-800 active:scale-[0.99]"
-            >
-              Iniciar camera
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="min-h-[44px] w-full rounded-2xl px-5 py-3 text-xs font-bold uppercase tracking-widest text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-            >
-              {cancelLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+  useEffect(() => {
+    if (!open || !portal || !portal.isConnected) return
+    dialogRef.current?.focus()
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.stopImmediatePropagation(); event.preventDefault(); close(); return }
+      if (event.key !== "Tab") return
+      // This portal is the active dialog; parent modal shortcuts must not run.
+      event.stopImmediatePropagation()
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]')
+      if (!focusable?.length) { event.preventDefault(); return }
+      const first = focusable[0], last = focusable[focusable.length - 1]
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener("keydown", keydown, true)
+    return () => document.removeEventListener("keydown", keydown, true)
+  }, [open, portal, close])
+
+  useEffect(() => {
+    if (!open || !portal || !portal.isConnected) return
+    let disposed = false
+    stopCamera()
+    const start = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Câmera indisponível. Abra o link em HTTPS no Safari, Chrome ou Edge atualizado.")
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } } })
+        if (disposed) { stream.getTracks().forEach(track => track.stop()); return }
+        streamRef.current = stream
+        const video = videoRef.current
+        if (!video) { stopCamera(); return }
+        video.srcObject = stream
+        video.muted = true
+        video.playsInline = true
+        await video.play()
+      } catch (cause) { if (!disposed) { stopCamera(); setError(cameraErrorMessage(cause)) } }
+    }
+    void start()
+    const suspend = () => { if (document.visibilityState === "hidden") { stopCamera(); setReady(false); setError("A câmera foi pausada. Toque em tentar novamente ao voltar.") } }
+    document.addEventListener("visibilitychange", suspend)
+    return () => { disposed = true; stopCamera(); document.removeEventListener("visibilitychange", suspend) }
+  }, [open, portal, facing, attempt, stopCamera])
+
+  async function post<T>(url: string, form: FormData): Promise<T> {
+    const controller = new AbortController()
+    requestRef.current = controller
+    const timer = window.setTimeout(() => controller.abort(), 25000)
+    try {
+      const headers = verifyToken ? {} : await api.getAuthHeaders()
+      if (verifyToken) form.set("token", verifyToken)
+      const response = await fetch(url, { method: "POST", headers, body: form, signal: controller.signal })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(result?.error || result?.message || "Verificação indisponível. Tente novamente ou use assinatura manual.")
+      return result as T
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === "AbortError") throw new Error("A operação não foi confirmada. Verifique a conexão e tente novamente. Nenhuma entrega foi concluída.")
+      throw cause
+    } finally { window.clearTimeout(timer); requestRef.current = null }
   }
 
-  return (
-    <div className="relative w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-xl shadow-slate-200/70">
-      <div className="flex max-h-[calc(100dvh-0.75rem)] min-h-[calc(100dvh-0.75rem)] flex-col gap-3 overflow-y-auto overscroll-contain p-3 sm:max-h-none sm:min-h-0 sm:overflow-visible sm:p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-700">{modeLabel}</p>
-            <h3 className="truncate text-base font-black uppercase tracking-tight text-slate-950 sm:text-lg">{title}</h3>
+  async function capture() {
+    if (busyRef.current) return
+    const video = videoRef.current
+    if (!video?.videoWidth || !video.videoHeight) { setError("Aguarde a imagem da câmera antes de capturar."); return }
+    if (mode !== "evidence" && !targetEmployee) { setError("Salve e selecione o colaborador antes de cadastrar o rosto."); return }
+    if (mode === "enroll" && !verifyToken && !supervised) { setError("Confirme presencialmente a identidade do colaborador antes do cadastro."); return }
+    busyRef.current = true
+    const generation = ++captureGeneration.current
+    setBusy(true)
+    setError("")
+    try {
+      const canvas = document.createElement("canvas")
+      const scale = Math.min(1, 1280 / video.videoWidth)
+      canvas.width = Math.round(video.videoWidth * scale)
+      canvas.height = Math.round(video.videoHeight * scale)
+      const drawing = canvas.getContext("2d")
+      if (!drawing) throw new Error("Captura indisponível neste navegador.")
+      // Full, unmirrored preview is exactly the image submitted to the server.
+      drawing.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("Falha ao capturar a foto.")), "image/jpeg", 0.88))
+      const image = await toDataUrl(blob)
+      if (generation !== captureGeneration.current) return
+      if (mode === "evidence") { stopCamera(); setOpen(false); onCapture([], image); return }
+      const form = new FormData()
+      form.set("employee_id", targetEmployee!)
+      if (mode === "enroll") {
+        form.set("frame", blob, "cadastro.jpg")
+        if (!verifyToken) form.set("supervised_confirmation", "true")
+        const enrollment = await post<FacialEnrollment>("/api/facial/enroll", form)
+        if (generation !== captureGeneration.current) return
+        if (!enrollment.enrollment_id || !["approved", "pending"].includes(enrollment.status)) throw new Error("O servidor não confirmou o cadastro. Tente novamente.")
+        stopCamera(); setOpen(false)
+        onEnrolled?.(enrollment, image)
+        onCapture([], image)
+        return
+      }
+      if (!verifyToken && !context) throw new Error("Selecione os itens da entrega antes de verificar o rosto.")
+      if (context) form.set("context", JSON.stringify(context))
+      const session = await post<FacialProof>("/api/facial/session", form)
+      if (generation !== captureGeneration.current) return
+      const frame = new FormData()
+      frame.set("session_id", session.session_id)
+      frame.set("frame", blob, "verificacao.jpg")
+      const result = await post<FacialProof & { decision: string; reason?: string }>("/api/facial/verify", frame)
+      if (generation !== captureGeneration.current) return
+      const decision = normalizeFacialDecision(result)
+      if (decision !== "approved") throw new Error(decision === "rejected"
+        ? "O rosto não foi aprovado. Confira o colaborador selecionado, a iluminação e tente novamente ou use assinatura manual."
+        : "A verificação facial segura está indisponível. A identidade NÃO foi verificada. Use assinatura manual para continuar.")
+      if (!onVerified) throw new Error("Esta tela não suporta confirmação facial de entrega. Use assinatura manual.")
+      stopCamera(); setOpen(false)
+      onVerified(result, image)
+    } catch (cause) { setError(cameraErrorMessage(cause)) }
+    finally { if (generation === captureGeneration.current) { busyRef.current = false; setBusy(false) } }
+  }
+
+  return <>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 text-center">
+      <Camera className="mx-auto mb-3 h-8 w-8 text-blue-700" aria-hidden="true" />
+      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+      {employeeLabel && <p className="mt-1 text-sm font-semibold">{employeeLabel}</p>}
+      <p className="my-3 text-sm text-slate-600">{mode === "evidence" ? "Foto complementar à assinatura manual. Não é reconhecimento biométrico." : "Use boa iluminação, deixe apenas um rosto visível e retire acessórios que cubram o rosto."}</p>
+      {mode === "enroll" && !targetEmployee && <p role="status" className="mb-3 text-sm text-amber-800">Salve o cadastro do colaborador primeiro. Depois, abra a edição para cadastrar o rosto.</p>}
+      <button type="button" disabled={mode !== "evidence" && !targetEmployee} onClick={openCamera} className="min-h-12 w-full rounded-xl bg-blue-700 px-4 py-3 font-bold text-white disabled:opacity-50">Abrir câmera em tela inteira</button>
+      <button type="button" onClick={onCancel} className="mt-2 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-semibold text-slate-600">{cancelLabel}</button>
+    </section>
+    {open && portal && createPortal(<div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={headingId} aria-describedby={descriptionId} className="fixed inset-0 z-[10000] flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-slate-950 text-white outline-none">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/15 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] [@media(max-height:499px)_and_(orientation:landscape)]:pb-2 [@media(max-height:499px)_and_(orientation:landscape)]:pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <div className="min-w-0"><h2 id={headingId} className="text-base font-bold sm:text-xl">{title}</h2>{employeeLabel && <p className="truncate text-sm text-slate-300">{employeeLabel}</p>}</div>
+        <button type="button" onClick={close} className="flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white/10" aria-label="Fechar câmera"><X aria-hidden="true" /></button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 [@media(max-height:499px)_and_(orientation:landscape)]:overflow-hidden [@media(max-height:499px)_and_(orientation:landscape)]:p-3">
+        <div data-testid="face-camera-layout" className="mx-auto flex w-full max-w-3xl flex-col gap-3 [@media(max-height:499px)_and_(orientation:landscape)]:grid [@media(max-height:499px)_and_(orientation:landscape)]:h-full [@media(max-height:499px)_and_(orientation:landscape)]:min-h-0 [@media(max-height:499px)_and_(orientation:landscape)]:max-w-5xl [@media(max-height:499px)_and_(orientation:landscape)]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] [@media(max-height:499px)_and_(orientation:landscape)]:grid-rows-[auto_minmax(0,1fr)] [@media(max-height:499px)_and_(orientation:landscape)]:gap-2">
+          <p id={descriptionId} className="text-center text-sm text-slate-200 [@media(max-height:499px)_and_(orientation:landscape)]:col-start-2 [@media(max-height:499px)_and_(orientation:landscape)]:row-start-1 [@media(max-height:499px)_and_(orientation:landscape)]:text-left [@media(max-height:499px)_and_(orientation:landscape)]:text-xs">Olhe para a câmera e mantenha o rosto inteiro visível. A imagem enviada será a mesma exibida na prévia.</p>
+          <div className="relative flex h-[45dvh] min-h-[180px] max-h-[520px] items-center justify-center overflow-hidden rounded-2xl bg-black [@media(max-height:499px)_and_(orientation:landscape)]:col-start-1 [@media(max-height:499px)_and_(orientation:landscape)]:row-span-2 [@media(max-height:499px)_and_(orientation:landscape)]:row-start-1 [@media(max-height:499px)_and_(orientation:landscape)]:h-full [@media(max-height:499px)_and_(orientation:landscape)]:min-h-0 [@media(max-height:499px)_and_(orientation:landscape)]:max-h-none">
+            <video ref={videoRef} autoPlay playsInline muted onLoadedData={() => setReady(true)} onCanPlay={() => setReady(true)} className="h-full w-full object-contain" aria-label="Prévia da câmera" />
+            {!ready && !error && <span className="absolute flex items-center gap-2 rounded-xl bg-black/80 p-3"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />Aguardando câmera…</span>}
           </div>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="min-h-[44px] max-w-[46%] shrink-0 truncate rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-100 sm:max-w-none sm:px-4"
-          >
-            {cancelLabel}
-          </button>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 sm:p-3">
-          <div className="mb-2 rounded-2xl bg-white/90 px-3 py-2 text-center text-sm font-semibold text-slate-800 shadow-sm">
-            {instruction}
-          </div>
-
-          {error && <p className="mb-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-slate-900 shadow-inner sm:aspect-video">
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              autoPlay
-              className={`h-full w-full touch-none scale-x-[-1] object-cover transition-opacity duration-300 ${isCameraReady ? "opacity-100" : "opacity-0"}`}
-            />
-
-            {!isCameraReady && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-slate-950 text-white">
-                <Loader2 className="h-8 w-8 animate-spin text-red-300" />
-                <div className="w-full max-w-[260px] px-4 text-center">
-                  <p className="text-sm font-black uppercase tracking-widest">{loadingLabel}</p>
-                  <p className="mt-1 text-sm text-slate-300">{progress}%</p>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15">
-                    <div className="h-full rounded-full bg-red-500 transition-all duration-300" style={{ width: `${progress}%` }} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div
-                className={`h-[72%] w-[54%] rounded-[50%] border-2 transition-all duration-300 ${
-                  state === "RETRY" || state === "ERROR"
-                    ? "border-red-400 shadow-[0_0_0_999px_rgba(15,23,42,0.18)]"
-                    : hasFaceSignal
-                      ? "animate-pulse border-emerald-300 shadow-[0_0_26px_rgba(16,185,129,0.55),0_0_0_999px_rgba(15,23,42,0.14)]"
-                      : "border-white/80 shadow-[0_0_0_999px_rgba(15,23,42,0.2)]"
-                }`}
-              />
+          <div data-testid="face-camera-controls" className="flex min-w-0 flex-col gap-3 [@media(max-height:499px)_and_(orientation:landscape)]:col-start-2 [@media(max-height:499px)_and_(orientation:landscape)]:row-start-2 [@media(max-height:499px)_and_(orientation:landscape)]:min-h-0 [@media(max-height:499px)_and_(orientation:landscape)]:overflow-y-auto [@media(max-height:499px)_and_(orientation:landscape)]:overscroll-contain [@media(max-height:499px)_and_(orientation:landscape)]:gap-2">
+            {error && <p role="alert" className="rounded-xl border border-amber-300/40 bg-amber-950 p-3 text-sm text-amber-100">{error}</p>}
+            {mode === "enroll" && !verifyToken && <label className="flex min-h-12 shrink-0 items-start gap-3 rounded-xl bg-white/10 p-3 text-sm [@media(max-height:499px)_and_(orientation:landscape)]:p-2 [@media(max-height:499px)_and_(orientation:landscape)]:text-xs"><input type="checkbox" checked={supervised} onChange={event => setSupervised(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0" />Conferi presencialmente a identidade e confirmo que este rosto pertence ao colaborador selecionado.</label>}
+            {mode === "enroll" && verifyToken && <p className="rounded-xl bg-white/10 p-3 text-sm">O cadastro enviado por link ficará pendente de conferência e aprovação do responsável.</p>}
+            {mode === "evidence" && <p className="text-sm text-amber-100">Esta foto é apenas evidência visual e não comprova identidade nem prova de vida.</p>}
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button type="button" disabled={busy} onClick={() => {setReady(false); setError(""); setFacing(value => value === "user" ? "environment" : "user")}} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm disabled:opacity-50"><SwitchCamera className="h-5 w-5" aria-hidden="true" />Trocar câmera</button>
+              {error && <button type="button" disabled={busy} onClick={() => {setReady(false); setError(""); setAttempt(value => value + 1)}} className="min-h-11 flex-1 rounded-xl bg-white/10 px-3 py-2 text-sm">Tentar novamente</button>}
             </div>
-
-            <div className="absolute bottom-3 left-3 right-3 rounded-full bg-white/90 p-1.5 shadow-lg backdrop-blur">
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    state === "RETRY" || state === "ERROR" ? "bg-red-600" : state === "APPROVED" || hasFaceSignal ? "bg-emerald-500" : "bg-red-700"
-                  }`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
           </div>
-
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 text-sm shadow-sm">
-            <span className="font-semibold text-slate-700">
-              {scorePercent !== null ? `Confianca ${scorePercent}%` : isEvidenceMode ? "Foto auditavel" : "Verificacao ativa"}
-            </span>
-            <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-widest ${hasFaceSignal ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-              {hasFaceSignal ? "ao vivo" : "aguarde"}
-            </span>
-          </div>
-
-          {isEvidenceMode && (
-            <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-800">
-              <Info className="mr-2 inline h-4 w-4 text-amber-600" />
-              Salvaremos uma foto facial para auditoria junto da assinatura, IP e data.
-            </div>
-          )}
         </div>
-
-        <div className="sticky bottom-0 z-10 mt-auto flex flex-col gap-2.5 border-t border-slate-200 bg-white/95 px-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0">
-          {isEvidenceMode && !isTerminal && (
-            <button
-              type="button"
-              onClick={() => void captureEvidence()}
-              disabled={!isCameraReady || isCapturing}
-              className="min-h-[56px] w-full rounded-2xl bg-red-700 px-5 py-4 text-sm font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-red-900/20 transition hover:bg-red-800 disabled:opacity-60"
-            >
-              {isCapturing ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : <CircleDot className="mr-2 inline h-4 w-4" />}
-              Capturar foto
-            </button>
-          )}
-
-          {isTerminal && state !== "APPROVED" && (
-            <button
-              type="button"
-              onClick={retry}
-              className="min-h-[52px] w-full rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black uppercase tracking-widest text-white transition hover:bg-slate-800"
-            >
-              <RotateCcw className="mr-2 inline h-4 w-4" />
-              Tentar novamente
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="min-h-[44px] w-full rounded-2xl border border-slate-200 px-5 py-3 text-xs font-bold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-          >
-            {isEvidenceMode ? "Usar assinatura manual" : "Usar fallback auditavel"}
-          </button>
-        </div>
-
-        <canvas ref={canvasRef} className="hidden" />
       </div>
-    </div>
-  )
+      <footer className="shrink-0 border-t border-white/15 bg-slate-950 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] [@media(max-height:499px)_and_(orientation:landscape)]:pt-2 [@media(max-height:499px)_and_(orientation:landscape)]:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-3xl flex-col gap-2 [@media(max-height:499px)_and_(orientation:landscape)]:max-w-5xl [@media(max-height:499px)_and_(orientation:landscape)]:flex-row">
+          <button type="button" onClick={() => void capture()} disabled={!ready || busy || (mode === "enroll" && !verifyToken && !supervised)} className="min-h-12 rounded-xl bg-blue-600 px-4 py-3 font-bold disabled:opacity-50 [@media(max-height:499px)_and_(orientation:landscape)]:min-h-11 [@media(max-height:499px)_and_(orientation:landscape)]:flex-1 [@media(max-height:499px)_and_(orientation:landscape)]:py-2">{busy ? "Aguardando resposta do servidor…" : mode === "verify" ? "Capturar e verificar" : mode === "enroll" ? "Enviar cadastro facial" : "Capturar foto"}</button>
+          <button type="button" onClick={close} className="min-h-11 rounded-xl px-3 py-2 text-sm text-slate-200 [@media(max-height:499px)_and_(orientation:landscape)]:min-w-[140px]">{mode === "verify" ? "Usar assinatura manual" : cancelLabel}</button>
+        </div>
+      </footer>
+    </div>, portal)}
+  </>
 }

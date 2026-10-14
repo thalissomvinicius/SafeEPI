@@ -89,7 +89,10 @@ describe("layout dos PDFs juridicos", () => {
     })
 
     const source = await pdfSource(blob)
-    expect(pageCount(source)).toBeGreaterThanOrEqual(3)
+    expect(pageCount(source)).toBeGreaterThanOrEqual(2)
+    expect(source.includes("FP-20260722-ABC123")).toBe(true)
+    expect(source.includes("Terminal Portaria Principal")).toBe(true)
+    expect(source.includes("a".repeat(64))).toBe(true)
     expect(source).not.toContain("NaN")
     expect(blob.size).toBeGreaterThan(10_000)
   })

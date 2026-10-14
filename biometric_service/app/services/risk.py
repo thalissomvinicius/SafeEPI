@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from app.core.config import settings
 from app.schemas import ScoreBundle
 
 
@@ -13,13 +12,8 @@ class RiskDecision:
 
 
 def adaptive_similarity_threshold(quality: float, spoof: float, has_ppe: bool = False) -> float:
-    if has_ppe:
-        return 0.36
-    if quality >= 0.78 and spoof >= 0.9:
-        return 0.45
-    if quality < 0.55:
-        return 0.38
-    return settings.base_similarity_threshold
+    # Legacy heuristic retired. V2 uses an artifact-bound calibration record.
+    raise RuntimeError("biometric_protocol_retired_use_v2")
 
 
 def resolve_weights(challenge_required: bool, quality: float) -> dict[str, float]:
@@ -82,8 +76,4 @@ def decide(
         final=final,
     )
 
-    if final >= 0.82:
-        return RiskDecision("approved", None, "Identidade confirmada", scores)
-    if final >= 0.70:
-        return RiskDecision("retry", "medium_risk", "Vamos tentar mais uma vez com o rosto bem centralizado", scores)
-    return RiskDecision("fallback", "high_risk", "Use assinatura manual com registro auditavel", scores)
+    return RiskDecision("fallback", "legacy_protocol_retired", "Use assinatura manual ou o protocolo facial v2", scores)

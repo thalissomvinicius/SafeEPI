@@ -66,4 +66,22 @@ describe("proxy authentication", () => {
       "https://safe-epi.test/login?redirectTo=%2Fdelivery%3Fstep%3D2",
     )
   })
+
+  it("nao aceita claims retornadas junto a erro de verificacao", async () => {
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: "unverified-user", app_metadata: { role: "MASTER" } } }, error: new Error("invalid signature") })
+    expect((await proxy(new NextRequest("https://safe-epi.test/admin"))).status).toBe(307)
+  })
+
+  it("ignora privilegios declarados pelo proprio usuario", async () => {
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: "user-1", user_metadata: { role: "MASTER" } } }, error: null })
+    const response = await proxy(new NextRequest("https://safe-epi.test/admin"))
+    expect(response.headers.get("location")).toBe("https://safe-epi.test/unauthorized")
+  })
+
+  it.each(["/api/client-location", "/api/fingerprint/agent/commands", "/api/facial/session", "/api/deliveries/facial"])("preserva autenticacao especifica do handler em %s", async (path) => {
+    const response = await proxy(new NextRequest(`https://safe-epi.test${path}`))
+    expect(response.status).toBe(200)
+    expect(response.headers.get("Content-Security-Policy")).toBeTruthy()
+    expect(mocks.getClaims).not.toHaveBeenCalled()
+  })
 })

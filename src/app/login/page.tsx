@@ -1,9 +1,14 @@
-﻿"use client"
+"use client"
 
-import { useEffect, useState } from "react"
-import { AlertTriangle, CheckCircle2, Clock3, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react"
-import { api } from "@/services/api"
+import { useEffect, useRef, useState } from "react"
+import { AlertCircle, ArrowRight, Check, ClipboardCheck, Eye, EyeOff, FileCheck2, ShieldCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/AuthContext"
+import { resolvePostLoginRedirect } from "@/lib/authNavigation"
+
+function loginDestination() {
+  return resolvePostLoginRedirect(new URLSearchParams(window.location.search).get("redirectTo"))
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -11,155 +16,128 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
-  const [successMsg, setSuccessMsg] = useState("")
-  const [redirectCountdown, setRedirectCountdown] = useState(3)
+  const [success, setSuccess] = useState(false)
+  const submittingRef = useRef(false)
+  const redirectedRef = useRef(false)
   const router = useRouter()
+  const { signIn, user, loading: checkingSession } = useAuth()
 
   useEffect(() => {
-    if (!successMsg) return
+    if (!user || checkingSession || submittingRef.current || redirectedRef.current) return
+    redirectedRef.current = true
+    router.replace(loginDestination())
+    router.refresh()
+  }, [checkingSession, router, user])
 
-    if (redirectCountdown <= 0) {
-      router.replace("/")
-      return
-    }
-
-    const timer = window.setTimeout(() => {
-      setRedirectCountdown((current) => current - 1)
-    }, 1000)
-
-    return () => window.clearTimeout(timer)
-  }, [redirectCountdown, router, successMsg])
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (submittingRef.current) return
     setErrorMsg("")
-    setSuccessMsg("")
-
-    if (!email || !password) {
-      setErrorMsg("Preencha todos os campos para continuar.")
+    if (!email.trim() || !password) {
+      setErrorMsg("Preencha o e-mail e a senha para continuar.")
       return
     }
 
+    submittingRef.current = true
+    setLoading(true)
     try {
-      setLoading(true)
-      await api.login(email.trim(), password)
-      setRedirectCountdown(3)
-      setSuccessMsg("Login efetuado com sucesso. Preparando seu painel SafeEPI...")
-    } catch (err) {
-      const error = err as Error
-      console.error("Login failed:", error)
-      const message = error.message?.toLowerCase().includes("invalid login credentials")
+      await signIn(email.trim(), password)
+      setSuccess(true)
+      redirectedRef.current = true
+      router.replace(loginDestination())
+      // The login endpoint sets SSR cookies; discard any anonymous route cache.
+      router.refresh()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível entrar. Tente novamente."
+      setErrorMsg(/invalid login credentials|credenciais invalidas/i.test(message)
         ? "E-mail ou senha incorretos. Confira os dados e tente novamente."
-        : error.message || "Nao foi possivel entrar. Tente novamente."
-      setErrorMsg(message)
-    } finally {
+        : message)
       setLoading(false)
+    } finally {
+      submittingRef.current = false
     }
   }
 
-  return (
-    <main id="main-content" className="min-h-[100dvh] flex items-center justify-center bg-slate-950 overflow-y-auto relative px-4 py-8 sm:py-12">
-      <div className="absolute inset-x-0 top-0 h-px bg-blue-300/30 pointer-events-none" />
+  const disabled = loading || success
+  const inputClass = "min-h-14 w-full rounded-xl border border-slate-200 bg-white px-4 text-base text-slate-900 shadow-sm outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 hover:border-slate-300 focus:border-[#2563EB] focus-visible:ring-4 focus-visible:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-500"
 
-      <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-700">
-        <div className="text-center mb-8 sm:mb-10">
-          <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 bg-[#2563EB] p-3 rounded-2xl shadow-xl shadow-blue-950/40 mb-5 sm:mb-6 flex items-center justify-center">
-            <ShieldCheck className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight">
-            SafeEPI <span className="text-blue-300">SESMT</span>
-          </h1>
-          <p className="text-slate-400 text-xs sm:text-sm mt-3 font-medium uppercase tracking-[0.18em] sm:tracking-[0.2em]">Autenticacao Restrita</p>
+  return (
+    <div className="grid min-h-[100dvh] w-full bg-white lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)]">
+      <aside aria-label="Sobre o SafeEPI" className="relative hidden overflow-hidden bg-slate-900 px-12 py-12 text-white lg:flex lg:flex-col xl:px-20">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_0%_0%,rgba(51,65,85,0.6),transparent_65%)]" />
+        <div className="relative flex items-center gap-3">
+          <span className="flex size-11 items-center justify-center rounded-xl border border-white/15 bg-white/5"><ShieldCheck strokeWidth={1.7} className="size-6" /></span>
+          <span className="text-xl font-semibold tracking-tight">SafeEPI<span className="ml-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Gestão</span></span>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-2xl">
-          {successMsg && (
-            <div role="status" aria-live="polite" className="mb-6 p-4 bg-emerald-500/10 border border-emerald-400/30 text-emerald-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-300 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-black uppercase tracking-widest">Acesso liberado</p>
-                  <p className="text-xs text-emerald-100/80 font-medium mt-1 leading-relaxed">{successMsg}</p>
-                  <div className="mt-3 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-200 bg-emerald-950/40 border border-emerald-400/20 rounded-full px-3 py-1.5">
-                    <Clock3 className="w-3.5 h-3.5" />
-                    Redirecionando em {redirectCountdown}s
-                  </div>
-                </div>
-              </div>
+        <div className="relative my-auto max-w-lg py-12">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Do almoxarifado ao prontuário</span>
+          <h2 className="mt-5 max-w-md text-4xl font-semibold leading-[1.2] tracking-tight xl:text-[2.75rem]">Cuidado com a equipe.<br /><span className="text-slate-400">Controle em cada entrega.</span></h2>
+          <p className="mt-6 max-w-sm text-base leading-relaxed text-slate-300">Entregas, assinaturas e histórico de EPIs em um só lugar. A informação certa para quem cuida da operação.</p>
+
+          <div className="mt-10 border-y border-white/10 py-7">
+            <div className="flex items-start gap-4">
+              <ClipboardCheck strokeWidth={1.7} className="mt-0.5 size-5 shrink-0 text-slate-400" />
+              <div><p className="text-sm font-semibold">Operação organizada</p><p className="mt-1 text-sm leading-relaxed text-slate-400">Colaboradores, equipamentos e estoque conectados.</p></div>
             </div>
-          )}
+            <div className="mt-6 flex items-start gap-4">
+              <FileCheck2 strokeWidth={1.7} className="mt-0.5 size-5 shrink-0 text-slate-400" />
+              <div><p className="text-sm font-semibold">Histórico que acompanha a equipe</p><p className="mt-1 text-sm leading-relaxed text-slate-400">Consulte comprovantes e prontuários quando precisar.</p></div>
+            </div>
+          </div>
+        </div>
+        <p className="relative text-xs leading-relaxed text-slate-400">SafeEPI · Gestão de equipamentos de proteção individual</p>
+      </aside>
+
+      <section aria-labelledby="login-title" className="flex min-w-0 flex-col px-6 py-7 sm:px-10 sm:py-10 lg:px-12 xl:px-20">
+        <div className="flex items-center gap-2.5 lg:hidden">
+          <span className="flex size-10 items-center justify-center rounded-xl bg-slate-900 text-white"><ShieldCheck strokeWidth={1.7} className="size-6" /></span>
+          <span className="text-lg font-semibold tracking-tight text-slate-900">SafeEPI</span>
+        </div>
+
+        <div className="mx-auto my-auto w-full max-w-[420px] py-10 sm:py-14">
+          <div className="mb-8 sm:mb-10">
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Seu ambiente de trabalho</p>
+            <h1 id="login-title" className="mt-3 text-[1.875rem] font-semibold leading-tight tracking-tight text-slate-900 sm:text-4xl">Bem-vindo de volta.</h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate-500">Entre com sua conta para continuar a operação.</p>
+          </div>
 
           {errorMsg && (
-            <div role="alert" aria-live="assertive" className="mb-6 p-4 bg-red-500/10 border border-red-400/30 text-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-black uppercase tracking-widest">Acesso nao autorizado</p>
-                  <p className="text-xs text-blue-100/80 font-medium mt-1 leading-relaxed">{errorMsg}</p>
-                </div>
-              </div>
+            <div id="login-error" role="alert" aria-live="assertive" className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-800">
+              <AlertCircle strokeWidth={1.8} aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              <span>{errorMsg}</span>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} aria-busy={loading} className="space-y-5">
             <div className="space-y-2">
-              <label htmlFor="login-email" className="block text-xs font-black text-slate-300 uppercase tracking-widest">E-mail corporativo</label>
-              <input 
-                id="login-email"
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading || !!successMsg}
-                className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl sm:rounded-2xl px-4 sm:px-5 py-4 text-base sm:text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-70"
-                placeholder="nome@empresa.com.br"
-                autoComplete="email"
-                required
-              />
+              <label htmlFor="login-email" className="block text-sm font-medium text-slate-700">E-mail corporativo</label>
+              <input id="login-email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={disabled} className={inputClass} placeholder="nome@empresa.com.br" autoComplete="username" autoCapitalize="none" spellCheck={false} aria-describedby={errorMsg ? "login-error" : undefined} required />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="login-password" className="block text-xs font-black text-slate-300 uppercase tracking-widest">Senha de acesso</label>
+              <label htmlFor="login-password" className="block text-sm font-medium text-slate-700">Senha de acesso</label>
               <div className="relative">
-                <input 
-                  id="login-password"
-                  type={showPassword ? "text" : "password"} 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading || !!successMsg}
-                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl sm:rounded-2xl py-4 pl-4 pr-14 text-base sm:pl-5 sm:text-sm focus:border-[#2563EB] focus:bg-slate-900 transition-all font-bold placeholder:font-normal placeholder:text-slate-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-70"
-                  placeholder="Digite sua senha"
-                  autoComplete="current-password"
-                  required
-                />
-                <button
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => setShowPassword((current) => !current)}
-                  disabled={loading || !!successMsg}
-                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  className="absolute right-1.5 top-1/2 flex min-h-12 min-w-12 -translate-y-1/2 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-950/60 text-slate-300 transition-all hover:border-blue-400 hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <input id="login-password" name="password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} disabled={disabled} className={`${inputClass} pr-14`} placeholder="Sua senha" autoComplete="current-password" aria-describedby={errorMsg ? "login-error" : undefined} required />
+                <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setShowPassword((current) => !current)} disabled={disabled} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} aria-pressed={showPassword} className="absolute right-1 top-1 flex size-12 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50">
+                  {showPassword ? <EyeOff aria-hidden="true" strokeWidth={1.8} className="size-[18px]" /> : <Eye aria-hidden="true" strokeWidth={1.8} className="size-[18px]" />}
                 </button>
               </div>
             </div>
 
-            <div className="pt-4">
-              <button 
-                type="submit" 
-                disabled={loading || !!successMsg}
-                className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white py-4 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-[0.16em] sm:tracking-[0.2em] transition-all shadow-2xl shadow-blue-950/35 shadow-lg shadow-blue-900/15 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-70"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : successMsg ? "Acesso Confirmado" : "Iniciar Sessao"}
-              </button>
-            </div>
+            <button type="submit" disabled={disabled} className="mt-2 flex min-h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#2563EB] px-5 text-sm font-semibold text-white shadow-sm transition-[background-color,transform] hover:bg-[#1D4ED8] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200 disabled:cursor-wait disabled:opacity-80 motion-reduce:transform-none">
+              {success ? <><Check aria-hidden="true" strokeWidth={2} className="size-[18px]" />Acesso confirmado</> : loading ? <><span aria-hidden="true" className="flex gap-1"><span className="size-1 rounded-full bg-white motion-safe:animate-pulse" /><span className="size-1 rounded-full bg-white/70 motion-safe:animate-pulse" /><span className="size-1 rounded-full bg-white/40 motion-safe:animate-pulse" /></span>Validando seu acesso...</> : <>Entrar no SafeEPI<ArrowRight aria-hidden="true" strokeWidth={1.8} className="size-[18px]" /></>}
+            </button>
+            <p role="status" aria-live="polite" className="sr-only">{success ? "Login efetuado. Abrindo seu painel." : loading ? "Validando sessão e permissões de acesso." : ""}</p>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-white/5 text-center">
-            <p className="text-xs text-slate-400 uppercase tracking-widest font-black italic">Ambiente protegido NR-06</p>
+          <div className="mt-8 border-t border-slate-100 pt-5">
+            <p className="flex items-start gap-2.5 text-xs leading-relaxed text-slate-500"><ShieldCheck aria-hidden="true" strokeWidth={1.6} className="mt-0.5 size-4 shrink-0" />Acesso exclusivo para usuários autorizados pela empresa.</p>
           </div>
         </div>
-      </div>
-    </main>
+
+        <p className="text-center text-xs text-slate-500">Precisa de acesso? Fale com o administrador da sua empresa.</p>
+      </section>
+    </div>
   )
 }

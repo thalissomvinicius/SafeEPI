@@ -130,15 +130,26 @@ export async function POST(request: NextRequest) {
     const { training, company_id } = body
     const companyId = resolveCompanyId(auth.user, company_id)
 
-    if (!training || typeof training !== "object") {
+    if (!training || typeof training !== "object" || Array.isArray(training)) {
       return NextResponse.json({ error: "Dados do treinamento sao obrigatorios." }, { status: 400 })
+    }
+
+    const authMethod = training.auth_method ?? "manual"
+    if (authMethod === "facial") {
+      return NextResponse.json({
+        error: "A confirmação facial ainda não está integrada a treinamentos. Colha uma assinatura manual, com foto de apoio opcional.",
+        code: "FACIAL_TRAINING_NOT_SUPPORTED",
+      }, { status: 409 })
+    }
+    if (authMethod !== "manual" && authMethod !== "manual_facial") {
+      return NextResponse.json({ error: "Método de assinatura inválido." }, { status: 400 })
     }
 
     if (!companyId) {
       return NextResponse.json({ error: "Empresa atual nao encontrada para este usuario." }, { status: 400 })
     }
 
-    const fullPayload = { ...getFullTraining(training), company_id: companyId }
+    const fullPayload = { ...getFullTraining(training), auth_method: authMethod, company_id: companyId }
     const fullResult = await supabaseAdmin
       .from("trainings")
       .insert([fullPayload])

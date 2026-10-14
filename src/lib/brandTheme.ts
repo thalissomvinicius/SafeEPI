@@ -11,6 +11,8 @@ export type ActiveBrand = {
 const BRAND_KEY = "safeepi_active_brand"
 export const BRAND_CHANGED_EVENT = "safeepi:brand-changed"
 const DEFAULT_COLOR = "#2563EB"
+let brandGeneration = 0
+let logoController: AbortController | null = null
 
 export function normalizeHexColor(color?: string | null) {
   if (!color) return DEFAULT_COLOR
@@ -68,16 +70,21 @@ export function getStoredBrand(): ActiveBrand {
 
 export function clearCompanyTheme() {
   if (typeof document === "undefined") return
+  brandGeneration += 1
+  logoController?.abort()
+  logoController = null
   document.body.classList.remove("company-theme")
   document.body.style.removeProperty("--brand-color")
   document.body.style.removeProperty("--brand-color-strong")
   emitBrandChanged(getFallbackBrand())
 }
 
-async function imageUrlToDataUrl(url: string): Promise<string | null> {
+async function imageUrlToDataUrl(url: string, signal: AbortSignal): Promise<string | null> {
   try {
-    const response = await fetch(url, { mode: "cors" })
+    const response = await fetch(url, { mode: "cors", signal })
+    if (!response.ok) return null
     const blob = await response.blob()
+    if (!blob.type.startsWith("image/") || blob.size > 2 * 1024 * 1024) return null
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => resolve(String(reader.result))
@@ -92,18 +99,20 @@ async function imageUrlToDataUrl(url: string): Promise<string | null> {
 export async function applyCompanyBrand(company?: Company | null, options: { enableTheme?: boolean } = {}) {
   if (typeof window === "undefined") return
 
+  const generation = ++brandGeneration
+  logoController?.abort()
+  logoController = null
+
   const primaryColor = normalizeHexColor(company?.primary_color)
   const logoUrl = company?.logo_url || "/logo.png"
+  const previousBrand = getStoredBrand()
   const brand: ActiveBrand = {
     name: company?.trade_name || company?.name || "SafeEPI",
     cnpj: company?.cnpj || null,
     logoUrl,
-    logoDataUrl: null,
+    logoDataUrl: previousBrand.logoUrl === logoUrl ? previousBrand.logoDataUrl : null,
     primaryColor,
   }
-
-  window.localStorage.setItem(BRAND_KEY, JSON.stringify(brand))
-  emitBrandChanged(brand)
 
   if (options.enableTheme !== false) {
     document.body.classList.add("company-theme")
@@ -111,10 +120,21 @@ export async function applyCompanyBrand(company?: Company | null, options: { ena
     document.body.style.setProperty("--brand-color-strong", darkenHexColor(primaryColor))
   }
 
-  const dataUrl = await imageUrlToDataUrl(logoUrl)
-  if (dataUrl) {
+  try { window.localStorage.setItem(BRAND_KEY, JSON.stringify(brand)) } catch { /* storage may be unavailable */ }
+  emitBrandChanged(brand)
+
+  // Color and tenant identity must never wait for an external logo request.
+  if (brand.logoDataUrl) return
+  const controller = new AbortController()
+  logoController = controller
+  const timeout = window.setTimeout(() => controller.abort(), 5000)
+  void imageUrlToDataUrl(logoUrl, controller.signal).then((dataUrl) => {
+    if (!dataUrl || controller.signal.aborted || generation !== brandGeneration) return
     const brandWithLogoData = { ...brand, logoDataUrl: dataUrl }
-    window.localStorage.setItem(BRAND_KEY, JSON.stringify(brandWithLogoData))
+    try { window.localStorage.setItem(BRAND_KEY, JSON.stringify(brandWithLogoData)) } catch { /* optional cache */ }
     emitBrandChanged(brandWithLogoData)
-  }
+  }).finally(() => {
+    window.clearTimeout(timeout)
+    if (logoController === controller) logoController = null
+  })
 }

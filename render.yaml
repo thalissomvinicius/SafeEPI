@@ -1,0 +1,18 @@
+# Render Blueprint para o microserviço facial do SafeEPI.
+# Fonte oficial dos campos: https://render.com/docs/blueprint-spec
+# Plano free atual: 0.1 CPU / 512 MB RAM, com cold start; use só para piloto.
+services:
+  - type: web
+    runtime: docker
+    name: safeepi-biometric
+    rootDir: biometric_service
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: SAFE_EPI_BIOMETRIC_SERVICE_TOKEN
+        sync: false
+      - key: SAFE_EPI_BIOMETRIC_LIMIT_CONCURRENCY
+        # HTTP connections, not inference slots (the app separately limits inference to one).
+        # Uvicorn counts the current connection: setting one rejects every request.
+        value: "8"

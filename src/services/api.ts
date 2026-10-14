@@ -106,6 +106,7 @@ let companyIdRequest: Promise<string | null> | null = null;
 let cachedCompanies: CompanyWithCounts[] | null = null;
 let cachedCompaniesExpiresAt = 0;
 let companiesRequest: Promise<CompanyWithCounts[]> | null = null;
+let companiesContextVersion = 0;
 
 type SignedDocumentUploadTarget = {
   error?: string;
@@ -474,6 +475,7 @@ function clearCompanyContextCache(clearStoredMasterCompany = false) {
   cachedCompanyId = null;
   cachedCompanyIdResolved = false;
   companyIdRequest = null;
+  companiesContextVersion += 1;
   cachedCompanies = null;
   cachedCompaniesExpiresAt = 0;
   companiesRequest = null;
@@ -687,7 +689,10 @@ export const api = {
     }
 
     const { data: sessionData, error } = await supabase.auth.getSession();
-    if (error || !sessionData.session) throw error || new Error("Sessao nao foi persistida.");
+    if (error || !sessionData.session || sessionData.session.user.id !== data.user.id) {
+      throw error || new Error("Nao foi possivel manter sua sessao. Verifique se os cookies estao permitidos e tente novamente.");
+    }
+    clearCompanyContextCache(false);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event(AUTH_CONTEXT_SYNC_EVENT));
     }
@@ -958,11 +963,20 @@ export const api = {
 
   // --- Gestão de Usuários (Apenas Admin) ---
   async getCurrentUser() {
-    const res = await fetchWithAuthRetry('/api/me');
-    const data = await readResponseJson<{ error?: string; user?: CurrentUser }>(res);
-    if (!res.ok) throw new Error(data.error || "Nao foi possivel validar o perfil.");
-    if (!data.user) throw new Error("Perfil nao encontrado na resposta do servidor.");
-    return data.user;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const res = await fetchWithAuthRetry('/api/me', { cache: "no-store", signal: controller.signal });
+      const data = await readResponseJson<{ error?: string; user?: CurrentUser }>(res);
+      if (!res.ok) throw new Error(data.error || "Nao foi possivel validar o perfil.");
+      if (!data.user) throw new Error("Perfil nao encontrado na resposta do servidor.");
+      return data.user;
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error("A validacao de acesso demorou mais que o esperado. Tente novamente.");
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   },
 
   async getCompanies() {
@@ -971,18 +985,25 @@ export const api = {
     }
     if (companiesRequest) return companiesRequest;
 
-    companiesRequest = (async () => {
+    const contextVersion = companiesContextVersion;
+    const request = (async () => {
       const res = await fetchWithAuthRetry('/api/companies');
       const data = await readResponseJson<{ error?: string; companies?: CompanyWithCounts[] }>(res);
       if (!res.ok) throw new Error(data.error || "Nao foi possivel carregar empresas.");
-      cachedCompanies = data.companies || [];
-      cachedCompaniesExpiresAt = Date.now() + COMPANIES_CACHE_TTL_MS;
-      return cachedCompanies;
+      const companies = data.companies || [];
+      // An older identity's in-flight request must not repopulate the next
+      // identity's cache after logout or an explicit context reset.
+      if (contextVersion === companiesContextVersion) {
+        cachedCompanies = companies;
+        cachedCompaniesExpiresAt = Date.now() + COMPANIES_CACHE_TTL_MS;
+      }
+      return companies;
     })().finally(() => {
-      companiesRequest = null;
+      if (companiesRequest === request) companiesRequest = null;
     });
+    companiesRequest = request;
 
-    return companiesRequest;
+    return request;
   },
 
   async createCompany(payload: Partial<Company>) {
@@ -993,8 +1014,10 @@ export const api = {
     });
     const data = await readResponseJson<{ error?: string; company?: Company }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel criar empresa.");
+    companiesContextVersion += 1;
     cachedCompanies = null;
     cachedCompaniesExpiresAt = 0;
+    companiesRequest = null;
     return data.company;
   },
 
@@ -1006,8 +1029,10 @@ export const api = {
     });
     const data = await readResponseJson<{ error?: string; company?: Company }>(res);
     if (!res.ok) throw new Error(data.error || "Nao foi possivel atualizar empresa.");
+    companiesContextVersion += 1;
     cachedCompanies = null;
     cachedCompaniesExpiresAt = 0;
+    companiesRequest = null;
     return data.company;
   },
 

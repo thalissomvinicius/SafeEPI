@@ -9,6 +9,7 @@ import { validateUpload } from "@/lib/validateUpload"
 import { isValidGeoLocation } from "@/utils/geolocation"
 import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
 import { assertPdfBytes, calculateSha256 } from "@/lib/documentIntegrity"
+import { authoritativeFacialReceipt } from "@/lib/facialDocumentProof"
 
 const VALID_DOCUMENT_TYPES = new Set([
   "delivery",
@@ -117,9 +118,6 @@ async function withSignedDocumentUrls<T extends {
 }
 
 export async function POST(request: Request) {
-  const limited = await rateLimit(`upload:signed-documents:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
-  if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
-
   try {
     assertRequestSize(request, 25 * 1024 * 1024)
     const formData = await request.formData()
@@ -153,6 +151,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Sessao ou link remoto invalido para arquivar documento." }, { status: 401 })
     }
 
+    if (documentType === "training_certificate") {
+      const limited = await rateLimit(`upload:signed-documents:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+      if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
+    }
+
     const declaredSha256Hash = String(formData.get("sha256_hash") || "").trim().toLowerCase()
 
     const geoLocation = String(formData.get("geo_location") || "").trim()
@@ -183,6 +186,11 @@ export async function POST(request: Request) {
     let storagePath = preuploadedStoragePath
     let documentUrl = preuploadedStoragePath
     let pdfBytes: Uint8Array
+    const newUploadPaths: string[] = []
+    // Rejected metadata must never delete an existing/pre-uploaded document.
+    const cleanupNewUploads = async () => {
+      if (newUploadPaths.length) await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove(newUploadPaths)
+    }
 
     if (!hasPreuploadedPdf) {
       const uploadFile = pdfFile as File
@@ -204,6 +212,7 @@ export async function POST(request: Request) {
       }
 
       documentUrl = storagePath
+      newUploadPaths.push(storagePath)
     } else {
       const { data: storedPdf, error: downloadError } = await supabaseAdmin.storage
         .from(PRIVATE_STORAGE_BUCKET)
@@ -217,7 +226,7 @@ export async function POST(request: Request) {
 
     const sha256Hash = await calculateSha256(pdfBytes)
     if (declaredSha256Hash && declaredSha256Hash !== sha256Hash) {
-      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath])
+      await cleanupNewUploads()
       return NextResponse.json({ error: "O hash do PDF enviado nao corresponde aos bytes arquivados." }, { status: 400 })
     }
 
@@ -237,11 +246,12 @@ export async function POST(request: Request) {
 
       if (evidenceUploadError) {
         console.error("[signed-documents] evidence upload error:", evidenceUploadError)
-        await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath])
+        await cleanupNewUploads()
         return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
       }
 
       photoEvidenceUrl = evidencePath
+      newUploadPaths.push(evidencePath)
     }
 
     const deliveryIds = parseJsonField<string[]>(formData.get("delivery_ids"), [])
@@ -251,13 +261,13 @@ export async function POST(request: Request) {
       ...deliveryIds,
       ...(deliveryId ? [deliveryId] : []),
     ])]
-    const signatureUrl = String(formData.get("signature_url") || "") || null
+    let signatureUrl = String(formData.get("signature_url") || "") || null
     if (signatureUrl && !isTenantStoragePath(signatureUrl, companyId)) {
-      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath, photoEvidenceStoragePath].filter((value): value is string => Boolean(value)))
+      await cleanupNewUploads()
       return NextResponse.json({ error: "Assinatura nao pertence a empresa atual." }, { status: 403 })
     }
     if (photoEvidenceUrl && !isTenantStoragePath(photoEvidenceUrl, companyId)) {
-      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath, photoEvidenceStoragePath].filter((value): value is string => Boolean(value)))
+      await cleanupNewUploads()
       return NextResponse.json({ error: "Evidencia facial nao pertence a empresa atual." }, { status: 403 })
     }
 
@@ -271,12 +281,50 @@ export async function POST(request: Request) {
       if (employeeId) deliveryQuery = deliveryQuery.eq("employee_id", employeeId)
       const { data: scopedDeliveries, error: scopedError } = await deliveryQuery
       if (scopedError || scopedDeliveries?.length !== referencedDeliveryIds.length) {
-        await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([storagePath, photoEvidenceStoragePath].filter((value): value is string => Boolean(value)))
+        await cleanupNewUploads()
         return NextResponse.json({ error: "Entrega referenciada nao pertence a empresa ou colaborador atual." }, { status: 403 })
       }
     }
 
-    const metadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
+    const rawMetadata = parseJsonField<Record<string, unknown>>(formData.get("metadata"), {})
+    const metadata = rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata) ? { ...rawMetadata } : {}
+    // Verification claims are rebuilt from consumed server evidence, never from
+    // browser metadata (nor inferred from the presence of a photograph).
+    delete metadata.biometricReceipt
+    delete metadata.biometric_receipt
+    delete metadata.biometric_verified
+    const authMethod = String(formData.get("auth_method") || "") || null
+    if (authMethod === "facial") {
+      const rejectUnverifiedDocument = async () => {
+        await cleanupNewUploads()
+        return NextResponse.json({ error: "O arquivo nao possui verificacao facial consumida para estas entregas.", code: "FACIAL_PROOF_REQUIRED" }, { status: 409 })
+      }
+      if (!employeeId || referencedDeliveryIds.length === 0) return rejectUnverifiedDocument()
+      const { data: facialRows, error: facialRowsError } = await supabaseAdmin.from("deliveries")
+        .select("id,biometric_session_id,auth_method").in("id", referencedDeliveryIds)
+        .eq("company_id", companyId).eq("employee_id", employeeId)
+      const sessionIds = new Set(facialRows?.map(row => row.biometric_session_id).filter(Boolean))
+      if (facialRowsError || facialRows?.length !== referencedDeliveryIds.length || sessionIds.size !== 1
+        || facialRows.some(row => row.auth_method !== "facial" || !row.biometric_session_id)) return rejectUnverifiedDocument()
+      const { data: facialSession, error: facialSessionError } = await supabaseAdmin.from("biometric_sessions")
+        .select("id,company_id,employee_id,remote_link_id,decision,consumed_at,delivery_ids,result,capture_storage_path")
+        .eq("id", [...sessionIds][0]).eq("company_id", companyId).maybeSingle()
+      const receipt = !facialSessionError ? authoritativeFacialReceipt(facialSession, {
+        companyId, employeeId, remoteLinkId, deliveryIds: referencedDeliveryIds,
+      }) : null
+      if (!receipt || !facialSession?.capture_storage_path
+        || !isTenantStoragePath(facialSession.capture_storage_path, companyId)) return rejectUnverifiedDocument()
+      // Reuse the exact server-verified capture; client evidence cannot replace it.
+      if (photoEvidenceStoragePath) {
+        await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove([photoEvidenceStoragePath])
+        newUploadPaths.splice(newUploadPaths.indexOf(photoEvidenceStoragePath), 1)
+        photoEvidenceStoragePath = null
+      }
+      signatureUrl = facialSession.capture_storage_path
+      photoEvidenceUrl = facialSession.capture_storage_path
+      metadata.biometricReceipt = receipt
+      metadata.biometric_verified = true
+    }
     const insertPayload = {
       company_id: companyId,
       document_type: documentType,
@@ -289,7 +337,7 @@ export async function POST(request: Request) {
       storage_path: storagePath,
       sha256_hash: sha256Hash.toLowerCase(),
       remote_link_id: remoteLinkId,
-      auth_method: String(formData.get("auth_method") || "") || null,
+      auth_method: authMethod,
       signature_url: signatureUrl,
       photo_evidence_url: photoEvidenceUrl,
       ip_address: String(formData.get("ip_address") || "") || null,
@@ -306,15 +354,16 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
-      const cleanupPaths = [storagePath, photoEvidenceStoragePath].filter((path): path is string => Boolean(path))
       if (isMissingAuditTable(error)) {
-        await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove(cleanupPaths)
+        await cleanupNewUploads()
         return NextResponse.json({
           error: "A tabela signed_documents ainda nao existe no Supabase. Rode o script signed_documents_audit.sql para ativar o arquivo juridico dos PDFs.",
         }, { status: 501 })
       }
 
-      await supabaseAdmin.storage.from(PRIVATE_STORAGE_BUCKET).remove(cleanupPaths)
+      // Transport errors may hide a committed insert. Only definitive database
+      // errors can discard this request's files; never destroy a possible receipt.
+      if (/^[0-9A-Z]{5}$/.test(error.code || "")) await cleanupNewUploads()
       console.error("[signed-documents] insert error:", error)
       return NextResponse.json({ error: "Operacao nao permitida" }, { status: 400 })
     }

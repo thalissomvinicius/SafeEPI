@@ -5,12 +5,11 @@
 
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
-import { Camera, Users, AlertTriangle, Search, CheckCircle2, ExternalLink, FileDown, Loader2, ArrowRightLeft, ShieldAlert, Fingerprint, PenLine } from "lucide-react"
+import { Camera, Users, AlertTriangle, Search, CheckCircle2, ExternalLink, FileDown, Loader2, ArrowRightLeft, PenLine } from "lucide-react"
 import SignatureCanvas from "react-signature-canvas"
 import { format } from "date-fns"
 import { api } from "@/services/api"
 import { Employee, PPE, DeliveryWithRelations, Workplace } from "@/types/database"
-import { FaceCamera } from "@/components/ui/FaceCamera"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { COMPANY_CONFIG } from "@/config/company"
@@ -22,7 +21,6 @@ import { toast } from "@/lib/toast"
 import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { DataLoadError } from "@/components/ui/DataLoadError"
-import { imageDataUrlToFile } from "@/utils/imageDataUrl"
 
 export default function ReturnsPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -45,7 +43,7 @@ export default function ReturnsPage() {
   const [replacementSearchTerm, setReplacementSearchTerm] = useState("")
   
   // Auth
-  const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
+  const [authMethod, setAuthMethod] = useState<'manual' | 'manual_facial'>('manual')
   const sigCanvas = useRef<SignatureCanvas | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
@@ -123,7 +121,9 @@ export default function ReturnsPage() {
     try {
       const photoUrl = await api.getPrivateAssetUrl(selectedEmployee.photo_storage_path || selectedEmployee.photo_url, "download", undefined, "biometric_photos")
       const response = await fetch(photoUrl || selectedEmployee.photo_url)
+      if (!response.ok) return undefined
       const blob = await response.blob()
+      if (!blob.type.startsWith("image/")) return undefined
       return await new Promise<string>((resolve) => {
         const reader = new FileReader()
         reader.onloadend = () => resolve(reader.result as string)
@@ -136,6 +136,11 @@ export default function ReturnsPage() {
 
   const saveReturn = async (signatureDataUrl: string) => {
     if (!deliveryToReturn || !selectedEmployee) return
+    if (isSaving || !signatureDataUrl) return
+    if (!["manual", "manual_facial"].includes(authMethod)) {
+      toast.error("Esta devolução exige assinatura manual. Foto isolada não substitui a assinatura.")
+      return
+    }
     if (authMethod === 'manual_facial' && !selectedEmployee.photo_url) {
       alert("Cadastre uma foto do colaborador antes de usar Foto + Assinatura.")
       return
@@ -151,7 +156,7 @@ export default function ReturnsPage() {
       
       const newPpe = needsReplacement ? ppes.find(p => p.id === replacementPpeId) : undefined;
       const photoBase64 = authMethod === 'manual_facial' ? await getEmployeePhotoBase64() : undefined
-      const persistedAuthMethod: 'manual' | 'facial' = authMethod === 'manual_facial' ? 'manual' : authMethod
+      if (authMethod === 'manual_facial' && !photoBase64) throw new Error("Não foi possível carregar a foto cadastral. Tente novamente ou escolha assinatura manual sem foto.")
       let replacementDelivery: DeliveryWithRelations | null = null
 
       // 1. Dar Baixa no Antigo
@@ -159,7 +164,9 @@ export default function ReturnsPage() {
 
       // 2. Criar Nova Entrega se precisar
       if (needsReplacement && replacementPpeId) {
-        const signatureFile = imageDataUrlToFile(signatureDataUrl, "signature")
+        const response = await fetch(signatureDataUrl)
+        const blob = await response.blob()
+        const signatureFile = new File([blob], "signature.png", { type: "image/png" })
 
         replacementDelivery = await api.saveDelivery({
           employee_id: selectedEmployee.id,
@@ -168,7 +175,7 @@ export default function ReturnsPage() {
           reason: returnMotive === 'Perda' || returnMotive === 'Dano' ? 'Perda' : 'Substituição (Desgaste/Validade)',
           quantity: 1,
           ip_address: "Terminal de Baixas",
-          auth_method: persistedAuthMethod,
+          auth_method: 'manual',
           signature_url: null,
           delivery_date: new Date().toISOString()
         }, signatureFile) as DeliveryWithRelations
@@ -494,19 +501,15 @@ export default function ReturnsPage() {
               {step === 2 && (
                 <div className="space-y-6">
                   {/* Tabs de Assinatura */}
-                  <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+                  <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-2">
                     <button onClick={() => setAuthMethod('manual')} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-xs font-black uppercase tracking-wide transition-all ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
                       <PenLine className="w-4 h-4" /> Manual
                     </button>
                     <button onClick={() => setAuthMethod('manual_facial')} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-xs font-black uppercase tracking-wide transition-all ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
                       <Camera className="w-4 h-4" /> Foto + Assinatura
                     </button>
-                    <button onClick={() => setAuthMethod('facial')} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-3 text-center text-xs font-black uppercase tracking-wide transition-all ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
-                      <Fingerprint className="w-4 h-4" /> Biometria
-                    </button>
                   </div>
 
-                  {authMethod === 'manual' || authMethod === 'manual_facial' ? (
                     <div className="space-y-3">
                       {authMethod === 'manual_facial' && (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center gap-3">
@@ -517,7 +520,7 @@ export default function ReturnsPage() {
                               <Camera className="w-5 h-5" />
                             </div>
                           )}
-                          <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">O recibo vai sair com foto cadastrada e assinatura manual.</p>
+                          <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">O recibo terá foto cadastral de apoio e assinatura manual. Não há captura atual nem verificação biométrica nesta devolução.</p>
                         </div>
                       )}
                       <div className="hidden justify-between items-center">
@@ -547,34 +550,6 @@ export default function ReturnsPage() {
                         {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Confirmar e Finalizar"}
                       </button>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {!selectedEmployee.photo_url ? (
-                        <div className="bg-amber-50 p-6 rounded-2xl text-center space-y-3 border border-amber-200">
-                          <ShieldAlert className="w-8 h-8 text-amber-500 mx-auto" />
-                          <p className="text-amber-800 font-bold text-sm">Biometria não cadastrada</p>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidade Certificada</span>
-                            <div className="flex items-center gap-2">
-                              {selectedEmployee.photo_url && (
-                                <Image src={selectedEmployee.photo_url} alt="User" width={24} height={24} className="w-6 h-6 rounded-full border border-slate-200 object-cover" unoptimized />
-                              )}
-                              <span className="text-[10px] font-bold text-slate-500">{selectedEmployee.full_name}</span>
-                            </div>
-                          </div>
-                          <FaceCamera 
-                            verifyEmployeeId={selectedEmployee.id}
-                            verifyCompanyId={selectedEmployee.company_id}
-                            onCapture={(desc, img) => saveReturn(img)}
-                            onCancel={() => setAuthMethod('manual')}
-                          />
-                        </>
-                      )}
-                    </div>
-                  )}
                   
                   <div className="pt-2 text-center">
                     <button onClick={() => setStep(1)} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voltar</button>

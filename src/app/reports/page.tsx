@@ -95,7 +95,7 @@ export default function ReportsPage() {
           api.getDeliveries({ all: true, signAssets: false }),
           api.getTrainings(),
           api.getWorkplaces(),
-          api.getEmployees(),
+          api.getEmployees({ signPhotos: false }),
           api.getThirdParties(),
         ])
         setRawPpes(ppeData)

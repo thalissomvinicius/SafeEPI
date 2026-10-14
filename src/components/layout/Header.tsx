@@ -46,7 +46,7 @@ export function Header() {
   const handleMasterCompanyChange = async (companyId: string) => {
     setSelectedCompanyId(companyId)
     api.setMasterCompanyContext(companyId)
-    await applyCompanyBrand(companies.find((company) => company.id === companyId), { enableTheme: true })
+    void applyCompanyBrand(companies.find((company) => company.id === companyId), { enableTheme: true })
     window.location.reload()
   }
 
@@ -59,37 +59,39 @@ export function Header() {
     if (path.startsWith('/inventory')) return 'Gestão de Estoque'
     if (path.startsWith('/ppes')) return 'Catálogo de EPIs'
     if (path.startsWith('/delivery')) return 'Nova Entrega'
-    if (path.startsWith('/history')) return 'Audit (Histórico)'
-    if (path.startsWith('/reports')) return 'Business Intelligence'
+    if (path.startsWith('/history')) return 'Histórico de entregas'
+    if (path.startsWith('/movements')) return 'Movimentações'
+    if (path.startsWith('/reports')) return 'Relatórios e indicadores'
     if (path.startsWith('/training')) return 'Treinamentos'
     if (path.startsWith('/users')) return 'Administração'
     if (path.startsWith('/workplaces')) return 'Obras e Canteiros'
     if (path.startsWith('/third-parties')) return 'Terceiros'
     if (path.startsWith('/job-sectors')) return 'Cargos e Setores'
+    if (path.startsWith('/support')) return 'Ajuda e suporte'
     return 'SafeEPI'
   }
 
   return (
-    <header className="h-16 md:h-20 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-3 sm:px-4 md:px-8 flex items-center justify-between gap-2">
-      <div className="flex flex-col min-w-0 max-w-[52vw] md:max-w-none">
-        <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Módulo Atual</span>
-        <h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-tighter leading-none truncate">{getPageTitle(pathname)}</h2>
+    <header className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200/70 bg-white px-3 pt-[env(safe-area-inset-top)] sm:px-5 md:px-7">
+      <div className="flex min-w-0 max-w-[42vw] flex-col md:max-w-none">
+        <span className="mb-1 hidden text-[11px] font-medium leading-none text-slate-400 sm:block">Área de trabalho</span>
+        <h2 className="truncate text-sm font-semibold leading-snug tracking-tight text-slate-800">{getPageTitle(pathname)}</h2>
       </div>
 
-      <div className="flex flex-none md:flex-1 justify-center px-0 md:px-8">
+      <div className="flex flex-none justify-center px-0 lg:flex-1 lg:px-5">
         <GlobalSearch />
       </div>
 
-      <div className="flex items-center gap-2 md:gap-4">
+      <div className="flex min-w-0 shrink-0 items-center gap-1.5 md:gap-3">
         {user?.role === "MASTER" && (
           <div className="relative flex h-11 flex-shrink-0 items-center">
-            <div className="pointer-events-none flex h-11 w-11 items-center justify-center rounded-xl border border-[#2563EB]/25 bg-white text-[#2563EB] shadow-sm md:hidden">
+            <div className="pointer-events-none flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 lg:hidden">
               <Building2 className="h-4 w-4" />
             </div>
             <select
               value={selectedCompanyId}
               onChange={(event) => void handleMasterCompanyChange(event.target.value)}
-              className="absolute inset-0 h-11 w-11 cursor-pointer opacity-0 md:static md:w-56 md:opacity-100 md:rounded-xl md:border md:border-[#2563EB]/25 md:bg-white md:px-3 md:py-2 md:pr-8 md:text-[10px] md:font-black md:uppercase md:tracking-widest md:text-slate-700 md:shadow-sm md:outline-none md:focus:border-[#2563EB]"
+              className="absolute inset-0 h-11 w-11 cursor-pointer opacity-0 lg:static lg:h-10 lg:w-44 lg:appearance-none lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:px-3 lg:pr-8 lg:text-xs lg:font-medium lg:text-slate-700 lg:opacity-100 lg:outline-none lg:focus:border-[var(--brand-color)] xl:w-52"
               title="Alterar empresa em contexto master"
               aria-label="Alterar empresa em contexto master"
             >
@@ -100,15 +102,15 @@ export function Header() {
                 </option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-slate-400 md:block" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-slate-400 lg:block" />
             <span className="sr-only">
               Empresa atual: {selectedCompany ? selectedCompany.trade_name || selectedCompany.name : "nenhuma"}
             </span>
           </div>
         )}
-        <div className="hidden md:flex flex-col items-end mr-2">
-            <span className="text-xs font-black text-slate-800 uppercase tracking-tighter">{user?.user_metadata?.full_name || user?.email}</span>
-            <span className="text-[9px] font-black text-[#2563EB] uppercase tracking-widest italic">{user?.role}</span>
+        <div className="hidden max-w-40 flex-col items-end border-l border-slate-200 pl-3 xl:flex">
+            <span className="max-w-full truncate text-xs font-semibold text-slate-700" title={user?.user_metadata?.full_name || user?.email}>{user?.user_metadata?.full_name || user?.email}</span>
+            <span className="mt-0.5 text-[10px] font-medium text-slate-400">{user?.role === "MASTER" ? "Gestão da plataforma" : user?.role === "ADMIN" ? "Administrador" : user?.role === "DIRETORIA" ? "Diretoria" : "Almoxarifado"}</span>
         </div>
         
         <NotificationBell />

@@ -60,6 +60,8 @@ function isAuthBypassedRoute(pathname: string) {
     pathname === "/api/cron/biometric-retention" ||
     pathname === "/api/fingerprint/agent" ||
     pathname.startsWith("/api/fingerprint/agent/") ||
+    // These handlers verify their own actor session or scoped remote-link token.
+    ["/api/facial/enroll", "/api/facial/enroll/approve", "/api/facial/profile", "/api/facial/session", "/api/facial/verify", "/api/deliveries/facial"].includes(pathname) ||
     pathname === "/api/auth" ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/remote-delivery" ||
@@ -122,20 +124,21 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  const {
-    data: verifiedToken,
-  } = await supabase.auth.getClaims()
-  let claims = verifiedToken?.claims || null
+  // getClaims verifies the signature using Supabase's JWKS cache. The SDK
+  // itself uses a verified getUser fallback for symmetric signing keys.
+  // Never replace this with a local JWT decode or unverified getSession data.
+  const verifiedToken = await supabase.auth.getClaims()
+  let claims = verifiedToken.error ? null : verifiedToken.data?.claims || null
 
   if (!claims?.sub && request.nextUrl.pathname.startsWith("/api/")) {
     const bearer = extractBearerToken(request.headers.get("authorization"))
     if (bearer) {
       const result = await supabase.auth.getClaims(bearer)
-      claims = result.data?.claims || null
+      claims = result.error ? null : result.data?.claims || null
     }
   }
 
-  if (!claims?.sub) {
+  if (typeof claims?.sub !== "string" || !claims.sub) {
     return request.nextUrl.pathname.startsWith("/api/")
       ? apiUnauthorized(csp, nonce)
       : redirectToLogin(request, csp, nonce)

@@ -101,7 +101,7 @@ export default function WorkplacesPage() {
     setDetailsWorkplace(w)
     setDetailsLoading(true)
     try {
-      const [allEmp, allDel] = await Promise.all([api.getEmployees(), api.getDeliveries({ all: true, signAssets: false })])
+      const [allEmp, allDel] = await Promise.all([api.getEmployees({ signPhotos: false }), api.getDeliveries({ all: true, signAssets: false })])
       setDetailsEmployees(allEmp.filter(e => e.workplace_id === w.id && e.active))
       setDetailsDeliveries(allDel.filter(d => d.workplace_id === w.id))
     } catch (err) {
@@ -115,7 +115,7 @@ export default function WorkplacesPage() {
     if (!formData.id) return
     setIsDeleting(true)
     try {
-      const [allEmp, allDel] = await Promise.all([api.getEmployees(), api.getDeliveries({ all: true, signAssets: false })])
+      const [allEmp, allDel] = await Promise.all([api.getEmployees({ signPhotos: false }), api.getDeliveries({ all: true, signAssets: false })])
       const linkedEmp = allEmp.filter(e => e.workplace_id === formData.id && e.active).length
       const linkedDel = allDel.filter(d => d.workplace_id === formData.id).length
       setDeleteModal({ open: true, linkedEmp, linkedDel })

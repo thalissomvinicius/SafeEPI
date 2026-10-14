@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,30 +51,32 @@
 :root {
   --brand-color: #2563EB;
   --brand-color-strong: #1D4ED8;
+  --brand-tint: color-mix(in srgb, var(--brand-color) 7%, white);
+  --brand-border: color-mix(in srgb, var(--brand-color) 22%, white);
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: #1e293b;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: var(--brand-color);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --secondary: #f1f5f9;
+  --secondary-foreground: #334155;
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: var(--brand-color);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -84,54 +87,128 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-body.company-theme [class*="text-[#2563EB]"],
-body.company-theme [class*="text-blue-600"],
-body.company-theme [class*="text-blue-700"],
-body.company-theme [class*="group-hover:text-[#2563EB]"]:hover {
+/* Match complete utility tokens. A substring match would also apply
+   focus/hover styles at rest and replace a disabled button's neutral fill. */
+body.company-theme :is([class~="text-[#2563EB]"], [class~="text-blue-600"], [class~="text-blue-700"]):not(:disabled):not([aria-disabled="true"]) {
   color: var(--brand-color) !important;
 }
 
-body.company-theme [class*="bg-[#2563EB]"],
-body.company-theme [class*="bg-blue-600"],
-body.company-theme [class*="accent-[#2563EB]"] {
+body.company-theme :is([class~="hover:text-[#2563EB]"], [class~="hover:text-blue-600"]):hover,
+body.company-theme .group:hover [class~="group-hover:text-[#2563EB]"] {
+  color: var(--brand-color) !important;
+}
+
+body.company-theme :is([class~="bg-[#2563EB]"], [class~="bg-blue-600"]):not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--brand-color) !important;
+}
+
+body.company-theme [class~="accent-[#2563EB]"] {
   accent-color: var(--brand-color) !important;
 }
 
-body.company-theme [class*="hover:bg-[#1D4ED8]"]:hover,
-body.company-theme [class*="hover:bg-blue-700"]:hover {
+body.company-theme [class~="bg-blue-700"],
+body.company-theme :is([class~="hover:bg-[#1D4ED8]"], [class~="hover:bg-blue-700"]):hover:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--brand-color-strong) !important;
 }
 
-body.company-theme [class*="bg-[#2563EB]/5"],
-body.company-theme [class*="bg-[#2563EB]/10"],
-body.company-theme [class*="bg-blue-50"],
-body.company-theme [class*="bg-blue-100"] {
+body.company-theme [class~="hover:bg-[#2563EB]"]:hover:not(:disabled):not([aria-disabled="true"]),
+body.company-theme .group:hover [class~="group-hover:bg-[#2563EB]"]:not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--brand-color) !important;
+}
+
+body.company-theme :is(button:disabled, [aria-disabled="true"]):is([class~="bg-[#2563EB]"], [class~="bg-blue-600"], [class~="bg-blue-700"], [class~="bg-primary"]) {
+  background-color: #cbd5e1 !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+}
+
+body.company-theme [class~="bg-[#2563EB]/5"] {
+  background-color: color-mix(in srgb, var(--brand-color) 5%, transparent) !important;
+}
+
+body.company-theme [class~="bg-[#2563EB]/10"],
+body.company-theme .group:hover [class~="group-hover:bg-[#2563EB]/10"] {
+  background-color: color-mix(in srgb, var(--brand-color) 10%, transparent) !important;
+}
+
+body.company-theme [class~="bg-[#2563EB]/20"] {
+  background-color: color-mix(in srgb, var(--brand-color) 20%, transparent) !important;
+}
+
+body.company-theme [class~="text-[#2563EB]/20"] {
+  color: color-mix(in srgb, var(--brand-color) 20%, transparent) !important;
+}
+
+body.company-theme [class~="bg-blue-50"],
+body.company-theme [class~="hover:bg-blue-50"]:hover,
+body.company-theme .group:hover [class~="group-hover:bg-blue-50"] {
+  background-color: var(--brand-tint) !important;
+}
+
+body.company-theme [class~="bg-blue-100"],
+body.company-theme [class~="hover:bg-blue-100"]:hover {
   background-color: color-mix(in srgb, var(--brand-color) 10%, white) !important;
 }
 
-body.company-theme [class*="border-[#2563EB]"],
-body.company-theme [class*="border-[#2563EB]/20"],
-body.company-theme [class*="border-[#2563EB]/30"],
-body.company-theme [class*="border-blue-100"],
-body.company-theme [class*="border-blue-200"] {
-  border-color: color-mix(in srgb, var(--brand-color) 35%, white) !important;
+body.company-theme [class~="bg-blue-50/30"] {
+  background-color: color-mix(in srgb, var(--brand-tint) 30%, transparent) !important;
 }
 
-body.company-theme [class*="ring-[#2563EB]"],
-body.company-theme [class*="ring-[#2563EB]/10"] {
-  --tw-ring-color: color-mix(in srgb, var(--brand-color) 18%, transparent) !important;
+body.company-theme [class~="bg-blue-50/50"],
+body.company-theme [class~="hover:bg-blue-50/50"]:hover {
+  background-color: color-mix(in srgb, var(--brand-tint) 50%, transparent) !important;
 }
 
-body.company-theme [class*="focus:border-[#2563EB]"]:focus,
-body.company-theme [class*="focus:border-blue-600"]:focus {
+body.company-theme [class~="bg-blue-50/60"] {
+  background-color: color-mix(in srgb, var(--brand-tint) 60%, transparent) !important;
+}
+
+body.company-theme [class~="bg-blue-50/70"] {
+  background-color: color-mix(in srgb, var(--brand-tint) 70%, transparent) !important;
+}
+
+body.company-theme [class~="bg-blue-100/50"] {
+  background-color: color-mix(in srgb, var(--brand-color) 5%, white) !important;
+}
+
+body.company-theme :is([class~="border-[#2563EB]"], [class~="border-blue-500"]):not(:disabled):not([aria-disabled="true"]) {
   border-color: var(--brand-color) !important;
 }
 
-body.company-theme svg.text-\[\#2563EB\],
-body.company-theme svg.text-blue-600,
-body.company-theme .text-\[\#2563EB\] svg {
-  color: var(--brand-color) !important;
+body.company-theme [class~="border-[#2563EB]/10"] {
+  border-color: color-mix(in srgb, var(--brand-color) 10%, transparent) !important;
+}
+
+body.company-theme :is([class~="border-[#2563EB]/20"], [class~="border-blue-100"]) {
+  border-color: color-mix(in srgb, var(--brand-color) 20%, white) !important;
+}
+
+body.company-theme :is([class~="border-[#2563EB]/30"], [class~="border-blue-200"]),
+body.company-theme [class~="hover:border-[#2563EB]/30"]:hover {
+  border-color: color-mix(in srgb, var(--brand-color) 30%, white) !important;
+}
+
+body.company-theme [class~="border-[#2563EB]/45"] {
+  border-color: color-mix(in srgb, var(--brand-color) 45%, transparent) !important;
+}
+
+body.company-theme [class~="ring-[#2563EB]/10"] {
+  --tw-ring-color: color-mix(in srgb, var(--brand-color) 10%, transparent) !important;
+}
+
+body.company-theme :is([class~="focus:border-[#2563EB]"], [class~="focus:border-blue-500"], [class~="focus:border-blue-600"]):focus,
+body.company-theme [class~="focus-within:border-[#2563EB]"]:focus-within,
+body.company-theme [class~="hover:border-[#2563EB]"]:hover {
+  border-color: var(--brand-color) !important;
+}
+
+body.company-theme :is([class~="focus-visible:ring-[#2563EB]/20"], [class~="focus-visible:ring-blue-100"], [class~="focus-visible:ring-blue-200"]):focus-visible {
+  --tw-ring-color: color-mix(in srgb, var(--brand-color) 20%, transparent) !important;
+}
+
+body.company-theme [class~="focus-visible:ring-blue-400"]:focus-visible {
+  --tw-ring-color: color-mix(in srgb, var(--brand-color) 60%, transparent) !important;
 }
 
 [data-sonner-toaster][dir="ltr"],
@@ -239,9 +316,8 @@ html[dir="ltr"] {
   font-weight: 400 !important;
   line-height: 1.35 !important;
   opacity: 1 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+  overflow-wrap: anywhere !important;
+  white-space: normal !important;
 }
 
 .dark [data-sonner-toast][data-styled="true"] [data-description] {
@@ -277,7 +353,7 @@ html[dir="ltr"] {
   [data-sonner-toaster] {
     left: 16px !important;
     right: 16px !important;
-    bottom: 16px !important;
+    bottom: calc(env(safe-area-inset-bottom) + 5rem) !important;
     width: calc(100vw - 32px) !important;
   }
 
@@ -413,6 +489,12 @@ html[dir="ltr"] {
   }
   body {
     @apply bg-background text-foreground;
+    /* Resolve brand-derived tokens on the same element that receives the
+       selected company's color, rather than inheriting a resolved blue tint. */
+    --brand-tint: color-mix(in srgb, var(--brand-color) 7%, white);
+    --brand-border: color-mix(in srgb, var(--brand-color) 22%, white);
+    --primary: var(--brand-color);
+    --ring: var(--brand-color);
     min-height: 100dvh;
     width: 100%;
     max-width: 100%;
@@ -467,6 +549,73 @@ html[dir="ltr"] {
   transform: translateY(0);
 }
 
+/* A quiet, predictable workspace for long operational sessions. Brand changes
+   remain instant: only interaction transforms/opacity animate, never the theme. */
+.app-workspace {
+  scroll-padding-top: 1.5rem;
+  scrollbar-gutter: stable;
+}
+
+.custom-scrollbar,
+.app-workspace {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar,
+.app-workspace::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.app-workspace::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.app-workspace :where(h1, h2, h3) {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  text-transform: none;
+}
+
+.app-workspace :where(label, button, a) {
+  letter-spacing: normal;
+}
+
+.app-workspace :where(label) {
+  font-weight: 600;
+  text-transform: none;
+}
+
+.app-workspace :where(button, a)[class~="uppercase"] {
+  font-weight: 600;
+  text-transform: none;
+}
+
+.app-workspace :where(input, select, textarea):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+  border-radius: 0.75rem;
+}
+
+.app-workspace :where(thead th) {
+  letter-spacing: 0.015em;
+  text-transform: none;
+}
+
+.app-workspace :where(td, th) {
+  font-variant-numeric: tabular-nums;
+}
+
+.safeepi-panel-enter {
+  animation: safeepi-panel-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes safeepi-panel-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 [class~="text-[9px]"],
 [class~="text-[10px]"] {
   font-size: 0.75rem !important;
@@ -478,6 +627,9 @@ html[dir="ltr"] {
   select,
   textarea {
     font-size: 16px !important;
+  }
+  .app-workspace :where(button, [data-slot="button"]) {
+    min-height: 44px;
   }
 }
 

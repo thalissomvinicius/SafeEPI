@@ -47,9 +47,6 @@ async function validateRemoteLink(linkToken: string | null, employeeId: string |
 }
 
 export async function POST(request: Request) {
-  const limited = await rateLimit(`upload:signed-documents-url:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
-  if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
-
   try {
   assertRequestSize(request, 64 * 1024)
   const formData = await request.formData()
@@ -87,6 +84,11 @@ export async function POST(request: Request) {
 
   if (!companyId) {
     return NextResponse.json({ error: "Empresa atual nao identificada para preparar upload." }, { status: 400 })
+  }
+
+  if (documentType === "training_certificate") {
+    const limited = await rateLimit(`upload:signed-documents-url:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
+    if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
   }
 
   const requestedFileName = fields.file_name || "documento_assinado.pdf"

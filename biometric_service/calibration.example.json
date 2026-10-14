@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "approved": false,
+  "calibration_id": "REPLACE_AFTER_VALIDATION",
+  "approved_by": "REPLACE_WITH_RESPONSIBLE_REVIEWER",
+  "valid_until": "REPLACE_WITH_ISO_UTC_EXPIRY",
+  "model_id": "opencv-sface-2021dec",
+  "model_sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+  "detector_sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+  "similarity_threshold": null,
+  "pad_model_id": "minifasnetv2-2.7-80x80",
+  "pad_filename": "reviewed-minifasnetv2.onnx",
+  "pad_sha256": "REPLACE_WITH_REVIEWED_EXPORT_SHA256",
+  "pad_threshold": null,
+  "pad_preprocessing": "yunet-2023mar-max960-minifasnet-2.7-bgr-0-255-nchw-80-v1",
+  "pad_output": "logits-1x3-live-index-1",
+  "validation_report_filename": "validation-report.pdf",
+  "validation_report_sha256": "REPLACE_WITH_REPORT_SHA256",
+  "commercial_use_review_ref": "REPLACE_WITH_WEIGHTS_AND_TRAINING_PROVENANCE_REVIEW",
+  "validated_attacks": []
+}

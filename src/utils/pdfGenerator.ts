@@ -14,6 +14,17 @@ import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 let [r, g, b] = COMPANY_CONFIG.primaryColorRgb
 type AuthMethod = 'manual' | 'facial' | 'manual_facial' | 'fingerprint'
 
+function normalizeLegacyPdfText(value: string | null | undefined) {
+  const replacements: Array<[string, string]> = [
+    ["Ã§", "ç"], ["Ã£", "ã"], ["Ã¡", "á"], ["Ã ", "à"], ["Ã¢", "â"],
+    ["Ã©", "é"], ["Ãª", "ê"], ["Ã­", "í"], ["Ã³", "ó"],
+    ["Ã´", "ô"], ["Ãµ", "õ"], ["Ãº", "ú"], ["Ãƒ", "Ã"],
+    ["Âº", "º"], ["Âª", "ª"], ["Â·", "·"],
+    ["â€¢", "•"], ["â€“", "–"], ["â€”", "—"],
+  ]
+  return replacements.reduce((text, [broken, fixed]) => text.replaceAll(broken, fixed), value || "")
+}
+
 function refreshPdfBrand() {
   const brand = getStoredBrand()
   ;[r, g, b] = hexToRgb(brand.primaryColor)
@@ -62,102 +73,60 @@ function addPdfLogo(doc: jsPDF, x: number, y: number, maxW: number, maxH: number
 
 function addPageHeader(doc: jsPDF, title: string, subtitle: string) {
   const pageWidth = doc.internal.pageSize.getWidth()
-
+  // A restrained stationery header stays legible in print and leaves the
+  // company identity in the accent, rather than filling the paper with ink.
   doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pageWidth, 38, "F")
-
-  doc.setFillColor(r + 30, g + 30, b + 30)
-  doc.rect(0, 34, pageWidth, 4, "F")
-
-  doc.setTextColor(255, 255, 255)
+  doc.rect(14, 6, pageWidth - 28, 1.2, "F")
+  doc.setTextColor(r, g, b)
   doc.setFontSize(8)
   doc.setFont("helvetica", "bold")
-  if (!addPdfLogo(doc, 14, 7, 24, 14)) {
-    doc.text(getPdfCompanyName().toUpperCase(), 14, 13)
+  if (!addPdfLogo(doc, 14, 10, 24, 9)) {
+    const companyLines = doc.splitTextToSize(getPdfCompanyName().toUpperCase(), pageWidth - 85) as string[]
+    doc.text(companyLines, 14, 15, { lineHeightFactor: 1.15 })
   }
-
-  doc.setFontSize(14)
+  doc.setTextColor(30, 41, 59)
+  doc.setFontSize(12.5)
   doc.setFont("helvetica", "bold")
-  doc.text(title, pageWidth / 2, 22, { align: "center" })
-
-  doc.setFontSize(8)
+  doc.text(title, 14, 27)
+  doc.setFontSize(7.5)
   doc.setFont("helvetica", "normal")
-  doc.text(subtitle, pageWidth / 2, 30, { align: "center" })
-
+  doc.setTextColor(100, 116, 139)
+  doc.text(subtitle, 14, 33)
+  doc.setFontSize(6.5)
+  doc.text("EMISSÃO DO DOCUMENTO", pageWidth - 14, 12, { align: "right" })
   doc.setFontSize(7)
-  doc.text(format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR }), pageWidth - 14, 13, { align: "right" })
-
+  doc.text(format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR }), pageWidth - 14, 17, { align: "right" })
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.25)
+  doc.line(14, 38, pageWidth - 14, 38)
   doc.setTextColor(30, 41, 59)
 }
 
-function addPageFooter(doc: jsPDF, hash?: string, ip?: string) {
+function addDocumentFooters(doc: jsPDF, label: string) {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-
-  doc.setFillColor(248, 250, 252)
-  doc.rect(0, pageHeight - 16, pageWidth, 16, "F")
-
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.line(14, pageHeight - 16, pageWidth - 14, pageHeight - 16)
-
-  doc.setFontSize(6)
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(100, 116, 139)
-
-  const left = `${COMPANY_CONFIG.systemName} • NR-06 Compliance • Identidade Digital Verificada`
-  const right = hash ? `Hash: ${hash} | IP: ${ip || 'N/A'}` : `Emitido em ${format(new Date(), "dd/MM/yyyy")}`
-  doc.text(left, 14, pageHeight - 6)
-  doc.text(right, pageWidth - 14, pageHeight - 6, { align: "right" })
-}
-
-function addFootersToEveryPage(doc: jsPDF, hash?: string, ip?: string) {
-  const lastPage = doc.getNumberOfPages()
-  for (let page = 1; page <= lastPage; page += 1) {
+  const totalPages = doc.getNumberOfPages()
+  for (let page = 1; page <= totalPages; page += 1) {
     doc.setPage(page)
-    addPageFooter(doc, hash, ip)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.25)
+    doc.line(14, pageHeight - 18, pageWidth - 14, pageHeight - 18)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(6.5)
+    doc.setTextColor(100, 116, 139)
+    const footerLines = doc.splitTextToSize(`${COMPANY_CONFIG.systemName} • ${label}`, pageWidth - 70) as string[]
+    doc.text(footerLines, 14, pageHeight - 12, { lineHeightFactor: 1.1 })
+    doc.text(`Página ${page} de ${totalPages}`, pageWidth - 14, pageHeight - 12, { align: "right" })
   }
-  doc.setPage(lastPage)
 }
 
-function normalizeLegacyPdfText(value: string | null | undefined) {
-  const text = value || ""
-  const replacements: Array<[string, string]> = [
-    ["Ã§", "ç"], ["Ã£", "ã"], ["Ã¡", "á"], ["Ã ", "à"], ["Ã¢", "â"],
-    ["Ã©", "é"], ["Ãª", "ê"], ["Ã­", "í"], ["Ã³", "ó"],
-    ["Ã´", "ô"], ["Ãµ", "õ"], ["Ãº", "ú"], ["Ãƒ", "Ã"],
-    ["Âº", "º"], ["Âª", "ª"], ["Â·", "·"],
-    ["â€¢", "•"], ["â€“", "–"], ["â€”", "—"],
-  ]
-
-  return replacements.reduce((normalized, [broken, fixed]) => normalized.replaceAll(broken, fixed), text)
-}
-
-function fitSingleLineText(doc: jsPDF, value: string | null | undefined, maxWidth: number) {
-  const text = normalizeLegacyPdfText(value) || "-"
-  if (doc.getTextWidth(text) <= maxWidth) return text
-
-  const suffix = "…"
-  let low = 0
-  let high = text.length
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2)
-    if (doc.getTextWidth(`${text.slice(0, middle).trimEnd()}${suffix}`) <= maxWidth) low = middle
-    else high = middle - 1
-  }
-  return `${text.slice(0, low).trimEnd()}${suffix}`
-}
-
-function infoRow(doc: jsPDF, label: string, value: string, x: number, y: number, maxWidth?: number) {
+function addReportHeader(doc: jsPDF, title: string, subtitle: string, context: string) {
+  addPageHeader(doc, title, subtitle)
   doc.setFont("helvetica", "bold")
-  doc.setFontSize(7.5)
-  doc.setTextColor(100, 116, 139)
-  doc.text(label.toUpperCase(), x, y)
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(9)
-  doc.setTextColor(30, 41, 59)
-  doc.text(maxWidth ? fitSingleLineText(doc, value, maxWidth) : normalizeLegacyPdfText(value) || "-", x, y + 5)
+  doc.setFontSize(7)
+  doc.setTextColor(r, g, b)
+  const lines = doc.splitTextToSize(context || "Conjunto completo", doc.internal.pageSize.getWidth() - 30) as string[]
+  doc.text(lines, 14, 45, { lineHeightFactor: 1.2 })
 }
 
 function drawManualSignatureLine(
@@ -175,14 +144,17 @@ function drawManualSignatureLine(
   doc.setFont("helvetica", "bold")
   doc.setFontSize(7.5)
   doc.setTextColor(30, 41, 59)
-  doc.text((signerName || "Responsavel pela assinatura").toUpperCase(), centerX, lineY + 5, { align: "center" })
+  const nameLines = doc.splitTextToSize((signerName || "Responsavel pela assinatura").toUpperCase(), width) as string[]
+  doc.text(nameLines, centerX, lineY + 5, { align: "center", lineHeightFactor: 1.25 })
+  const nameOffset = (nameLines.length - 1) * 3.3
   doc.setFont("helvetica", "normal")
   doc.setFontSize(6.5)
   doc.setTextColor(100, 116, 139)
-  doc.text(role, centerX, lineY + 9, { align: "center" })
+  const roleLines = doc.splitTextToSize(role, width) as string[]
+  doc.text(roleLines, centerX, lineY + 9 + nameOffset, { align: "center", lineHeightFactor: 1.2 })
   doc.setFontSize(6)
   doc.setTextColor(148, 163, 184)
-  doc.text(note, centerX, lineY + 13, { align: "center" })
+  doc.text(note, centerX, lineY + 13 + nameOffset + (roleLines.length - 1) * 2.8, { align: "center" })
 }
 
 function drawSignatureCellLine(doc: jsPDF, cell: { x: number; y: number; width: number; height: number }) {
@@ -210,17 +182,43 @@ export interface DeliveryPDFData {
   authMethod: AuthMethod
   signatureBase64?: string
   photoBase64?: string
-  fingerprintEvidence?: {
-    code: string
-    terminalName: string
-    completedAt: string
-    resultHash: string
-  }
+  fingerprintEvidence?: FingerprintReceiptMetadata
   ipAddress?: string
   location?: string
   locationSource?: "device" | "network"
   validationHash?: string
   deliveryDate?: string
+  biometricReceipt?: BiometricReceiptMetadata
+}
+
+export interface FingerprintReceiptMetadata {
+  code: string
+  terminalName: string
+  completedAt: string
+  resultHash: string
+}
+
+/** Receipt fields must come from the server response after transaction confirmation.
+ * This renderer displays evidence; it is not a biometric or cryptographic verifier.
+ */
+export interface BiometricReceiptMetadata {
+  session_id: string
+  accepted_at: string
+  model_id: string
+  calibration_id: string
+  context_hash: string
+  similarity?: number
+  threshold?: number
+  pad_model_id?: string
+}
+
+function completeBiometricReceipt(value?: BiometricReceiptMetadata): value is BiometricReceiptMetadata {
+  if (!value || typeof value !== "object") return false
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.session_id || "")
+    && [value.model_id, value.calibration_id].every(part => typeof part === "string" && part.trim().length > 0)
+    && /^[0-9a-f]{64}$/i.test(value.context_hash || "")
+    && typeof value.accepted_at === "string"
+    && Number.isFinite(Date.parse(value.accepted_at))
 }
 
 export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> {
@@ -228,334 +226,232 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const hash = data.validationHash || generateAuditCode()
-
-  const pdfItems = data.items && data.items.length > 0
+  const margin = 14
+  const contentWidth = pageWidth - margin * 2
+  const bottom = pageHeight - 24
+  const reference = data.validationHash || generateAuditCode()
+  const receipt = data.authMethod === "facial" && completeBiometricReceipt(data.biometricReceipt)
+    ? data.biometricReceipt
+    : undefined
+  const pdfItems = data.items?.length
     ? data.items
     : [{ ppeName: data.ppeName || "", ppeCaNumber: data.ppeCaNumber || "", caExpiry: data.ppeCaExpiry, quantity: data.quantity || 0, reason: data.reason || "" }]
-
-  addPageHeader(doc, "FICHA DE ENTREGA DE EPI", "NR-06 | Certificado de Uso Individual")
-
   const today = data.deliveryDate
     ? `${formatDeliveryDate(data.deliveryDate)} ${formatDeliveryTime(data.deliveryDate)}`
     : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })
+  let currentY = 49
 
-  let currentY = 50
-  doc.setFillColor(255, 255, 255)
-  doc.setDrawColor(230, 230, 230)
-  doc.roundedRect(14, currentY, pageWidth - 28, 35, 3, 3, "S")
+  const header = () => addPageHeader(doc, "FICHA DE ENTREGA DE EPI", "Registro de recebimento e evidências")
+  header()
 
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(12)
-  doc.setTextColor(r, g, b)
-  doc.text(fitSingleLineText(doc, data.employeeName.toUpperCase(), pageWidth - 40), 20, currentY + 10)
+  const ensureSpace = (height: number) => {
+    if (currentY + height <= bottom) return
+    doc.addPage()
+    header()
+    currentY = 49
+  }
+  const write = (value: string, size = 8, bold = false, color: [number, number, number] = [30, 41, 59], width = contentWidth) => {
+    doc.setFont("helvetica", bold ? "bold" : "normal")
+    doc.setFontSize(size)
+    const lineHeight = size / doc.internal.scaleFactor * doc.getLineHeightFactor() + 0.8
+    // Built-in Helvetica metrics are rounded; a small inset also keeps long,
+    // unbroken identifiers inside the margins in precise PDF renderers.
+    const lines = doc.splitTextToSize(normalizeLegacyPdfText(value) || "-", width - 2) as string[]
+    for (const line of lines) {
+      ensureSpace(lineHeight)
+      // A continuation header changes text styling, so restore it for every line.
+      doc.setFont("helvetica", bold ? "bold" : "normal")
+      doc.setFontSize(size)
+      doc.setTextColor(...color)
+      doc.text(line, margin, currentY)
+      currentY += lineHeight
+    }
+  }
+  const field = (label: string, value: string, width = contentWidth) => {
+    ensureSpace(11)
+    write(label.toUpperCase(), 6.5, true, [100, 116, 139])
+    write(value, 8, false, [30, 41, 59], width)
+    currentY += 1
+  }
+  const section = (title: string) => {
+    ensureSpace(15)
+    doc.setDrawColor(226, 232, 240)
+    doc.line(margin, currentY - 3, pageWidth - margin, currentY - 3)
+    write(title, 9, true, [r, g, b])
+    currentY += 1
+  }
 
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8)
-  doc.setTextColor(100, 116, 139)
+  write(data.employeeName.toUpperCase(), 12, true, [r, g, b])
+  currentY += 4
+  const identityFields = [
+    { label: "CPF", value: data.employeeCpf },
+    { label: "Cargo / função", value: data.employeeRole || "Não informado" },
+    { label: "Unidade / canteiro", value: data.workplaceName || "Sede" },
+    { label: "Data da entrega", value: today },
+  ]
+  const identityColumnWidth = (contentWidth - 8) / 2
+  for (let row = 0; row < 2; row += 1) {
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(8.5)
+    const values = identityFields.slice(row * 2, row * 2 + 2).map(entry => ({
+      ...entry,
+      lines: doc.splitTextToSize(normalizeLegacyPdfText(entry.value), identityColumnWidth - 2) as string[],
+    }))
+    const rowHeight = 8 + Math.max(...values.map(entry => entry.lines.length)) * 4
+    ensureSpace(rowHeight)
+    values.forEach((entry, column) => {
+      const x = margin + column * (identityColumnWidth + 8)
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(6.5)
+      doc.setTextColor(100, 116, 139)
+      doc.text(entry.label.toUpperCase(), x, currentY)
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(8.5)
+      doc.setTextColor(30, 41, 59)
+      doc.text(entry.lines, x, currentY + 5, { lineHeightFactor: 1.3 })
+    })
+    currentY += rowHeight + 3
+  }
+  section("EQUIPAMENTOS ENTREGUES")
+  ensureSpace(24)
 
-  doc.text("CPF", 20, currentY + 18)
-  doc.setTextColor(30, 41, 59)
-  doc.setFont("helvetica", "bold")
-  doc.text(data.employeeCpf, 20, currentY + 23)
-
-  doc.setTextColor(100, 116, 139)
-  doc.setFont("helvetica", "normal")
-  doc.text("CARGO / FUNÇÃO", pageWidth / 2, currentY + 18)
-  doc.setTextColor(30, 41, 59)
-  doc.setFont("helvetica", "bold")
-  doc.text(fitSingleLineText(doc, data.employeeRole || "Não Informado", 62), pageWidth / 2, currentY + 23)
-
-  doc.setTextColor(100, 116, 139)
-  doc.setFont("helvetica", "normal")
-  doc.text("UNIDADE / CANTEIRO", pageWidth - 20, currentY + 18, { align: "right" })
-  doc.setTextColor(30, 41, 59)
-  doc.setFont("helvetica", "bold")
-  doc.text(fitSingleLineText(doc, data.workplaceName || "Sede", 62), pageWidth - 20, currentY + 23, { align: "right" })
-
-  currentY += 45
+  const tableStartPage = doc.getCurrentPageInfo().pageNumber
   autoTable(doc, {
     startY: currentY,
     head: [["Equipamento (EPI)", "Nº CA", "Venc. CA", "Qtd", "Motivo", "Data Entrega"]],
     body: pdfItems.map(item => [
       normalizeLegacyPdfText(item.ppeName),
       item.ppeCaNumber,
-      item.caExpiry ? format(new Date(item.caExpiry), "dd/MM/yyyy") : "-",
+      item.caExpiry ? formatDateOnly(item.caExpiry) : "-",
       String(item.quantity),
       normalizeLegacyPdfText(item.autoReturnNote ? `${item.reason}\n${item.autoReturnNote}` : item.reason),
-      data.deliveryDate ? `${formatDeliveryDate(data.deliveryDate)} ${formatDeliveryTime(data.deliveryDate)}` : format(new Date(), "dd/MM/yyyy HH:mm")
+      today,
     ]),
-    styles: { fontSize: 8.5, cellPadding: 4, font: "helvetica" },
-    headStyles: { fillColor: [245, 245, 245], textColor: [71, 85, 105], fontStyle: "bold" },
-    margin: { top: 45, right: 14, bottom: 22, left: 14 },
-    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 3, font: "helvetica", overflow: "linebreak", lineColor: [226, 232, 240], lineWidth: 0.15, textColor: [30, 41, 59] },
+    headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: "bold", fontSize: 7 },
+    alternateRowStyles: { fillColor: [250, 251, 253] },
+    columnStyles: { 0: { cellWidth: 57, fontStyle: "bold" }, 1: { cellWidth: 19, halign: "center" }, 2: { cellWidth: 23, halign: "center" }, 3: { cellWidth: 13, halign: "center", fontStyle: "bold" }, 5: { cellWidth: 27 } },
+    margin: { left: margin, right: margin, top: 46, bottom: 24 },
+    theme: "striped",
+    rowPageBreak: "avoid",
     didDrawPage: () => {
-      if (doc.getCurrentPageInfo().pageNumber > 1) {
-        addPageHeader(doc, "FICHA DE ENTREGA DE EPI", "NR-06 | Certificado de Uso Individual")
-      }
+      if (doc.getCurrentPageInfo().pageNumber > tableStartPage) header()
     },
   })
-
   // @ts-expect-error - jsPDF-autotable adds lastAutoTable to doc
-  currentY = doc.lastAutoTable.finalY + 15
-  const signatureBlockHeight = data.authMethod === "facial"
-    ? 80
-    : data.authMethod === "fingerprint"
-      ? 66
-    : data.authMethod === "manual_facial" && data.photoBase64 && data.signatureBase64
-      ? 62
-      : 58
-  const requiredLegalBlockHeight = 35 + signatureBlockHeight + 45
-  if (currentY + requiredLegalBlockHeight > pageHeight - 18) {
-    doc.addPage()
-    addPageHeader(doc, "FICHA DE ENTREGA DE EPI", "NR-06 | Certificado de Uso Individual")
-    currentY = 50
+  currentY = doc.lastAutoTable.finalY + 12
+
+  section("TERMO DE RECEBIMENTO")
+  write("Declaro ter recebido o(s) EPI(s) listado(s) neste comprovante em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m) e a cuidar de sua guarda e conservação. A forma de confirmação e as evidências disponíveis estão descritas abaixo.", 7.5)
+  currentY += 5
+
+  section("FORMA DE CONFIRMAÇÃO")
+  const hasManualSignature = (data.authMethod === "manual" || data.authMethod === "manual_facial") && Boolean(data.signatureBase64)
+  const supportingPhoto = data.authMethod === "manual_facial" ? data.photoBase64 : undefined
+  const facePhoto = data.authMethod === "facial" ? data.photoBase64 || data.signatureBase64 : undefined
+  if (data.authMethod === "fingerprint") {
+    write(data.fingerprintEvidence ? "Confirmação por impressão digital registrada" : "Impressão digital — evidência indisponível neste arquivo", 9, true)
+  } else if (receipt) {
+    write("Verificação facial registrada", 9, true)
+  } else if (data.authMethod === "facial") {
+    write("Registro fotográfico — verificação biométrica não comprovada neste arquivo", 8, true)
+  } else if (data.authMethod === "manual_facial") {
+    write(hasManualSignature ? "Assinatura manual com foto de apoio" : "Foto de apoio; assinatura manual pendente", 8, true)
+  } else {
+    write(hasManualSignature ? "Assinatura manual registrada" : "Assinatura manual pendente", 8, true)
   }
-  doc.setFillColor(255, 255, 255)
-  doc.roundedRect(14, currentY, pageWidth - 28, 25, 2, 2, "S")
+  currentY += 2
 
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(r, g, b)
-  doc.text("TERMO DE RESPONSABILIDADE", 20, currentY + 7)
-
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(7.5)
-  doc.setTextColor(71, 85, 105)
-  const termText = "Declaro ter recebido o(s) EPI(s) listado(s) acima em perfeito estado, comprometendo-me a utilizá-lo(s) para a finalidade a que se destina(m), responsabilizando-me pela sua guarda e conservação conforme NR-06 do MTE."
-  const splitTerm = doc.splitTextToSize(termText, pageWidth - 36)
-  doc.text(splitTerm, 18, currentY + 13, { align: "left" })
-
-  currentY += 35
-
-  const hasSignature = Boolean(data.signatureBase64)
-  const hasManualAndPhoto = data.authMethod === 'manual_facial' && Boolean(data.photoBase64) && hasSignature
-  let isPhoto = data.authMethod === 'facial'
-  let imgRatio = 1
-
-  if (hasSignature && data.signatureBase64) {
-    try {
-      const imgProps = doc.getImageProperties(data.signatureBase64)
-      imgRatio = imgProps.width / imgProps.height
-      if (imgRatio <= 1.5) isPhoto = true
-      if (imgRatio > 2.5) isPhoto = false
-    } catch { /* keep declared method */ }
+  if (facePhoto || supportingPhoto || hasManualSignature) {
+    const imageHeight = facePhoto ? 45 : supportingPhoto ? 38 : 30
+    ensureSpace(imageHeight + 7)
+    doc.setDrawColor(226, 232, 240)
+    if (facePhoto) {
+      const x = (pageWidth - 45) / 2
+      doc.roundedRect(x, currentY, 45, 45, 2, 2, "S")
+      try { addImageContained(doc, facePhoto, x + 2, currentY + 2, 41, 41) } catch { /* The modality above remains explicit even when an old asset is unavailable. */ }
+    } else {
+      const signatureX = supportingPhoto ? 74 : (pageWidth - 100) / 2
+      if (supportingPhoto) {
+        doc.roundedRect(24, currentY, 38, 38, 2, 2, "S")
+        try { addImageContained(doc, supportingPhoto, 26, currentY + 2, 34, 34) } catch { /* Optional supporting photo. */ }
+      }
+      if (hasManualSignature && data.signatureBase64) {
+        doc.roundedRect(signatureX, currentY, 100, 30, 2, 2, "S")
+        try { addImageContained(doc, data.signatureBase64, signatureX + 3, currentY + 3, 94, 24) } catch { /* Preserve the receipt if an archived image cannot be decoded. */ }
+      }
+    }
+    currentY += imageHeight + 7
   }
+  if ((data.authMethod === "manual" || data.authMethod === "manual_facial") && !hasManualSignature) {
+    ensureSpace(27)
+    currentY += 15
+    doc.setDrawColor(148, 163, 184)
+    doc.line(margin + 25, currentY, pageWidth - margin - 25, currentY)
+    currentY += 5
+    write("Assinar manualmente sobre a linha", 7, false, [100, 116, 139])
+  }
+  write(data.employeeName.toUpperCase(), 8, true)
+  currentY += 5
 
   if (data.authMethod === "fingerprint" && data.fingerprintEvidence) {
     const evidence = data.fingerprintEvidence
-    const boxW = 124
-    const boxH = 43
-    const boxX = (pageWidth - boxW) / 2
-
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(8)
-    doc.setTextColor(30, 64, 175)
-    doc.text("CONFIRMAÇÃO POR IMPRESSÃO DIGITAL", pageWidth / 2, currentY, { align: "center" })
-
-    doc.setDrawColor(147, 197, 253)
-    doc.setFillColor(239, 246, 255)
-    doc.roundedRect(boxX, currentY + 5, boxW, boxH, 3, 3, "FD")
-    doc.setFillColor(37, 99, 235)
-    doc.circle(boxX + 13, currentY + 18, 7, "F")
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(10)
-    doc.text("OK", boxX + 13, currentY + 20.5, { align: "center" })
-
-    doc.setTextColor(30, 41, 59)
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
-    doc.text("DIGITAL CONFIRMADA NO ATO DA ENTREGA", boxX + 24, currentY + 14)
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(71, 85, 105)
-    doc.text(`Evidência: ${evidence.code}`, boxX + 24, currentY + 21)
-    doc.text(`Terminal: ${fitSingleLineText(doc, evidence.terminalName, 68)}`, boxX + 24, currentY + 27)
-    doc.text(`Data/hora: ${formatDeliveryDate(evidence.completedAt)} ${formatDeliveryTime(evidence.completedAt)}`, boxX + 24, currentY + 33)
-    doc.setFont("courier", "normal")
-    doc.setFontSize(5.5)
-    doc.setTextColor(100, 116, 139)
-    doc.text(`Resultado: ${evidence.resultHash.slice(0, 32) || "registrado no histórico auditável"}`, boxX + 24, currentY + 39)
-
-    currentY += boxH + 17
-  } else if (hasManualAndPhoto && data.photoBase64 && data.signatureBase64) {
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(8)
-    doc.setTextColor(71, 85, 105)
-    doc.text("FOTO E ASSINATURA DO COLABORADOR", pageWidth / 2, currentY, { align: "center" })
-
-    const photoSize = 38
-    const sigBoxW = 92
-    const sigBoxH = 30
-    const groupW = photoSize + 12 + sigBoxW
-    const photoX = (pageWidth - groupW) / 2
-    const sigBoxX = photoX + photoSize + 12
-    const boxY = currentY + 5
-
-    doc.setDrawColor(226, 232, 240)
-    doc.setFillColor(248, 250, 252)
-    doc.roundedRect(photoX, boxY, photoSize, photoSize, 3, 3, "FD")
-    try {
-      const photoProps = doc.getImageProperties(data.photoBase64)
-      const photoRatio = photoProps.width / photoProps.height
-      let drawW = photoSize - 3
-      let drawH = drawW / photoRatio
-      if (drawH > photoSize - 3) {
-        drawH = photoSize - 3
-        drawW = drawH * photoRatio
-      }
-      doc.addImage(data.photoBase64, getImageFormat(data.photoBase64), photoX + (photoSize - drawW) / 2, boxY + (photoSize - drawH) / 2, drawW, drawH)
-    } catch (error) {
-      throw new Error("Nao foi possivel inserir a foto de evidencia no PDF.", { cause: error })
-    }
-
-    doc.setFillColor(252, 252, 252)
-    doc.roundedRect(sigBoxX, boxY + 4, sigBoxW, sigBoxH, 2, 2, "FD")
-    try {
-      const sigProps = doc.getImageProperties(data.signatureBase64)
-      const sigRatio = sigProps.width / sigProps.height
-      let drawW = sigBoxW - 8
-      let drawH = drawW / sigRatio
-      if (drawH > sigBoxH - 6) {
-        drawH = sigBoxH - 6
-        drawW = drawH * sigRatio
-      }
-      doc.addImage(data.signatureBase64, getImageFormat(data.signatureBase64), sigBoxX + (sigBoxW - drawW) / 2, boxY + 4 + (sigBoxH - drawH) / 2, drawW, drawH)
-    } catch (error) {
-      throw new Error("Nao foi possivel inserir a assinatura no PDF.", { cause: error })
-    }
-
-    doc.setDrawColor(200, 200, 200)
-    doc.line(sigBoxX + 8, boxY + sigBoxH + 8, sigBoxX + sigBoxW - 8, boxY + sigBoxH + 8)
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(30, 41, 59)
-    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, boxY + photoSize + 9, { align: "center" })
-    doc.setFontSize(6.5)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(148, 163, 184)
-    doc.text("Foto capturada no ato + assinatura manual coletada no ato", pageWidth / 2, boxY + photoSize + 14, { align: "center" })
-
-    currentY += photoSize + 24
-  } else if (isPhoto && data.signatureBase64) {
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(8)
-    doc.setTextColor(71, 85, 105)
-    doc.text("AUTENTICAÇÃO BIOMÉTRICA", pageWidth / 2, currentY, { align: "center" })
-
-    const containerSize = 50
-    const containerX = pageWidth / 2 - containerSize / 2
-    doc.setDrawColor(226, 232, 240)
-    doc.setFillColor(248, 250, 252)
-    doc.roundedRect(containerX - 2, currentY + 5, containerSize + 4, containerSize + 4, 3, 3, "FD")
-
-    try {
-      let drawW: number, drawH: number
-      if (imgRatio >= 1) {
-        drawW = containerSize
-        drawH = containerSize / imgRatio
-      } else {
-        drawH = containerSize
-        drawW = containerSize * imgRatio
-      }
-      const drawX = containerX + (containerSize - drawW) / 2
-      const drawY = currentY + 7 + (containerSize - drawH) / 2
-      doc.addImage(data.signatureBase64, getImageFormat(data.signatureBase64), drawX, drawY, drawW, drawH)
-    } catch (e) {
-      throw new Error("Nao foi possivel inserir a biometria facial no PDF.", { cause: e })
-    }
-
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(9)
-    doc.setTextColor(30, 41, 59)
-    doc.text(data.employeeName.toUpperCase(), pageWidth / 2, currentY + containerSize + 16, { align: "center" })
-
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(148, 163, 184)
-    doc.text("Identidade validada por IA (Faceplugin / ONNX)", pageWidth / 2, currentY + containerSize + 21, { align: "center" })
-
-    currentY += containerSize + 30
-  } else {
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(8)
-    doc.setTextColor(71, 85, 105)
-    doc.text(hasSignature ? "ASSINATURA DO COLABORADOR" : "ASSINATURA DO COLABORADOR (MANUAL)", pageWidth / 2, currentY, { align: "center" })
-
-    const sigBoxW = 100
-    const sigBoxH = 30
-    const sigBoxX = (pageWidth - sigBoxW) / 2
-
-    doc.setDrawColor(226, 232, 240)
-    doc.setFillColor(252, 252, 252)
-    doc.roundedRect(sigBoxX, currentY + 4, sigBoxW, sigBoxH, 2, 2, "FD")
-
-    if (data.signatureBase64) try {
-      const imgProps = doc.getImageProperties(data.signatureBase64)
-      const sigRatio = imgProps.width / imgProps.height
-      let drawW = sigBoxW - 8
-      let drawH = drawW / sigRatio
-      if (drawH > sigBoxH - 6) {
-        drawH = sigBoxH - 6
-        drawW = drawH * sigRatio
-      }
-      const drawX = sigBoxX + (sigBoxW - drawW) / 2
-      const drawY = currentY + 4 + (sigBoxH - drawH) / 2
-      doc.addImage(data.signatureBase64, getImageFormat(data.signatureBase64), drawX, drawY, drawW, drawH)
-    } catch (error) {
-      throw new Error("Nao foi possivel inserir a assinatura no PDF.", { cause: error })
-    }
-
-    drawManualSignatureLine(
-      doc,
-      pageWidth / 2,
-      currentY + sigBoxH + 6,
-      sigBoxW - 20,
-      data.employeeName,
-      hasSignature ? "Assinatura digital registrada" : "Assinatura presencial do colaborador"
-    )
-
-    currentY += sigBoxH + 28
+    section("EVIDÊNCIAS DA IMPRESSÃO DIGITAL")
+    field("Código da evidência", evidence.code)
+    field("Terminal de confirmação", evidence.terminalName)
+    field("Data e hora da confirmação", `${formatDeliveryDate(evidence.completedAt)} ${formatDeliveryTime(evidence.completedAt)}`)
+    field("Hash do resultado registrado", evidence.resultHash)
+    write("As informações acima identificam a evidência registrada pelo terminal e devem ser conferidas no histórico do sistema.", 7, false, [100, 116, 139])
+    currentY += 6
   }
 
-  doc.setFillColor(252, 252, 252)
-  doc.setDrawColor(240, 240, 240)
-  doc.roundedRect(14, currentY, pageWidth - 28, 35, 3, 3, "FD")
+  if (receipt) {
+    section("EVIDÊNCIAS DA TRANSAÇÃO")
+    field("Sessão de verificação", receipt.session_id)
+    field("Aceite do recebimento (horário do servidor, UTC)", new Date(receipt.accepted_at).toISOString())
+    field("Modelo de reconhecimento", receipt.model_id)
+    field("Calibração aplicada", receipt.calibration_id)
+    if (receipt.pad_model_id) field("Modelo de prova de vida", receipt.pad_model_id)
+    if (typeof receipt.similarity === "number" && Number.isFinite(receipt.similarity)
+      && typeof receipt.threshold === "number" && Number.isFinite(receipt.threshold)) {
+      field("Comparação e limiar aplicados", `${receipt.similarity.toFixed(4)} / ${receipt.threshold.toFixed(4)}`)
+    }
+    field("SHA-256 do contexto da transação", receipt.context_hash)
+    write("Esses dados identificam o registro mantido pelo sistema. Este PDF não é um certificado ICP-Brasil; o hash do contexto não comprova, isoladamente, a autoria do aceite.", 7, false, [100, 116, 139])
+    currentY += 6
+  }
 
-  const metaX = 20
-  doc.setFontSize(7)
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(148, 163, 184)
-  doc.text("HASH DE VALIDAÇÃO", metaX, currentY + 10)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(71, 85, 105)
-  doc.text(hash, metaX, currentY + 14)
-
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(148, 163, 184)
-  doc.text("IP DO TERMINAL", metaX, currentY + 21)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(71, 85, 105)
-  doc.text(data.ipAddress || "Remoto", metaX, currentY + 25)
-
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(148, 163, 184)
-  doc.text(data.locationSource === "network" ? "GEOLOCALIZAÇÃO (REDE APROX.)" : "GEOLOCALIZAÇÃO", metaX, currentY + 31)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(71, 85, 105)
-  doc.text(fitSingleLineText(doc, data.location || "Coordenadas não capturadas", pageWidth - 78), metaX, currentY + 35)
-
+  let qrDataUrl: string | undefined
   try {
-    const qrText = `${COMPANY_CONFIG.systemName} | Valid: ${hash} | Date: ${today}${data.fingerprintEvidence ? ` | Fingerprint: ${data.fingerprintEvidence.code}` : ""}`
-    const qrDataUrl = await QRCode.toDataURL(qrText, { width: 200, margin: 1 })
-    doc.addImage(qrDataUrl, 'PNG', pageWidth - 45, currentY + 5, 25, 25)
-    doc.setFontSize(6)
-    doc.setTextColor(200, 200, 200)
-    doc.text("Scan to Verify", pageWidth - 32, currentY + 33, { align: "center" })
-  } catch {}
+    qrDataUrl = await QRCode.toDataURL(`${COMPANY_CONFIG.systemName} | Referência: ${reference} | Data: ${today}`, { width: 200, margin: 1 })
+  } catch { /* The human-readable reference remains available. */ }
 
-  addFootersToEveryPage(doc, hash, data.ipAddress)
+  // Keep the QR beside the reference/IP instead of pushing an isolated QR
+  // onto a final page. Reserve the section and both columns together.
+  ensureSpace(qrDataUrl ? 42 : 15)
+  section("INFORMAÇÕES DO REGISTRO")
+  const recordTop = currentY
+  const recordPage = doc.getCurrentPageInfo().pageNumber
+  if (qrDataUrl) {
+    const qrColumnX = pageWidth - margin - 33
+    doc.addImage(qrDataUrl, "PNG", qrColumnX + 5, recordTop, 23, 23)
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(6.5)
+    doc.setTextColor(100, 116, 139)
+    doc.text("QR de referência do registro", qrColumnX, recordTop + 26)
+  }
+  const recordWidth = qrDataUrl ? contentWidth - 42 : contentWidth
+  field("Código de referência", reference, recordWidth)
+  field("IP do terminal", data.ipAddress || "Não registrado neste arquivo", recordWidth)
+  if (qrDataUrl && doc.getCurrentPageInfo().pageNumber === recordPage) {
+    // The short geolocation label can share the caption's row on the left;
+    // its full-width value starts below both the QR and its caption.
+    currentY = Math.max(currentY, recordTop + 26)
+  }
+  field(data.locationSource === "network" ? "Geolocalização (rede aproximada)" : "Geolocalização", data.location || "Coordenadas não capturadas")
+  write("O código de referência serve para localizar o registro; não é o hash deste arquivo PDF. A integridade do arquivo arquivado deve ser consultada no histórico do sistema.", 7, false, [100, 116, 139])
 
+  addDocumentFooters(doc, "Entrega de EPI • Evidências conforme modalidade informada")
   return doc.output("blob")
 }
 
@@ -570,6 +466,7 @@ export interface ReturnPDFData {
   authMethod: AuthMethod
   signatureBase64?: string
   photoBase64?: string
+  fingerprintEvidence?: FingerprintReceiptMetadata
   validationHash?: string
 }
 
@@ -577,94 +474,112 @@ export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   refreshPdfBrand()
   const doc = new jsPDF({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const hash = data.validationHash || "PENDENTE"
-
-  addPageHeader(doc, "RECIBO DE BAIXA / SUBSTITUIÇÃO E.P.I.", "Registro de Devolução e Troca - NR-06")
-
-  const boxY = 46
-  infoRow(doc, "Colaborador", data.employeeName, 14, boxY)
-  infoRow(doc, "CPF", data.employeeCpf, 14, boxY + 12)
-  infoRow(doc, "Unidade / Sede", data.workplaceName, pageWidth / 2, boxY + 12)
-
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.line(14, boxY + 20, pageWidth - 14, boxY + 20)
-
-  const retY = boxY + 28
-  doc.setFillColor(254, 242, 242)
-  doc.setDrawColor(252, 165, 165)
-  doc.roundedRect(14, retY, (pageWidth - 28) / 2 - 4, 26, 3, 3, "FD")
-  doc.setFontSize(8)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(r, g, b)
-  doc.text("ITEM DEVOLVIDO / BAIXADO", 18, retY + 8)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(9)
-  doc.setTextColor(30, 41, 59)
-  doc.text(data.returnedItemName, 18, retY + 16)
-  doc.setFontSize(7.5)
-  doc.setTextColor(100, 116, 139)
-  doc.text(`Motivo: ${data.returnMotive}`, 18, retY + 23)
-
-  if (data.newItemName) {
-    doc.setFillColor(240, 253, 244)
-    doc.setDrawColor(134, 239, 172)
-    const halfW = (pageWidth - 28) / 2
-    doc.roundedRect(14 + halfW + 4, retY, halfW - 4, 26, 3, 3, "FD")
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(21, 128, 61)
-    doc.text("NOVO EPI ENTREGUE", 18 + halfW + 4, retY + 8)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(9)
-    doc.setTextColor(30, 41, 59)
-    doc.text(data.newItemName, 18 + halfW + 4, retY + 16)
-    if (data.newItemCa) {
-      doc.setFontSize(7.5)
-      doc.setTextColor(100, 116, 139)
-      doc.text(`CA: ${data.newItemCa}`, 18 + halfW + 4, retY + 23)
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const contentWidth = pageWidth - 28
+  let currentY = 49
+  const header = () => addPageHeader(doc, "RECIBO DE DEVOLUÇÃO / SUBSTITUIÇÃO", "Movimentação de equipamento e confirmação do colaborador")
+  header()
+  const ensureSpace = (height: number) => {
+    if (currentY + height <= pageHeight - 24) return
+    doc.addPage()
+    header()
+    currentY = 49
+  }
+  const write = (value: string, size = 8, bold = false) => {
+    doc.setFont("helvetica", bold ? "bold" : "normal")
+    doc.setFontSize(size)
+    const lines = doc.splitTextToSize(normalizeLegacyPdfText(value) || "-", contentWidth - 2) as string[]
+    const lineHeight = size * 25.4 / 72 * 1.35 + 0.7
+    for (const line of lines) {
+      ensureSpace(lineHeight)
+      doc.setFont("helvetica", bold ? "bold" : "normal")
+      doc.setFontSize(size)
+      doc.setTextColor(30, 41, 59)
+      doc.text(line, 14, currentY)
+      currentY += lineHeight
     }
   }
-
-  const termY = retY + 34
+  const section = (label: string) => {
+    ensureSpace(15)
+    doc.setDrawColor(226, 232, 240)
+    doc.line(14, currentY - 3, pageWidth - 14, currentY - 3)
+    write(label, 8.5, true)
+    currentY += 3
+  }
+  write(data.employeeName.toUpperCase(), 11, true)
+  currentY += 3
+  write(`CPF: ${data.employeeCpf}`, 8)
+  write(`Unidade: ${data.workplaceName || "Não informada"}`, 8)
+  currentY += 7
+  section("EQUIPAMENTOS MOVIMENTADOS")
+  const firstTablePage = doc.getCurrentPageInfo().pageNumber
+  autoTable(doc, {
+    startY: currentY,
+    head: [["Movimentação", "Equipamento", "Detalhes"]],
+    body: [
+      ["Devolução / baixa", normalizeLegacyPdfText(data.returnedItemName), `Motivo: ${normalizeLegacyPdfText(data.returnMotive)}`],
+      ...(data.newItemName ? [["Nova entrega", normalizeLegacyPdfText(data.newItemName), `CA: ${data.newItemCa || "Não informado"}`]] : []),
+    ],
+    styles: { font: "helvetica", fontSize: 8, cellPadding: 4, textColor: [30, 41, 59], overflow: "linebreak", lineColor: [226, 232, 240], lineWidth: 0.15 },
+    headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: "bold", fontSize: 7 },
+    alternateRowStyles: { fillColor: [250, 251, 253] },
+    columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 88, fontStyle: "bold" } },
+    margin: { left: 14, right: 14, top: 46, bottom: 24 },
+    rowPageBreak: "avoid",
+    theme: "striped",
+    didDrawPage: () => { if (doc.getCurrentPageInfo().pageNumber > firstTablePage) header() },
+  })
+  currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12
+  section("CONFIRMAÇÃO DA MOVIMENTAÇÃO")
   const term = data.newItemName
     ? "Confirmo a devolução do item antigo e o recebimento do novo equipamento listado acima em perfeitas condições de uso."
     : "Confirmo a devolução do item acima, encerrando minha responsabilidade sobre o mesmo. Estou ciente das implicações legais conforme NR-06."
-  doc.setFillColor(248, 250, 252)
-  doc.setDrawColor(226, 232, 240)
-  doc.roundedRect(14, termY, pageWidth - 28, 16, 3, 3, "FD")
-  doc.setFont("helvetica", "italic")
-  doc.setFontSize(7.5)
-  doc.setTextColor(71, 85, 105)
-  doc.text(`"${term}"`, pageWidth / 2, termY + 10, { align: "center" })
-
-  const sigY = termY + 24
-  doc.setFillColor(248, 250, 252)
-  doc.setDrawColor(226, 232, 240)
-  doc.roundedRect(14, sigY, pageWidth - 28, 50, 3, 3, "FD")
-  const hasReturnSignature = Boolean(data.signatureBase64)
-  try {
-    if (data.signatureBase64 && data.authMethod === 'manual_facial' && data.photoBase64) {
-      doc.addImage(data.photoBase64, 'JPEG', pageWidth / 2 - 48, sigY + 5, 30, 30)
-      doc.addImage(data.signatureBase64, 'PNG', pageWidth / 2 - 10, sigY + 8, 70, 24)
-    } else if (data.signatureBase64 && data.authMethod === 'facial') {
-      doc.addImage(data.signatureBase64, 'JPEG', (pageWidth - 40) / 2, sigY + 3, 40, 40)
-    } else if (data.signatureBase64) {
-      doc.addImage(data.signatureBase64, 'PNG', (pageWidth - 80) / 2, sigY + 5, 80, 30)
+  write(term, 8)
+  currentY += 9
+  const facePhoto = data.authMethod === "facial" ? data.photoBase64 || data.signatureBase64 : undefined
+  const manualSignature = data.authMethod === "manual" || data.authMethod === "manual_facial" ? data.signatureBase64 : undefined
+  const supportingPhoto = data.authMethod === "manual_facial" ? data.photoBase64 : undefined
+  write(data.authMethod === "fingerprint" ? "Confirmação por impressão digital" : facePhoto ? "Registro fotográfico (sem prova biométrica neste arquivo)" : manualSignature ? "Assinatura manual registrada" : "Assinatura manual pendente", 7.5, true)
+  if (data.authMethod === "fingerprint") {
+    if (data.fingerprintEvidence) {
+      write(`Evidência: ${data.fingerprintEvidence.code}`, 8)
+      write(`Terminal: ${data.fingerprintEvidence.terminalName}`, 8)
+      write(`Confirmação: ${formatDeliveryDate(data.fingerprintEvidence.completedAt)} ${formatDeliveryTime(data.fingerprintEvidence.completedAt)}`, 8)
+      write(`Hash do resultado: ${data.fingerprintEvidence.resultHash}`, 7)
+    } else {
+      write("Evidência da impressão digital indisponível neste arquivo. Consulte o histórico do sistema.", 8)
     }
-  } catch { /* */ }
-  drawManualSignatureLine(
-    doc,
-    pageWidth / 2,
-    sigY + 42,
-    pageWidth - 80,
-    data.employeeName,
-    hasReturnSignature
-      ? `${data.authMethod === 'facial' ? 'Biometria Facial' : 'Assinatura Manual'} - ${format(new Date(), "dd/MM/yyyy HH:mm")}`
-      : "Assinatura presencial do colaborador"
-  )
-
-  addPageFooter(doc, hash)
+  }
+  currentY += 5
+  if (data.authMethod !== "fingerprint") {
+    ensureSpace(52)
+    const sigY = currentY
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.25)
+    doc.roundedRect(14, sigY, contentWidth, 42, 2, 2, "S")
+    try {
+      if (facePhoto) {
+        addImageContained(doc, facePhoto, (pageWidth - 36) / 2, sigY + 3, 36, 36)
+      } else if (manualSignature) {
+        if (supportingPhoto) addImageContained(doc, supportingPhoto, 23, sigY + 4, 32, 32)
+        addImageContained(doc, manualSignature, supportingPhoto ? 64 : 38, sigY + 7, supportingPhoto ? 116 : 134, 28)
+      }
+    } catch { /* Preserve the explicit modality when an old image cannot be decoded. */ }
+    if (!facePhoto && !manualSignature) {
+      doc.setDrawColor(148, 163, 184)
+      doc.line(30, sigY + 31, pageWidth - 30, sigY + 31)
+    }
+    currentY += 48
+  }
+  write(data.employeeName.toUpperCase(), 8, true)
+  write(`Documento emitido em ${format(new Date(), "dd/MM/yyyy HH:mm")}`, 7)
+  currentY += 8
+  section("INFORMAÇÕES DO REGISTRO")
+  write("CÓDIGO DE REFERÊNCIA", 6.5, true)
+  write(data.validationHash || "PENDENTE", 8)
+  currentY += 2
+  write("O código serve para localizar o registro; a integridade do PDF arquivado deve ser consultada no histórico do sistema.", 7)
+  addDocumentFooters(doc, "Devolução / substituição de EPI • Registro documental")
   return doc.output("blob")
 }
 
@@ -699,6 +614,16 @@ export interface NR06PDFData {
   }
 }
 
+// Text supplied by the company for its employee record; keep its wording intact.
+export const EPI_RESPONSIBILITY_TERM = {
+  title: "TERMO DE RESPONSABILIDADE – ENTREGA DE EPI",
+  paragraphs: [
+    "Declaro que recebi o(s) equipamento(s) e/ou material, os quais me comprometo a utilizar de acordo com a NR-6, e as orientações técnicas que me foram dadas quanto ao seu uso nos locais determinados pela empresa, responsabilizando-me também pela guarda e conservação dos mesmos, respondendo pelo eventual desaparecimento e/ou danos causados por descuido ou mau uso.",
+    "Comprometo-me ainda a apresentar para troca todo equipamento que no decorrer do uso apresentar defeito ou desgaste natural da utilização.",
+    "Declaro também estar ciente de que o não uso dos EPI por parte da empresa, conforme a Lei nº 6.514, de 22/12/1977, artigo 158, parágrafo único, e NR-6, item 6.7.1 da Portaria 3.214, de 08/06/1978.",
+  ],
+} as const
+
 export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   refreshPdfBrand()
   const doc = new jsPDF({ format: "a4" })
@@ -707,7 +632,29 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
 
   addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
 
-  const boxY = 46
+  const paragraphLineHeight = 8.5 * 25.4 / 72 * 1.35
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8.5)
+  const termParagraphLines = EPI_RESPONSIBILITY_TERM.paragraphs.map(paragraph => doc.splitTextToSize(paragraph, pageWidth - 37) as string[])
+  const termHeight = 18 + termParagraphLines.reduce((height, lines) => height + lines.length * paragraphLineHeight + 4, 0)
+  doc.setFillColor(249, 250, 252)
+  doc.rect(14, 43, pageWidth - 28, termHeight, "F")
+  doc.setFillColor(r, g, b)
+  doc.rect(14, 43, 0.8, termHeight, "F")
+  let contentY = 51
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(10)
+  doc.setTextColor(r, g, b)
+  doc.text(EPI_RESPONSIBILITY_TERM.title, 18, contentY)
+  contentY += 7
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8.5)
+  doc.setTextColor(30, 41, 59)
+  for (const lines of termParagraphLines) {
+    doc.text(lines, 18, contentY, { lineHeightFactor: 1.35 })
+    contentY += lines.length * paragraphLineHeight + 4
+  }
+  const boxY = 43 + termHeight + 10
   const col = (pageWidth - 28) / 3
 
   const fields = [
@@ -719,11 +666,23 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     { label: "Data de Admissão", value: data.admissionDate },
   ]
 
-  fields.forEach((f, i) => {
-    const x = 14 + (i % 3) * col
-    const y = boxY + Math.floor(i / 3) * 17
-    infoRow(doc, f.label, f.value, x, y, col - 6)
-  })
+  let fieldsY = boxY
+  for (let row = 0; row < 2; row++) {
+    let rowHeight = 17
+    fields.slice(row * 3, row * 3 + 3).forEach((field, index) => {
+      const x = 14 + index * col
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(7)
+      doc.setTextColor(100, 116, 139)
+      doc.text(field.label.toUpperCase(), x, fieldsY)
+      doc.setFontSize(9)
+      doc.setTextColor(30, 41, 59)
+      const lines = doc.splitTextToSize(normalizeLegacyPdfText(field.value) || "-", col - 4) as string[]
+      doc.text(lines, x, fieldsY + 5)
+      rowHeight = Math.max(rowHeight, 9 + lines.length * 4)
+    })
+    fieldsY += rowHeight
+  }
 
   const itemsWithSigs = await Promise.all(
     data.items.map(async (item) => {
@@ -749,37 +708,38 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     })
   )
 
-  const tableY = boxY + 38
+  const tableY = fieldsY + 4
   autoTable(doc, {
     startY: tableY,
     head: [["Data", "EPI", "Nº C.A.", "Qtd", "Motivo", "Status", "Devolução", "Assinatura"]],
     body: itemsWithSigs.map(item => [
       item.deliveryDate,
-      item.ppeName,
+      normalizeLegacyPdfText(item.ppeName),
       item.caNr,
       item.quantity,
       normalizeLegacyPdfText(item.reason),
       item.returnedAt ? "Devolvido" : item.isExpired ? "Troca Pendente" : "Em uso",
       item.returnedAt ? format(new Date(item.returnedAt), "dd/MM/yyyy") : "-",
-      "",
+      item.authMethod === "fingerprint" ? `Impressão digital\n${item.fingerprintEvidenceCode || "Evidência indisponível"}` : "",
     ]),
     styles: {
       fontSize: 7,
-      cellPadding: { top: 4, right: 3, bottom: 4, left: 3 },
+      cellPadding: { top: 6, right: 3, bottom: 6, left: 3 },
       font: "helvetica",
       textColor: [30, 41, 59],
-      minCellHeight: 22,
+      minCellHeight: 12,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.15,
+      overflow: "linebreak",
     },
     headStyles: {
-      fillColor: [r, g, b],
-      textColor: [255, 255, 255],
+      fillColor: [241, 245, 249],
+      textColor: [51, 65, 85],
       fontStyle: "bold",
       fontSize: 6.5,
       halign: "center",
-      minCellHeight: 10,
-      cellPadding: 3,
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    alternateRowStyles: { fillColor: [250, 251, 253] },
     columnStyles: {
       0: { cellWidth: 18 },
       2: { halign: "center", cellWidth: 14 },
@@ -799,26 +759,12 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
       if (hookData.section === 'body' && hookData.column.index === 7) {
         const rowIndex = hookData.row.index
         const item = itemsWithSigs[rowIndex]
+        if (item?.authMethod === "fingerprint") return
         const cell = hookData.cell
-        if (!item) return
         const maxW = cell.width - 4
         const maxH = cell.height - 4
         const x = cell.x + 2
         const y = cell.y + 2
-
-        if (item.authMethod === "fingerprint" && item.fingerprintEvidenceCode) {
-          doc.setFillColor(239, 246, 255)
-          doc.setDrawColor(147, 197, 253)
-          doc.roundedRect(x, y, maxW, maxH, 1.5, 1.5, "FD")
-          doc.setFont("helvetica", "bold")
-          doc.setFontSize(5.7)
-          doc.setTextColor(30, 64, 175)
-          doc.text("DIGITAL VALIDADA", cell.x + cell.width / 2, y + 6, { align: "center" })
-          doc.setFont("courier", "normal")
-          doc.setFontSize(5.2)
-          doc.text(fitSingleLineText(doc, item.fingerprintEvidenceCode, maxW - 2), cell.x + cell.width / 2, y + 12, { align: "center" })
-          return
-        }
 
         if (!item?.signatureBase64 && !item?.photoBase64) {
           drawSignatureCellLine(doc, cell)
@@ -850,18 +796,15 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
           } else if (item.photoBase64) {
             drawImageFit(item.photoBase64, x, y, maxW, maxH)
           }
-        } catch (error) {
-          throw new Error("Nao foi possivel inserir a assinatura da entrega na ficha NR-06.", { cause: error })
-        }
+        } catch { /* skip */ }
       }
     },
-    didDrawPage: () => {
-      if (doc.getCurrentPageInfo().pageNumber > 1) {
-        addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
-      }
-    },
+    margin: { left: 14, right: 14, top: 46, bottom: 36 },
+    theme: "striped",
     rowPageBreak: "avoid",
-    margin: { top: 45, right: 14, bottom: 22, left: 14 },
+    didDrawPage: () => {
+      addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
+    },
   })
 
   // @ts-expect-error - jsPDF-autotable adds lastAutoTable to doc
@@ -870,31 +813,38 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
 
   if (data.tstSigner) {
     const tst = data.tstSigner
-    const blockWidth = 88
+    const blockWidth = pageWidth - 28
     const blockX = (pageWidth - blockWidth) / 2
-    if (finalY + 50 > pageHeight - 20) {
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(8.5)
+    const signerNameLines = doc.splitTextToSize(tst.name.toUpperCase(), blockWidth - 33) as string[]
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(7)
+    const signerRoleLines = doc.splitTextToSize(tst.role, blockWidth - 33) as string[]
+    const blockHeight = Math.max(50, 44 + signerNameLines.length * 4 + signerRoleLines.length * 3)
+    if (finalY + blockHeight > pageHeight - 36) {
       doc.addPage()
       addPageHeader(doc, "FICHA DE CONTROLE DE EPI - NR-06", "Documento de Prontuário Individual do Colaborador")
-      finalY = 50
+      finalY = 48
     }
     const blockY = finalY
     const contentX = blockX + 16
     const contentWidth = blockWidth - 32
-    doc.setDrawColor(203, 213, 225)
-    doc.setLineWidth(0.8)
-    doc.roundedRect(blockX, blockY, blockWidth, 50, 4, 4)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.25)
+    doc.roundedRect(blockX, blockY, blockWidth, blockHeight, 2, 2)
 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(7)
     doc.setTextColor(71, 85, 105)
-    doc.text("ASSINATURA DO RESPONSÁVEL TÉCNICO", pageWidth / 2, blockY + 7, { align: "center" })
+    doc.text("ASSINATURA DO RESPONSÁVEL TÉCNICO", contentX, blockY + 7)
 
     try {
       const imgProps = doc.getImageProperties(tst.signatureBase64)
       const ratio = imgProps.width / imgProps.height
       if (tst.authMethod === 'manual_facial' && tst.photoBase64) {
         const photoSize = 18
-        doc.addImage(tst.photoBase64, getImageFormat(tst.photoBase64), blockX + 16, blockY + 11, photoSize, photoSize)
+        doc.addImage(tst.photoBase64, 'JPEG', blockX + 16, blockY + 11, photoSize, photoSize)
         const drawH = 12
         let drawW = drawH * ratio
         const sigAreaW = contentWidth - photoSize - 8
@@ -903,7 +853,8 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
         }
         const sigX = blockX + 16 + photoSize + 8 + (sigAreaW - drawW) / 2
         const sigY = blockY + 15
-        doc.addImage(tst.signatureBase64, getImageFormat(tst.signatureBase64), sigX, sigY, drawW, drawH)
+        const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+        doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
       } else {
         const isPhoto = ratio <= 1.5
         const drawH = isPhoto ? 20 : 12
@@ -913,11 +864,10 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
         }
         const sigX = blockX + (blockWidth - drawW) / 2
         const sigY = blockY + 12
-        doc.addImage(tst.signatureBase64, getImageFormat(tst.signatureBase64), sigX, sigY, drawW, drawH)
+        const fmt = tst.signatureBase64.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+        doc.addImage(tst.signatureBase64, fmt, sigX, sigY, drawW, drawH)
       }
-    } catch (error) {
-      throw new Error("Nao foi possivel inserir a assinatura do responsavel tecnico na ficha NR-06.", { cause: error })
-    }
+    } catch { /* skip */ }
 
     doc.setDrawColor(203, 213, 225)
     doc.setLineWidth(0.3)
@@ -926,17 +876,17 @@ export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(8.5)
     doc.setTextColor(30, 41, 59)
-    doc.text(fitSingleLineText(doc, tst.name.toUpperCase(), contentWidth), contentX, blockY + 40)
+    doc.text(signerNameLines, contentX, blockY + 40, { lineHeightFactor: 1.33 })
 
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7)
     doc.setTextColor(102, 102, 102)
-    doc.text(fitSingleLineText(doc, tst.role, contentWidth), contentX, blockY + 45)
+    doc.text(signerRoleLines, contentX, blockY + 42 + signerNameLines.length * 4, { lineHeightFactor: 1.2 })
 
-    finalY += 56
+    finalY += blockHeight + 6
   }
 
-  addFootersToEveryPage(doc)
+  addDocumentFooters(doc, "Prontuário individual de EPI • Evidências conforme modalidade informada")
 
   return doc.output("blob")
 }
@@ -960,49 +910,10 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   const border = [226, 232, 240] as [number, number, number]
   const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 
-  const drawFooter = () => {
-    doc.setDrawColor(...border)
-    doc.setLineWidth(0.2)
-    doc.line(mx, ph - 14, pw - mx, ph - 14)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.setTextColor(...muted)
-    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio gerencial de conformidade`, mx, ph - 8)
-    doc.text(`Pagina ${doc.getCurrentPageInfo().pageNumber}`, pw - mx, ph - 8, { align: "right" })
+  const drawContinuationHeader = () => {
+    if (doc.getCurrentPageInfo().pageNumber > 1) addPageHeader(doc, "RELATÓRIO DE CONFORMIDADE E CUSTOS", data.periodTitle || "Período geral")
   }
-
-  doc.setFillColor(248, 250, 252)
-  doc.rect(0, 0, pw, ph, "F")
-  doc.setFillColor(255, 255, 255)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
-  doc.setDrawColor(...border)
-  doc.setLineWidth(0.25)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
-  doc.setFillColor(...brandColor)
-  doc.rect(mx, 12, 4, 36, "F")
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(...muted)
-  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
-    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
-  }
-  doc.setFontSize(18)
-  doc.setTextColor(...ink)
-  doc.text("Relatorio gerencial de conformidade e custos", mx + 46, 27)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8.5)
-  doc.setTextColor(...muted)
-  doc.text("Indicadores operacionais, rastreabilidade de entregas e leitura executiva do periodo.", mx + 46, 35)
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(7.5)
-  doc.setTextColor(...brandColor)
-  doc.text("BUSINESS INTELLIGENCE", pw - mx - 6, 23, { align: "right" })
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(...muted)
-  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
-  doc.text(data.periodTitle || "Periodo geral", pw - mx - 6, 38, { align: "right" })
+  addReportHeader(doc, "RELATÓRIO DE CONFORMIDADE E CUSTOS", "Indicadores operacionais, rastreabilidade de entregas e leitura executiva do período", data.periodTitle || "Período geral")
 
   const cardY = 58
   const cardW = (pw - mx * 2 - 12) / 4
@@ -1074,16 +985,22 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
         2: { cellWidth: 34, halign: "center" },
         3: { cellWidth: 73, halign: "right", fontStyle: "bold" },
       },
-      margin: { left: mx, right: mx, bottom: 18 },
+      margin: { left: mx, right: mx, top: 46, bottom: 22 },
+      rowPageBreak: "avoid",
       theme: "grid",
       styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
       didDrawPage: () => {
-        drawFooter()
+        drawContinuationHeader()
       },
     })
     tableStartY = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY || 123) + 12
   }
 
+  if (tableStartY > ph - 36) {
+    doc.addPage()
+    drawContinuationHeader()
+    tableStartY = 52
+  }
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
   doc.setTextColor(...ink)
@@ -1122,14 +1039,16 @@ export function generateGeneralReportPDF(data: ReportPDFData): Blob {
       6: { cellWidth: 36 },
       7: { cellWidth: 60 },
     },
-    margin: { left: mx, right: mx, bottom: 18 },
+    margin: { left: mx, right: mx, top: 46, bottom: 22 },
+    rowPageBreak: "avoid",
     theme: "grid",
     styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
     didDrawPage: () => {
-      drawFooter()
+      drawContinuationHeader()
     },
   })
 
+  addDocumentFooters(doc, "Relatório gerencial de conformidade e custos")
   return doc.output("blob")
 }
 
@@ -1482,7 +1401,6 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
   refreshPdfBrand()
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
-  const ph = doc.internal.pageSize.getHeight()
   const mx = 14
   const brandColor = [r, g, b] as [number, number, number]
   const ink = [15, 23, 42] as [number, number, number]
@@ -1490,60 +1408,21 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
   const border = [226, 232, 240] as [number, number, number]
   const workplaceName = (id?: string | null) => data.workplaces?.find(w => w.id === id)?.name || "Administrativo"
 
-  const drawFooter = () => {
-    doc.setDrawColor(...border)
-    doc.setLineWidth(0.2)
-    doc.line(mx, ph - 14, pw - mx, ph - 14)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.setTextColor(...muted)
-    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio de colaboradores`, mx, ph - 8)
-    doc.text(`Pagina ${doc.getCurrentPageInfo().pageNumber}`, pw - mx, ph - 8, { align: "right" })
+  const drawContinuationHeader = () => {
+    if (doc.getCurrentPageInfo().pageNumber > 1) addPageHeader(doc, "RELATÓRIO DE COLABORADORES", data.periodLabel || "Equipe completa")
   }
-
-  doc.setFillColor(248, 250, 252)
-  doc.rect(0, 0, pw, ph, "F")
-  doc.setFillColor(255, 255, 255)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
-  doc.setDrawColor(...border)
-  doc.setLineWidth(0.25)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
-  doc.setFillColor(...brandColor)
-  doc.rect(mx, 12, 4, 36, "F")
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(...muted)
-  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
-    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
-  }
-  doc.setFontSize(18)
-  doc.setTextColor(...ink)
-  doc.text("Relatorio executivo de colaboradores", mx + 46, 27)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8.5)
-  doc.setTextColor(...muted)
-  doc.text("Quadro funcional, lotacao, status de vinculo e situacao de biometria facial.", mx + 46, 35)
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(7.5)
-  doc.setTextColor(...brandColor)
-  doc.text("DOCUMENTO GERENCIAL", pw - mx - 6, 23, { align: "right" })
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(...muted)
-  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
-  doc.text(data.periodLabel || "Equipe completa", pw - mx - 6, 38, { align: "right" })
+  addReportHeader(doc, "RELATÓRIO DE COLABORADORES", "Quadro funcional, lotação, status de vínculo e foto cadastral", data.periodLabel || "Equipe completa")
 
   const activeCount = data.employees.filter(e => e.active).length
   const inactiveCount = data.employees.length - activeCount
-  const biometricCount = data.employees.filter(e => e.photo_url).length
-  const biometricPendingCount = data.employees.length - biometricCount
+  const photoCount = data.employees.filter(e => e.photo_url).length
+  const photoPendingCount = data.employees.length - photoCount
   const kpis = [
     { label: "Total", value: data.employees.length, color: brandColor },
     { label: "Ativos", value: activeCount, color: [5, 150, 105] as [number, number, number] },
     { label: "Inativos", value: inactiveCount, color: [217, 119, 6] as [number, number, number] },
-    { label: "Biometria", value: biometricCount, color: [37, 99, 235] as [number, number, number] },
-    { label: "Pend. biometria", value: biometricPendingCount, color: [220, 38, 38] as [number, number, number] },
+    { label: "Com foto", value: photoCount, color: [37, 99, 235] as [number, number, number] },
+    { label: "Sem foto", value: photoPendingCount, color: [220, 38, 38] as [number, number, number] },
   ]
   const cardY = 58
   const cardW = (pw - mx * 2 - 16) / 5
@@ -1578,7 +1457,7 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
   doc.setFontSize(8)
   doc.setTextColor(...muted)
   doc.text(`${activeCount} ativo(s) e ${inactiveCount} inativo(s) no conjunto filtrado`, mx + 7, summaryY + 15)
-  doc.text(`${biometricPendingCount} pendencia(s) de biometria facial`, mx + 90, summaryY + 15)
+  doc.text(`${photoPendingCount} cadastro(s) sem foto`, mx + 90, summaryY + 15)
   doc.text("Uso recomendado: conferencia gerencial, TST e auditoria interna.", pw - mx - 7, summaryY + 15, { align: "right" })
 
   doc.setFont("helvetica", "bold")
@@ -1588,7 +1467,7 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
 
   autoTable(doc, {
     startY: 123,
-    head: [["Nome", "CPF", "Cargo", "Setor", "Obra", "Admissao", "Demissao", "Status", "Biometria"]],
+    head: [["Nome", "CPF", "Cargo", "Setor", "Obra", "Admissao", "Demissao", "Status", "Foto cadastral"]],
     body: data.employees.map(emp => [
       emp.full_name,
       emp.cpf,
@@ -1604,17 +1483,18 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
     bodyStyles: { fontSize: 6.8, cellPadding: { top: 2.6, right: 2.6, bottom: 2.6, left: 2.6 }, textColor: ink },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
-      0: { cellWidth: 42, fontStyle: "bold" },
+      0: { cellWidth: 46, fontStyle: "bold" },
       1: { cellWidth: 25, halign: "center" },
-      2: { cellWidth: 42 },
+      2: { cellWidth: 45 },
       3: { cellWidth: 29 },
-      4: { cellWidth: 34 },
+      4: { cellWidth: 37 },
       5: { cellWidth: 21, halign: "center" },
       6: { cellWidth: 21, halign: "center" },
       7: { cellWidth: 20, halign: "center", fontStyle: "bold" },
       8: { cellWidth: 25, halign: "center", fontStyle: "bold" },
     },
-    margin: { left: mx, right: mx, bottom: 18 },
+    margin: { left: mx, right: mx, top: 46, bottom: 22 },
+    rowPageBreak: "avoid",
     theme: "grid",
     styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
     didParseCell: (hookData) => {
@@ -1631,10 +1511,11 @@ export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
       }
     },
     didDrawPage: () => {
-      drawFooter()
+      drawContinuationHeader()
     },
   })
 
+  addDocumentFooters(doc, "Relatório de colaboradores")
   return doc.output("blob")
 }
 
@@ -1647,7 +1528,6 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
   refreshPdfBrand()
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
-  const ph = doc.internal.pageSize.getHeight()
   const mx = 14
   const brandColor = [r, g, b] as [number, number, number]
   const ink = [15, 23, 42] as [number, number, number]
@@ -1676,50 +1556,10 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
   const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length
   const regularCount = Math.max(0, ppes.length - expiredCount - expiringCount)
 
-  const drawFooter = () => {
-    const pageLabel = `Pagina ${doc.getCurrentPageInfo().pageNumber}`
-    doc.setDrawColor(...border)
-    doc.setLineWidth(0.2)
-    doc.line(mx, ph - 14, pw - mx, ph - 14)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.setTextColor(...muted)
-    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio tecnico de EPIs e CAs`, mx, ph - 8)
-    doc.text(pageLabel, pw - mx, ph - 8, { align: "right" })
+  const drawContinuationHeader = () => {
+    if (doc.getCurrentPageInfo().pageNumber > 1) addPageHeader(doc, "RELATÓRIO TÉCNICO DE EPIS E CAS", data.filterLabel || "Catálogo ativo completo")
   }
-
-  doc.setFillColor(248, 250, 252)
-  doc.rect(0, 0, pw, ph, "F")
-  doc.setFillColor(255, 255, 255)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
-  doc.setDrawColor(...border)
-  doc.setLineWidth(0.25)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
-  doc.setFillColor(...brandColor)
-  doc.rect(mx, 12, 4, 36, "F")
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(...muted)
-  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
-    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
-  }
-  doc.setFontSize(18)
-  doc.setTextColor(...ink)
-  doc.text("Relatorio tecnico de EPIs e CAs", mx + 46, 27)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8.5)
-  doc.setTextColor(...muted)
-  doc.text("Conformidade, validade legal, estoque e custo estimado para gestao operacional.", mx + 46, 35)
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(7.5)
-  doc.setTextColor(...brandColor)
-  doc.text("DOCUMENTO GERENCIAL", pw - mx - 6, 23, { align: "right" })
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(...muted)
-  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
-  doc.text(data.filterLabel || "Catalogo ativo completo", pw - mx - 6, 38, { align: "right" })
+  addReportHeader(doc, "RELATÓRIO TÉCNICO DE EPIS E CAS", "Validade dos CAs, saldo de estoque e custo estimado para gestão operacional", data.filterLabel || "Catálogo ativo completo")
 
   const kpis = [
     { label: "Itens catalogados", value: ppes.length, color: brandColor },
@@ -1799,7 +1639,8 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
       5: { cellWidth: 34, halign: "right" },
       6: { cellWidth: 46, halign: "right", fontStyle: "bold" },
     },
-    margin: { left: mx, right: mx, bottom: 18 },
+    margin: { left: mx, right: mx, top: 46, bottom: 22 },
+    rowPageBreak: "avoid",
     theme: "grid",
     styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
     didParseCell: (hookData) => {
@@ -1817,10 +1658,11 @@ export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
       }
     },
     didDrawPage: () => {
-      drawFooter()
+      drawContinuationHeader()
     },
   })
 
+  addDocumentFooters(doc, "Relatório técnico de EPIs e CAs")
   return doc.output("blob")
 }
 
@@ -1833,7 +1675,6 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
   refreshPdfBrand()
   const doc = new jsPDF({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
-  const ph = doc.internal.pageSize.getHeight()
   const mx = 14
   const brandColor = [r, g, b] as [number, number, number]
   const ink = [15, 23, 42] as [number, number, number]
@@ -1851,48 +1692,10 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
   const lowStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 5).length
   const zeroStockCount = ppes.filter((ppe) => Number(ppe.current_stock || 0) <= 0).length
 
-  const drawFooter = () => {
-    doc.setDrawColor(...border)
-    doc.setLineWidth(0.2)
-    doc.line(mx, ph - 14, pw - mx, ph - 14)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.setTextColor(...muted)
-    doc.text(`${COMPANY_CONFIG.systemName} - Relatorio de estoque`, mx, ph - 8)
-    doc.text(`Pagina ${doc.getCurrentPageInfo().pageNumber}`, pw - mx, ph - 8, { align: "right" })
+  const drawContinuationHeader = () => {
+    if (doc.getCurrentPageInfo().pageNumber > 1) addPageHeader(doc, "RELATÓRIO DE ESTOQUE", data.filterLabel || "Estoque atual")
   }
-
-  doc.setFillColor(248, 250, 252)
-  doc.rect(0, 0, pw, ph, "F")
-  doc.setFillColor(255, 255, 255)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "F")
-  doc.setDrawColor(...border)
-  doc.setLineWidth(0.25)
-  doc.roundedRect(mx, 12, pw - mx * 2, 36, 3, 3, "S")
-  doc.setFillColor(...brandColor)
-  doc.rect(mx, 12, 4, 36, "F")
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(...muted)
-  if (!addPdfLogo(doc, mx + 10, 18, 30, 15)) {
-    doc.text(getPdfCompanyName().toUpperCase(), mx + 10, 23)
-  }
-  doc.setFontSize(18)
-  doc.setTextColor(...ink)
-  doc.text("Relatorio de estoque", mx + 46, 27)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8.5)
-  doc.setTextColor(...muted)
-  doc.text("Saldo fisico atual, status de reposicao e valor estimado em estoque.", mx + 46, 35)
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(7.5)
-  doc.setTextColor(...brandColor)
-  doc.text("ALMOXARIFADO", pw - mx - 6, 23, { align: "right" })
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(...muted)
-  doc.text(format(new Date(), "dd/MM/yyyy 'as' HH:mm"), pw - mx - 6, 31, { align: "right" })
-  doc.text(data.filterLabel || "Estoque atual", pw - mx - 6, 38, { align: "right" })
+  addReportHeader(doc, "RELATÓRIO DE ESTOQUE", "Saldo físico atual, status de reposição e valor estimado em estoque", data.filterLabel || "Estoque atual")
 
   const kpis = [
     { label: "Itens listados", value: ppes.length, color: brandColor },
@@ -1941,7 +1744,7 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
     bodyStyles: { fontSize: 7, cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 }, textColor: ink },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
-      0: { cellWidth: 86, fontStyle: "bold" },
+      0: { cellWidth: 74, fontStyle: "bold" },
       1: { cellWidth: 25, halign: "center" },
       2: { cellWidth: 45 },
       3: { cellWidth: 20, halign: "center", fontStyle: "bold" },
@@ -1949,7 +1752,8 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
       5: { cellWidth: 32, halign: "right" },
       6: { cellWidth: 39, halign: "right", fontStyle: "bold" },
     },
-    margin: { left: mx, right: mx, bottom: 18 },
+    margin: { left: mx, right: mx, top: 46, bottom: 22 },
+    rowPageBreak: "avoid",
     theme: "grid",
     styles: { lineColor: [226, 232, 240], lineWidth: 0.25, overflow: "linebreak" },
     didParseCell: (hookData) => {
@@ -1964,23 +1768,22 @@ export function generateInventoryStockReportPDF(data: InventoryStockReportData):
       }
     },
     didDrawPage: () => {
-      drawFooter()
+      drawContinuationHeader()
     },
   })
 
+  addDocumentFooters(doc, "Relatório de estoque")
   return doc.output("blob")
 }
 
 function drawCard(doc: jsPDF, x: number, y: number, w: number, h: number, accentColor?: [number, number, number]) {
-  doc.setFillColor(226, 232, 240)
-  doc.roundedRect(x + 1.5, y + 1.5, w, h, 3, 3, "F")
   doc.setFillColor(255, 255, 255)
-  doc.roundedRect(x, y, w, h, 3, 3, "F")
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(x, y, w, h, 2, 2, "FD")
   if (accentColor) {
     doc.setFillColor(...accentColor)
-    doc.roundedRect(x, y, w, 3, 3, 3, "F")
-    doc.setFillColor(255, 255, 255)
-    doc.rect(x, y + 2, w, 2, "F")
+    doc.rect(x + 5, y, w - 10, 0.8, "F")
   }
 }
 
@@ -1992,34 +1795,14 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
   refreshPdfBrand()
   const doc = new jsPDF({ orientation: "portrait", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
-  const ph = doc.internal.pageSize.getHeight()
   const mx = 14
-
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pw, 40, "F")
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  if (!addPdfLogo(doc, mx, 7, 24, 13)) {
-    doc.text(getPdfCompanyName().toUpperCase(), mx, 12)
-  }
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(18)
-  doc.setTextColor(255, 255, 255)
-  doc.text("Relatório de Movimentações", mx, 27)
-
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8)
-  doc.setTextColor(255, 255, 255)
-  doc.text(`${data.period}  ·  Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, mx, 35)
+  addReportHeader(doc, "RELATÓRIO DE MOVIMENTAÇÕES", "Entregas e devoluções de equipamentos no período selecionado", data.period)
 
   const cardY = 48
   const cardW = (pw - mx * 2 - 9) / 4
   const cardH = 28
   const kpis = [
-    { label: "Entregas", value: String(data.stats.deliveries), color: [37, 99, 235] as [number, number, number] },
+    { label: "Entregas", value: String(data.stats.deliveries), color: [r, g, b] as [number, number, number] },
     { label: "Devoluções", value: String(data.stats.returns), color: [217, 119, 6] as [number, number, number] },
     { label: "Itens", value: String(data.stats.totalItems), color: [r, g, b] as [number, number, number] },
     { label: "Pessoas", value: String(data.stats.uniqueEmployees), color: [5, 150, 105] as [number, number, number] },
@@ -2049,7 +1832,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
       m.returned_at ? "DEVOLUÇÃO" : "ENTREGA",
       m.workplace?.name || "Geral"
     ]),
-    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 8, cellPadding: 4 },
+    headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: "bold", fontSize: 7, cellPadding: 3 },
     bodyStyles: { fontSize: 7.5, cellPadding: 3.5 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
@@ -2057,9 +1840,13 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
       3: { cellWidth: 12, halign: "center" },
       4: { cellWidth: 24, halign: "center" },
     },
-    margin: { left: mx, right: mx },
-    theme: "grid",
-    styles: { lineColor: [226, 232, 240], lineWidth: 0.3 },
+    margin: { left: mx, right: mx, top: 46, bottom: 24 },
+    rowPageBreak: "avoid",
+    theme: "striped",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.15, overflow: "linebreak" },
+    didDrawPage: () => {
+      if (doc.getCurrentPageInfo().pageNumber > 1) addPageHeader(doc, "RELATÓRIO DE MOVIMENTAÇÕES", data.period)
+    },
     didParseCell: (hookData) => {
       if (hookData.column.index === 4 && hookData.section === "body") {
         const val = hookData.cell.raw as string
@@ -2075,16 +1862,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
     }
   })
 
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.line(mx, ph - 16, pw - mx, ph - 16)
-
-  doc.setFontSize(7)
-  doc.setFont("helvetica", "italic")
-  doc.setTextColor(148, 163, 184)
-  doc.text(`${COMPANY_CONFIG.name} - ${COMPANY_CONFIG.systemName}`, mx, ph - 10)
-  doc.text(`Total: ${data.movements.length} registros`, pw - mx, ph - 10, { align: "right" })
-
+  addDocumentFooters(doc, `Movimentações de EPI • ${data.movements.length} registros no conjunto`)
   return doc.output("blob")
 }
 
@@ -2100,30 +1878,7 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     if (image) signatureImages.set(movement.id, image)
   }))
 
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pw, 50, "F")
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  if (!addPdfLogo(doc, 18, 8, 28, 14)) {
-    doc.text(getPdfCompanyName().toUpperCase(), 18, 14)
-  }
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(26)
-  doc.setTextColor(255, 255, 255)
-  doc.text("RELATÓRIO DE MOVIMENTAÇÕES DE EPI", 18, 32)
-
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(10)
-  doc.setTextColor(255, 255, 255)
-  doc.text(`Período: ${data.period}  ·  Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, 18, 44)
-
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(255, 255, 255)
-  doc.text(COMPANY_CONFIG.systemName.toUpperCase(), pw - 18, 44, { align: "right" })
+  addReportHeader(doc, "RELATÓRIO DE MOVIMENTAÇÕES DE EPI", "Visão operacional do período e detalhamento dos registros", data.period)
 
   const kpiY = 60
   const kpiW = (pw - 36 - 15) / 4
@@ -2286,28 +2041,12 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc.text(String(count), rightX + rightW - 8, rowY + 5.5, { align: "right" })
   })
 
-  doc.setFillColor(r, g, b)
-  doc.rect(0, ph - 14, pw, 14, "F")
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.setTextColor(255, 255, 255)
-  doc.text(`${COMPANY_CONFIG.name}  ·  Documento Confidencial  ·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
-  doc.text("Página 1 de 2", pw - 18, ph - 5, { align: "right" })
-
   doc.addPage()
-  doc.setFillColor(r, g, b)
-  doc.rect(0, 0, pw, 30, "F")
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(14)
-  doc.setTextColor(255, 255, 255)
-  doc.text("DETALHAMENTO COMPLETO DE MOVIMENTAÇÕES", 18, 18)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8)
-  doc.setTextColor(255, 255, 255)
-  doc.text(`${data.period}  ·  ${data.movements.length} registros`, pw - 18, 18, { align: "right" })
+  const detailHeader = () => addPageHeader(doc, "DETALHAMENTO DE MOVIMENTAÇÕES", `${data.period} • ${data.movements.length} registros`)
+  detailHeader()
 
   autoTable(doc, {
-    startY: 36,
+    startY: 46,
     head: [["#", "Data", "Colaborador", "CPF", "EPI / CA", "Qtd", "Tipo", "Unidade", "Assinatura"]],
     body: data.movements.map((m, idx) => [
       String(idx + 1),
@@ -2320,8 +2059,8 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       m.workplace?.name || "Geral",
       ""
     ]),
-    headStyles: { fillColor: [r, g, b], fontStyle: "bold", fontSize: 7, cellPadding: 2.2, valign: "middle" },
-    bodyStyles: { fontSize: 6.6, cellPadding: 2.2, valign: "middle" },
+    headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: "bold", fontSize: 7, cellPadding: 2.2, valign: "middle" },
+    bodyStyles: { fontSize: 6.6, cellPadding: 2.2, valign: "middle", minCellHeight: 16 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: 10, halign: "center", fontStyle: "bold" },
@@ -2331,12 +2070,14 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
       4: { cellWidth: 64 },
       5: { cellWidth: 11, halign: "center" },
       6: { cellWidth: 22, halign: "center" },
-      7: { cellWidth: 18 },
+      7: { cellWidth: 25 },
       8: { cellWidth: 28, halign: "center" },
     },
-    margin: { left: 14, right: 14 },
-    theme: "grid",
-    styles: { lineColor: [226, 232, 240], lineWidth: 0.3, overflow: "linebreak" },
+    margin: { left: 14, right: 14, top: 46, bottom: 24 },
+    rowPageBreak: "avoid",
+    theme: "striped",
+    styles: { lineColor: [226, 232, 240], lineWidth: 0.15, overflow: "linebreak" },
+    didDrawPage: () => { if (doc.getCurrentPageInfo().pageNumber > 2) detailHeader() },
     didParseCell: (hookData) => {
       if (hookData.column.index === 6 && hookData.section === "body") {
         const val = hookData.cell.raw as string
@@ -2375,7 +2116,20 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   })
 
   const finalY = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY || 150
-  const signY = Math.min(ph - 32, finalY + 16)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(7.5)
+  const technicianNameLines = doc.splitTextToSize((data.technicianName || "Responsavel tecnico").toUpperCase(), 144) as string[]
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(6.5)
+  const technicianRoleLines = doc.splitTextToSize(data.technicianRole || "Responsavel tecnico pelo relatorio", 144) as string[]
+  const signatureBlockHeight = 42 + (technicianNameLines.length - 1) * 3.3 + (technicianRoleLines.length - 1) * 2.8
+  let signatureTop = finalY + 12
+  if (signatureTop + signatureBlockHeight > ph - 24) {
+    doc.addPage()
+    detailHeader()
+    signatureTop = 49
+  }
+  const signY = signatureTop + 24
   if (data.technicianSignatureBase64) {
     try {
       const props = doc.getImageProperties(data.technicianSignatureBase64)
@@ -2390,19 +2144,12 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
     doc,
     pw / 2,
     signY,
-    84,
+    144,
     data.technicianName || "Responsavel tecnico",
     data.technicianRole || "Responsavel tecnico pelo relatorio",
     data.technicianSignatureBase64 ? "Assinatura digital registrada" : "Assinar manualmente sobre a linha"
   )
 
-  doc.setFillColor(r, g, b)
-  doc.rect(0, ph - 14, pw, 14, "F")
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.setTextColor(255, 255, 255)
-  doc.text(`${COMPANY_CONFIG.name}  ·  Documento Confidencial  ·  ${COMPANY_CONFIG.systemName}`, pw / 2, ph - 5, { align: "center" })
-  doc.text("Página 2 de 2", pw - 18, ph - 5, { align: "right" })
-
+  addDocumentFooters(doc, `Movimentações de EPI • ${data.movements.length} registros no conjunto`)
   return doc.output("blob")
 }

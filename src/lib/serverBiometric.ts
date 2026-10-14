@@ -26,44 +26,89 @@ export function isValidRemoteToken(value: unknown): value is string {
 }
 
 export async function callBiometricService<T>(path: string, formData: FormData): Promise<T> {
-  const serviceUrl = process.env.BIOMETRIC_SERVICE_URL?.replace(/\/$/, "")
+  const serviceUrl = process.env.BIOMETRIC_SERVICE_URL?.replace(/\/+$/, "")
   const serviceToken = process.env.BIOMETRIC_SERVICE_TOKEN
 
-  if (!serviceUrl || !serviceToken) {
-    const error = new Error("Servico biometrico nao configurado. Usando evidencia facial local.")
+  if (!serviceUrl || !serviceToken || serviceToken.length < 32 || /\s/.test(serviceToken)) {
+    const error = new Error("Serviço biométrico não configurado. Modalidade facial indisponível.")
     error.name = "BIOMETRIC_SERVICE_NOT_CONFIGURED"
     throw error
   }
 
+  let base: URL
+  try { base = new URL(serviceUrl) } catch { throw new Error("Endereço do serviço biométrico inválido.") }
+  const localDevelopment = ["development", "test"].includes(process.env.NODE_ENV || "")
+    && ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)
+  if (base.username || base.password || base.search || base.hash
+    || !(base.protocol === "https:" || (base.protocol === "http:" && localDevelopment))) {
+    throw new Error("Serviço biométrico exige HTTPS; HTTP é permitido apenas em desenvolvimento local.")
+  }
+  if (!/^\/[a-z0-9/_-]+$/i.test(path) || path.startsWith("//") || path.includes("..")) {
+    throw new Error("Endpoint biométrico inválido.")
+  }
+
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
-  let response: Response
+  let timedOut = false
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  const cancelReader = () => { void reader?.cancel().catch(() => undefined) }
+  controller.signal.addEventListener("abort", cancelReader)
+  const timeout = setTimeout(() => { timedOut = true; controller.abort() }, 10_000)
   try {
-    response = await fetch(`${serviceUrl}${path}`, {
+    const response = await fetch(`${serviceUrl}${path}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${serviceToken}`,
       },
       body: formData,
       cache: "no-store",
+      redirect: "error",
       signal: controller.signal,
     })
+    if (timedOut) throw new Error("Serviço biométrico excedeu o tempo limite.")
+    const responseLimit = 64 * 1024
+    const declaredLength = response.headers.get("content-length")
+    if (declaredLength !== null && (!Number.isSafeInteger(Number(declaredLength)) || Number(declaredLength) < 0 || Number(declaredLength) > responseLimit)) {
+      controller.abort()
+      throw new Error("Resposta biométrica inválida ou muito grande.")
+    }
+    if (!response.body) throw new Error("Resposta biométrica vazia.")
+    reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let total = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (timedOut) throw new Error("Serviço biométrico excedeu o tempo limite.")
+      if (done) break
+      total += value.byteLength
+      if (total > responseLimit) {
+        controller.abort()
+        throw new Error("Resposta biométrica muito grande.")
+      }
+      chunks.push(value)
+    }
+    const bytes = new Uint8Array(total)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    let payload: unknown
+    try { payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) }
+    catch { throw new Error("Resposta biométrica inválida.") }
+    if (!response.ok) {
+      const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+      const detail = record.detail || record.error
+      // Only bounded machine codes cross the private-service error boundary.
+      throw new Error(typeof detail === "string" && /^[a-z][a-z0-9_]{0,99}$/.test(detail) ? detail : "Serviço biométrico indisponível.")
+    }
+    return payload as T
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Servico biometrico excedeu o tempo limite.")
+    if (timedOut) {
+      throw new Error("Serviço biométrico excedeu o tempo limite.")
     }
     throw error
   } finally {
     clearTimeout(timeout)
+    controller.signal.removeEventListener("abort", cancelReader)
+    reader?.releaseLock()
   }
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    const detail = payload?.detail || payload?.error || "Servico biometrico indisponivel."
-    throw new Error(typeof detail === "string" ? detail : "Servico biometrico indisponivel.")
-  }
-
-  return payload as T
 }
 
 async function validateRemoteBiometricToken(token: string, employeeId: string) {

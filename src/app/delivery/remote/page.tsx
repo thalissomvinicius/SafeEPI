@@ -9,6 +9,9 @@ import { Camera, ExternalLink, FileDown, ShieldAlert, Fingerprint, PenLine, Shie
 import { api } from "@/services/api"
 import { Delivery, Employee, PPE, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { FacialDeliveryConfirmation, type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmation"
+import { submitFacialDelivery } from "@/components/ui/submitFacialDelivery"
+import { FacialPreflightError } from "@/components/ui/facialClient"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
@@ -18,8 +21,8 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { getSignatureDataUrl } from "@/utils/signatureCanvas"
-import { isValidGeoLocation, requestRequiredGeolocation } from "@/utils/geolocation"
 import { imageDataUrlToFile } from "@/utils/imageDataUrl"
+import { isValidGeoLocation, requestRequiredGeolocation, type RequiredGeolocationResult } from "@/utils/geolocation"
 
 interface DeliveryData {
   e: string // employee id
@@ -83,6 +86,7 @@ function RemoteDeliveryContent() {
   // -- Signing --
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial'>('manual')
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
+  const [facialTransactionLocked, setFacialTransactionLocked] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null)
   const [lastPdfFileName, setLastPdfFileName] = useState<string | null>(null)
@@ -91,6 +95,8 @@ function RemoteDeliveryContent() {
   const [ipAddress, setIpAddress] = useState("")
   const [location, setLocation] = useState("")
   const [locationSource, setLocationSource] = useState<"device" | "network" | null>(null)
+  const [locationAccuracy, setLocationAccuracy] = useState<number | undefined>()
+  const locationRequestRef = useRef<Promise<RequiredGeolocationResult> | null>(null)
   const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "granted" | "blocked">("idle")
   const [locationError, setLocationError] = useState("")
   const [linkToken, setLinkToken] = useState<string>("")
@@ -99,29 +105,34 @@ function RemoteDeliveryContent() {
     if (isValidGeoLocation(location)) {
       setLocationStatus("granted")
       setLocationError("")
-      return { value: location, source: locationSource || "device" as const }
+      return { ok: true as const, value: location, source: locationSource || "device", accuracyMeters: locationAccuracy }
     }
 
     setLocationStatus("requesting")
-    const result = await requestRequiredGeolocation()
+    if (!locationRequestRef.current) {
+      locationRequestRef.current = requestRequiredGeolocation().finally(() => { locationRequestRef.current = null })
+    }
+    const result = await locationRequestRef.current
 
     if (result.ok) {
       setLocation(result.value)
       setLocationSource(result.source)
+      setLocationAccuracy(result.accuracyMeters)
       setLocationStatus("granted")
       setLocationError("")
-      return { value: result.value, source: result.source }
+      return result
     }
 
     setLocation("")
     setLocationSource(null)
+    setLocationAccuracy(undefined)
     setLocationStatus("blocked")
     setLocationError(result.message)
     if (showToast) {
       toast.error("Localização obrigatória", result.message)
     }
     return null
-  }, [location, locationSource])
+  }, [location, locationAccuracy, locationSource])
 
   // -- Auto-scroll to top on phase/method change --
   useEffect(() => {
@@ -340,21 +351,21 @@ function RemoteDeliveryContent() {
   }
 
   // -- Save delivery --
-  const saveDelivery = useCallback(async (signatureDataUrl: string) => {
+  const saveDelivery = useCallback(async (signatureDataUrl: string, facialSubmission?: FacialSubmission) => {
     if (!employee || !ppe) return
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
-      toast.error("Faça a verificação facial antes de confirmar a assinatura.")
+      toast.error("Capture a foto de evidência antes de confirmar a assinatura manual.")
       return
     }
+    if (authMethod === 'facial' && !facialSubmission) throw new Error("Verifique o rosto e confirme os itens antes de finalizar.")
     const locationEvidence = await requestLocationForSignature()
-    if (!locationEvidence) return
+    if (!locationEvidence) { if (facialSubmission) throw new FacialPreflightError("Autorize a localização antes de confirmar o recebimento."); return }
     const requiredLocation = locationEvidence.value
-    const requiredLocationSource = locationEvidence.source
     try {
       setIsSaving(true)
       const validationHash = generateAuditCode()
       
-      const signatureFile = imageDataUrlToFile(signatureDataUrl, "remote_signature")
+      const signatureFile = facialSubmission ? undefined : imageDataUrlToFile(signatureDataUrl, "remote_signature")
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
       const persistedAuthMethod: Delivery['auth_method'] = authMethod
 
@@ -369,16 +380,17 @@ function RemoteDeliveryContent() {
       formData.append('ip_address', ipAddress || 'Remoto')
       formData.append('geo_location', requiredLocation)
       formData.append('auth_method', persistedAuthMethod)
-      formData.append('signatureFile', signatureFile)
+      if (signatureFile) formData.append('signatureFile', signatureFile)
       if (linkToken) formData.append('token', linkToken) // Passa o token para o servidor
 
-      const apiRes = await fetch('/api/remote-delivery', {
-        method: 'POST',
-        body: formData
-      })
-      
-      const responseData = await apiRes.json()
-      if (!apiRes.ok) throw new Error(responseData.error || "Erro ao salvar na nuvem")
+      const responseData = facialSubmission
+        ? await submitFacialDelivery(facialSubmission,linkToken)
+        : await (async () => {
+          const apiRes = await fetch('/api/remote-delivery', { method: 'POST', body: formData })
+          const result = await apiRes.json()
+          if (!apiRes.ok) throw new Error(result.error || "Erro ao salvar na nuvem")
+          return result
+        })()
       const autoReturnedDeliveryIds = Array.isArray(responseData.autoReturnedDeliveryIds)
         ? responseData.autoReturnedDeliveryIds as string[]
         : deliveryData?.autoReturnedDeliveryIds || []
@@ -420,11 +432,11 @@ function RemoteDeliveryContent() {
           autoReturnNote: item.autoReturnNote || autoReturnNote,
         })),
         authMethod,
+        biometricReceipt: facialSubmission ? responseData.receipt : undefined,
         signatureBase64: signatureDataUrl,
         photoBase64,
         ipAddress,
-        location: requiredLocation,
-        locationSource: requiredLocationSource,
+        location: locationEvidence.source === "network" ? `${requiredLocation} (aproximada da rede)` : requiredLocation,
         validationHash,
         deliveryDate: getPdfDeliveryDate(authoritativeDeliveryDate),
       })
@@ -449,8 +461,10 @@ function RemoteDeliveryContent() {
           geoLocation: requiredLocation,
           linkToken,
           metadata: {
+            geolocationSource: locationEvidence.source,
+            geolocationAccuracyMeters: locationEvidence.accuracyMeters,
+            biometricReceipt: facialSubmission ? responseData.receipt : undefined,
             validationHash,
-            locationSource: requiredLocationSource,
             remoteLinkToken: linkToken,
             signaturePendingOnly: deliveryData?.signaturePendingOnly === true,
             workplaceName: workplace?.name || "Sede",
@@ -501,6 +515,7 @@ function RemoteDeliveryContent() {
       console.error(err)
       const message = err instanceof Error ? err.message : "Erro desconhecido";
       toast.error("Erro ao salvar assinatura: " + message)
+      if (facialSubmission) throw err
     } finally {
       setIsSaving(false)
     }
@@ -642,7 +657,7 @@ function RemoteDeliveryContent() {
         </div>
 
         <p className="hidden text-center text-[9px] sm:block sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">
-          Segurança Certificada - {COMPANY_CONFIG.systemName}
+          Link de recebimento - {COMPANY_CONFIG.systemName}
         </p>
       </div>
     </div>
@@ -655,7 +670,7 @@ function RemoteDeliveryContent() {
     <div className="min-h-[100dvh] overflow-x-hidden bg-slate-50 flex flex-col items-center p-3 pt-4 sm:p-4 sm:pt-12">
       <div className="w-full min-w-0 max-w-lg space-y-3 sm:space-y-6">
         <div className="text-center space-y-1.5">
-          <div className="inline-block bg-green-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2">✓ Identidade Verificada</div>
+          <div className="inline-block rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 mb-2">Dados conferidos</div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter">Confirmação de Recebimento</h1>
           <p className="text-slate-500 text-xs sm:text-sm font-medium">{employee?.full_name}</p>
         </div>
@@ -684,6 +699,14 @@ function RemoteDeliveryContent() {
           </div>
         )}
 
+        {locationStatus === "granted" && (
+          <p role="status" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-relaxed text-slate-600">
+            {locationSource === "network"
+              ? "Localização aproximada da rede registrada. Não representa a posição GPS do dispositivo."
+              : `Localização do dispositivo registrada${locationAccuracy !== undefined ? ` (precisão informada: ${locationAccuracy} m)` : ""}.`}
+          </p>
+        )}
+
         <div className="w-full min-w-0 max-w-full space-y-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/50 sm:space-y-6 sm:rounded-3xl sm:p-6">
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 sm:hidden">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recebimento</p>
@@ -708,44 +731,34 @@ function RemoteDeliveryContent() {
           </div>
 
           {/* Auth method toggle */}
-          <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
+          <fieldset disabled={isSaving || facialTransactionLocked} className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 sm:grid-cols-3">
             <button onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
               <PenLine className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Manual
             </button>
             <button onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}>
               <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Foto + Assin.
             </button>
-            <button onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
+            <button disabled={process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"} onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }} className={`flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:gap-2 sm:py-3 disabled:opacity-40 ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
               <Fingerprint className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Biometria
             </button>
-          </div>
+          </fieldset>
 
           {/* Manual signature */}
           {authMethod === 'manual' || authMethod === 'manual_facial' ? (
             <div className="space-y-3 sm:space-y-4 animate-in fade-in">
               {authMethod === 'manual_facial' && !capturedPhotoBase64 && (
-                !employee?.photo_url ? (
-                  <div className="bg-amber-50 border border-amber-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl text-center space-y-2 sm:space-y-3">
-                    <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8 text-amber-500 mx-auto" />
-                    <p className="text-amber-800 font-bold text-xs sm:text-sm">Biometria nao cadastrada</p>
-                    <p className="text-amber-600 text-[10px] sm:text-xs text-center">Solicite o cadastro da foto facial mestre ou use assinatura manual.</p>
-                    <button onClick={() => setAuthMethod('manual')} className="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg text-[10px] font-black uppercase">Mudar para Manual</button>
-                  </div>
-                ) : (
                   <FaceCamera
-                    verifyEmployeeId={employee.id}
-                    verifyCompanyId={employee.company_id}
-                    verifyToken={linkToken}
+                    mode="evidence"
+                    employeeLabel={employee?.full_name}
                     onCapture={(_desc, img) => setCapturedPhotoBase64(img)}
                     onCancel={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
                   />
-                )
               )}
               {authMethod === 'manual_facial' && capturedPhotoBase64 && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={capturedPhotoBase64} alt="Foto capturada agora" className="w-11 h-11 rounded-xl object-cover border border-emerald-200" />
-                  <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">Identidade verificada. O comprovante vai sair com foto capturada agora e assinatura manual.</p>
+                  <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">Foto de evidência registrada, sem verificação biométrica. Assine manualmente abaixo.</p>
                   <button
                     onClick={() => setCapturedPhotoBase64(null)}
                     title="Refazer foto"
@@ -764,10 +777,7 @@ function RemoteDeliveryContent() {
               <SignatureCapture
                 signatureRef={sigCanvas}
                 isSaving={isSaving}
-                isPreparing={locationStatus === "requesting"}
-                preparingLabel="Obtendo localização..."
-                confirmLabel={locationStatus === "granted" ? "Confirmar recebimento" : "Obter localização e confirmar"}
-                confirmHint={locationStatus === "blocked" ? "A localização será tentada novamente ao confirmar." : undefined}
+                confirmLabel="Confirmar recebimento"
                 onConfirm={() => {
                   if (sigCanvas.current?.isEmpty()) return toast.error("Assine antes de confirmar.")
                   const signatureDataUrl = getSignatureDataUrl(sigCanvas.current)
@@ -780,28 +790,21 @@ function RemoteDeliveryContent() {
             </div>
           ) : (
             <div className="space-y-4 animate-in zoom-in-95">
-              {!employee?.photo_url ? (
-                <div className="bg-amber-50 border border-amber-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl text-center space-y-2 sm:space-y-3">
-                  <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8 text-amber-500 mx-auto" />
-                  <p className="text-amber-800 font-bold text-xs sm:text-sm">Biometria não cadastrada</p>
-                  <p className="text-amber-600 text-[10px] sm:text-xs text-center">Utilize a Assinatura Manual.</p>
-                  <button onClick={() => setAuthMethod('manual')} className="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg text-[10px] font-black uppercase">Mudar para Manual</button>
-                </div>
-              ) : (
-                <FaceCamera 
-                  verifyEmployeeId={employee.id}
-                  verifyCompanyId={employee.company_id}
-                  verifyToken={linkToken}
-                  onCapture={(_desc, img) => saveDelivery(img)}
-                  onCancel={() => setAuthMethod('manual')}
+                <FacialDeliveryConfirmation
+                  employeeId={employee!.id}
+                  employeeLabel={employee!.full_name}
+                  token={linkToken}
+                  items={deliveryItems.length ? deliveryItems.map(item => ({name:item.ppeName,quantity:item.quantity,ca:item.ppeCaNumber})) : [{name:ppe?.name || "EPI",quantity:deliveryData?.q || 1,ca:ppe?.ca_number}]}
+                  onConfirm={(submission,image) => saveDelivery(image,submission)}
+                  onManual={() => setAuthMethod('manual')}
+                  onTransactionLocked={setFacialTransactionLocked}
                 />
-              )}
             </div>
           )}
         </div>
         
         <p className="text-center text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] pb-8">
-          Segurança Certificada - {COMPANY_CONFIG.systemName}
+          Registro de recebimento - {COMPANY_CONFIG.systemName}
         </p>
       </div>
     </div>

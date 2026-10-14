@@ -11,7 +11,6 @@ export interface DeviceBiometricReadiness {
   webAuthnSupported: boolean
   platformAuthenticatorAvailable: boolean | null
 }
-
 interface DeviceBiometricRuntime {
   secureContext: boolean
   checkPlatformAuthenticator?: () => Promise<boolean>

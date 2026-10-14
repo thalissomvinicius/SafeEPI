@@ -3,6 +3,21 @@ import { z } from "zod"
 export const uuidSchema = z.string().uuid()
 export const tokenSchema = z.string().regex(/^[0-9a-f]{64}$/i)
 
+/** Public employee fields only. Tenant, identity keys and audit fields are server-owned. */
+export const employeeWriteSchema = z.object({
+  registration_number: z.string().trim().max(64).transform(value => value || null).nullable().optional(),
+  full_name: z.string().trim().min(1).max(200).optional(),
+  cpf: z.string().trim().min(1).max(20).optional(),
+  job_title: z.string().max(200).optional(),
+  department: z.string().max(200).nullable().optional(),
+  admission_date: z.string().max(35).nullable().optional(),
+  termination_date: z.string().max(35).nullable().optional(),
+  active: z.boolean().optional(),
+  workplace_id: uuidSchema.nullable().optional(),
+  third_party_id: uuidSchema.nullable().optional(),
+  photo_url: z.string().max(2000).nullable().optional(),
+}).strict()
+
 export const createUserSchema = z.object({
   email: z.string().email().max(254),
   password: z.string().min(8).max(256),
@@ -36,10 +51,12 @@ export const remoteCaptureSchema = z.object({
   photo_url: z.string()
     .max(4_500_000)
     .regex(/^data:image\/(png|jpe?g|webp);base64,/i),
-  face_descriptor: z.union([
-    z.array(z.number().finite()).length(512),
-    z.array(z.never()).length(0),
-  ]).nullable().optional(),
+  // Legacy photo endpoint cannot create biometric references, even encrypted ones.
+  face_descriptor: z.array(z.never()).length(0).nullable().optional(),
+  face_descriptor_encrypted: z.null().optional(),
+  biometric_key_version: z.null().optional(),
+  embedding: z.null().optional(),
+  embedding_encrypted: z.null().optional(),
 })
 
 export const remoteDeliveryFieldsSchema = z.object({

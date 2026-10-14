@@ -7,6 +7,7 @@ const originalGeolocation = navigator.geolocation
 afterEach(() => {
   Object.defineProperty(navigator, "geolocation", { configurable: true, value: originalGeolocation })
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe("geolocation", () => {
@@ -57,5 +58,17 @@ describe("geolocation", () => {
       value: "-23.5505, -46.6333",
       source: "network",
     })
+  })
+
+  it("nao transforma coordenadas invalidas de rede em localizacao valida", async () => {
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ location: "999, -46", source: "network" }) }))
+    await expect(requestRequiredGeolocation()).resolves.toMatchObject({ ok: false, reason: "unsupported" })
+  })
+
+  it("exige a identificacao explicita da fonte aproximada", async () => {
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ location: "-23.55, -46.63", source: "gps" }) }))
+    await expect(requestRequiredGeolocation()).resolves.toMatchObject({ ok: false, reason: "unsupported" })
   })
 })

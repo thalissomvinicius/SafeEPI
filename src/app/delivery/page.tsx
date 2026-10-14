@@ -7,12 +7,18 @@ import Image from "next/image"
 import SignatureCanvas from "react-signature-canvas"
 import { Camera, CheckCircle2, ExternalLink, FileDown, Loader2, ShieldAlert, Fingerprint, PenLine, Link2, Plus, Trash2, Package, Calendar, Clock, User, Clipboard, RefreshCw, Hourglass, XCircle, Search } from "lucide-react"
 import { format, addDays } from "date-fns"
-import { api, type FingerprintEvidence, type PendingDeliveryRemoteLink } from "@/services/api"
+import { api, type PendingDeliveryRemoteLink, type FingerprintEvidence } from "@/services/api"
 import { Employee, PPE, Workplace, Delivery, DeliveryWithRelations } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { FaceCamera } from "@/components/ui/FaceCamera"
+import { FacialDeliveryConfirmation, type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmation"
+import { submitFacialDelivery } from "@/components/ui/submitFacialDelivery"
+import { FacialPreflightError } from "@/components/ui/facialClient"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { FingerprintCommandPanel } from "@/components/biometrics/FingerprintCommandPanel"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { DataLoadError } from "@/components/ui/DataLoadError"
+import type { BiometricReceiptMetadata } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
 import { formatCpf } from "@/utils/cpf"
 import { generateAuditCode } from "@/utils/auditCode"
@@ -21,7 +27,6 @@ import { getSignatureDataUrl } from "@/utils/signatureCanvas"
 import { getDateOnlyValue, isDateOnlyPast, toLocalDeliveryDateISOString } from "@/lib/dateOnly"
 import { toast } from "@/lib/toast"
 import { isValidGeoLocation, requestRequiredGeolocation } from "@/utils/geolocation"
-import { FingerprintCommandPanel } from "@/components/biometrics/FingerprintCommandPanel"
 import { imageDataUrlToFile } from "@/utils/imageDataUrl"
 
 interface CartItem {
@@ -79,6 +84,8 @@ const normalizeSearchText = (value: unknown) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
 
+const dataUrlToImageFile = (dataUrl: string, baseName: string) => imageDataUrlToFile(dataUrl, baseName)
+
 export default function DeliveryPage() {
   const { user } = useAuth()
   const [step, setStep] = useState(1)
@@ -97,24 +104,27 @@ export default function DeliveryPage() {
 
   const [ipAddress, setIpAddress] = useState<string>("")
   const [location, setLocation] = useState<string>("")
-  const [locationSource, setLocationSource] = useState<"device" | "network" | null>(null)
   const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "granted" | "blocked">("idle")
   const [locationError, setLocationError] = useState("")
+  const locationSourceRef = useRef<"device" | "network">("device")
+  const [locationSource, setLocationSource] = useState<"device" | "network">("device")
 
   const [employees, setEmployees] = useState<Employee[]>([])
   const [ppes, setPpes] = useState<PPE[]>([])
   const [workplaces, setWorkplaces] = useState<Workplace[]>([])
   const [activeDeliveries, setActiveDeliveries] = useState<DeliveryWithRelations[]>([])
   const [loadingActiveDeliveries, setLoadingActiveDeliveries] = useState(false)
-  const [activeDeliveriesError, setActiveDeliveriesError] = useState<string | null>(null)
-  const [activeDeliveriesReloadVersion, setActiveDeliveriesReloadVersion] = useState(0)
   const [loadingOptions, setLoadingOptions] = useState(true)
+  const [optionsError, setOptionsError] = useState<string | null>(null)
+  const [optionsReload, setOptionsReload] = useState(0)
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("")
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("")
   const [ppeSearchTerm, setPpeSearchTerm] = useState("")
   const [selectedWorkplaceId, setSelectedWorkplaceId] = useState("")
   const [deliveryDate, setDeliveryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
+  // Keep the challenge context stable across renders and request retries.
+  const facialDeliveryDateIso = useMemo(() => toLocalDeliveryDateISOString(deliveryDate), [deliveryDate])
 
   const [cart, setCart] = useState<CartItem[]>([])
   const [currentPpeId, setCurrentPpeId] = useState("")
@@ -122,37 +132,37 @@ export default function DeliveryPage() {
   const [currentReason, setCurrentReason] = useState("Primeira Entrega")
 
   const [authMethod, setAuthMethod] = useState<'manual' | 'facial' | 'manual_facial' | 'fingerprint'>('manual')
-  const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
   const [fingerprintEvidence, setFingerprintEvidence] = useState<FingerprintEvidence | null>(null)
-  const [selectedEmployeePhoto, setSelectedEmployeePhoto] = useState<{ employeeId: string; url: string } | null>(null)
+  const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null)
+  const [facialTransactionLocked, setFacialTransactionLocked] = useState(false)
 
   const requestLocationForSignature = useCallback(async (showToast = true) => {
     if (isValidGeoLocation(location)) {
       setLocationStatus("granted")
       setLocationError("")
-      return { value: location, source: locationSource || "device" as const }
+      return location
     }
 
     setLocationStatus("requesting")
     const result = await requestRequiredGeolocation()
 
     if (result.ok) {
-      setLocation(result.value)
+      locationSourceRef.current = result.source
       setLocationSource(result.source)
+      setLocation(result.value)
       setLocationStatus("granted")
       setLocationError("")
-      return { value: result.value, source: result.source }
+      return result.value
     }
 
     setLocation("")
-    setLocationSource(null)
     setLocationStatus("blocked")
     setLocationError(result.message)
     if (showToast) {
       toast.error("Localização obrigatória", result.message)
     }
     return null
-  }, [location, locationSource])
+  }, [location])
 
   const pendingSignatureSummary = useMemo(() => {
     const pending = pendingDrafts.filter((draft) => draft.status === "pending").length
@@ -167,16 +177,31 @@ export default function DeliveryPage() {
   useEffect(() => {
     const captureMetadata = async () => {
         try {
-            const ipRes = await fetch('https://api.ipify.org?format=json')
-            const ipData = await ipRes.json()
-            setIpAddress(ipData.ip)
-
+            setLocationStatus("requesting")
+            const locationResult = await requestRequiredGeolocation()
+            if (locationResult.ok) {
+              locationSourceRef.current = locationResult.source
+              setLocationSource(locationResult.source)
+              setLocation(locationResult.value)
+              setLocationStatus("granted")
+              setLocationError("")
+            } else {
+              setLocation("")
+              setLocationStatus("blocked")
+              setLocationError(locationResult.message)
+            }
         } catch (e) { console.error("Erro ao capturar metadados:", e) }
     }
+    void fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(5000) })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (typeof data?.ip === "string") setIpAddress(data.ip) })
+      .catch(() => { /* optional IP lookup must not block location or navigation */ })
     captureMetadata()
 
     async function loadOptions() {
       try {
+        setLoadingOptions(true)
+        setOptionsError(null)
         const [empData, ppeData, wpData] = await Promise.all([
           api.getEmployees({ signPhotos: false }),
           api.getPpes(),
@@ -186,16 +211,21 @@ export default function DeliveryPage() {
         setPpes(ppeData.filter(p => p.active))
         setWorkplaces(wpData)
         
+        if (empData.length > 0) {
+            setSelectedEmployeeId(empData[0].id)
+            setSelectedWorkplaceId(empData[0].workplace_id || "")
+        }
         if (ppeData.length > 0) setCurrentPpeId(ppeData[0].id)
       } catch (error) {
         console.error("Erro ao carregar opções:", error)
+        setOptionsError(error instanceof Error ? error.message : "Não foi possível consultar os cadastros.")
       } finally {
         setLoadingOptions(false)
       }
     }
 
     loadOptions()
-  }, [])
+  }, [optionsReload])
 
   useEffect(() => {
     return () => {
@@ -207,10 +237,7 @@ export default function DeliveryPage() {
 
   useEffect(() => {
     if (!selectedEmployeeId) {
-      const timer = window.setTimeout(() => {
-        setActiveDeliveries([])
-        setActiveDeliveriesError(null)
-      }, 0)
+      const timer = window.setTimeout(() => setActiveDeliveries([]), 0)
       return () => window.clearTimeout(timer)
     }
 
@@ -218,13 +245,11 @@ export default function DeliveryPage() {
       const loadEmployeeActiveDeliveries = async () => {
         try {
           setLoadingActiveDeliveries(true)
-          setActiveDeliveriesError(null)
-          setActiveDeliveries([])
           const history = await api.getEmployeeHistory(selectedEmployeeId)
           setActiveDeliveries(history.filter(delivery => !delivery.returned_at && getRemainingDeliveryQuantity(delivery) > 0))
         } catch (err) {
           console.error("Erro ao carregar EPIs ativos do colaborador:", err)
-          setActiveDeliveriesError(err instanceof Error ? err.message : "Falha ao consultar os EPIs em posse.")
+          setActiveDeliveries([])
         } finally {
           setLoadingActiveDeliveries(false)
         }
@@ -234,41 +259,13 @@ export default function DeliveryPage() {
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [selectedEmployeeId, activeDeliveriesReloadVersion])
+  }, [selectedEmployeeId])
 
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId)
   const currentPpe = ppes.find(p => p.id === currentPpeId)
   const selectedWorkplace = workplaces.find(w => w.id === selectedWorkplaceId)
   const selectedThirdPartyId = selectedEmployee?.third_party_id || selectedWorkplace?.third_party_id || null
   const currentActiveSamePpeDeliveries = activeDeliveries.filter(delivery => delivery.ppe_id === currentPpeId && !delivery.returned_at)
-
-  useEffect(() => {
-    let disposed = false
-
-    if (step !== 2 || authMethod !== "facial" || !selectedEmployee?.photo_url) {
-      return () => {
-        disposed = true
-      }
-    }
-
-    void api.getPrivateAssetUrl(selectedEmployee.photo_url, "view", undefined, "biometric_photos")
-      .then((signedUrl) => {
-        if (!disposed && signedUrl) {
-          setSelectedEmployeePhoto({ employeeId: selectedEmployee.id, url: signedUrl })
-        }
-      })
-      .catch((error) => {
-        console.error("Erro ao carregar a foto do colaborador selecionado:", error)
-      })
-
-    return () => {
-      disposed = true
-    }
-  }, [authMethod, selectedEmployee?.id, selectedEmployee?.photo_url, step])
-
-  const selectedEmployeePhotoUrl = selectedEmployeePhoto && selectedEmployeePhoto.employeeId === selectedEmployee?.id
-    ? selectedEmployeePhoto.url
-    : null
 
   const shouldAutoReturn = (reason: string, deliveries = currentActiveSamePpeDeliveries) =>
     deliveries.length > 0 && reason !== "Primeira Entrega"
@@ -479,7 +476,6 @@ export default function DeliveryPage() {
   const handleEmployeeChange = (empId: string) => {
     setSelectedEmployeeId(empId)
     setCapturedPhotoBase64(null)
-    setFingerprintEvidence(null)
     const emp = employees.find(e => e.id === empId)
     if (emp && emp.workplace_id) {
         setSelectedWorkplaceId(emp.workplace_id)
@@ -503,10 +499,6 @@ export default function DeliveryPage() {
 
   const addToCart = () => {
     if (!currentPpe) return
-    if (loadingActiveDeliveries || activeDeliveriesError) {
-      toast.error("Confirme os EPIs em posse antes de adicionar uma nova entrega.")
-      return
-    }
     if (isCurrentPpeExpired) {
       toast.error("EPI com CA vencido não pode ser entregue.")
       return
@@ -594,16 +586,16 @@ export default function DeliveryPage() {
     }
   }
 
-  const saveDelivery = useCallback(async (signatureDataUrl?: string, verifiedFingerprint?: FingerprintEvidence) => {
+  const saveDelivery = useCallback(async (signatureDataUrl?: string, facialSubmission?: FacialSubmission, verifiedFingerprint?: FingerprintEvidence) => {
     if (cart.length === 0) {
       toast.error("Adicione pelo menos um EPI à lista de entrega.")
+      if (facialSubmission) throw new FacialPreflightError("Adicione os EPIs antes de confirmar.")
       return
     }
-    if (!validateCartForDelivery()) return
-    const locationEvidence = await requestLocationForSignature()
-    if (!locationEvidence) return
-    const requiredLocation = locationEvidence.value
-    const requiredLocationSource = locationEvidence.source
+    if (!validateCartForDelivery()) { if (facialSubmission) throw new FacialPreflightError("Confira os itens e o estoque antes de confirmar."); return }
+    if (authMethod === 'facial' && !facialSubmission) throw new Error("Verifique o rosto e confirme os itens antes de finalizar.")
+    const requiredLocation = await requestLocationForSignature()
+    if (!requiredLocation) { if (facialSubmission) throw new FacialPreflightError("Autorize a localização antes de confirmar o recebimento."); return }
 
     try {
       setIsSaving(true)
@@ -611,25 +603,24 @@ export default function DeliveryPage() {
       const validationHash = generateAuditCode()
       
       const biometricEvidence = authMethod === 'fingerprint' ? verifiedFingerprint || fingerprintEvidence : null
-      if (authMethod === 'fingerprint' && (
-        !biometricEvidence ||
-        biometricEvidence.status !== 'completed' ||
-        biometricEvidence.operation !== 'verify' ||
-        biometricEvidence.employeeId !== selectedEmployeeId ||
-        biometricEvidence.matchedEmployeeId !== selectedEmployeeId
-      )) {
+      if (authMethod === 'fingerprint' && (!biometricEvidence || biometricEvidence.status !== 'completed' || biometricEvidence.operation !== 'verify' || biometricEvidence.employeeId !== selectedEmployeeId || biometricEvidence.matchedEmployeeId !== selectedEmployeeId)) {
         throw new Error("Confirme a digital do colaborador antes de concluir a entrega.")
       }
       const fingerprintBatchId = biometricEvidence ? crypto.randomUUID() : null
-      const signatureFile = signatureDataUrl ? imageDataUrlToFile(signatureDataUrl, "signature") : undefined
+      const signatureFile = facialSubmission || !signatureDataUrl ? undefined : await dataUrlToImageFile(signatureDataUrl, "signature")
       const photoBase64 = authMethod === 'manual_facial' ? capturedPhotoBase64 || undefined : undefined
       const persistedAuthMethod: Delivery['auth_method'] = authMethod
       const selectedDeliveryDateIso = toLocalDeliveryDateISOString(deliveryDate)
 
       const savedDeliveries: Delivery[] = []
       const autoReturnedDeliveryIds: string[] = []
+      let biometricReceipt: BiometricReceiptMetadata | undefined
 
-      for (const item of cart) {
+      if (facialSubmission) {
+        const result = await submitFacialDelivery(facialSubmission)
+        savedDeliveries.push(...result.deliveries)
+        biometricReceipt = result.receipt
+      } else for (const item of cart) {
         const savedDelivery = await api.saveDelivery({
           employee_id: selectedEmployeeId,
           third_party_id: selectedThirdPartyId,
@@ -641,10 +632,7 @@ export default function DeliveryPage() {
           auth_method: persistedAuthMethod,
           signature_url: null,
           delivery_date: selectedDeliveryDateIso
-        }, signatureFile, biometricEvidence && fingerprintBatchId ? {
-          fingerprintEventId: biometricEvidence.id,
-          fingerprintBatchId,
-        } : undefined)
+        }, signatureFile, biometricEvidence && fingerprintBatchId ? { fingerprintEventId: biometricEvidence.id, fingerprintBatchId } : undefined)
         savedDeliveries.push(savedDelivery as Delivery)
 
         const previousAllocations = item.autoReturnAllocations || (item.autoReturnDeliveryIds || []).map(deliveryId => ({
@@ -659,8 +647,6 @@ export default function DeliveryPage() {
         }
       }
 
-      // jsPDF and the 2k+ line renderer stay out of the initial route chunk.
-      // They are loaded only after the user confirms a delivery.
       const { generateDeliveryPDF } = await import("@/utils/pdfGenerator")
       const pdfBlob = await generateDeliveryPDF({
         employeeName: selectedEmployee?.full_name || "",
@@ -678,22 +664,18 @@ export default function DeliveryPage() {
           caExpiry: item.ppeCaExpiry,
           quantity: item.quantity,
           reason: item.reason,
-          autoReturnNote: item.autoReturnNote
+          autoReturnNote: facialSubmission ? undefined : item.autoReturnNote
         })),
         authMethod,
+        biometricReceipt,
+        fingerprintEvidence: biometricEvidence ? { code: biometricEvidence.code, terminalName: biometricEvidence.terminalName || "Terminal SafeEPI", completedAt: biometricEvidence.completedAt || "", resultHash: biometricEvidence.resultHash || "" } : undefined,
         signatureBase64: signatureDataUrl,
-        fingerprintEvidence: biometricEvidence ? {
-          code: biometricEvidence.code,
-          terminalName: biometricEvidence.terminalName || "Terminal SafeEPI",
-          completedAt: biometricEvidence.completedAt || new Date().toISOString(),
-          resultHash: biometricEvidence.resultHash || "",
-        } : undefined,
         photoBase64,
         ipAddress,
         location: requiredLocation,
-        locationSource: requiredLocationSource,
+        locationSource: locationSourceRef.current,
         validationHash,
-        deliveryDate: selectedDeliveryDateIso
+        deliveryDate: facialSubmission ? savedDeliveries[0]?.delivery_date || facialDeliveryDateIso : selectedDeliveryDateIso
       })
       
       const shortId = validationHash.slice(0, 8)
@@ -714,8 +696,10 @@ export default function DeliveryPage() {
           ipAddress,
           geoLocation: requiredLocation,
           metadata: {
+            biometricReceipt,
+            locationSource: locationSourceRef.current,
+            fingerprintEvidence: biometricEvidence ? { id: biometricEvidence.id, code: biometricEvidence.code, terminalName: biometricEvidence.terminalName, completedAt: biometricEvidence.completedAt, resultHash: biometricEvidence.resultHash, batchId: fingerprintBatchId } : null,
             validationHash,
-            locationSource: requiredLocationSource,
             workplaceName: selectedWorkplace?.name || "Sede",
             thirdPartyId: selectedThirdPartyId,
             itemCount: cart.length,
@@ -725,18 +709,10 @@ export default function DeliveryPage() {
               caNumber: item.ppeCaNumber,
               quantity: item.quantity,
               reason: item.reason,
-              autoReturnDeliveryIds: item.autoReturnDeliveryIds || [],
-              autoReturnNote: item.autoReturnNote,
+              autoReturnDeliveryIds: facialSubmission ? [] : item.autoReturnDeliveryIds || [],
+              autoReturnNote: facialSubmission ? undefined : item.autoReturnNote,
             })),
             autoReturnedDeliveryIds,
-            fingerprintEvidence: biometricEvidence ? {
-              id: biometricEvidence.id,
-              code: biometricEvidence.code,
-              terminalName: biometricEvidence.terminalName,
-              completedAt: biometricEvidence.completedAt,
-              resultHash: biometricEvidence.resultHash,
-              batchId: fingerprintBatchId,
-            } : null,
           },
         })
       } catch (archiveError) {
@@ -788,14 +764,15 @@ export default function DeliveryPage() {
       console.error("Erro ao finalizar entrega:", err)
       const message = err instanceof Error ? err.message : "Erro ao salvar entrega."
       toast.error(message)
+      if (facialSubmission) throw err
     } finally {
       setIsSaving(false)
     }
-  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, authMethod, capturedPhotoBase64, fingerprintEvidence, selectedEmployee, selectedWorkplace, deliveryDate, validateCartForDelivery, requestLocationForSignature])
+  }, [selectedEmployeeId, selectedThirdPartyId, selectedWorkplaceId, cart, ipAddress, authMethod, capturedPhotoBase64, fingerprintEvidence, selectedEmployee, selectedWorkplace, deliveryDate, facialDeliveryDateIso, validateCartForDelivery, requestLocationForSignature])
 
   const handleManualSave = () => {
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
-      toast.error("Faça a verificação facial antes de confirmar a assinatura.")
+      toast.error("Capture a foto de evidência antes de confirmar a assinatura manual.")
       return
     }
     if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
@@ -810,11 +787,8 @@ export default function DeliveryPage() {
     saveDelivery(signatureDataUrl)
   }
 
-  const handleFaceCapture = (descriptor: number[], imageBase64: string) => {
-    saveDelivery(imageBase64)
-  }
-
   const generateRemoteLink = async () => {
+      if (facialTransactionLocked) { toast.warning("Conclua ou consulte a confirmação facial em andamento antes de gerar outro link."); return }
       if (cart.length === 0) {
         toast.error("Adicione pelo menos um EPI à lista antes de gerar o link.")
 	        return
@@ -872,6 +846,7 @@ export default function DeliveryPage() {
   }
 
   const saveForLaterSignature = async () => {
+    if (facialTransactionLocked) { toast.warning("Consulte a confirmação facial em andamento antes de registrar outra entrega."); return }
     if (cart.length === 0) {
       toast.error("Adicione pelo menos um EPI à lista de entrega.")
       return
@@ -1215,6 +1190,8 @@ export default function DeliveryPage() {
       )
   }
 
+  if (optionsError) return <DataLoadError title="Não foi possível preparar a entrega" message={optionsError} onRetry={() => setOptionsReload((version) => version + 1)} />
+
   if (isSaved) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[70vh] p-6 animate-in zoom-in duration-500 text-center">
@@ -1248,7 +1225,7 @@ export default function DeliveryPage() {
             </>
           )}
           <button 
-            onClick={() => { setIsSaved(false); setStep(1); setLastPdfUrl(null); setLastPdfFileName(null); setCart([]); setFingerprintEvidence(null); }}
+            onClick={() => { setIsSaved(false); setStep(1); setLastPdfUrl(null); setLastPdfFileName(null); setCart([]); }}
             className="px-8 py-4 bg-white hover:bg-slate-50 text-slate-600 rounded-xl font-bold transition-all border border-slate-200 shadow-sm"
           >
             Nova Entrega
@@ -1268,12 +1245,14 @@ export default function DeliveryPage() {
       <div className="mb-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="grid grid-cols-2 bg-slate-100 border border-slate-200 p-1 rounded-2xl w-full lg:w-auto">
           <button
+            disabled={isSaving || facialTransactionLocked}
             onClick={() => setViewMode("new")}
             className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "new" ? "bg-white text-[#2563EB] shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
           >
             <Plus className="w-4 h-4" /> Nova Entrega
           </button>
           <button
+            disabled={isSaving || facialTransactionLocked}
             onClick={() => setViewMode("pending")}
             className={`px-4 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${viewMode === "pending" ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
           >
@@ -1668,20 +1647,6 @@ export default function DeliveryPage() {
                         </div>
                       )}
 
-                      {!loadingActiveDeliveries && activeDeliveriesError && selectedEmployeeId && (
-                        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
-                          <p className="text-[10px] font-black uppercase tracking-widest">Nao foi possivel confirmar os EPIs em posse</p>
-                          <p className="mt-1 text-xs font-semibold">A entrega foi bloqueada para evitar baixa ou substituicao incorreta.</p>
-                          <button
-                            type="button"
-                            onClick={() => setActiveDeliveriesReloadVersion((version) => version + 1)}
-                            className="mt-3 min-h-11 rounded-xl border border-amber-300 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest"
-                          >
-                            Tentar novamente
-                          </button>
-                        </div>
-                      )}
-
                       {!loadingActiveDeliveries && currentPpe && currentActiveSamePpeDeliveries.length > 0 && (
                         <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-start gap-3">
                           <div className="bg-amber-100 text-amber-700 rounded-lg p-2 flex-shrink-0">
@@ -1719,7 +1684,7 @@ export default function DeliveryPage() {
                       
                       <button 
                         onClick={addToCart}
-                        disabled={!currentPpe || isCurrentPpeExpired || loadingActiveDeliveries || Boolean(activeDeliveriesError)}
+                        disabled={!currentPpe || isCurrentPpeExpired}
                         className="w-full bg-slate-800 hover:bg-slate-900 text-white disabled:bg-slate-300 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 mt-2"
                       >
                         <Plus className="w-4 h-4" /> Adicionar à Entrega
@@ -1772,10 +1737,7 @@ export default function DeliveryPage() {
                   <button 
                     disabled={employees.length === 0 || cart.length === 0}
                     onClick={() => {
-                      if (validateCartForDelivery()) {
-                        setStep(2)
-                        void requestLocationForSignature(false)
-                      }
+                      if (validateCartForDelivery()) setStep(2)
                     }}
                     className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white disabled:bg-slate-300 py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-blue-900/10 shadow-lg shadow-blue-900/15 flex items-center justify-center gap-2"
                   >
@@ -1837,54 +1799,42 @@ export default function DeliveryPage() {
                 </div>
               )}
 
-              <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-1.5 overflow-hidden rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-2">
                 <button 
-                  onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
+                  disabled={isSaving || facialTransactionLocked}
+                  onClick={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
                   className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <PenLine className="w-4 h-4" /> Assinatura na Tela
                 </button>
                 <button 
-                  onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
+                  disabled={isSaving || facialTransactionLocked}
+                  onClick={() => { setAuthMethod('manual_facial'); setCapturedPhotoBase64(null) }}
                   className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'manual_facial' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Camera className="w-4 h-4" /> Foto + Assinatura
                 </button>
                 <button 
-                  onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
+                  disabled={isSaving || facialTransactionLocked || process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true"}
+                  onClick={() => { setAuthMethod('facial'); setCapturedPhotoBase64(null) }}
                   className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'facial' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <Fingerprint className="w-4 h-4" /> Biometria Facial
                 </button>
-                <button
-                  onClick={() => { setAuthMethod('fingerprint'); setCapturedPhotoBase64(null); setFingerprintEvidence(null) }}
-                  className={`flex min-h-[44px] min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-4 text-center text-[10px] font-black uppercase tracking-wide transition-all sm:text-xs ${authMethod === 'fingerprint' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <Fingerprint className="w-4 h-4" /> Impressão Digital
+                <button type="button" disabled={isSaving || facialTransactionLocked} onClick={() => { setAuthMethod('fingerprint'); setFingerprintEvidence(null) }} className={`min-h-11 rounded-xl px-3 py-3 text-sm font-semibold ${authMethod === 'fingerprint' ? 'bg-white text-[var(--brand-color)] shadow-sm' : 'text-slate-600'}`}>
+                  <span className="flex items-center justify-center gap-2"><Fingerprint className="h-4 w-4" />Leitor de digital USB</span>
                 </button>
               </div>
+              {process.env.NEXT_PUBLIC_FACIAL_V2_ENABLED !== "true" && <p className="text-xs text-slate-500">Reconhecimento facial em preparação. Use assinatura na tela, foto de apoio ou leitor USB configurado.</p>}
+              {locationStatus === "granted" && <p className="text-xs text-slate-500">{locationSource === "network" ? "Localização aproximada da rede (não GPS)" : "Localização informada pelo dispositivo"}</p>}
 
               {authMethod === 'manual' || authMethod === 'manual_facial' ? (
                 <div className="space-y-4 animate-in fade-in">
                   {authMethod === 'manual_facial' && !capturedPhotoBase64 && (
-                    !selectedEmployee?.photo_url ? (
-                      <div className="bg-amber-50 border border-amber-200 p-8 rounded-3xl text-center space-y-4">
-                        <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-                          <ShieldAlert className="w-8 h-8 text-amber-600" />
-                        </div>
-                        <div>
-                          <p className="text-amber-800 font-black uppercase tracking-tight text-lg">Biometria Indisponivel</p>
-                          <p className="text-amber-600 text-sm mt-1 leading-relaxed">Cadastre a foto facial mestre do colaborador para usar Foto + Assinatura.</p>
-                        </div>
-                        <button onClick={() => setAuthMethod('manual')} className="mt-4 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors">
-                          Usar Assinatura Manual
-                        </button>
-                      </div>
-                    ) : (
                       <>
                         <FaceCamera
-                          verifyEmployeeId={selectedEmployee.id}
-                          verifyCompanyId={selectedEmployee.company_id}
+                          mode="evidence"
+                          employeeLabel={selectedEmployee?.full_name}
                           onCapture={(_, img) => setCapturedPhotoBase64(img)}
                           onCancel={() => { setAuthMethod('manual'); setCapturedPhotoBase64(null) }}
                         />
@@ -1896,13 +1846,12 @@ export default function DeliveryPage() {
                           <Link2 className="w-4 h-4 text-blue-500" /> Enviar link para assinatura
                         </button>
                       </>
-                    )
                   )}
                   {authMethod === 'manual_facial' && capturedPhotoBase64 && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
                       <Image src={capturedPhotoBase64} alt="Foto capturada agora" width={44} height={44} className="w-11 h-11 rounded-xl object-cover border border-emerald-200" unoptimized />
                       <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-relaxed">
-                        Identidade verificada. O PDF vai sair com a foto capturada agora e a assinatura manual abaixo.
+                        Foto registrada como evidência visual, sem verificação biométrica. Assine manualmente abaixo.
                       </p>
                       <button
                         onClick={() => setCapturedPhotoBase64(null)}
@@ -1922,12 +1871,7 @@ export default function DeliveryPage() {
                   <SignatureCapture
                     signatureRef={sigCanvas}
                     isSaving={isSaving}
-                    isPreparing={locationStatus === "requesting"}
-                    preparingLabel="Obtendo localização..."
-                    confirmLabel={locationStatus === "granted"
-                      ? `Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`
-                      : "Obter localização e confirmar"}
-                    confirmHint={locationStatus === "blocked" ? "A localização será tentada novamente ao confirmar." : undefined}
+                    confirmLabel={`Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
                     onClear={clearSignature}
                     onConfirm={handleManualSave}
                   />
@@ -1949,61 +1893,22 @@ export default function DeliveryPage() {
                   )}
                 </div>
               ) : authMethod === 'fingerprint' ? (
-                <div className="space-y-4 animate-in zoom-in-95">
-                  <FingerprintCommandPanel
-                    key={`${selectedEmployeeId}:verify`}
-                    employeeId={selectedEmployeeId}
-                    employeeName={selectedEmployee?.full_name || "Colaborador"}
-                    operation="verify"
-                    onCompleted={setFingerprintEvidence}
-                    onReset={() => setFingerprintEvidence(null)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void saveDelivery(undefined, fingerprintEvidence || undefined)}
-                    disabled={isSaving || fingerprintEvidence?.status !== 'completed'}
-                    className="flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-xs font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-900/10 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-                    Concluir entrega com digital
-                  </button>
+                <div className="space-y-4">
+                  <FingerprintCommandPanel employeeId={selectedEmployeeId} employeeName={selectedEmployee?.full_name || "Colaborador"} operation="verify" onCompleted={setFingerprintEvidence} onReset={() => setFingerprintEvidence(null)} />
+                  <button type="button" disabled={isSaving || fingerprintEvidence?.status !== 'completed'} onClick={() => void saveDelivery(undefined, undefined, fingerprintEvidence || undefined)} className="min-h-12 w-full rounded-xl bg-[var(--brand-color)] px-4 py-3 font-semibold text-white disabled:opacity-50">{isSaving ? "Registrando entrega…" : `Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 's' : ''})`}</button>
                 </div>
               ) : (
                 <div className="space-y-4 animate-in zoom-in-95">
-                  {!selectedEmployee?.photo_url ? (
-                    <div className="bg-amber-50 border border-amber-200 p-8 rounded-3xl text-center space-y-4">
-                      <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-                        <ShieldAlert className="w-8 h-8 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-amber-800 font-black uppercase tracking-tight text-lg">Biometria Indisponível</p>
-                        <p className="text-amber-600 text-sm mt-1 leading-relaxed">O colaborador <strong className="uppercase">{selectedEmployee?.full_name}</strong> ainda não realizou o registro facial mestre.</p>
-                      </div>
-                      <button onClick={() => setAuthMethod('manual')} className="mt-4 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors">
-                        Usar Assinatura Manual
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between mb-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identidade Requerida</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-slate-700 uppercase">{selectedEmployee.full_name}</span>
-                          {selectedEmployeePhotoUrl ? (
-                            <Image src={selectedEmployeePhotoUrl} alt="User" width={32} height={32} className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover" unoptimized />
-                          ) : (
-                            <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-400 shadow-sm" aria-label="Carregando foto">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <FaceCamera 
-                        verifyEmployeeId={selectedEmployee.id}
-                        verifyCompanyId={selectedEmployee.company_id}
-                        onCapture={handleFaceCapture}
-                        onCancel={() => setAuthMethod('manual')}
+                      <FacialDeliveryConfirmation
+                        employeeId={selectedEmployeeId}
+                        employeeLabel={selectedEmployee?.full_name || "Colaborador selecionado"}
+                        context={{ employee_id: selectedEmployeeId, workplace_id: selectedWorkplaceId || null, third_party_id: selectedThirdPartyId, delivery_date: facialDeliveryDateIso, items: cart.map(item => ({ ppe_id: item.ppeId, quantity: item.quantity, reason: item.reason })) }}
+                        items={cart.map(item => ({name:item.ppeName,quantity:item.quantity,ca:item.ppeCaNumber}))}
+                        onConfirm={(submission,image) => saveDelivery(image,submission)}
+                        onManual={() => setAuthMethod('manual')}
+                        onTransactionLocked={setFacialTransactionLocked}
                       />
+                      {cart.some(item => item.autoReturnAllocations?.length) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Na modalidade facial, devoluções anteriores devem ser registradas separadamente em Movimentações. Esta confirmação registra somente os EPIs recebidos agora.</p>}
                       <button
                         onClick={generateRemoteLink}
                         disabled={cart.length === 0 || isSaving}
@@ -2018,13 +1923,11 @@ export default function DeliveryPage() {
                       >
                         <Hourglass className="w-4 h-4" /> Entregar agora e assinar depois
                       </button>
-                    </>
-                  )}
                 </div>
               )}
 
               <div className="pt-6 flex justify-center border-t border-slate-100">
-                <button onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-800 transition-colors bg-slate-50 px-6 py-3 rounded-xl">
+                <button disabled={isSaving || facialTransactionLocked} onClick={() => setStep(1)} className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-800 transition-colors bg-slate-50 px-6 py-3 rounded-xl disabled:opacity-50">
                   ← Voltar e Alterar EPIs
                 </button>
               </div>

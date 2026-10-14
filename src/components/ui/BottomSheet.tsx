@@ -59,7 +59,7 @@ export function BottomSheet({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl animate-in slide-in-from-bottom-8 duration-200 md:zoom-in-95",
+          "safeepi-panel-enter flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_24px_80px_rgb(15_23_42/18%)]",
           desktopPanel,
           className,
         )}
@@ -67,7 +67,7 @@ export function BottomSheet({
         {(title || description) && (
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-5 md:p-6">
             <div className="min-w-0">
-              {title && <h2 id={titleId} className="break-words text-lg font-black uppercase tracking-tight text-slate-900">{title}</h2>}
+              {title && <h2 id={titleId} className="break-words text-lg font-semibold tracking-tight text-slate-900">{title}</h2>}
               {description && <p id={descriptionId} className="mt-1 text-sm font-medium text-slate-500">{description}</p>}
             </div>
             <button
@@ -81,7 +81,7 @@ export function BottomSheet({
             </button>
           </header>
         )}
-        <div className={cn("min-h-0 flex-1 overflow-y-auto p-5 md:p-6", contentClassName)}>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 pt-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] md:p-6", contentClassName)}>
           {children}
         </div>
       </section>

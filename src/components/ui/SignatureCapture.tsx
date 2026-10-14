@@ -11,10 +11,7 @@ type SignatureCaptureProps = {
   onConfirm: () => void
   onClear?: () => void
   isSaving?: boolean
-  isPreparing?: boolean
   confirmLabel?: string
-  preparingLabel?: string
-  confirmHint?: string
   className?: string
 }
 
@@ -23,10 +20,7 @@ export function SignatureCapture({
   onConfirm,
   onClear,
   isSaving = false,
-  isPreparing = false,
   confirmLabel = "Confirmar assinatura",
-  preparingLabel = "Preparando confirmação...",
-  confirmHint,
   className = "",
 }: SignatureCaptureProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -182,19 +176,14 @@ export function SignatureCapture({
       </div>
 
       <div className="sticky bottom-0 z-10 w-full max-w-full bg-white/95 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur sm:static sm:bg-transparent sm:p-0">
-        {confirmHint && !isSaving && (
-          <p className="mb-2 text-center text-xs font-semibold leading-relaxed text-amber-700" role="status">
-            {confirmHint}
-          </p>
-        )}
         <button
           type="button"
           onClick={onConfirm}
-          disabled={isSaving || isPreparing || !hasSignature}
+          disabled={isSaving || !hasSignature}
           className="flex min-h-[52px] w-full min-w-0 items-center justify-center rounded-2xl bg-[#2563EB] px-4 py-4 text-center text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-blue-900/15 transition hover:bg-[#1D4ED8] disabled:bg-slate-300 disabled:shadow-none"
         >
-          {isSaving || isPreparing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
-          {isSaving ? "Salvando..." : isPreparing ? preparingLabel : confirmLabel}
+          {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
+          {isSaving ? "Salvando..." : confirmLabel}
         </button>
       </div>
     </div>

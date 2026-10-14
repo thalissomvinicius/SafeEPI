@@ -136,7 +136,7 @@ export default function ThirdPartiesPage() {
       const [thirdPartyData, workplaceData, employeeData, deliveryData] = await Promise.all([
         api.getThirdParties(),
         api.getWorkplaces(),
-        api.getEmployees(),
+        api.getEmployees({ signPhotos: false }),
         api.getDeliveries({ all: true, signAssets: false }),
       ])
       setThirdParties(thirdPartyData)

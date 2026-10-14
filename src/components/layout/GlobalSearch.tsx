@@ -86,7 +86,7 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="md:hidden p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-[#2563EB] transition-all"
+        className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-50 hover:text-[#2563EB] lg:hidden"
         aria-label="Abrir busca global"
         title="Buscar"
       >
@@ -96,12 +96,12 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:border-[#2563EB]/30 hover:bg-white transition-all w-64 group"
+        className="group hidden h-10 w-52 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-500 transition-colors hover:border-[var(--brand-border)] hover:bg-white lg:flex xl:w-60"
         aria-label="Abrir busca global, atalho Control K"
       >
         <Search className="w-4 h-4 group-hover:text-[#2563EB] transition-colors" />
-        <span className="text-xs font-bold uppercase tracking-widest flex-1 text-left">Busca Global...</span>
-        <kbd className="text-xs bg-white border border-slate-200 px-1.5 py-0.5 rounded-md font-sans">Ctrl+K</kbd>
+        <span className="flex-1 text-left text-xs font-medium">Buscar no sistema</span>
+        <kbd className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 font-sans text-[10px]">Ctrl K</kbd>
       </button>
 
       {isOpen && (
@@ -154,9 +154,9 @@ export function GlobalSearch() {
 
             <div id={resultsId} className="flex-1 md:max-h-[500px] overflow-y-auto p-2" aria-live="polite">
               {query.trim().length < 2 ? (
-                <div className="p-12 text-center text-slate-500"><p className="text-sm font-bold uppercase tracking-widest">Digite ao menos dois caracteres.</p></div>
+                <div className="px-8 py-12 text-center text-slate-500"><p className="text-sm">Busque colaboradores, EPIs ou locais.</p><p className="mt-1 text-xs text-slate-400">Digite ao menos dois caracteres para começar.</p></div>
               ) : !loading && resultCount === 0 ? (
-                <div className="p-12 text-center text-slate-500"><p className="text-sm font-bold uppercase tracking-widest">Nenhum resultado encontrado para &quot;{query}&quot;</p></div>
+                <div className="px-8 py-12 text-center text-slate-500"><p className="text-sm">Nenhum resultado para &quot;{query}&quot;.</p><p className="mt-1 text-xs text-slate-400">Confira o nome ou tente outra palavra.</p></div>
               ) : (
                 <div className="space-y-2">
                   {results.employees.length > 0 && (

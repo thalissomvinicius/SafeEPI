@@ -28,6 +28,7 @@ export const metadata: Metadata = {
 
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ClientShell } from "@/components/layout/ClientShell";
+import { BrandBootstrap } from "@/components/layout/BrandBootstrap";
 import { Toaster } from "sonner";
 import { ToastIcon } from "@/components/ui/ToastIcon";
 import { Analytics } from "@vercel/analytics/next";
@@ -46,7 +47,8 @@ export default async function RootLayout({
       lang="pt-BR"
       className={`${plusJakarta.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-[100dvh] overflow-x-hidden flex flex-col bg-slate-50 text-slate-900">
+      <body suppressHydrationWarning className="min-h-[100dvh] overflow-x-hidden flex flex-col bg-slate-50 text-slate-900">
+        <BrandBootstrap />
         <a href="#main-content" className="skip-link">Pular para o conteúdo principal</a>
         <AuthProvider>
           <ClientShell>

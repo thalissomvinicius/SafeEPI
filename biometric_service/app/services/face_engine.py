@@ -1,57 +1,71 @@
+"""CPU YuNet/SFace. OpenCV instances mutate, so inference is serialized."""
+from threading import RLock
+import cv2
 import numpy as np
 
 from app.core.config import settings
-from app.services.quality import quality_score
+from app.model_manifest import checked_model_path
+from app.services.quality import quality_score, instruction_for_quality
+from app.services.verification import validate_embedding
 
 
 class FaceEngine:
     def __init__(self) -> None:
-        self._app = None
+        self._detector = None
+        self._recognizer = None
+        self._lock = RLock()
+        self.readiness_reason = "models_not_loaded"
+
+    @property
+    def ready(self) -> bool:
+        return self._detector is not None and self._recognizer is not None
 
     def load(self) -> None:
-        if self._app is not None:
-            return
-        from insightface.app import FaceAnalysis
-
-        app = FaceAnalysis(name=settings.insightface_model, providers=["CPUExecutionProvider"])
-        app.prepare(ctx_id=-1, det_size=(settings.det_size, settings.det_size))
-        self._app = app
+        with self._lock:
+            if self.ready:
+                return
+            try:
+                detector_path = checked_model_path(settings.models_dir, "yunet")
+                recognizer_path = checked_model_path(settings.models_dir, "sface")
+                cv2.setNumThreads(settings.cpu_threads)
+                detector = cv2.FaceDetectorYN.create(str(detector_path), "", (320, 320), settings.min_face_score, 0.3, 5000)
+                recognizer = cv2.FaceRecognizerSF.create(str(recognizer_path), "")
+                self._detector, self._recognizer = detector, recognizer
+                self.readiness_reason = "ready"
+            except (RuntimeError, cv2.error, OSError) as error:
+                self.readiness_reason = str(error) if str(error) in {"models_not_installed", "model_integrity_failed"} else "model_load_failed"
+                raise RuntimeError(self.readiness_reason) from error
 
     def analyze(self, image: np.ndarray) -> dict:
-        self.load()
-        faces = self._app.get(image)  # type: ignore[union-attr]
-        if len(faces) != 1:
-            return {
-                "ok": False,
-                "reason": "multiple_faces" if len(faces) > 1 else "no_face",
-                "face_count": len(faces),
-            }
-
-        face = faces[0]
-        if float(face.det_score) < settings.min_face_score:
-            return {"ok": False, "reason": "low_detection_score", "face_count": 1}
-
-        q_score, q_parts = quality_score(image, face.bbox)
-
-        return {
-            "ok": True,
-            "face_count": 1,
-            "det_score": float(face.det_score),
-            "bbox": face.bbox.astype(float).tolist(),
-            "landmarks": face.kps.astype(float).tolist() if getattr(face, "kps", None) is not None else [],
-            "embedding": face.normed_embedding.astype(float).tolist(),
-            "quality_score": q_score,
-            "quality_parts": q_parts,
-        }
+        with self._lock:
+            self.load()
+            height, width = image.shape[:2]
+            self._detector.setInputSize((width, height))
+            _, faces = self._detector.detect(image)
+            count = 0 if faces is None else len(faces)
+            if count != 1:
+                return {"ok": False, "reason": "multiple_faces" if count > 1 else "no_face", "face_count": count}
+            face = faces[0]
+            x, y, box_width, box_height = face[:4]
+            bbox = np.array([x, y, x + box_width, y + box_height], dtype=np.float32)
+            quality, parts = quality_score(image, bbox)
+            reason, _ = instruction_for_quality(parts)
+            if reason or quality < settings.min_quality_score:
+                return {"ok": False, "reason": reason or "low_quality", "face_count": 1, "quality_score": quality}
+            aligned = self._recognizer.alignCrop(image, face)
+            feature = self._recognizer.feature(aligned).reshape(-1).astype(np.float64)
+            norm = float(np.linalg.norm(feature))
+            if not np.isfinite(norm) or norm <= 1e-8:
+                raise RuntimeError("invalid_model_embedding")
+            embedding = validate_embedding((feature / norm).tolist())
+            return {"ok": True, "face_count": 1, "det_score": float(face[-1]),
+                    "bbox": bbox.astype(float).tolist(), "embedding": embedding,
+                    "quality_score": quality, "quality_parts": parts}
 
 
 face_engine = FaceEngine()
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    va = np.asarray(a, dtype=np.float32)
-    vb = np.asarray(b, dtype=np.float32)
-    denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
-    if denom == 0:
-        return 0.0
-    return float(np.dot(va, vb) / denom)
+    a, b = validate_embedding(a), validate_embedding(b)
+    return max(-1.0, min(1.0, sum(x * y for x, y in zip(a, b))))

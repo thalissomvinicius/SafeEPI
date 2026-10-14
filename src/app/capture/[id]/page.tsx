@@ -1,369 +1,139 @@
 "use client"
 
-// ui: câmera/assinatura redesenhada — mobile-first ✓
-
-import { useState, useEffect } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useParams, useSearchParams } from "next/navigation"
-import { Camera, CheckCircle2, Loader2, AlertTriangle, ShieldCheck, Lock, RefreshCw, XCircle } from "lucide-react"
+import { AlertTriangle, Camera, CheckCircle2, Hourglass, ShieldCheck } from "lucide-react"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { LoadingState } from "@/components/ui/LoadingState"
-import { formatCpf } from "@/utils/cpf"
-import Image from "next/image"
-import { Suspense } from "react"
-import { toast } from "@/lib/toast"
 
-interface LinkData {
-  id: string
-  employee_id: string
-  token: string
-  status: string
-  type: string
-  employee: {
-    id: string
-    full_name: string
-    cpf: string
-    photo_url: string | null
-  }
-}
+type CaptureEmployee = { id: string; full_name: string; registration_number?: string | null }
 
 function CaptureContent() {
   const params = useParams()
   const searchParams = useSearchParams()
   const employeeId = params.id as string
-  const token = searchParams.get('t')
-
+  const token = searchParams.get("t")
   const [loading, setLoading] = useState(true)
   const [pageError, setPageError] = useState<string | null>(null)
-  const [linkStatus, setLinkStatus] = useState<string>("")
-  const [employee, setEmployee] = useState<LinkData['employee'] | null>(null)
-  const [linkToken, setLinkToken] = useState<string>("")
-  
-  // Verificação de CPF
-  const [cpfInput, setCpfInput] = useState("")
-  const [cpfVerified, setCpfVerified] = useState(false)
-  const [cpfError, setCpfError] = useState("")
-
-  // Captura
+  const [employee, setEmployee] = useState<CaptureEmployee | null>(null)
   const [isCapturing, setIsCapturing] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
-  
-  // Preview da foto capturada
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
-  const [capturedDescriptor, setCapturedDescriptor] = useState<number[] | null>(null)
-
-  // -- Auto-scroll to top on state change --
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [cpfVerified, isCapturing, isSuccess, capturedPhoto])
+  const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
+    const controller = new AbortController()
+    let current = true
+    const timeout = window.setTimeout(() => controller.abort(), 15000)
     async function validateLink() {
+      setLoading(true)
+      setEmployee(null)
+      setPageError(null)
+      setIsCapturing(false)
+      setSubmitted(false)
       try {
-        if (token) {
-          // Novo fluxo: validar via token
-          const res = await fetch(`/api/remote-links?token=${token}`)
-          const data = await res.json()
-          
-          if (!res.ok) {
-            setPageError(data.error || "Link inválido.")
-            setLinkStatus(data.status || "invalid")
-            return
-          }
-
-          setEmployee(data.link.employee)
-          setLinkToken(data.link.token)
-        } else {
-          // Fallback: fluxo antigo sem token (compatibilidade)
-          const res = await fetch(`/api/remote-capture?id=${employeeId}`)
-          if (!res.ok) throw new Error("Colaborador não encontrado.")
-          const data = await res.json()
-          setEmployee(data)
+        if (!employeeId || !token) {
+          throw new Error("Solicite um novo link de cadastro ao responsável da empresa. Este endereço não contém uma autorização válida.")
         }
-      } catch (err: unknown) {
-        setPageError(err instanceof Error ? err.message : "Erro desconhecido.")
+        const res = await fetch(`/api/remote-links?${new URLSearchParams({ token })}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        const data = await res.json()
+        if (!current) return
+        if (!res.ok) {
+          if (data.status === "completed") {
+            throw new Error("Este link já foi utilizado. Consulte o responsável da empresa para saber se o cadastro foi aprovado; uma foto enviada não significa biometria ativa.")
+          }
+          throw new Error(data.error || "Não foi possível validar o link. Solicite um novo link de cadastro.")
+        }
+        const link = data.link
+        if (link?.type !== "capture" || link.employee_id !== employeeId || link.employee?.id !== employeeId || link.status !== "pending") {
+          throw new Error("Este link não corresponde a este cadastro ou não está disponível para captura.")
+        }
+        setEmployee({ id: link.employee.id, full_name: link.employee.full_name, registration_number: link.employee.registration_number })
+      } catch (error) {
+        if (current) {
+          setPageError(controller.signal.aborted ? "A consulta demorou demais. Reabra o link para tentar novamente." : error instanceof Error ? error.message : "Falha ao abrir o cadastro. Tente novamente.")
+        }
       } finally {
-        setLoading(false)
+        window.clearTimeout(timeout)
+        if (current) setLoading(false)
       }
     }
-    
-    if (employeeId) validateLink()
+    void validateLink()
+    return () => { current = false; window.clearTimeout(timeout); controller.abort() }
   }, [employeeId, token])
 
-  const handleCpfVerify = () => {
-    if (!employee) return
-    setCpfError("")
-    const inputDigits = cpfInput.replace(/\D/g, '')
-    const employeeDigits = employee.cpf.replace(/\D/g, '')
-    
-    if (inputDigits.length < 11) {
-      setCpfError("Digite o CPF completo (11 dígitos).")
-      return
-    }
+  const pageClass = "flex min-h-[100dvh] flex-col items-center justify-center bg-slate-50 px-4 py-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]"
 
-    if (inputDigits === employeeDigits) {
-      setCpfVerified(true)
-    } else {
-      setCpfError("CPF não confere com o cadastro. Verifique e tente novamente.")
-    }
-  }
+  if (loading) return <div className={pageClass}><LoadingState variant="page" label="Abrindo cadastro facial" detail="Validando a autorização de captura." /></div>
 
-  // Captura da foto - mostra preview
-  const handleCapture = (face_descriptor: number[], photo_url: string) => {
-    setIsCapturing(false)
-    setCapturedPhoto(photo_url)
-    setCapturedDescriptor(face_descriptor)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  // Refazer - volta para a câmera
-  const handleRetake = () => {
-    setCapturedPhoto(null)
-    setCapturedDescriptor(null)
-    setIsCapturing(true)
-  }
-
-  // Confirmar - envia para o banco e desativa o link
-  const handleConfirm = async () => {
-    if (!capturedPhoto) return
-    setIsSaving(true)
-    
-    try {
-      const res = await fetch('/api/remote-capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: employee!.id,
-          photo_url: capturedPhoto,
-          face_descriptor: capturedDescriptor ? Array.from(capturedDescriptor) : [],
-          token: linkToken // Passa o token para validação e conclusão no servidor
-        })
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Erro ao salvar a biometria.")
-      }
-
-      setIsSuccess(true)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? "Falha: " + err.message : "Falha ao salvar biometria.")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // -- LOADING --
-  if (loading) {
-    return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50">
-        <LoadingState
-          variant="page"
-          label="Abrindo captura"
-          detail="Validando link e preparando o fluxo facial."
-        />
-      </div>
-    )
-  }
-
-  // -- ERRO / LINK EXPIRADO / LINK JÁ USADO --
   if (pageError || !employee) {
-    const isExpired = linkStatus === 'expired'
-    const isCompleted = linkStatus === 'completed'
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full space-y-4">
-          {isCompleted ? (
-            <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
-          ) : isExpired ? (
-            <XCircle className="w-16 h-16 text-orange-500 mx-auto" />
-          ) : (
-            <AlertTriangle className="w-16 h-16 text-red-500 mx-auto" />
-          )}
-          <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">
-            {isCompleted ? "Captura Já Concluída" : isExpired ? "Link Expirado" : "Erro no Link"}
-          </h1>
-          <p className="text-slate-500 font-medium">{pageError}</p>
-          {isCompleted && (
-            <p className="text-sm text-green-600 font-bold">A biometria já foi registrada com sucesso. Pode fechar esta tela.</p>
-          )}
+      <main className={pageClass}>
+        <div className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-12 w-12 text-amber-600" aria-hidden="true" />
+          <h1 className="text-xl font-bold text-slate-900">Cadastro indisponível</h1>
+          <p role="alert" className="text-sm leading-relaxed text-slate-600">{pageError || "Solicite um novo link de cadastro."}</p>
         </div>
-      </div>
+      </main>
     )
   }
 
-  // -- SUCESSO --
-  if (isSuccess) {
+  if (submitted) {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-slate-50 p-4 animate-in fade-in zoom-in duration-500">
-        <CheckCircle2 className="w-24 h-24 text-green-500 mb-6" />
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mb-2 text-center">Biometria Salva!</h1>
-        <p className="text-slate-500 text-center max-w-sm mb-8">
-          Sua foto foi registrada com sucesso no sistema. Você já pode fechar esta tela.
-        </p>
-      </div>
+      <main className={pageClass}>
+        <div className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 text-center shadow-sm" role="status">
+          <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" aria-hidden="true" />
+          <h1 className="text-xl font-bold text-slate-900">Cadastro enviado para revisão</h1>
+          <p className="text-sm leading-relaxed text-slate-600">O reconhecimento facial ainda não está liberado. Um responsável autorizado precisa conferir sua identidade e aprovar este cadastro.</p>
+          <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Você pode fechar esta tela. O link de captura é de uso único.</p>
+        </div>
+      </main>
     )
   }
 
-  // -- CÂMERA FULLSCREEN --
-  if (isCapturing) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto overscroll-contain bg-slate-50 pb-[env(safe-area-inset-bottom)]">
-        <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white/95 p-3 z-10 backdrop-blur">
-          <h3 className="text-slate-900 font-black uppercase text-xs tracking-widest">Captura Facial</h3>
-          <button onClick={() => setIsCapturing(false)} className="min-h-[40px] text-slate-700 text-xs font-bold bg-slate-100 px-4 rounded-full">Cancelar</button>
-        </div>
-        <div className="min-h-0 flex-1 p-2 sm:p-6">
-           <FaceCamera 
-              employeeId={employee?.id}
-              verifyToken={linkToken}
-              requireLiveness
-              onCapture={handleCapture}
-              onCancel={() => setIsCapturing(false)}
-              cancelLabel="Cancelar"
-           />
-        </div>
-      </div>
-    )
-  }
-
-  // -- PREVIEW DA FOTO CAPTURADA --
-  if (capturedPhoto) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
-        <div className="w-full max-w-md space-y-5 rounded-3xl bg-white p-5 text-center shadow-xl animate-in fade-in sm:p-8">
-          <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Confirme sua Foto</h2>
-          
-          <div className="relative mx-auto w-48 h-48 sm:w-56 sm:h-56 rounded-full overflow-hidden border-4 border-green-500 shadow-xl">
-            <Image 
-              src={capturedPhoto} 
-              alt="Foto capturada" 
-              fill 
-              className="object-cover"
-              unoptimized 
-            />
-          </div>
-
-          <p className="text-sm text-slate-500">
-            Esta foto ficará registrada no seu cadastro. Verifique se está nítida e bem centralizada.
-          </p>
-
-          <div className="flex flex-col gap-3">
-            <button 
-              onClick={handleConfirm}
-              disabled={isSaving}
-              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-4 font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-900/15 transition-all hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {isSaving ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Salvando...</>
-              ) : (
-                <><CheckCircle2 className="w-5 h-5" /> Confirmar e Enviar</>
-              )}
-            </button>
-            <button 
-              onClick={handleRetake}
-              disabled={isSaving}
-              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-50"
-            >
-              <RefreshCw className="w-4 h-4" /> Tirar Outra Foto
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // -- VERIFICAÇÃO DE CPF --
-  if (!cpfVerified) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
-        <div className="w-full max-w-md space-y-5 rounded-3xl bg-white p-5 text-center shadow-xl sm:p-8">
-          <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-            <Lock className="w-7 h-7 text-[#2563EB]" />
-          </div>
-          
-          <div>
-            <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Verificação de Identidade</h1>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">SafeEPI</p>
-          </div>
-
-          <p className="text-sm text-slate-500">
-            Para sua segurança, informe o seu CPF para confirmar sua identidade.
-          </p>
-
-          <div className="space-y-3">
-            <input 
-              type="text"
-              value={cpfInput}
-              onChange={(e) => { setCpfInput(formatCpf(e.target.value)); setCpfError(""); }}
-              placeholder="000.000.000-00"
-              maxLength={14}
-              className="min-h-[52px] w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-center text-lg font-bold tracking-widest transition-all focus:border-[#2563EB] focus:outline-none"
-              autoFocus
-              inputMode="numeric"
-              onKeyDown={(e) => e.key === 'Enter' && handleCpfVerify()}
-            />
-            
-            {cpfError && (
-              <p className="text-red-500 text-xs font-bold animate-in fade-in">{cpfError}</p>
-            )}
-
-            <button 
-              onClick={handleCpfVerify}
-              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]"
-            >
-              <ShieldCheck className="w-4 h-4" /> Verificar CPF
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // -- TELA PRINCIPAL (CPF verificado) --
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center overflow-x-hidden bg-slate-50 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
-      <div className="w-full max-w-md space-y-5 rounded-3xl bg-white p-5 text-center shadow-xl sm:p-8">
-        <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-          <Camera className="w-7 h-7 text-green-600" />
-        </div>
-        
+    <main className={pageClass}>
+      <div className="w-full max-w-md space-y-5 rounded-3xl bg-white p-6 shadow-sm">
+        <Camera className="h-10 w-10 text-blue-600" aria-hidden="true" />
         <div>
-          <h1 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Cadastro de Biometria</h1>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">SafeEPI</p>
+          <h1 className="text-xl font-bold text-slate-900">Cadastro facial</h1>
+          <p className="mt-1 text-sm font-semibold text-slate-700">{employee.full_name}</p>
+          {employee.registration_number && <p className="mt-1 text-sm text-slate-600">Matrícula: {employee.registration_number}</p>}
         </div>
-
-        <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
-          <div className="text-left">
-            <p className="text-[10px] text-green-700 font-bold uppercase tracking-widest">Identidade Confirmada</p>
-            <p className="font-black text-green-900 text-sm">{employee.full_name}</p>
-          </div>
+        <p className="text-sm leading-relaxed text-slate-600">Cadastre somente o seu próprio rosto. A captura será analisada no servidor e ficará aguardando a conferência do responsável da empresa.</p>
+        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <Hourglass className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <p>Este cadastro não confirma recebimento de EPIs nem é uma assinatura. Se os dados acima não forem seus, não prossiga.</p>
         </div>
-
-        <button 
-          onClick={() => setIsCapturing(true)}
-          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#2563EB] py-4 font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]"
-        >
-          <Camera className="w-5 h-5" /> Iniciar Câmera
+        <button type="button" onClick={() => setIsCapturing(true)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700">
+          <Camera className="h-5 w-5" aria-hidden="true" /> Iniciar câmera
         </button>
-
-        <p className="text-[9px] text-slate-400 italic">
-          Certifique-se de estar em um local bem iluminado e retire óculos escuros ou bonés.
-        </p>
+        <p className="flex gap-2 text-xs leading-relaxed text-slate-500"><ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />Use um ambiente iluminado. Se não puder usar a câmera, procure o responsável para uma alternativa de atendimento.</p>
       </div>
-    </div>
+      {isCapturing && (
+        <FaceCamera
+          mode="enroll"
+          employeeId={employee.id}
+          employeeLabel={employee.registration_number ? `${employee.full_name} · Matrícula ${employee.registration_number}` : employee.full_name}
+          verifyToken={token || undefined}
+          onCapture={() => { /* Enrollment is confirmed only by the server response below. */ }}
+          onEnrolled={(result) => {
+            setIsCapturing(false)
+            if (result.status !== "pending" || !result.enrollment_id) {
+              setPageError("O servidor não confirmou o envio para revisão. Consulte o responsável antes de tentar novamente.")
+              return
+            }
+            setSubmitted(true)
+          }}
+          onCancel={() => setIsCapturing(false)}
+          cancelLabel="Voltar ao cadastro"
+        />
+      )}
+    </main>
   )
 }
 
 export default function RemoteCapturePage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50">
-        <LoadingState variant="page" label="Abrindo captura" detail="Preparando a tela segura." />
-      </div>
-    }>
-      <CaptureContent />
-    </Suspense>
-  )
+  return <Suspense fallback={<LoadingState variant="page" label="Abrindo cadastro facial" detail="Preparando a tela segura." />}><CaptureContent /></Suspense>
 }

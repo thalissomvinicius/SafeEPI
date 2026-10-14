@@ -4,24 +4,19 @@ import { fetchImageDataUrl, imageDataUrlToFile } from "@/utils/imageDataUrl"
 describe("imageDataUrlToFile", () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it("converte a assinatura localmente sem tentar acessar a rede", async () => {
+  it("converte a assinatura localmente sem acessar a rede", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
-
     const file = imageDataUrlToFile("data:image/png;base64,AQIDBA==", "signature")
-
     expect(fetchMock).not.toHaveBeenCalled()
     expect(file.name).toBe("signature.png")
     expect(file.type).toBe("image/png")
     expect(Array.from(new Uint8Array(await file.arrayBuffer()))).toEqual([1, 2, 3, 4])
   })
 
-  it("preserva a extensão de formatos de imagem permitidos", () => {
+  it("preserva os formatos permitidos e recusa conteúdo inválido", () => {
     expect(imageDataUrlToFile("data:image/jpeg;base64,AQ==", "signature").name).toBe("signature.jpg")
     expect(imageDataUrlToFile("data:image/webp;base64,AQ==", "signature").name).toBe("signature.webp")
-  })
-
-  it("recusa conteúdo vazio ou que não seja uma imagem Base64 permitida", () => {
     expect(() => imageDataUrlToFile("data:image/png;base64,", "signature")).toThrow("inválida")
     expect(() => imageDataUrlToFile("data:text/plain;base64,AQ==", "signature")).toThrow("inválida")
     expect(() => imageDataUrlToFile("data:image/svg+xml;base64,AQ==", "signature")).toThrow("inválida")

@@ -78,3 +78,44 @@ export function decryptBiometricDescriptor(encrypted: string, companyId: string)
 }
 
 export const BIOMETRIC_KEY_VERSION = FORMAT_VERSION
+
+export const FACIAL_KEY_VERSION = "v2"
+export type FacialTemplateScope = { companyId: string; employeeId: string; modelId: string }
+
+function facialAad(scope: FacialTemplateScope) {
+  if (!scope.companyId || !scope.employeeId || !scope.modelId) throw new Error("Contexto biométrico incompleto.")
+  return Buffer.from(JSON.stringify([FACIAL_KEY_VERSION, scope.companyId, scope.employeeId, scope.modelId]), "utf8")
+}
+
+function validateFacialTemplate(value: unknown): asserts value is number[] {
+  if (!Array.isArray(value) || value.length !== 128
+    || value.some(item => typeof item !== "number" || !Number.isFinite(item) || Math.abs(item) > 100)
+    || !value.some(item => Math.abs(item) > 1e-12)) {
+    throw new Error("Template SFace inválido. Faça um novo cadastro supervisionado.")
+  }
+}
+
+export function encryptFacialTemplate(template: number[], scope: FacialTemplateScope) {
+  validateFacialTemplate(template)
+  const aad = facialAad(scope)
+  const iv = randomBytes(IV_BYTES)
+  const cipher = createCipheriv(ALGORITHM, getEncryptionKey(), iv)
+  cipher.setAAD(aad)
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(template), "utf8"), cipher.final()])
+  return [FACIAL_KEY_VERSION, iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), encrypted.toString("base64url")].join(".")
+}
+
+export function decryptFacialTemplate(encrypted: string, scope: FacialTemplateScope) {
+  const [version, iv, tag, ciphertext, extra] = encrypted.split(".")
+  if (version !== FACIAL_KEY_VERSION || !iv || !tag || !ciphertext || extra
+    || Buffer.from(iv, "base64url").length !== IV_BYTES || Buffer.from(tag, "base64url").length !== 16) {
+    throw new Error("Formato de template facial inválido.")
+  }
+  const decipher = createDecipheriv(ALGORITHM, getEncryptionKey(), Buffer.from(iv, "base64url"))
+  decipher.setAAD(facialAad(scope))
+  decipher.setAuthTag(Buffer.from(tag, "base64url"))
+  const plain = Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()])
+  const template: unknown = JSON.parse(plain.toString("utf8"))
+  validateFacialTemplate(template)
+  return template
+}

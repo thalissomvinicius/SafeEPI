@@ -2,8 +2,6 @@ import { NextResponse } from "next/server"
 import { requireAuthorizedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { getSignedUrl, PRIVATE_STORAGE_BUCKET, STORAGE_VIEW_EXPIRES_IN } from "@/lib/privateStorage"
-import { getClientIp } from "@/lib/getClientIp"
-import { rateLimit, rateLimitExceededResponse } from "@/lib/rateLimit"
 import { uploadFieldsSchema } from "@/lib/securitySchemas"
 import { isValidationResponse, validateBody } from "@/lib/validateBody"
 import { validateUpload } from "@/lib/validateUpload"
@@ -14,9 +12,6 @@ function sanitizePathPart(value: string) {
 }
 
 export async function POST(request: Request) {
-  const limited = await rateLimit(`upload:signature:ip:${getClientIp(request)}`, 20, 60 * 60 * 1000)
-  if (!limited.success) return rateLimitExceededResponse(limited.retryAfter)
-
   const auth = await requireAuthorizedUser(request)
   if (!auth.authorized) {
     return auth.response

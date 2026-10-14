@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Keep jsdom/coverage workers bounded on development machines and small CI runners.
+    maxWorkers: 2,
     setupFiles: ["./tests/setup.ts"],
     coverage: {
       provider: "v8",

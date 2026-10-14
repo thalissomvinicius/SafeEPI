@@ -142,7 +142,7 @@ export default function HistoryPage() {
   }
 
   const handleDownloadPDF = async (rec: DeliveryWithRelations) => {
-    if (!rec.signature_url) {
+    if (!rec.signature_url && rec.auth_method !== "fingerprint") {
       toast.error("Este registro não possui assinatura digital.")
       return
     }
@@ -159,6 +159,7 @@ export default function HistoryPage() {
         )
         if (!documentUrl) throw new Error("Nao foi possivel gerar o link seguro do PDF.")
         const archivedResponse = await fetch(documentUrl)
+        if (!archivedResponse.ok) throw new Error("Não foi possível carregar o PDF arquivado.")
         const archivedBlob = await archivedResponse.blob()
         openPdfDialog(archivedBlob, signedDocument.file_name || `Comprovante_${rec.id.slice(0, 8)}.pdf`, {
           title: "Comprovante arquivado",
@@ -188,15 +189,12 @@ export default function HistoryPage() {
         }) || undefined
         if (!base64Signature) throw new Error("Nao foi possivel carregar a assinatura da entrega.")
       }
-      const photoBase64 = signedDocument?.photo_evidence_url
-        ? await fetchImageDataUrl(
-          await api.getPrivateAssetUrl(
-             signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url,
-             "download",
-          ) || signedDocument.photo_evidence_url,
-          { required: true, label: "a evidência fotográfica da entrega" },
-        ) || undefined
-        : undefined
+      let photoBase64: string | undefined
+      if (signedDocument?.photo_evidence_url) {
+        const photoUrl = await api.getPrivateAssetUrl(signedDocument.photo_evidence_storage_path || signedDocument.photo_evidence_url, "download")
+        if (!photoUrl) throw new Error("Não foi possível gerar o acesso seguro à evidência fotográfica.")
+        photoBase64 = await fetchImageDataUrl(photoUrl, { required: true, label: "a evidência fotográfica da entrega" }) || undefined
+      }
       const authMethod = rec.auth_method === "fingerprint"
         ? "fingerprint"
         : signedDocument?.auth_method === "manual_facial" || rec.auth_method === "manual_facial"
@@ -337,6 +335,7 @@ export default function HistoryPage() {
 
   const getDeliveryBadge = (rec: DeliveryWithRelations, signedDocument?: SignedDocument) => {
     if (signedDocument) return { label: "Arquivado", variant: "border-green-200 bg-green-50 text-green-700" }
+    if (rec.auth_method === "fingerprint") return { label: "Digital validada", variant: "border-blue-100 bg-blue-50 text-blue-700" }
     if (rec.signature_url) return { label: "Assinado", variant: "border-amber-200 bg-amber-50 text-amber-700" }
     return { label: "Pendente", variant: "border-slate-200 bg-slate-50 text-slate-500" }
   }
@@ -355,14 +354,15 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-800 flex items-center uppercase tracking-tighter">
+          <p className="mb-2 text-xs font-semibold text-slate-500">Arquivo de entregas</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center">
             <History className="w-6 h-6 mr-2 text-[#2563EB]" />
-            Auditoria SafeEPI • Live
+            Histórico e comprovantes
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Consulta direta ao banco de dados Supabase para conformidade NR-06.</p>
+          <p className="text-slate-500 text-sm mt-2 leading-6">Consulte registros, assinaturas e documentos arquivados por colaborador.</p>
         </div>
       </div>
 
@@ -370,20 +370,23 @@ export default function HistoryPage() {
         <div className="p-5 border-b border-slate-200 bg-slate-50/50">
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <div className="relative w-full md:max-w-md md:flex-1">
-              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <label htmlFor="history-search" className="sr-only">Buscar colaborador ou protocolo</label>
               <input
+                id="history-search"
                 type="text"
                 placeholder="Buscar colaborador ou ID da entrega..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-all"
+                className="min-h-11 w-full bg-white border border-slate-200 text-slate-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-[#2563EB] transition-colors"
               />
             </div>
             {hasThirdPartyFeature && (
               <select
+                aria-label="Vínculo do colaborador no histórico"
                 value={deliveryScopeFilter}
                 onChange={(event) => setDeliveryScopeFilter(event.target.value as DeliveryScopeFilter)}
-                className="min-h-11 w-full md:w-56 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-[#2563EB] transition-all"
+                className="min-h-11 w-full md:w-56 bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-xs font-semibold  tracking-normal focus:outline-none focus:border-[#2563EB] transition-colors"
               >
                 <option value="own">Próprios</option>
                 <option value="third_party">Terceiros</option>
@@ -395,8 +398,8 @@ export default function HistoryPage() {
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
               <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Terceiros no histórico</p>
-                  <p className="mt-0.5 text-xs font-bold text-slate-600">
+                  <p className="text-xs font-semibold  tracking-normal text-slate-500">Terceiros no histórico</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-600">
                     {selectedThirdParties.length === 0 ? "Todos os terceiros cadastrados" : `${selectedThirdParties.length} selecionado(s)`}
                   </p>
                 </div>
@@ -404,7 +407,7 @@ export default function HistoryPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedThirdPartyIds([])}
-                    className="min-h-9 rounded-xl px-3 text-[10px] font-black uppercase tracking-widest text-[#2563EB] hover:bg-blue-50"
+                    className="min-h-9 rounded-xl px-3 text-xs font-semibold  tracking-normal text-[#2563EB] hover:bg-blue-50"
                   >
                     Ver todos
                   </button>
@@ -414,7 +417,7 @@ export default function HistoryPage() {
                 title="Selecionar terceiro no histórico"
                 value=""
                 onChange={(event) => addSelectedThirdParty(event.target.value)}
-                className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:border-[#2563EB]"
+                className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 outline-none focus:border-[#2563EB]"
               >
                 <option value="">Adicionar terceiro...</option>
                 {activeThirdParties.map((thirdParty) => (
@@ -432,7 +435,7 @@ export default function HistoryPage() {
                   key={chip.label}
                   type="button"
                   onClick={chip.onRemove}
-                  className="min-h-9 rounded-full border border-blue-100 bg-blue-50 px-3 text-sm font-bold text-[#2563EB]"
+                  className="min-h-9 rounded-full border border-blue-100 bg-blue-50 px-3 text-sm font-semibold text-[#2563EB]"
                   aria-label={`Remover filtro ${chip.label}`}
                 >
                   {chip.label} ×
@@ -444,15 +447,15 @@ export default function HistoryPage() {
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {thirdPartyTotals.map((thirdParty) => (
                 <div key={thirdParty.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                  <p className="truncate text-sm font-black uppercase tracking-tight text-slate-800" title={thirdParty.name}>{thirdParty.name}</p>
+                  <p className="truncate text-sm font-semibold  tracking-tight text-slate-800" title={thirdParty.name}>{thirdParty.name}</p>
                   <div className="mt-3 flex items-end justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Valor no filtro</p>
-                      <p className="mt-1 text-lg font-black text-emerald-700">
+                      <p className="text-xs font-semibold  tracking-normal text-slate-500">Valor no filtro</p>
+                      <p className="mt-1 text-lg font-semibold text-emerald-700">
                         R$ {thirdParty.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </p>
                     </div>
-                    <div className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <div className="text-right text-xs font-semibold  tracking-normal text-slate-500">
                       <p>{thirdParty.deliveries} registro(s)</p>
                       <p>{thirdParty.items} item(ns)</p>
                     </div>
@@ -460,7 +463,7 @@ export default function HistoryPage() {
                 </div>
               ))}
               {thirdPartyTotals.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400 md:col-span-2 xl:col-span-3">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-semibold text-slate-500 md:col-span-2 xl:col-span-3">
                   Nenhum histórico de terceiro encontrado no filtro atual.
                 </div>
               )}
@@ -503,7 +506,7 @@ export default function HistoryPage() {
                         <button
                           onClick={() => handleDownloadPDF(rec)}
                           disabled={downloadingId === rec.id}
-                          className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-[10px] font-black uppercase tracking-widest text-[#2563EB] disabled:opacity-30"
+                          className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-xs font-semibold  tracking-normal text-[#2563EB] disabled:opacity-30"
                         >
                           {downloadingId === rec.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
                           PDF
@@ -524,23 +527,23 @@ export default function HistoryPage() {
                 )
               })}
               {filteredRecords.length === 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-400 italic font-medium">
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 italic font-medium">
                   Nenhum registro de entrega encontrado no histórico.
                 </div>
               )}
             </div>
-            <table className="hidden min-w-[1220px] w-full whitespace-nowrap text-left text-sm md:table xl:min-w-0">
-                <thead className="whitespace-nowrap text-[10px] text-slate-400 bg-white uppercase tracking-[0.2em] border-b border-slate-100 font-black">
+            <table className="hidden min-w-[1220px] w-full whitespace-nowrap text-left text-sm md:table">
+                <thead className="whitespace-nowrap text-xs text-slate-500 bg-white  tracking-normal border-b border-slate-100 font-semibold">
                 <tr>
-                    <th className="px-4 py-5 lg:px-5">Protocolo</th>
-                    <th className="px-4 py-5 lg:px-5">Colaborador</th>
-                    <th className="px-4 py-5 lg:px-5">Tomador</th>
-                    <th className="px-4 py-5 lg:px-5">EPI / CA</th>
-                    <th className="px-4 py-5 lg:px-5">Valor</th>
-                    <th className="px-4 py-5 lg:px-5">Data da Entrega</th>
-                    <th className="px-4 py-5 lg:px-5">Arquivo Juridico</th>
-                    <th className="hidden px-4 py-5 lg:px-5 xl:table-cell">Hash SHA-256</th>
-                    <th className="sticky right-0 z-20 min-w-[118px] bg-white px-4 py-5 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)]">Ação</th>
+                    <th className="px-4 py-3 lg:px-5">Protocolo</th>
+                    <th className="px-4 py-3 lg:px-5">Colaborador</th>
+                    <th className="px-4 py-3 lg:px-5">Tomador</th>
+                    <th className="px-4 py-3 lg:px-5">EPI / CA</th>
+                    <th className="px-4 py-3 lg:px-5">Valor</th>
+                    <th className="px-4 py-3 lg:px-5">Data da Entrega</th>
+                    <th className="px-4 py-3 lg:px-5">Arquivo Juridico</th>
+                    <th className="hidden px-4 py-3 lg:px-5 xl:table-cell">Hash SHA-256</th>
+                    <th className="sticky right-0 z-20 min-w-[118px] bg-white px-4 py-3 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)]">Ação</th>
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -549,24 +552,24 @@ export default function HistoryPage() {
 
                   return (
                     <tr key={rec.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-4 py-5 font-mono text-[10px] text-slate-400 lg:px-5">#{rec.id.slice(0, 8)}</td>
-                    <td className="px-4 py-5 font-bold text-slate-800 lg:px-5">{rec.employee?.full_name}</td>
-                    <td className="px-4 py-5 text-xs font-black uppercase tracking-tight text-slate-500 lg:px-5">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500 lg:px-5">#{rec.id.slice(0, 8)}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-800 lg:px-5">{rec.employee?.full_name}</td>
+                    <td className="px-4 py-3 text-xs font-semibold  tracking-tight text-slate-500 lg:px-5">
                       {getDeliveryThirdPartyId(rec) ? getDeliveryThirdPartyName(rec) : "Próprio"}
                     </td>
-                    <td className="px-4 py-5 text-slate-600 font-medium lg:px-5">
+                    <td className="px-4 py-3 text-slate-600 font-medium lg:px-5">
                         <div className="flex items-center gap-2 whitespace-nowrap">
                           <span>{rec.ppe?.name}</span>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">CA {rec.ppe?.ca_number}</span>
+                          <span className="text-xs text-slate-500 font-semibold ">CA {rec.ppe?.ca_number}</span>
                         </div>
                     </td>
-                    <td className="px-4 py-5 text-xs font-black text-emerald-700 lg:px-5">
+                    <td className="px-4 py-3 text-xs font-semibold text-emerald-700 lg:px-5">
                       R$ {getDeliveryCost(rec).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-5 text-slate-400 text-xs font-bold uppercase lg:px-5">
+                    <td className="px-4 py-3 text-slate-500 text-xs font-semibold  lg:px-5">
                         <span className="whitespace-nowrap">{formatDeliveryDate(rec.delivery_date)} · {formatDeliveryTime(rec.delivery_date)}</span>
                     </td>
-                    <td className="px-4 py-5 lg:px-5">
+                    <td className="px-4 py-3 lg:px-5">
                         {signedDocument ? (
                              <button
                                 type="button"
@@ -577,14 +580,14 @@ export default function HistoryPage() {
                                 )}
                                 disabled={openingAssetKey === `document:${signedDocument.id}`}
                                 aria-label={`Abrir documento arquivado de ${rec.employee?.full_name || "colaborador"}`}
-                                className="flex w-fit items-center whitespace-nowrap rounded border border-green-100 bg-green-50 px-2 py-1 text-[10px] font-bold text-green-700 transition-colors hover:bg-green-100 disabled:opacity-60"
+                                className="flex min-h-11 w-fit items-center whitespace-nowrap rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 transition-colors hover:bg-green-100 disabled:opacity-60"
                              >
                                 {openingAssetKey === `document:${signedDocument.id}` ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="w-3 h-3 mr-1" />}
                                 Arquivado
                                 <ExternalLink className="w-3 h-3 ml-1" />
                              </button>
                         ) : rec.auth_method === "fingerprint" ? (
-                            <span className="flex w-fit items-center whitespace-nowrap rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
+                            <span className="flex w-fit items-center whitespace-nowrap rounded border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
                               <Fingerprint className="mr-1 h-3 w-3" /> Digital validada
                             </span>
                         ) : rec.signature_url ? (
@@ -597,36 +600,36 @@ export default function HistoryPage() {
                                 )}
                                 disabled={openingAssetKey === `signature:${rec.id}`}
                                 aria-label={`Abrir somente a assinatura de ${rec.employee?.full_name || "colaborador"}`}
-                                className="flex w-fit items-center whitespace-nowrap rounded border border-amber-100 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-600 transition-colors hover:bg-amber-100 disabled:opacity-60"
+                                className="flex min-h-11 w-fit items-center whitespace-nowrap rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-60"
                              >
                                 {openingAssetKey === `signature:${rec.id}` ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="w-3 h-3 mr-1" />}
                                 Só assinatura
                              </button>
                         ) : (
-                            <span className="text-[10px] text-amber-500 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-100 w-fit">Pendente</span>
+                            <span className="text-xs text-amber-500 font-semibold bg-amber-50 px-2 py-1 rounded border border-amber-100 w-fit">Pendente</span>
                         )}
                     </td>
-                    <td className="hidden px-4 py-5 lg:px-5 xl:table-cell">
+                    <td className="hidden px-4 py-3 lg:px-5 xl:table-cell">
                       {signedDocument ? (
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                          <div className="flex items-center gap-1 text-xs font-semibold text-slate-600  tracking-normal">
                             <Fingerprint className="w-3.5 h-3.5 text-[#2563EB]" />
                             {signedDocument.sha256_hash.slice(0, 12)}...
                           </div>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">
+                          <p className="text-xs font-semibold text-slate-500 ">
                             {new Date(signedDocument.created_at).toLocaleString("pt-BR")}
                           </p>
                         </div>
                       ) : (
-                        <span className="text-[10px] font-bold text-slate-300 uppercase">Sem arquivo</span>
+                        <span className="text-xs font-semibold text-slate-300 ">Sem arquivo</span>
                       )}
                     </td>
-                    <td className="sticky right-0 z-10 bg-white px-3 py-5 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)] transition-colors group-hover:bg-slate-50/80">
+                    <td className="sticky right-0 z-10 bg-white px-3 py-3 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)] transition-colors group-hover:bg-slate-50/80">
                         <div className="flex min-w-[98px] items-center justify-end gap-1">
                           <button
                             onClick={() => handleDownloadPDF(rec)}
                             disabled={downloadingId === rec.id}
-                            className="flex min-h-10 min-w-[64px] items-center justify-center rounded-xl border border-blue-100 bg-blue-50 px-3 text-[10px] font-black uppercase tracking-widest text-[#2563EB] transition-all hover:bg-blue-100 disabled:opacity-30"
+                            className="flex min-h-10 min-w-[64px] items-center justify-center rounded-xl border border-blue-100 bg-blue-50 px-3 text-xs font-semibold  tracking-normal text-[#2563EB] transition-colors hover:bg-blue-100 disabled:opacity-30"
                           >
                               {downloadingId === rec.id ? (
                                 <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -640,7 +643,7 @@ export default function HistoryPage() {
                               onClick={() => setConfirmDelete(rec)}
                               disabled={deletingId === rec.id}
                               title="Excluir registro de entrega (Master)"
-                              className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition-all hover:bg-red-100 disabled:opacity-30"
+                              className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:opacity-30"
                             >
                               {deletingId === rec.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -656,7 +659,7 @@ export default function HistoryPage() {
                 })}
                 {filteredRecords.length === 0 && (
                     <tr>
-                        <td colSpan={9} className="px-6 py-20 text-center text-slate-400 italic font-medium">
+                        <td colSpan={9} className="px-6 py-20 text-center text-slate-500 italic font-medium">
                             Nenhum registro de entrega encontrado no histórico.
                         </td>
                     </tr>
@@ -672,7 +675,7 @@ export default function HistoryPage() {
               type="button"
               onClick={() => void loadMoreRecords()}
               disabled={loadingMore}
-              className="min-h-11 rounded-xl border border-slate-200 bg-white px-5 text-xs font-black uppercase tracking-widest text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-[#2563EB] disabled:opacity-50"
+              className="min-h-11 rounded-xl border border-slate-200 bg-white px-5 text-xs font-semibold  tracking-normal text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-[#2563EB] disabled:opacity-50"
             >
               {loadingMore ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Carregar mais 500 registros"}
             </button>
@@ -700,10 +703,10 @@ export default function HistoryPage() {
                 <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">
+                <h2 className="text-base font-semibold text-slate-800  tracking-tight">
                   Invalidar registro de entrega
                 </h2>
-                <p className="text-xs text-red-700 font-bold mt-1">
+                <p className="text-xs text-red-700 font-semibold mt-1">
                   Acao restrita ao usuario MASTER e registrada para auditoria.
                 </p>
               </div>
@@ -715,23 +718,23 @@ export default function HistoryPage() {
               </p>
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1 text-xs">
                 <p>
-                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">
+                  <span className="font-semibold  tracking-normal text-slate-500 mr-2">
                     Protocolo
                   </span>
                   <span className="font-mono">#{confirmDelete.id.slice(0, 8)}</span>
                 </p>
                 <p>
-                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">
+                  <span className="font-semibold  tracking-normal text-slate-500 mr-2">
                     Colaborador
                   </span>
                   {confirmDelete.employee?.full_name || "-"}
                 </p>
                 <p>
-                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">EPI</span>
+                  <span className="font-semibold  tracking-normal text-slate-500 mr-2">EPI</span>
                   {confirmDelete.ppe?.name || "-"} (CA {confirmDelete.ppe?.ca_number || "-"})
                 </p>
                 <p>
-                  <span className="font-black uppercase tracking-widest text-slate-400 mr-2">
+                  <span className="font-semibold  tracking-normal text-slate-500 mr-2">
                     Quantidade
                   </span>
                   {confirmDelete.quantity}
@@ -742,14 +745,14 @@ export default function HistoryPage() {
               <button
                 onClick={() => setConfirmDelete(null)}
                 disabled={deletingId === confirmDelete.id}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-white font-black text-[11px] uppercase tracking-widest transition-all disabled:opacity-50"
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-white font-semibold text-[11px]  tracking-normal transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => handleDeleteDelivery(confirmDelete)}
                 disabled={deletingId === confirmDelete.id}
-                className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 font-black text-[11px] uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 font-semibold text-[11px]  tracking-normal flex items-center gap-2 transition-colors disabled:opacity-50"
               >
                 {deletingId === confirmDelete.id ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
