@@ -32,7 +32,7 @@ describe("brandTheme", () => {
     try {
       await applyCompanyBrand({ name: "Empresa anterior", primary_color: "#B0161B", logo_url: "/antigo.png" } as Company)
       await applyCompanyBrand({ name: "Empresa atual", primary_color: "#166534", logo_url: "/atual.png" } as Company)
-      resolveOld(new Response(new Blob(["logo"], { type: "image/png" })))
+      resolveOld({ ok: true, blob: async () => new Blob(["logo"], { type: "image/png" }) } as Response)
       await new Promise((resolve) => window.setTimeout(resolve, 25))
       expect(getStoredBrand()).toMatchObject({ name: "Empresa atual", primaryColor: "#166534", logoDataUrl: null })
       expect(document.body.style.getPropertyValue("--brand-color")).toBe("#166534")

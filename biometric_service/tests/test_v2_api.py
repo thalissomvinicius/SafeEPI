@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient
 from PIL import Image
 from app.main import app
+from app.core.config import settings
 from app.model_manifest import MODEL_ID, MODEL_SHA256
 
 
@@ -28,7 +29,7 @@ GOOD_ANALYSIS = {"ok": True, "embedding": [1 / 128 ** 0.5] * 128, "quality_score
 class V2ApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
-        self.headers = {"Authorization": "Bearer test-token-with-sufficient-entropy"}
+        self.headers = {"Authorization": f"Bearer {settings.service_token}"}
 
     def request(self, path, data=None, body=None):
         return self.client.post(path, headers=self.headers, data=data or {},
@@ -36,6 +37,11 @@ class V2ApiTests(unittest.TestCase):
 
     def test_service_auth_required(self):
         result = self.client.post("/v2/enroll", files={"frame": ("a.jpg", frame_bytes(), "image/jpeg")})
+        self.assertEqual(result.status_code, 401)
+
+    def test_invalid_service_token_is_rejected(self):
+        result = self.client.post("/v2/enroll", headers={"Authorization": "Bearer incorrect-test-token"},
+                                  files={"frame": ("a.jpg", frame_bytes(), "image/jpeg")})
         self.assertEqual(result.status_code, 401)
 
     def test_enrollment_uses_server_engine_and_version(self):
