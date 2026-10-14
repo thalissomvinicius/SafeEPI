@@ -26,6 +26,8 @@ import { toast } from "@/lib/toast"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
 import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
 import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
+import { getManualSignatureDeclaration } from "@/lib/manualSignatureEvidence"
+import { useDocumentArchive } from "@/hooks/useDocumentArchive"
 import { mapConcurrent } from "@/lib/mapConcurrent"
 import signatureStyles from "./prontuarioSignature.module.css"
 import { fetchImageDataUrl } from "@/utils/imageDataUrl"
@@ -172,6 +174,7 @@ const getBiometryStatus = (employee: Employee) => {
 }
 
 export default function EmployeesPage() {
+  const { archiveDocument, archiveRecovery } = useDocumentArchive()
   const facialV2Enabled = false
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -892,6 +895,7 @@ export default function EmployeesPage() {
 
     try {
       setIsGeneratingPdf(true)
+      const responsibleSignatureDeclaration = getManualSignatureDeclaration(tstSigCanvas.current)
       // URLs assinadas expiram rapidamente. Atualizamos as entregas somente
       // no momento da emissao para nunca montar a ficha com links vencidos.
       const [freshEmployeeHistory, signedDocuments] = await Promise.all([
@@ -967,7 +971,7 @@ export default function EmployeesPage() {
 
       if (forPaper) return
 
-      void api.archiveSignedDocument({
+      void archiveDocument({
         documentType: "nr06",
         employeeId: emp.id,
         deliveryIds: freshEmployeeHistory.map((delivery) => delivery.id).filter(Boolean),
@@ -976,6 +980,7 @@ export default function EmployeesPage() {
         authMethod: tstAuthMethod,
         metadata: {
           tstSignerName: tstName,
+          responsibleSignatureDeclaration,
           tstSignerRole: tstRole,
           deliveryCount: freshEmployeeHistory.length,
           workplaceName: getWorkplaceName(emp.workplace_id),
@@ -2450,6 +2455,7 @@ export default function EmployeesPage() {
         </AccessibleOverlay>
       )}
       {pdfActionDialog}
+      {archiveRecovery}
     </div>
   )
 }

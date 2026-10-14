@@ -184,6 +184,7 @@ function drawSignatureCellLine(doc: jsPDF, cell: { x: number; y: number; width: 
 }
 
 export interface DeliveryPDFData {
+  manualSignatureDeclaration?: ManualSignatureDeclaration | null
   employeeName: string
   employeeCpf: string
   employeeRole: string
@@ -464,6 +465,15 @@ export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> 
     currentY = Math.max(currentY, recordTop + 26)
   }
   field(data.locationSource === "network" ? "Geolocalização (rede aproximada)" : "Geolocalização", data.location || "Coordenadas não capturadas")
+  if (data.manualSignatureDeclaration) {
+    const originLabel = { drawn: "Desenhada na tela", typed: "Nome digitado aplicado à imagem", mixed: "Nome digitado e traços desenhados" }[data.manualSignatureDeclaration.origin]
+    field("Forma declarada de assinatura", originLabel)
+    write("A forma de captura e a foto de apoio não constituem verificação de identidade.", 7, false, [100, 116, 139])
+    if (data.manualSignatureDeclaration.accepted) {
+      field("Versão do aceite apresentado", data.manualSignatureDeclaration.termVersion || "Não informada")
+      write(MANUAL_ACCEPTANCE_TEXT, 7)
+    }
+  }
   write("O código de referência serve para localizar o registro; não é o hash deste arquivo PDF. A integridade do arquivo arquivado deve ser consultada no histórico do sistema.", 7, false, [100, 116, 139])
 
   addDocumentFooters(doc, "Entrega de EPI • Evidências conforme modalidade informada")
@@ -2197,3 +2207,4 @@ export async function generateMovementsPresentationPDF(data: MovementsReportData
   addDocumentFooters(doc, `Movimentações de EPI • ${data.movements.length} registros no conjunto`)
   return doc.output("blob")
 }
+import { MANUAL_ACCEPTANCE_TEXT, type ManualSignatureDeclaration } from "@/lib/manualSignatureEvidence"

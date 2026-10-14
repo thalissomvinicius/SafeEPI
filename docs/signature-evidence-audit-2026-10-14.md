@@ -74,3 +74,30 @@ Revisar termo com assessoria jurídica, definir evento uniforme de aceite e
 versionamento, marcar origem desenhada/digitada/papel, recuperar PDFs pendentes,
 homologar retenção/trilha/backup e implementar verificação de identidade adequada.
 Mudanças de schema dependerão de autorização específica.
+
+## Correções posteriores sem migração
+
+- Entregas presenciais e por link exigem aceite explícito no componente de
+  assinatura; alterar o contexto dos itens invalida o aceite anterior.
+- Origem declarada é desenhada, digitada ou mista. O PDF de entrega mostra essa
+  origem; não é comprovação automática de autoria. Registros antigos permanecem
+  sem origem conhecida, sem preenchimento retroativo inventado.
+- Arquivamento normaliza a declaração e reconstrói o texto/versão/hash do aceite
+  no servidor, em signed_documents.metadata. Dados de origem continuam declarados
+  pelo navegador. Metadata não é certificado e não possui força imutável externa.
+- O servidor registra server_received_at do arquivo, IDs vinculados e SHA-256
+  em archivalReceipt. Event explicitamente 'pdf_archival_not_delivery_acceptance':
+  não confundir horário do upload com instante do recebimento dos EPIs.
+- Responsável do prontuário tem origem declarada separada da assinatura de entrega.
+- Telas de entrega e prontuário oferecem recuperação em memória do mesmo PDF
+  quando arquivamento falha; não repetem a entrega nem alteram estoque.
+- Resposta perdida de insert pode ser recuperada pelo mesmo hash/empresa e
+  vínculos, preservando o recibo anterior. Nunca troca metadados do arquivo antigo.
+- Histórico sinaliza assinatura salva sem PDF arquivado. Recuperação em memória
+  termina ao recarregar/sair; não é fila durável de pendências.
+
+O texto de aceite eletrônico introduzido é declaração de conferência/recebimento,
+não substitui o termo de responsabilidade da empresa. A revisão jurídica deste
+último continua pendente. Backups/retenção/validação de identidade, registro
+transacional do aceite e fila durável exigem etapa própria; não foram declarados
+concluídos nem executados via SQL nesta correção.

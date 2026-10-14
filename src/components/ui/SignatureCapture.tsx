@@ -6,6 +6,7 @@ import SignatureCanvas from "react-signature-canvas"
 import { CheckCircle2, Expand, Loader2, RotateCcw, X } from "lucide-react"
 import { useDialogAccessibility } from "@/hooks/useDialogAccessibility"
 import { useVisualViewport } from "@/hooks/useVisualViewport"
+import { MANUAL_ACCEPTANCE_TEXT, MANUAL_ACCEPTANCE_VERSION, setManualSignatureDeclaration, type ManualSignatureOrigin } from "@/lib/manualSignatureEvidence"
 
 type SignatureCaptureProps = {
   signatureRef: RefObject<SignatureCanvas | null>
@@ -17,6 +18,8 @@ type SignatureCaptureProps = {
   compact?: boolean
   showConfirmButton?: boolean
   onSignatureChange?: (hasSignature: boolean) => void
+  requireAcceptance?: boolean
+  acceptanceContext?: string
 }
 
 function copyCanvas(canvas: HTMLCanvasElement) {
@@ -27,14 +30,21 @@ function copyCanvas(canvas: HTMLCanvasElement) {
   return copy
 }
 
-export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = false, confirmLabel = "Confirmar assinatura", className = "", compact = false, showConfirmButton = true, onSignatureChange }: SignatureCaptureProps) {
+export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = false, confirmLabel = "Confirmar assinatura", className = "", compact = false, showConfirmButton = true, onSignatureChange, requireAcceptance = false, acceptanceContext }: SignatureCaptureProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const expandButtonRef = useRef<HTMLButtonElement | null>(null)
   const snapshotRef = useRef<HTMLCanvasElement | null>(null)
   const drawingRef = useRef(false)
   const [hasSignature, setHasSignature] = useState(false)
   const [typedSignature, setTypedSignature] = useState("")
+  const [acceptedContext, setAcceptedContext] = useState<string | null>(null)
+  const accepted = acceptedContext === (acceptanceContext ?? "default")
+  const setAccepted = (value: boolean) => setAcceptedContext(value ? acceptanceContext ?? "default" : null)
   const [expanded, setExpanded] = useState(false)
+  const originRef = useRef<ManualSignatureOrigin | null>(null)
+  useEffect(() => {
+    setManualSignatureDeclaration(signatureRef.current, originRef.current ? { origin: originRef.current, accepted: requireAcceptance && accepted, ...(requireAcceptance && accepted ? { termVersion: MANUAL_ACCEPTANCE_VERSION } : {}) } : null)
+  }, [accepted, hasSignature, expanded, requireAcceptance, signatureRef])
   const [portal, setPortal] = useState<HTMLElement | null>(null)
   useEffect(() => { onSignatureChange?.(hasSignature) }, [hasSignature, onSignatureChange])
   const typedSignatureId = useId()
@@ -101,6 +111,9 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
     setExpanded(true)
   }
   const clear = () => {
+    originRef.current = null
+    setAccepted(false)
+    setManualSignatureDeclaration(signatureRef.current, null)
     signatureRef.current?.clear()
     snapshotRef.current = null
     setHasSignature(false)
@@ -110,6 +123,9 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
     const signature = signatureRef.current
     const name = typedSignature.trim().replace(/\s+/g, " ")
     if (!signature || name.length < 3) return
+    originRef.current = "typed"
+    setAccepted(false)
+    setManualSignatureDeclaration(signature, { origin: "typed", accepted: false })
     const canvas = signature.getCanvas()
     const source = document.createElement("canvas")
     source.width = canvas.width
@@ -140,7 +156,7 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
     <div ref={wrapperRef} data-signature-canvas className={`relative w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed bg-white ${expanded ? "h-[min(42dvh,360px)] min-h-[160px]" : compact ? "h-[140px] sm:h-[180px]" : "h-[220px] sm:h-[280px]"} ${hasSignature ? "border-emerald-400" : "border-slate-300"}`}>
       {!hasSignature && <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center"><p className="text-sm text-slate-400">Assine aqui com o dedo ou mouse</p></div>}
       <SignatureCanvas ref={signatureRef} clearOnResize={false} penColor="#0f172a"
-        onBegin={() => { drawingRef.current = true; setHasSignature(true) }}
+        onBegin={() => { drawingRef.current = true; originRef.current = originRef.current === "typed" || originRef.current === "mixed" ? "mixed" : "drawn"; setAccepted(false); setManualSignatureDeclaration(signatureRef.current, { origin: originRef.current, accepted: false }); setHasSignature(true) }}
         onEnd={() => {
           drawingRef.current = false
           const signature = signatureRef.current
@@ -160,7 +176,15 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
         </div>
       </div>
     </details>
-    {(showConfirmButton || expanded) && <button type="button" onClick={onConfirm} disabled={isSaving || !hasSignature} className="flex min-h-[52px] w-full shrink-0 items-center justify-center rounded-xl bg-[#2563EB] px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:bg-slate-300 disabled:shadow-none">
+    {requireAcceptance && <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-relaxed text-slate-700">
+      <p>{MANUAL_ACCEPTANCE_TEXT}</p>
+      <label className="mt-3 flex min-h-11 cursor-pointer items-start gap-3"><input type="checkbox" checked={accepted} disabled={isSaving || !hasSignature} onChange={event => setAccepted(event.target.checked)} className="mt-1 h-5 w-5 shrink-0" /><span>Li e confirmo o recebimento dos itens apresentados.</span></label>
+    </section>}
+    {(showConfirmButton || expanded) && <button type="button" onClick={() => {
+      if (requireAcceptance && !accepted) return
+      setManualSignatureDeclaration(signatureRef.current, originRef.current ? { origin: originRef.current, accepted: requireAcceptance && accepted, ...(requireAcceptance && accepted ? { termVersion: MANUAL_ACCEPTANCE_VERSION } : {}) } : null)
+      onConfirm()
+    }} disabled={isSaving || !hasSignature || (requireAcceptance && !accepted)} className="flex min-h-[52px] w-full shrink-0 items-center justify-center rounded-xl bg-[#2563EB] px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:bg-slate-300 disabled:shadow-none">
       {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="mr-2 h-5 w-5" aria-hidden="true" />}{isSaving ? "Salvando…" : confirmLabel}
     </button>}
     {expanded && <p className="pb-[env(safe-area-inset-bottom)] text-center text-xs text-slate-500">Ao voltar, sua assinatura será preservada.</p>}

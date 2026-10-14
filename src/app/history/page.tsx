@@ -335,8 +335,9 @@ export default function HistoryPage() {
 
   const getDeliveryBadge = (rec: DeliveryWithRelations, signedDocument?: SignedDocument) => {
     if (signedDocument) return { label: "Arquivado", variant: "border-green-200 bg-green-50 text-green-700" }
-    if (rec.auth_method === "fingerprint") return { label: "Digital validada", variant: "border-blue-100 bg-blue-50 text-blue-700" }
-    if (rec.signature_url) return { label: "Assinado", variant: "border-amber-200 bg-amber-50 text-amber-700" }
+    if (rec.auth_method === "fingerprint") return { label: "Registro de digital · PDF não arquivado", variant: "border-blue-100 bg-blue-50 text-blue-700" }
+    if (rec.auth_method === "facial") return { label: "Registro facial legado · verificar evidência", variant: "border-amber-200 bg-amber-50 text-amber-700" }
+    if (rec.signature_url) return { label: "Assinatura salva · PDF não arquivado", variant: "border-amber-200 bg-amber-50 text-amber-700" }
     return { label: "Pendente", variant: "border-slate-200 bg-slate-50 text-slate-500" }
   }
 
@@ -621,7 +622,7 @@ export default function HistoryPage() {
                           </p>
                         </div>
                       ) : (
-                        <span className="text-xs font-semibold text-slate-300 ">Sem arquivo</span>
+                        <span className="text-xs font-semibold text-amber-700">PDF não arquivado</span>
                       )}
                     </td>
                     <td className="sticky right-0 z-10 bg-white px-3 py-3 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)] transition-colors group-hover:bg-slate-50/80">

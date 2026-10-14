@@ -6,13 +6,14 @@ import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import SignatureCanvas from "react-signature-canvas"
 import { Camera, ExternalLink, FileDown, ShieldAlert, PenLine, ShieldCheck, UserCheck, Lock } from "lucide-react"
-import { api } from "@/services/api"
 import { Delivery, Employee, PPE, Workplace } from "@/types/database"
 import { FaceCamera } from "@/components/ui/FaceCamera"
 import { type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmation"
 import { submitFacialDelivery } from "@/components/ui/submitFacialDelivery"
 import { FacialPreflightError } from "@/components/ui/facialClient"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { getManualSignatureDeclaration } from "@/lib/manualSignatureEvidence"
+import { useDocumentArchive } from "@/hooks/useDocumentArchive"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { generateDeliveryPDF } from "@/utils/pdfGenerator"
 import { COMPANY_CONFIG } from "@/config/company"
@@ -64,6 +65,7 @@ const getPdfDeliveryDate = (deliveryDate?: string | null) => {
 }
 
 function RemoteDeliveryContent() {
+  const { archiveDocument, archiveRecovery } = useDocumentArchive()
   const searchParams = useSearchParams()
   const sigCanvas = useRef<SignatureCanvas | null>(null)
   
@@ -356,6 +358,7 @@ function RemoteDeliveryContent() {
 
   // -- Save delivery --
   const saveDelivery = useCallback(async (signatureDataUrl: string, facialSubmission?: FacialSubmission) => {
+    const manualSignatureDeclaration = getManualSignatureDeclaration(sigCanvas.current)
     if (savingRef.current || deliveryConfirmedRef.current) return
     if (!employee || !ppe) return
     if (authMethod === 'manual_facial' && !capturedPhotoBase64) {
@@ -425,6 +428,7 @@ function RemoteDeliveryContent() {
         }]
 
       const pdfBlob = await generateDeliveryPDF({
+        manualSignatureDeclaration,
         employeeName: employee.full_name,
         employeeCpf: employee.cpf,
         employeeRole: employee.job_title,
@@ -459,7 +463,7 @@ function RemoteDeliveryContent() {
 
       let archived = false
       try {
-        await api.archiveSignedDocument({
+        await archiveDocument({
           documentType: "remote_delivery",
           employeeId: employee.id,
           deliveryId: deliveryIds[0] || responseData.data?.id,
@@ -473,6 +477,7 @@ function RemoteDeliveryContent() {
           geoLocation: requiredLocation,
           linkToken,
           metadata: {
+            manualSignatureDeclaration,
             geolocationSource: locationEvidence.source,
             geolocationAccuracyMeters: locationEvidence.accuracyMeters,
             biometricReceipt: facialSubmission ? responseData.receipt : undefined,
@@ -540,7 +545,7 @@ function RemoteDeliveryContent() {
       savingRef.current = false
       setIsSaving(false)
     }
-  }, [employee, ppe, workplace, deliveryData, deliveryItems, authMethod, capturedPhotoBase64, ipAddress, linkToken, requestLocationForSignature])
+  }, [employee, ppe, workplace, deliveryData, deliveryItems, authMethod, capturedPhotoBase64, ipAddress, linkToken, requestLocationForSignature, archiveDocument])
 
   // ---------------------------------------
   // RENDER: Loading
@@ -576,6 +581,7 @@ function RemoteDeliveryContent() {
       </div>
       <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Assinatura Confirmada</h2>
       <p role="status" className="text-slate-600 max-w-md text-sm leading-relaxed">{completionMessage}</p>
+      {archiveRecovery}
       <div className="mt-8 flex flex-col gap-4 w-full max-w-xs">
         {lastPdfUrl && (
           <>
@@ -796,6 +802,8 @@ function RemoteDeliveryContent() {
                 <button onClick={() => sigCanvas.current?.clear()} className="text-[10px] font-black text-[#2563EB] uppercase italic">Limpar</button>
               </div>
               <SignatureCapture
+                requireAcceptance
+                acceptanceContext={linkToken}
                 signatureRef={sigCanvas}
                 isSaving={isSaving}
                 confirmLabel="Confirmar recebimento"

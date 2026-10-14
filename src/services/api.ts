@@ -9,7 +9,7 @@ type AddTrainingResult = {
   warning?: string;
 }
 
-type SignedDocumentArchivePayload = {
+export type SignedDocumentArchivePayload = {
   documentType: 'delivery' | 'remote_delivery' | 'return' | 'nr06' | 'training_certificate';
   employeeId?: string | null;
   deliveryId?: string | null;
@@ -902,7 +902,7 @@ export const api = {
     });
 
     const data = await readResponseJson<{ error?: string; document?: SignedDocument }>(res);
-    if (!res.ok) throw new Error(data.error || "Nao foi possivel arquivar o documento assinado.");
+    if (!res.ok || !data.document?.id) throw new Error(data.error || "O servidor não confirmou o arquivamento. O PDF continua disponível para baixar.");
     return data.document;
   },
 

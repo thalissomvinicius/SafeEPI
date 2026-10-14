@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type SignatureCanvas from "react-signature-canvas"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { getManualSignatureDeclaration, MANUAL_ACCEPTANCE_VERSION } from "@/lib/manualSignatureEvidence"
 
 // Canvas pixels are represented as text here; browser coverage checks the real
 // raster. The regression is whether the component copies that raster rather
@@ -82,6 +83,30 @@ function draw() {
 }
 
 describe("mobile signature retention", () => {
+  it("exige aceite, distingue desenho e invalida aceite quando os itens mudam", () => {
+    const signatureRef = createRef<SignatureCanvas>() as RefObject<SignatureCanvas | null>
+    const confirm = vi.fn()
+    const { rerender } = render(<SignatureCapture signatureRef={signatureRef} onConfirm={confirm} requireAcceptance acceptanceContext="items-v1" />)
+    draw()
+    expect(screen.getByRole("button", { name: "Confirmar assinatura" })).toBeDisabled()
+    fireEvent.click(screen.getByRole("checkbox", { name: /Li e confirmo/i }))
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar assinatura" }))
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(getManualSignatureDeclaration(signatureRef.current)).toEqual({ origin: "drawn", accepted: true, termVersion: MANUAL_ACCEPTANCE_VERSION })
+    rerender(<SignatureCapture signatureRef={signatureRef} onConfirm={confirm} requireAcceptance acceptanceContext="items-v2" />)
+    expect(screen.getByRole("button", { name: "Confirmar assinatura" })).toBeDisabled()
+    expect(getManualSignatureDeclaration(signatureRef.current)?.accepted).toBe(false)
+  })
+  it("distingue nome digitado e assinatura mista, sem manter aceite após redesenho", () => {
+    const { signatureRef } = setup()
+    fireEvent.change(screen.getByPlaceholderText("Nome completo"), { target: { value: "Maria Teste" } })
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar assinatura" }))
+    expect(getManualSignatureDeclaration(signatureRef.current)?.origin).toBe("typed")
+    draw()
+    expect(getManualSignatureDeclaration(signatureRef.current)?.origin).toBe("mixed")
+    fireEvent.click(screen.getByRole("button", { name: "Limpar assinatura" }))
+    expect(getManualSignatureDeclaration(signatureRef.current)).toBeNull()
+  })
   it("keeps drawn ink and the nonempty state after orientation/keyboard resize", () => {
     const { signatureRef } = setup()
     draw()

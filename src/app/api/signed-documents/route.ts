@@ -10,6 +10,7 @@ import { isValidGeoLocation } from "@/utils/geolocation"
 import { assertRequestSize, RequestTooLargeError } from "@/lib/requestSecurity"
 import { assertPdfBytes, calculateSha256 } from "@/lib/documentIntegrity"
 import { authoritativeFacialReceipt } from "@/lib/facialDocumentProof"
+import { buildManualSignatureArchive } from "@/lib/manualSignatureArchive"
 
 const VALID_DOCUMENT_TYPES = new Set([
   "delivery",
@@ -293,6 +294,31 @@ export async function POST(request: Request) {
     delete metadata.biometricReceipt
     delete metadata.biometric_receipt
     delete metadata.biometric_verified
+    // Never let caller-supplied metadata masquerade as a server receipt.
+    delete metadata.manualSignatureEvidence
+    delete metadata.responsibleSignatureEvidence
+    delete metadata.archivalReceipt
+    try {
+      if (metadata.manualSignatureDeclaration != null) metadata.manualSignatureEvidence = await buildManualSignatureArchive(metadata.manualSignatureDeclaration)
+      if (metadata.responsibleSignatureDeclaration != null) metadata.responsibleSignatureEvidence = await buildManualSignatureArchive(metadata.responsibleSignatureDeclaration)
+    } catch (error) {
+      await cleanupNewUploads()
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Declaração de assinatura inválida." }, { status: 400 })
+    }
+    delete metadata.manualSignatureDeclaration
+    delete metadata.responsibleSignatureDeclaration
+    metadata.archivalReceipt = {
+      version: 1,
+      server_received_at: new Date().toISOString(),
+      event: "pdf_archival_not_delivery_acceptance",
+      actor_id: createdBy,
+      remote_link_id: remoteLinkId,
+      company_id: companyId,
+      employee_id: employeeId,
+      delivery_ids: referencedDeliveryIds,
+      pdf_sha256: sha256Hash,
+      source: "server",
+    }
     const authMethod = String(formData.get("auth_method") || "") || null
     if (authMethod === "facial") {
       const rejectUnverifiedDocument = async () => {
@@ -354,6 +380,19 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
+      // Recover an insert whose successful response was lost, preserving its evidence.
+      if (error.code === "23505") {
+        const { data: previous, error: previousError } = await supabaseAdmin.from("signed_documents")
+          .select("*").eq("company_id", companyId).eq("sha256_hash", sha256Hash).maybeSingle()
+        const previousIds = [...new Set([previous?.delivery_id, ...(previous?.delivery_ids || [])].filter(Boolean))].sort()
+        const currentIds = [...new Set(referencedDeliveryIds)].sort()
+        if (!previousError && previous && previous.document_type === documentType && previous.employee_id === employeeId
+          && (previous.training_id || null) === (String(formData.get("training_id") || "") || null)
+          && JSON.stringify(previousIds) === JSON.stringify(currentIds)) {
+          await cleanupNewUploads()
+          return NextResponse.json({ success: true, document: await withSignedDocumentUrls(previous), alreadyArchived: true })
+        }
+      }
       if (isMissingAuditTable(error)) {
         await cleanupNewUploads()
         return NextResponse.json({

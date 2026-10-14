@@ -15,6 +15,8 @@ import { type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmatio
 import { submitFacialDelivery } from "@/components/ui/submitFacialDelivery"
 import { FacialPreflightError } from "@/components/ui/facialClient"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { getManualSignatureDeclaration } from "@/lib/manualSignatureEvidence"
+import { useDocumentArchive } from "@/hooks/useDocumentArchive"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { DataLoadError } from "@/components/ui/DataLoadError"
 import type { BiometricReceiptMetadata } from "@/utils/pdfGenerator"
@@ -87,6 +89,7 @@ const normalizeSearchText = (value: unknown) =>
 const dataUrlToImageFile = (dataUrl: string, baseName: string) => imageDataUrlToFile(dataUrl, baseName)
 
 export default function DeliveryPage() {
+  const { archiveDocument, archiveRecovery } = useDocumentArchive()
   const { user } = useAuth()
   const [step, setStep] = useState(1)
   const sigCanvas = useRef<SignatureCanvas | null>(null)
@@ -694,6 +697,7 @@ export default function DeliveryPage() {
   }
 
   const saveDelivery = async (signatureDataUrl?: string, facialSubmission?: FacialSubmission, verifiedFingerprint?: FingerprintEvidence) => {
+    const manualSignatureDeclaration = getManualSignatureDeclaration(sigCanvas.current)
     if (savingRef.current) return
     if (cart.length === 0) {
       toast.error("Adicione pelo menos um EPI à lista de entrega.")
@@ -741,6 +745,7 @@ export default function DeliveryPage() {
         : signatureDataUrl
       const { generateDeliveryPDF } = await import("@/utils/pdfGenerator")
       const pdfBlob = await generateDeliveryPDF({
+        manualSignatureDeclaration,
         employeeName: selectedEmployee?.full_name || "",
         employeeCpf: selectedEmployee?.cpf || "",
         employeeRole: selectedEmployee?.job_title || "",
@@ -776,7 +781,7 @@ export default function DeliveryPage() {
       const fileName = `Comprovante_${shortId}_${safeName}_${itemCount}.pdf`
 
       try {
-        await api.archiveSignedDocument({
+        await archiveDocument({
           documentType: "delivery",
           employeeId: selectedEmployeeId,
           deliveryIds: savedDeliveries.map((delivery) => delivery.id).filter(Boolean),
@@ -788,6 +793,7 @@ export default function DeliveryPage() {
           ipAddress,
           geoLocation: requiredLocation,
           metadata: {
+            manualSignatureDeclaration,
             biometricReceipt,
             locationSource: locationSourceRef.current,
             fingerprintEvidence: biometricEvidence ? { id: biometricEvidence.id, code: biometricEvidence.code, terminalName: biometricEvidence.terminalName, completedAt: biometricEvidence.completedAt, resultHash: biometricEvidence.resultHash, batchId: fingerprintBatchId } : null,
@@ -1275,6 +1281,7 @@ export default function DeliveryPage() {
           <CheckCircle2 className="w-16 h-16" />
         </div>
         <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter italic">Comprovante Digital Gerado</h2>
+        {archiveRecovery}
         <p className="mt-2 text-xs font-medium text-slate-400">Escolha se deseja apenas visualizar o PDF ou baixa-lo agora.</p>
         <p className="text-slate-500 max-w-md italic text-sm">{cart.length} EPI(s) registrado(s) • IP {ipAddress || '...'}</p>
         
@@ -1930,6 +1937,8 @@ export default function DeliveryPage() {
                     <button onClick={clearSignature} className="text-xs font-black text-[#2563EB] uppercase hover:underline italic bg-red-50 px-3 py-1 rounded-lg">Limpar Traço</button>
                   </div>
                   <SignatureCapture
+                    requireAcceptance
+                    acceptanceContext={JSON.stringify([selectedEmployeeId, selectedWorkplaceId, cart, authMethod])}
                     signatureRef={sigCanvas}
                     isSaving={isSaving}
                     confirmLabel={`Confirmar entrega (${cart.length} EPI${cart.length !== 1 ? 'S' : ''})`}
