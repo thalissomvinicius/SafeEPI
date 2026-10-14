@@ -38,6 +38,12 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
   const [hasSignature, setHasSignature] = useState(false)
   const [typedSignature, setTypedSignature] = useState("")
   const [acceptedContext, setAcceptedContext] = useState<string | null>(null)
+  const [previousContext, setPreviousContext] = useState(acceptanceContext)
+  // Invalidate permanently on context changes, including changing back to old items.
+  if (previousContext !== acceptanceContext) {
+    setPreviousContext(acceptanceContext)
+    if (acceptedContext !== null) setAcceptedContext(null)
+  }
   const accepted = acceptedContext === (acceptanceContext ?? "default")
   const setAccepted = (value: boolean) => setAcceptedContext(value ? acceptanceContext ?? "default" : null)
   const [expanded, setExpanded] = useState(false)

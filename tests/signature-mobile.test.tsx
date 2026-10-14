@@ -96,6 +96,9 @@ describe("mobile signature retention", () => {
     rerender(<SignatureCapture signatureRef={signatureRef} onConfirm={confirm} requireAcceptance acceptanceContext="items-v2" />)
     expect(screen.getByRole("button", { name: "Confirmar assinatura" })).toBeDisabled()
     expect(getManualSignatureDeclaration(signatureRef.current)?.accepted).toBe(false)
+    rerender(<SignatureCapture signatureRef={signatureRef} onConfirm={confirm} requireAcceptance acceptanceContext="items-v1" />)
+    expect(screen.getByRole("button", { name: "Confirmar assinatura" })).toBeDisabled()
+    expect(getManualSignatureDeclaration(signatureRef.current)?.accepted).toBe(false)
   })
   it("distingue nome digitado e assinatura mista, sem manter aceite após redesenho", () => {
     const { signatureRef } = setup()
