@@ -3,13 +3,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type React from "react"
-import { Building2, CheckCircle2, DollarSign, Edit3, HardHat, Handshake, Loader2, Mail, MapPin, Package, Phone, Plus, Search, ShieldAlert, Trash2, X, type LucideIcon } from "lucide-react"
+import { Building2, CheckCircle2, DollarSign, Edit3, HardHat, Handshake, Mail, MapPin, Package, Phone, Plus, Search, ShieldAlert, Trash2, X, type LucideIcon } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { api } from "@/services/api"
 import type { DeliveryWithRelations, Employee, ThirdParty, Workplace } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { Button } from "@/components/ui/button"
 
 type ThirdPartyForm = {
   id?: string
@@ -601,10 +602,10 @@ export default function ThirdPartiesPage() {
               <button type="button" onClick={closeForm} disabled={submitting} className="min-h-11 w-full rounded-xl border border-slate-200 px-5 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50 md:w-auto">
                 Cancelar
               </button>
-              <button disabled={submitting} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-colors hover:bg-[#1D4ED8] disabled:opacity-60 md:w-auto">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              <Button type="submit" disabled={submitting} loading={submitting} loadingText="Salvando…" className="flex h-auto min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-colors hover:bg-[#1D4ED8] disabled:opacity-60 md:w-auto">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                 {form.id ? "Salvar alteracoes" : "Salvar terceiro"}
-              </button>
+              </Button>
             </div>
           </form>
       </BottomSheet>

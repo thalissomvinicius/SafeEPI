@@ -1,7 +1,7 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { TrendingDown, Download, BarChart3 as BarChartIcon, PieChart as PieChartIcon, ShieldCheck, FileSpreadsheet, Calendar } from "lucide-react"
 import { api } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { DataLoadError } from "@/components/ui/DataLoadError"
+import { Button } from "@/components/ui/button"
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import { exportDeliveriesToExcel } from "@/utils/excelExporter"
 import { generateGeneralReportPDF } from "@/utils/pdfGenerator"
@@ -35,7 +36,11 @@ export default function ReportsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadedPeriodKey, setLoadedPeriodKey] = useState<string | null>(null)
   const [reloadVersion, setReloadVersion] = useState(0)
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const exportInFlight = useRef(false)
   
   // Raw Data State
   const [rawDeliveries, setRawDeliveries] = useState<DeliveryWithRelations[]>([])
@@ -56,6 +61,8 @@ export default function ReportsPage() {
   const [selectedThirdPartyIds, setSelectedThirdPartyIds] = useState<string[]>([])
   const [isCompactCharts, setIsCompactCharts] = useState(false)
   const period = useMemo(() => getReportPeriod(dateFilter, customStartDate, customEndDate, specificMonth), [dateFilter, customStartDate, customEndDate, specificMonth])
+  const periodKey = `${period.start?.toISOString() || "all"}:${period.end?.toISOString() || "all"}`
+  const reportDataReady = !loading && !loadError && period.valid && loadedPeriodKey === periodKey
   
   // Computed Data State
   const [allDeliveries, setAllDeliveries] = useState<DeliveryWithRelations[]>([])
@@ -109,6 +116,7 @@ export default function ReportsPage() {
         setRawWorkplaces(wpData)
         setRawEmployees(employeeData)
         setThirdParties(thirdPartyData)
+        setLoadedPeriodKey(periodKey)
       } catch (err) {
         if (cancelled) return
         console.error("Erro ao carregar dados:", err)
@@ -122,12 +130,10 @@ export default function ReportsPage() {
         loadData()
     }, 0)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [user, reloadVersion, period])
+  }, [user, reloadVersion, period, periodKey])
 
   // Compute stats based on filter
   useEffect(() => {
-    if (rawDeliveries.length === 0 && rawPpes.length === 0) return
-
     const employeeThirdPartyById = new Map(rawEmployees.map((employee) => [employee.id, employee.third_party_id || null]))
     const workplaceThirdPartyById = new Map(rawWorkplaces.map((workplace) => [workplace.id, workplace.third_party_id || null]))
     const thirdPartyById = new Map(thirdParties.map((thirdParty) => [thirdParty.id, thirdParty]))
@@ -250,10 +256,10 @@ export default function ReportsPage() {
   if (loading && rawPpes.length === 0 && rawDeliveries.length === 0) {
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in">
-            <div className="flex justify-between border-b border-slate-100 pb-8">
-                <div className="space-y-2">
+            <div className="flex flex-wrap justify-between gap-4 border-b border-slate-100 pb-8">
+                <div className="min-w-0 space-y-2">
                     <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-10 w-64" />
+                    <Skeleton className="h-10 w-64 max-w-full" />
                 </div>
                 <Skeleton className="h-12 w-40" />
             </div>
@@ -319,36 +325,63 @@ export default function ReportsPage() {
     setSelectedThirdPartyIds((prev) => prev.filter((id) => id !== thirdPartyId))
   }
 
-  const handleExportPDF = () => {
-    if (!period.valid || loading) return
-    let periodTitle = 'Todo o Histórico'
-    if (dateFilter === 'month') periodTitle = 'Neste Mês'
-    if (dateFilter === 'last30') periodTitle = 'Últimos 30 Dias'
-    if (dateFilter === 'last60') periodTitle = 'Últimos 60 Dias'
-    if (dateFilter === 'last90') periodTitle = 'Últimos 90 Dias'
-    if (dateFilter === 'custom') periodTitle = `Período: ${customStartDate} a ${customEndDate}`
-    if (dateFilter === 'specific_month') periodTitle = `Mês Específico: ${specificMonth}`
-    periodTitle = `${periodTitle} · ${reportScopeTitleMap[reportScopeFilter]}`
+  const handleExportExcel = async () => {
+    if (!reportDataReady || exportInFlight.current || deliveriesForExport.length === 0) return
+    exportInFlight.current = true
+    setExporting("excel")
+    setExportError(null)
+    try {
+      await exportDeliveriesToExcel(deliveriesForExport)
+    } catch {
+      setExportError("Não foi possível gerar a planilha. Tente novamente; os registros não foram alterados.")
+    } finally {
+      exportInFlight.current = false
+      setExporting(null)
+    }
+  }
 
-    if (showThirdPartySelector) periodTitle = `${periodTitle} · ${thirdPartyFilterLabel}`
+  const handleExportPDF = async () => {
+    if (!reportDataReady || exportInFlight.current || deliveriesForExport.length === 0) return
+    exportInFlight.current = true
+    setExporting("pdf")
+    setExportError(null)
+    try {
+      // Allow the pending button to render before the synchronous PDF work.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+      let periodTitle = 'Todo o Histórico'
+      if (dateFilter === 'month') periodTitle = 'Neste Mês'
+      if (dateFilter === 'last30') periodTitle = 'Últimos 30 Dias'
+      if (dateFilter === 'last60') periodTitle = 'Últimos 60 Dias'
+      if (dateFilter === 'last90') periodTitle = 'Últimos 90 Dias'
+      if (dateFilter === 'custom') periodTitle = `Período: ${customStartDate} a ${customEndDate}`
+      if (dateFilter === 'specific_month') periodTitle = `Mês Específico: ${specificMonth}`
+      periodTitle = `${periodTitle} · ${reportScopeTitleMap[reportScopeFilter]}`
 
-    const pdfBlob = generateGeneralReportPDF({
-      stats,
-      deliveries: deliveriesForExport,
-      periodTitle: periodTitle,
-      thirdPartySummary: investmentByThirdParty,
-    })
+      if (showThirdPartySelector) periodTitle = `${periodTitle} · ${thirdPartyFilterLabel}`
 
-    const safePeriod = periodTitle
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "")
+      const pdfBlob = generateGeneralReportPDF({
+        stats,
+        deliveries: deliveriesForExport,
+        periodTitle,
+        thirdPartySummary: investmentByThirdParty,
+      })
 
-    openPdfDialog(pdfBlob, `Relatorio_Global_EPIs_${safePeriod || "Geral"}.pdf`, {
-      title: "Relatorio gerencial pronto",
-      description: "Escolha se deseja abrir o relatorio em uma nova aba ou baixar o PDF agora.",
-    })
+      const safePeriod = periodTitle
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+
+      openPdfDialog(pdfBlob, `Relatorio_Global_EPIs_${safePeriod || "Geral"}.pdf`, {
+        title: "Relatorio gerencial pronto",
+        description: "Escolha se deseja abrir o relatorio em uma nova aba ou baixar o PDF agora.",
+      })
+    } catch {
+      setExportError("Não foi possível gerar o PDF. Tente novamente; os registros não foram alterados.")
+    } finally {
+      exportInFlight.current = false
+      setExporting(null)
+    }
   }
 
   return (
@@ -512,17 +545,22 @@ export default function ReportsPage() {
               />
             </div>
           )}
-          <button 
-            onClick={handleExportPDF}
-            disabled={!period.valid || loading || allDeliveries.length === 0}
-            className="min-h-11 w-full bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center shadow-sm"
+          <Button
+            variant="outline"
+            onClick={() => void handleExportPDF()}
+            loading={exporting === "pdf"}
+            loadingText="Gerando PDF…"
+            aria-describedby={exportError ? "report-export-error" : undefined}
+            disabled={!reportDataReady || exporting !== null || deliveriesForExport.length === 0}
+            className="w-full border-slate-200 bg-white text-slate-600 hover:bg-slate-50 shadow-sm"
           >
               <Download className="w-4 h-4 mr-2 text-[#2563EB]" />
               Exportar PDF
-          </button>
+          </Button>
         </div>
       </div>
 
+      {exportError && <p id="report-export-error" role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm leading-5 text-red-800">{exportError}</p>}
       {!period.valid && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Informe um período completo com datas válidas. Exportação indisponível até corrigir o filtro.</p>}
       {loading && <p role="status" className="text-sm text-slate-600">Atualizando o período selecionado…</p>}
       <p className="text-xs leading-5 text-slate-500">Custos estimados pelo preço atual do catálogo, sem recompor preços históricos. Alertas de CA consideram todo o catálogo ativo; os demais indicadores respeitam os filtros.</p>
@@ -675,13 +713,13 @@ export default function ReportsPage() {
           <div className="space-y-6 flex-1 overflow-y-auto pr-2">
             {investmentByWorkplace.map((wp, i) => (
                 <div key={i} className="space-y-2">
-                    <div className="flex justify-between items-end">
-                        <span className="text-sm font-bold text-slate-600 uppercase tracking-tighter">{wp.name}</span>
-                        <span className="text-xs font-black text-[#2563EB]">R$ {wp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <div className="flex min-w-0 items-end justify-between gap-3">
+                        <span className="min-w-0 truncate text-sm font-bold text-slate-600 uppercase tracking-tighter" title={wp.name}>{wp.name}</span>
+                        <span className="shrink-0 whitespace-nowrap text-xs font-black tabular-nums text-[#2563EB]">R$ {wp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div 
-                            className="h-full bg-[#2563EB] transition-all duration-1000" 
+                            className="h-full bg-[#2563EB]"
                             ref={(el) => {
                                 if (el) {
                                     el.style.width = `${Math.min(100, (wp.value / (investmentByWorkplace[0]?.value || 1)) * 100)}%`
@@ -696,11 +734,8 @@ export default function ReportsPage() {
             )}
           </div>
             <p className="text-slate-400 text-sm mt-4 italic font-medium">
-              O algoritmo SafeEPI analisa o fluxo de justificativas (Perda, Dano, Validade) para identificar padrões de comportamento.
+              Custo estimado das entregas no período selecionado, calculado com os preços atuais do catálogo. Não representa o custo histórico de compra.
             </p>
-            <div className="mt-8 relative w-24 h-24">
-               <div className="absolute inset-0 rounded-full border-[10px] border-slate-50 border-t-[#2563EB]/20 border-r-[#2563EB]/40 animate-[spin_3s_linear_infinite] transition-all"></div>
-            </div>
         </div>
 
       <div className="bg-slate-900 rounded-2xl p-5 sm:p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-slate-900/40 relative overflow-hidden">
@@ -714,23 +749,33 @@ export default function ReportsPage() {
                 <p className="text-slate-300 text-sm">Relatórios do conjunto selecionado para conferência da empresa.</p>
             </div>
         </div>
-        <div className="flex gap-4 w-full sm:w-auto relative z-10">
-            <button 
-              onClick={() => exportDeliveriesToExcel(deliveriesForExport)}
-              disabled={loading || !period.valid || deliveriesForExport.length === 0}
-              className="flex-1 sm:flex-none border border-slate-700 bg-slate-800 text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center justify-center disabled:opacity-40 gap-2"
+        <div className="flex w-full flex-col gap-3 sm:w-auto relative z-10">
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => void handleExportExcel()}
+              loading={exporting === "excel"}
+              loadingText="Gerando…"
+              aria-describedby={exportError ? "report-export-error" : undefined}
+              disabled={!reportDataReady || exporting !== null || deliveriesForExport.length === 0}
+              className="flex-1 border-slate-700 bg-slate-800 text-white hover:bg-slate-700 hover:text-white sm:flex-none"
             >
                 <FileSpreadsheet className="w-4 h-4 text-green-400" />
                 Excel
-            </button>
-            <button 
-                onClick={handleExportPDF}
-                disabled={loading || !period.valid || deliveriesForExport.length === 0}
-                className="flex-1 sm:flex-none bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-slate-50 transition-all flex items-center justify-center border-b-4 border-slate-200 gap-2"
+            </Button>
+            <Button
+                variant="outline"
+                onClick={() => void handleExportPDF()}
+                loading={exporting === "pdf"}
+                loadingText="Gerando…"
+                aria-describedby={exportError ? "report-export-error" : undefined}
+                disabled={!reportDataReady || exporting !== null || deliveriesForExport.length === 0}
+                className="flex-1 bg-white text-slate-900 hover:bg-slate-50 sm:flex-none"
             >
                 <Download className="w-4 h-4 text-[#2563EB]" />
                 PDF
-            </button>
+            </Button>
+          </div>
         </div>
       </div>
       {pdfActionDialog}

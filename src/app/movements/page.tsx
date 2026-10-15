@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import SignatureCanvas from "react-signature-canvas"
-import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, Shield, Users, FileDown, Presentation, PenTool, Trash2 } from "lucide-react"
+import { ArrowRightLeft, Search, Calendar, Filter, FileSpreadsheet, ArrowUpRight, ArrowDownLeft, Shield, Users, FileDown, Presentation, PenTool, Trash2 } from "lucide-react"
 import { api } from "@/services/api"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
@@ -21,6 +21,7 @@ import { toast } from "@/lib/toast"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { DataLoadError } from "@/components/ui/DataLoadError"
+import { Button } from "@/components/ui/button"
 import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 
 type DateFilter = 'all' | 'month' | 'last30' | 'last60' | 'last90' | 'custom' | 'specific_month'
@@ -33,8 +34,16 @@ export default function MovementsPage() {
   const { openPdfDialog, pdfActionDialog } = usePdfActionDialog()
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadedPeriodKey, setLoadedPeriodKey] = useState<string | null>(null)
   const [hasMoreRecords, setHasMoreRecords] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const loadingMoreRef = useRef(false)
+  const [exportingExcel, setExportingExcel] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const exportingExcelRef = useRef(false)
+  const generatingPdfRef = useRef(false)
+  const receiptInFlightRef = useRef(false)
+  const signatureInFlightRef = useRef(false)
   const [pages, setPages] = useState({ deliveryOffset: 0, returnOffset: 0, deliveryMore: false, returnMore: false })
   const queryGeneration = useRef(0)
   const [visibleMovementCount, setVisibleMovementCount] = useState(100)
@@ -64,6 +73,8 @@ export default function MovementsPage() {
   const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>('own')
   const period = useMemo(() => getReportPeriod(dateFilter, customStartDate, customEndDate, specificMonth), [dateFilter, customStartDate, customEndDate, specificMonth])
   const invalidCustomPeriod = !period.valid
+  const periodKey = `${period.start?.toISOString() || "all"}:${period.end?.toISOString() || "all"}`
+  const reportDataReady = !loading && !loadError && !invalidCustomPeriod && loadedPeriodKey === periodKey
   const hasThirdPartyFeature = Boolean(user)
 
   // Auth protection
@@ -97,6 +108,7 @@ export default function MovementsPage() {
       setSignedDocuments(documentData)
       setEmployees(employeeData)
       setWorkplaces(workplaceData)
+      setLoadedPeriodKey(periodKey)
     } catch (err) {
       if (generation !== queryGeneration.current) return
       console.error("Erro ao carregar movimentações:", err)
@@ -104,7 +116,7 @@ export default function MovementsPage() {
     } finally {
       if (generation === queryGeneration.current) setLoading(false)
     }
-  }, [user, hasThirdPartyFeature, period])
+  }, [user, hasThirdPartyFeature, period, periodKey])
 
   // Load Data
   useEffect(() => {
@@ -113,6 +125,8 @@ export default function MovementsPage() {
   }, [loadData])
 
   const loadMoreRecords = async () => {
+    if (!reportDataReady || loadingMoreRef.current || !hasMoreRecords) return
+    loadingMoreRef.current = true
     const generation = queryGeneration.current
     try {
       setLoadingMore(true)
@@ -132,6 +146,7 @@ export default function MovementsPage() {
       console.error("Erro ao carregar mais movimentações:", error)
       toast.error("Não foi possível carregar mais registros. Os dados anteriores foram mantidos.")
     } finally {
+      loadingMoreRef.current = false
       setLoadingMore(false)
     }
   }
@@ -187,9 +202,9 @@ export default function MovementsPage() {
     if (searchTerm) {
       const lower = searchTerm.toLowerCase()
       filtered = filtered.filter(d =>
-        d.employee?.full_name.toLowerCase().includes(lower) ||
-        d.ppe?.name.toLowerCase().includes(lower) ||
-        d.employee?.cpf.includes(searchTerm)
+        d.employee?.full_name?.toLowerCase().includes(lower) ||
+        d.ppe?.name?.toLowerCase().includes(lower) ||
+        d.employee?.cpf?.includes(searchTerm)
       )
     }
 
@@ -205,11 +220,13 @@ export default function MovementsPage() {
     )
 
   const handleDeliveryReceiptPDF = async (delivery: DeliveryWithRelations) => {
+    if (receiptInFlightRef.current) return
     if (!delivery.signature_url && delivery.auth_method !== "fingerprint") {
       toast.error("Esta entrega não possui assinatura digital.")
       return
     }
 
+    receiptInFlightRef.current = true
     try {
       setDownloadingDeliveryId(delivery.id)
       const signedDocument = getSignedDocumentForDelivery(delivery.id)
@@ -294,6 +311,7 @@ export default function MovementsPage() {
       console.error("Erro ao gerar comprovante da movimentação:", err)
       toast.error("Erro ao processar o comprovante PDF.")
     } finally {
+      receiptInFlightRef.current = false
       setDownloadingDeliveryId(null)
     }
   }
@@ -311,11 +329,13 @@ export default function MovementsPage() {
   }
 
   const openSignatureFlow = async (delivery: DeliveryWithRelations) => {
+    if (signatureInFlightRef.current) return
     if (!delivery.employee_id || !delivery.ppe_id) {
       toast.error("Nao foi possivel identificar colaborador ou EPI desta entrega.")
       return
     }
 
+    signatureInFlightRef.current = true
     try {
       setCreatingSignatureLinkId(delivery.id)
       const existingToken = await getPendingSignatureLinkToken(delivery.id)
@@ -353,6 +373,7 @@ export default function MovementsPage() {
       const message = error instanceof Error ? error.message : "Nao foi possivel abrir a assinatura desta entrega."
       toast.error(message)
     } finally {
+      signatureInFlightRef.current = false
       setCreatingSignatureLinkId(null)
     }
   }
@@ -380,18 +401,44 @@ export default function MovementsPage() {
     )
   }
 
-  const handleSimplePDF = () => {
-    if (loading || hasMoreRecords || invalidCustomPeriod) return
-    const blob = generateMovementsSimplePDF({ movements: filteredMovements, stats, period: getPeriodLabel() })
-    openPdfDialog(blob, `Movimentacoes_Simples_${new Date().toISOString().slice(0,10)}.pdf`, {
-      title: "PDF Simples - Movimentações",
-      description: `Período: ${getPeriodLabel()} · ${filteredMovements.length} registros`
-    })
-    setShowPdfModal(false)
+  const handleExportExcel = async () => {
+    if (!reportDataReady || hasMoreRecords || filteredMovements.length === 0 || exportingExcelRef.current) return
+    exportingExcelRef.current = true
+    setExportingExcel(true)
+    setExportError(null)
+    try {
+      await exportMovementEventsToExcel(filteredMovements)
+    } catch {
+      setExportError("Não foi possível gerar a planilha. Tente novamente; os registros não foram alterados.")
+    } finally {
+      exportingExcelRef.current = false
+      setExportingExcel(false)
+    }
+  }
+
+  const handleSimplePDF = async () => {
+    if (!reportDataReady || hasMoreRecords || generatingPdfRef.current) return
+    generatingPdfRef.current = true
+    setGeneratingPresentationPdf(true)
+    try {
+      // Give the shared pending button a frame before building the document.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+      const blob = generateMovementsSimplePDF({ movements: filteredMovements, stats, period: getPeriodLabel() })
+      openPdfDialog(blob, `Movimentacoes_Simples_${new Date().toISOString().slice(0,10)}.pdf`, {
+        title: "PDF Simples - Movimentações",
+        description: `Período: ${getPeriodLabel()} · ${filteredMovements.length} registros`
+      })
+      setShowPdfModal(false)
+    } catch {
+      toast.error("Não foi possível gerar o PDF. Tente novamente.")
+    } finally {
+      generatingPdfRef.current = false
+      setGeneratingPresentationPdf(false)
+    }
   }
 
   const handlePresentationPDF = async () => {
-    if (loading || hasMoreRecords || invalidCustomPeriod) return
+    if (!reportDataReady || hasMoreRecords || generatingPdfRef.current) return
     if (!technicianName.trim()) {
       toast.error("Selecione o responsável técnico cadastrado no sistema.")
       return
@@ -400,6 +447,7 @@ export default function MovementsPage() {
       toast.error("Assine como responsável técnico antes de gerar o PDF de apresentação.")
       return
     }
+    generatingPdfRef.current = true
     try {
       setGeneratingPresentationPdf(true)
       const movementsWithAssets = await mapConcurrent(filteredMovements, 4, async (movement) => {
@@ -424,13 +472,14 @@ export default function MovementsPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível gerar o PDF completo.")
     } finally {
+      generatingPdfRef.current = false
       setGeneratingPresentationPdf(false)
     }
   }
 
   const handleGenerateSelectedPDF = () => {
     if (selectedPdfType === 'simple') {
-      handleSimplePDF()
+      void handleSimplePDF()
       return
     }
 
@@ -450,18 +499,21 @@ export default function MovementsPage() {
         </div>
 
         <div className="w-full md:w-auto flex gap-2">
-          <button
-            onClick={() => exportMovementEventsToExcel(filteredMovements)}
-            disabled={loading || hasMoreRecords || invalidCustomPeriod || filteredMovements.length === 0}
+          <Button
+            variant="outline"
+            onClick={() => void handleExportExcel()}
+            loading={exportingExcel}
+            loadingText="Gerando…"
+            disabled={!reportDataReady || hasMoreRecords || filteredMovements.length === 0}
             title="Exportar para planilha Excel"
             className="min-h-11 flex-1 md:flex-none border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Excel
-          </button>
+          </Button>
           <button
-            onClick={() => setShowPdfModal(true)}
-            disabled={loading || hasMoreRecords || invalidCustomPeriod || filteredMovements.length === 0}
+            onClick={() => { if (reportDataReady && !hasMoreRecords) setShowPdfModal(true) }}
+            disabled={!reportDataReady || hasMoreRecords || filteredMovements.length === 0}
             title="Gerar relatório em PDF"
             className="min-h-11 flex-1 md:flex-none border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
@@ -471,7 +523,13 @@ export default function MovementsPage() {
         </div>
       </div>
 
-      {loadError && rawDeliveries.length > 0 && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">A consulta falhou. Mantivemos os registros carregados; tente atualizar novamente.</div>}
+      {exportError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{exportError}</p>}
+      {loadError && rawDeliveries.length > 0 && (
+        <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <p>A consulta falhou. Os dados anteriores podem não corresponder ao período selecionado. A exportação está bloqueada até atualizar.</p>
+          <Button variant="outline" onClick={() => void loadData()} loading={loading} loadingText="Atualizando…" className="border-amber-300 text-amber-900">Tentar novamente</Button>
+        </div>
+      )}
       <p className="rounded-xl border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">{MOVEMENT_HISTORY_NOTE}</p>
       {hasMoreRecords && !loading && (
         <div role="status" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -479,9 +537,9 @@ export default function MovementsPage() {
             <p className="text-sm font-semibold text-amber-900">Histórico carregado parcialmente</p>
               <p className="mt-1 text-xs leading-5 text-amber-800">{rawDeliveries.length} entregas de origem carregadas. Totais e busca consideram apenas estes registros; carregue os restantes para liberar relatórios completos.</p>
           </div>
-          <button type="button" onClick={() => void loadMoreRecords()} disabled={loadingMore} className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">
-            {loadingMore ? "Carregando registros…" : "Carregar mais 500 registros"}
-          </button>
+          <Button variant="outline" type="button" onClick={() => void loadMoreRecords()} loading={loadingMore} loadingText="Carregando registros…" disabled={!reportDataReady} className="border-amber-300 text-amber-900">
+            Carregar mais 500 registros
+          </Button>
         </div>
       )}
 
@@ -778,35 +836,32 @@ export default function MovementsPage() {
 
                         <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
                           {move.signature_url || move.auth_method === "fingerprint" ? (
-                            <button
+                            <Button
                               onClick={() => void handleDeliveryReceiptPDF(move)}
-                              disabled={isDownloading}
+                              loading={isDownloading}
+                              loadingText="Gerando…"
+                              disabled={downloadingDeliveryId !== null}
                               title="Emitir comprovante de entrega do EPI"
                               className="inline-flex items-center gap-1.5 rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-3 text-xs font-semibold  tracking-normal text-white shadow-sm shadow-blue-900/15 transition-colors hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20 disabled:opacity-40"
                             >
-                              {isDownloading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <FileDown className="h-4 w-4" />
-                              )}
+                              <FileDown className="h-4 w-4" />
                               {isReturn ? "PDF da entrega" : "PDF"}
-                            </button>
+                            </Button>
                           ) : (
                             <>
                               <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold  tracking-normal text-slate-400">Sem assinatura</span>
-                              <button
+                              <Button
+                                variant="outline"
                                 onClick={() => void openSignatureFlow(move)}
-                                disabled={isCreatingSignatureLink}
+                                loading={isCreatingSignatureLink}
+                                loadingText="Abrindo…"
+                                disabled={creatingSignatureLinkId !== null}
                                 title="Abrir assinatura desta entrega"
                                 className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold  tracking-normal text-amber-700 transition-colors hover:-translate-y-0.5 hover:bg-amber-100 hover:shadow-md disabled:opacity-50"
                               >
-                                {isCreatingSignatureLink ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <PenTool className="h-4 w-4" />
-                                )}
+                                <PenTool className="h-4 w-4" />
                                 Assinar
-                              </button>
+                              </Button>
                             </>
                           )}
                         </div>
@@ -957,20 +1012,20 @@ export default function MovementsPage() {
               <p className="text-xs text-slate-400 italic">
                 Período: <strong>{getPeriodLabel()}</strong> · {filteredMovements.length} movimentações
               </p>
-              <button
+              <Button
                 onClick={handleGenerateSelectedPDF}
-                disabled={generatingPresentationPdf}
+                loading={generatingPresentationPdf}
+                loadingText="Gerando PDF…"
+                disabled={!reportDataReady || hasMoreRecords || filteredMovements.length === 0}
                 className="min-h-11 rounded-xl bg-[var(--brand-color)] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-color-strong)] disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {generatingPresentationPdf ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : selectedPdfType === 'presentation' ? (
+                {selectedPdfType === 'presentation' ? (
                   <Presentation className="w-4 h-4" />
                 ) : (
                   <FileDown className="w-4 h-4" />
                 )}
                 {selectedPdfType === 'presentation' ? 'Gerar apresentação assinada' : 'Gerar PDF simples'}
-              </button>
+              </Button>
             </div>
       </BottomSheet>
       {pdfActionDialog}

@@ -12,6 +12,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { LoadingRows, LoadingState } from "@/components/ui/LoadingState"
 import { AdminLoadError } from "@/components/ui/AdminLoadError"
+import { Button } from "@/components/ui/button"
 
 export default function UsersPage() {
   const { user: currentUser, loading: authLoading } = useAuth()
@@ -387,13 +388,15 @@ export default function UsersPage() {
                 >
                   Cancelar
                 </button>
-                <button 
+                <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-colors flex items-center justify-center disabled:opacity-50"
+                  loading={isSubmitting}
+                  loadingText={formData.id ? "Salvando…" : "Criando conta…"}
+                  className="h-auto min-h-11 flex-1 px-4 py-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-colors flex items-center justify-center disabled:opacity-50"
                 >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : (formData.id ? 'Salvar Senha' : 'Criar Conta')}
-                </button>
+                  {formData.id ? 'Salvar Senha' : 'Criar Conta'}
+                </Button>
               </div>
             </form>
       </BottomSheet>

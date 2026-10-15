@@ -1,8 +1,8 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 
-import { useState, useEffect } from "react"
-import { ExternalLink, Fingerprint, History, ShieldCheck, Search, Loader2, FileDown, Trash2, AlertTriangle } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { ExternalLink, Fingerprint, History, ShieldCheck, Search, FileDown, Trash2, AlertTriangle } from "lucide-react"
 import { MobileTableCard } from "@/components/ui/MobileTableCard"
 import { api } from "@/services/api"
 import { DeliveryWithRelations, SignedDocument, ThirdParty } from "@/types/database"
@@ -15,6 +15,7 @@ import { LoadingState } from "@/components/ui/LoadingState"
 import { AccessibleOverlay } from "@/components/ui/AccessibleOverlay"
 import { DataLoadError } from "@/components/ui/DataLoadError"
 import { fetchImageDataUrl } from "@/utils/imageDataUrl"
+import { Button } from "@/components/ui/button"
 
 type DeliveryScopeFilter = "own" | "third_party" | "all"
 
@@ -44,6 +45,10 @@ export default function HistoryPage() {
   const [confirmDelete, setConfirmDelete] = useState<DeliveryWithRelations | null>(null)
   const [deliveryScopeFilter, setDeliveryScopeFilter] = useState<DeliveryScopeFilter>("own")
   const [selectedThirdPartyIds, setSelectedThirdPartyIds] = useState<string[]>([])
+  const downloadingRef = useRef(false)
+  const openingAssetRef = useRef(false)
+  const deletingRef = useRef(false)
+  const loadingMoreRef = useRef(false)
 
   useEffect(() => {
     async function fetchHistory() {
@@ -71,6 +76,8 @@ export default function HistoryPage() {
   }, [hasThirdPartyFeature, reloadVersion])
 
   const loadMoreRecords = async () => {
+    if (loadingMoreRef.current) return
+    loadingMoreRef.current = true
     try {
       setLoadingMore(true)
       const nextRecords = await api.getDeliveries({ offset: records.length, limit: 500, signAssets: false })
@@ -83,6 +90,7 @@ export default function HistoryPage() {
       console.error("Erro ao carregar mais registros:", error)
       toast.error("Falha ao carregar mais registros do historico.")
     } finally {
+      loadingMoreRef.current = false
       setLoadingMore(false)
     }
   }
@@ -114,11 +122,13 @@ export default function HistoryPage() {
   }
 
   const handleOpenPrivateAsset = async (key: string, value: string | null | undefined, label: string) => {
+    if (openingAssetRef.current) return
     if (!value) {
       toast.error(`${label} não encontrada.`)
       return
     }
 
+    openingAssetRef.current = true
     const popup = window.open("about:blank", "_blank")
     if (popup) popup.opener = null
 
@@ -137,17 +147,20 @@ export default function HistoryPage() {
       console.error(`Erro ao abrir ${label.toLowerCase()}:`, error)
       toast.error(`Não foi possível abrir ${label.toLowerCase()}. Tente novamente.`)
     } finally {
+      openingAssetRef.current = false
       setOpeningAssetKey(null)
     }
   }
 
   const handleDownloadPDF = async (rec: DeliveryWithRelations) => {
+    if (downloadingRef.current) return
     if (!rec.signature_url && rec.auth_method !== "fingerprint") {
       toast.error("Este registro não possui assinatura digital.")
       return
     }
 
     try {
+      downloadingRef.current = true
       setDownloadingId(rec.id)
       const signedDocument = getSignedDocumentForDelivery(rec.id)
 
@@ -238,6 +251,7 @@ export default function HistoryPage() {
       console.error("Erro ao gerar PDF:", err)
       toast.error("Erro ao processar o arquivo PDF.")
     } finally {
+      downloadingRef.current = false
       setDownloadingId(null)
     }
   }
@@ -249,12 +263,14 @@ export default function HistoryPage() {
     )
 
   const handleDeleteDelivery = async (rec: DeliveryWithRelations) => {
+    if (deletingRef.current) return
     if (!isMaster) {
       toast.error("Somente o usuario MASTER pode excluir registros de entrega.")
       return
     }
 
     try {
+      deletingRef.current = true
       setDeletingId(rec.id)
       const result = await api.deleteDelivery(rec.id)
       setRecords((prev) => prev.filter((item) => item.id !== rec.id))
@@ -277,6 +293,7 @@ export default function HistoryPage() {
       const message = err instanceof Error ? err.message : "Erro ao excluir entrega."
       toast.error(message)
     } finally {
+      deletingRef.current = false
       setDeletingId(null)
     }
   }
@@ -292,10 +309,10 @@ export default function HistoryPage() {
     const thirdPartyName = getDeliveryThirdPartyName(rec).toLowerCase()
 
     return matchesDeliveryScope && matchesAllScopeSelection && (
-      rec.employee?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.employee?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       thirdPartyName.includes(searchTerm.toLowerCase()) ||
       rec.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getSignedDocumentForDelivery(rec.id)?.sha256_hash.toLowerCase().includes(searchTerm.toLowerCase())
+      getSignedDocumentForDelivery(rec.id)?.sha256_hash?.toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
 
@@ -504,14 +521,18 @@ export default function HistoryPage() {
                     ]}
                     actions={
                       <div className="flex w-full gap-2">
-                        <button
+                        <Button
+                          type="button"
+                          variant="outline"
                           onClick={() => handleDownloadPDF(rec)}
-                          disabled={downloadingId === rec.id}
+                          disabled={downloadingId !== null}
+                          loading={downloadingId === rec.id}
+                          loadingText="Gerando…"
                           className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-xs font-semibold  tracking-normal text-[#2563EB] disabled:opacity-30"
                         >
-                          {downloadingId === rec.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
+                          <FileDown className="mr-1 h-4 w-4" />
                           PDF
-                        </button>
+                        </Button>
                         {isMaster && (
                           <button
                             onClick={() => setConfirmDelete(rec)}
@@ -519,7 +540,7 @@ export default function HistoryPage() {
                             className="flex min-h-11 w-12 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 disabled:opacity-30"
                             aria-label="Excluir registro"
                           >
-                            {deletingId === rec.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
@@ -572,40 +593,46 @@ export default function HistoryPage() {
                     </td>
                     <td className="px-4 py-3 lg:px-5">
                         {signedDocument ? (
-                             <button
+                             <Button
                                 type="button"
+                                variant="outline"
                                 onClick={() => void handleOpenPrivateAsset(
                                   `document:${signedDocument.id}`,
                                   signedDocument.storage_path || signedDocument.document_url,
                                   "Documento arquivado",
                                 )}
-                                disabled={openingAssetKey === `document:${signedDocument.id}`}
+                                disabled={openingAssetKey !== null}
+                                loading={openingAssetKey === `document:${signedDocument.id}`}
+                                loadingText="Abrindo…"
                                 aria-label={`Abrir documento arquivado de ${rec.employee?.full_name || "colaborador"}`}
                                 className="flex min-h-11 w-fit items-center whitespace-nowrap rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 transition-colors hover:bg-green-100 disabled:opacity-60"
                              >
-                                {openingAssetKey === `document:${signedDocument.id}` ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="w-3 h-3 mr-1" />}
+                                <ShieldCheck className="w-3 h-3 mr-1" />
                                 Arquivado
                                 <ExternalLink className="w-3 h-3 ml-1" />
-                             </button>
+                             </Button>
                         ) : rec.auth_method === "fingerprint" ? (
                             <span className="flex w-fit items-center whitespace-nowrap rounded border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
                               <Fingerprint className="mr-1 h-3 w-3" /> Digital validada
                             </span>
                         ) : rec.signature_url ? (
-                             <button
+                             <Button
                                 type="button"
+                                variant="outline"
                                 onClick={() => void handleOpenPrivateAsset(
                                   `signature:${rec.id}`,
                                   rec.signature_storage_path || rec.signature_url,
                                   "Assinatura",
                                 )}
-                                disabled={openingAssetKey === `signature:${rec.id}`}
+                                disabled={openingAssetKey !== null}
+                                loading={openingAssetKey === `signature:${rec.id}`}
+                                loadingText="Abrindo…"
                                 aria-label={`Abrir somente a assinatura de ${rec.employee?.full_name || "colaborador"}`}
                                 className="flex min-h-11 w-fit items-center whitespace-nowrap rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-60"
                              >
-                                {openingAssetKey === `signature:${rec.id}` ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="w-3 h-3 mr-1" />}
+                                <ShieldCheck className="w-3 h-3 mr-1" />
                                 Só assinatura
-                             </button>
+                             </Button>
                         ) : (
                             <span className="text-xs text-amber-500 font-semibold bg-amber-50 px-2 py-1 rounded border border-amber-100 w-fit">Pendente</span>
                         )}
@@ -615,7 +642,7 @@ export default function HistoryPage() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-xs font-semibold text-slate-600  tracking-normal">
                             <Fingerprint className="w-3.5 h-3.5 text-[#2563EB]" />
-                            {signedDocument.sha256_hash.slice(0, 12)}...
+                            {signedDocument.sha256_hash ? `${signedDocument.sha256_hash.slice(0, 12)}...` : "Hash não informado"}
                           </div>
                           <p className="text-xs font-semibold text-slate-500 ">
                             {new Date(signedDocument.created_at).toLocaleString("pt-BR")}
@@ -627,18 +654,18 @@ export default function HistoryPage() {
                     </td>
                     <td className="sticky right-0 z-10 bg-white px-3 py-3 text-right shadow-[-16px_0_22px_-22px_rgba(15,23,42,0.55)] transition-colors group-hover:bg-slate-50/80">
                         <div className="flex min-w-[98px] items-center justify-end gap-1">
-                          <button
+                          <Button
+                            type="button"
+                            variant="outline"
                             onClick={() => handleDownloadPDF(rec)}
-                            disabled={downloadingId === rec.id}
+                            disabled={downloadingId !== null}
+                            loading={downloadingId === rec.id}
+                            loadingText="Gerando…"
                             className="flex min-h-10 min-w-[64px] items-center justify-center rounded-xl border border-blue-100 bg-blue-50 px-3 text-xs font-semibold  tracking-normal text-[#2563EB] transition-colors hover:bg-blue-100 disabled:opacity-30"
                           >
-                              {downloadingId === rec.id ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <FileDown className="w-4 h-4 mr-1" />
-                              )}
+                              <FileDown className="w-4 h-4 mr-1" />
                               PDF
-                          </button>
+                          </Button>
                           {isMaster && (
                             <button
                               onClick={() => setConfirmDelete(rec)}
@@ -646,11 +673,7 @@ export default function HistoryPage() {
                               title="Excluir registro de entrega (Master)"
                               className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:opacity-30"
                             >
-                              {deletingId === rec.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -672,14 +695,16 @@ export default function HistoryPage() {
         </div>
         {hasMore && !loading && (
           <div className="border-t border-slate-100 bg-slate-50 p-4 text-center">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => void loadMoreRecords()}
-              disabled={loadingMore}
+              loading={loadingMore}
+              loadingText="Carregando registros…"
               className="min-h-11 rounded-xl border border-slate-200 bg-white px-5 text-xs font-semibold  tracking-normal text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-[#2563EB] disabled:opacity-50"
             >
-              {loadingMore ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Carregar mais 500 registros"}
-            </button>
+              Carregar mais 500 registros
+            </Button>
           </div>
         )}
       </div>
@@ -689,21 +714,21 @@ export default function HistoryPage() {
         <AccessibleOverlay
           label="Invalidar registro de entrega"
           onClose={() => {
-            if (deletingId !== confirmDelete.id) setConfirmDelete(null)
+            if (!deletingRef.current) setConfirmDelete(null)
           }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in"
           onClick={(event) => {
-            if (event.target === event.currentTarget && deletingId !== confirmDelete.id) {
+            if (event.target === event.currentTarget && !deletingRef.current) {
               setConfirmDelete(null)
             }
           }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-slate-100 bg-red-50/60 flex items-start gap-3">
+          <div className="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="p-5 border-b border-slate-100 bg-red-50/60 flex shrink-0 items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-base font-semibold text-slate-800  tracking-tight">
                   Invalidar registro de entrega
                 </h2>
@@ -712,12 +737,12 @@ export default function HistoryPage() {
                 </p>
               </div>
             </div>
-            <div className="p-5 space-y-3 text-sm text-slate-700">
+            <div className="min-h-0 overflow-y-auto overscroll-contain p-5 space-y-3 text-sm text-slate-700">
               <p className="font-medium">
                 Confirma a invalidacao desta entrega? O saldo consumido sera estornado automaticamente.
                 A entrega, o documento assinado e a trilha de auditoria serao preservados como evidencia.
               </p>
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1 text-xs">
+              <div className="break-words bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-1 text-xs">
                 <p>
                   <span className="font-semibold  tracking-normal text-slate-500 mr-2">
                     Protocolo
@@ -742,26 +767,26 @@ export default function HistoryPage() {
                 </p>
               </div>
             </div>
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setConfirmDelete(null)}
                 disabled={deletingId === confirmDelete.id}
                 className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-white font-semibold text-[11px]  tracking-normal transition-colors disabled:opacity-50"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
                 onClick={() => handleDeleteDelivery(confirmDelete)}
-                disabled={deletingId === confirmDelete.id}
+                loading={deletingId === confirmDelete.id}
+                loadingText="Invalidando…"
                 className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 font-semibold text-[11px]  tracking-normal flex items-center gap-2 transition-colors disabled:opacity-50"
               >
-                {deletingId === confirmDelete.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4" />
-                )}
+                <Trash2 className="w-4 h-4" />
                 Invalidar agora
-              </button>
+              </Button>
             </div>
           </div>
         </AccessibleOverlay>

@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { toast } from "@/lib/toast"
+import { Button } from "@/components/ui/button"
 import { api, type CompanyWithCounts } from "@/services/api"
 import type { Profile } from "@/types/database"
 import { useAuth } from "@/contexts/AuthContext"
@@ -595,10 +596,10 @@ export default function CompaniesPage() {
               </div>
             </div>
 
-            <button disabled={submittingCompany} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60">
-              {submittingCompany ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            <Button type="submit" disabled={submittingCompany} loading={submittingCompany} loadingText="Salvando…" className="mt-4 flex h-auto min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60">
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
               Salvar Empresa
-            </button>
+            </Button>
           </form>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -636,10 +637,10 @@ export default function CompaniesPage() {
                   <option value="DIRETORIA">Diretoria</option>
                 </select>
               </div>
-              <button disabled={submittingUser || !selectedCompanyId} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-slate-800 disabled:opacity-60">
-                {submittingUser ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCog className="h-4 w-4" />}
+              <Button type="submit" disabled={submittingUser || !selectedCompanyId} loading={submittingUser} loadingText="Criando acesso…" className="flex h-auto min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-slate-800 disabled:opacity-60">
+                <UserCog className="h-4 w-4" aria-hidden="true" />
                 Criar Acesso
-              </button>
+              </Button>
             </form>
 
             <div className="mt-6 border-t border-slate-100 pt-5">

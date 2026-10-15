@@ -1,0 +1,72 @@
+.button {
+  position: relative;
+}
+
+.content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: inherit;
+  gap: inherit;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.button[data-loading="true"] {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+.button[data-loading="true"] .content {
+  visibility: hidden;
+}
+
+.pending {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: inherit;
+  min-width: 0;
+  padding-inline: inherit;
+  pointer-events: none;
+}
+
+.pendingText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.indicator {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.indicator svg {
+  width: 100%;
+  height: 100%;
+  animation: rotate 900ms linear infinite;
+  animation-play-state: paused;
+}
+
+.indicator[data-animated="true"] svg {
+  animation-play-state: running;
+}
+
+@keyframes rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator svg {
+    animation: none;
+  }
+
+  .button {
+    transition: none;
+  }
+}

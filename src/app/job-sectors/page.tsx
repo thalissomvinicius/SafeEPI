@@ -1,11 +1,12 @@
 // responsive: revisado — mobile-first ✓
 "use client"
 import { useEffect, useState } from "react"
-import { BriefcaseBusiness, Building2, Loader2, Plus, Search, Trash2, X } from "lucide-react"
+import { BriefcaseBusiness, Building2, Plus, Search, Trash2, X } from "lucide-react"
 import { api } from "@/services/api"
 import { CatalogItem } from "@/types/database"
 import { toast } from "@/lib/toast"
 import { LoadingRows } from "@/components/ui/LoadingState"
+import { Button } from "@/components/ui/button"
 
 type CatalogKind = "job" | "department"
 
@@ -222,14 +223,16 @@ export default function JobSectorsPage() {
                 Cancelar
               </button>
             )}
-            <button
+            <Button
               type="submit"
               disabled={saving}
-              className="flex-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+              loading={saving}
+              loadingText="Salvando…"
+              className="h-auto min-h-11 flex-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg shadow-blue-900/20 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              <Plus className="w-4 h-4" aria-hidden="true" />
               {formData.id ? "Salvar Alteração" : `Cadastrar ${singularTitle}`}
-            </button>
+            </Button>
           </div>
         </form>
 

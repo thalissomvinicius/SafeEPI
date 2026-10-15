@@ -8,6 +8,7 @@ import { resolvePostLoginRedirect } from "@/lib/authNavigation"
 import { useVisualViewport } from "@/hooks/useVisualViewport"
 import styles from "./login.module.css"
 import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
+import { Button } from "@/components/ui/button"
 
 function loginDestination() {
   return resolvePostLoginRedirect(new URLSearchParams(window.location.search).get("redirectTo"))
@@ -114,9 +115,9 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            <button type="submit" disabled={disabled} className={styles.submit}>
-              {success ? <><Check aria-hidden="true" strokeWidth={2} className="size-[18px]" />Acesso confirmado</> : loading ? <><span aria-hidden="true" className="flex gap-1"><span className="size-1 rounded-full bg-white motion-safe:animate-pulse" /><span className="size-1 rounded-full bg-white/70 motion-safe:animate-pulse" /><span className="size-1 rounded-full bg-white/40 motion-safe:animate-pulse" /></span>Validando seu acesso...</> : <>Entrar no SafeEPI<ArrowRight aria-hidden="true" strokeWidth={1.8} className="size-[18px]" /></>}
-            </button>
+            <Button type="submit" disabled={disabled} loading={loading && !success} loadingText="Validando seu acesso…" className={styles.submit}>
+              {success ? <><Check aria-hidden="true" strokeWidth={2} className="size-[18px]" />Acesso confirmado</> : <>Entrar no SafeEPI<ArrowRight aria-hidden="true" strokeWidth={1.8} className="size-[18px]" /></>}
+            </Button>
             <p role="status" aria-live="polite" className="sr-only">{success ? "Login efetuado. Abrindo seu painel." : loading ? "Validando sessão e permissões de acesso." : ""}</p>
           </form>
 

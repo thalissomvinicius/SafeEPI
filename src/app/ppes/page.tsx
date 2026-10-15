@@ -17,6 +17,7 @@ import { formatDateOnly, getDateOnlyValue, getDaysUntilDateOnly } from "@/lib/da
 import { LOW_STOCK_THRESHOLD } from "@/lib/stockPolicy"
 import { generatePpeCatalogReportPDF } from "@/utils/pdfGenerator"
 import { usePdfActionDialog } from "@/hooks/usePdfActionDialog"
+import { Button } from "@/components/ui/button"
 
 export default function PpesPage() {
   const { user } = useAuth()
@@ -512,13 +513,15 @@ export default function PpesPage() {
                 >
                   Cancelar
                 </button>
-                <button 
+                <Button
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all flex items-center justify-center font-bold shadow-lg shadow-blue-900/15 shadow-xl shadow-blue-900/10"
+                  loading={isSaving}
+                  loadingText="Salvando…"
+                  className="h-auto min-h-11 flex-[2] px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-2xl uppercase tracking-widest transition-all flex items-center justify-center font-bold shadow-lg shadow-blue-900/15 shadow-xl shadow-blue-900/10"
                 >
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar no Catálogo"}
-                </button>
+                  {formData.id ? "Salvar Edição" : "Ativar no Catálogo"}
+                </Button>
               </div>
             </form>
       </BottomSheet>

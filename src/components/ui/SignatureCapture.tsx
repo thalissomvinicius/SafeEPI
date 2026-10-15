@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import SignatureCanvas from "react-signature-canvas"
-import { CheckCircle2, Expand, Loader2, RotateCcw, X } from "lucide-react"
+import { CheckCircle2, Expand, RotateCcw, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { useDialogAccessibility } from "@/hooks/useDialogAccessibility"
 import { useVisualViewport } from "@/hooks/useVisualViewport"
 import { MANUAL_ACCEPTANCE_TEXT, MANUAL_ACCEPTANCE_VERSION, setManualSignatureDeclaration, type ManualSignatureOrigin } from "@/lib/manualSignatureEvidence"
@@ -155,8 +156,8 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
     <div className="flex items-center justify-between gap-3">
       <p className="text-sm font-medium text-slate-600">{compact ? "Assinatura" : "Desenhe sua assinatura"}</p>
       <div className="flex gap-1">
-        {!expanded && <button ref={expandButtonRef} type="button" onClick={openExpanded} disabled={isSaving} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600"><Expand className="h-4 w-4" aria-hidden="true" />Tela inteira</button>}
-        <button type="button" onClick={clear} disabled={isSaving} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50" aria-label="Limpar assinatura"><RotateCcw className="h-4 w-4" aria-hidden="true" />{!compact && <span className="hidden sm:inline">Limpar</span>}</button>
+        {!expanded && <Button ref={expandButtonRef} type="button" variant="outline" onClick={openExpanded} disabled={isSaving} className="min-h-11 rounded-lg px-3 text-sm text-slate-600"><Expand className="size-4" aria-hidden="true" />Tela inteira</Button>}
+        <Button type="button" variant="ghost" onClick={clear} disabled={isSaving} className="min-h-11 rounded-lg px-3 text-sm text-slate-600" aria-label="Limpar assinatura"><RotateCcw className="size-4" aria-hidden="true" />{!compact && <span className="hidden sm:inline">Limpar</span>}</Button>
       </div>
     </div>
     <div ref={wrapperRef} data-signature-canvas className={`relative w-full shrink-0 overflow-hidden rounded-xl border-2 border-dashed bg-white ${expanded ? "h-[min(42dvh,360px)] min-h-[160px]" : compact ? "h-[140px] sm:h-[180px]" : "h-[220px] sm:h-[280px]"} ${hasSignature ? "border-emerald-400" : "border-slate-300"}`}>
@@ -178,7 +179,7 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
         <label htmlFor={typedSignatureId} className="block text-sm text-slate-600">Seu nome será aplicado visualmente à assinatura.</label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input id={typedSignatureId} type="text" autoComplete="name" maxLength={100} value={typedSignature} onChange={event => setTypedSignature(event.target.value)} disabled={isSaving} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900" placeholder="Nome completo" />
-          <button type="button" onClick={applyTypedSignature} disabled={typedSignature.trim().length < 3 || isSaving} className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-50">Aplicar assinatura</button>
+          <Button type="button" variant="outline" onClick={applyTypedSignature} disabled={typedSignature.trim().length < 3 || isSaving} className="min-h-11 rounded-lg text-sm text-slate-700">Aplicar assinatura</Button>
         </div>
       </div>
     </details>
@@ -186,13 +187,13 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
       <p>{MANUAL_ACCEPTANCE_TEXT}</p>
       <label className="mt-3 flex min-h-11 cursor-pointer items-start gap-3"><input type="checkbox" checked={accepted} disabled={isSaving || !hasSignature} onChange={event => setAccepted(event.target.checked)} className="mt-1 h-5 w-5 shrink-0" /><span>Li e confirmo o recebimento dos itens apresentados.</span></label>
     </section>}
-    {(showConfirmButton || expanded) && <button type="button" onClick={() => {
+    {(showConfirmButton || expanded) && <Button type="button" loading={isSaving} loadingText="Salvando…" onClick={() => {
       if (requireAcceptance && !accepted) return
       setManualSignatureDeclaration(signatureRef.current, originRef.current ? { origin: originRef.current, accepted: requireAcceptance && accepted, ...(requireAcceptance && accepted ? { termVersion: MANUAL_ACCEPTANCE_VERSION } : {}) } : null)
       onConfirm()
-    }} disabled={isSaving || !hasSignature || (requireAcceptance && !accepted)} className="flex min-h-[52px] w-full shrink-0 items-center justify-center rounded-xl bg-[#2563EB] px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:bg-slate-300 disabled:shadow-none">
-      {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="mr-2 h-5 w-5" aria-hidden="true" />}{isSaving ? "Salvando…" : confirmLabel}
-    </button>}
+    }} disabled={isSaving || !hasSignature || (requireAcceptance && !accepted)} className="h-auto min-h-[52px] w-full whitespace-normal px-4 py-3 text-center text-sm disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none">
+      <CheckCircle2 className="size-5" aria-hidden="true" />{confirmLabel}
+    </Button>}
     {expanded && <p className="pb-[env(safe-area-inset-bottom)] text-center text-xs text-slate-500">Ao voltar, sua assinatura será preservada.</p>}
   </div>
 
@@ -201,7 +202,7 @@ export function SignatureCapture({ signatureRef, onConfirm, onClear, isSaving = 
     {createPortal(<div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={headingId} tabIndex={-1} className="safeepi-viewport-overlay fixed inset-x-0 z-[10000] flex min-h-0 flex-col overflow-hidden bg-white outline-none">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <h2 id={headingId} className="text-lg font-semibold text-slate-900">Assinatura</h2>
-        <button type="button" onClick={closeExpanded} disabled={isSaving} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600" aria-label="Voltar à tela anterior"><X className="h-5 w-5" aria-hidden="true" /></button>
+        <Button type="button" variant="ghost" size="icon" onClick={closeExpanded} disabled={isSaving} className="min-h-11 min-w-11 rounded-lg text-slate-600" aria-label="Voltar à tela anterior"><X className="size-5" aria-hidden="true" /></Button>
       </header>{editor}
     </div>, portal)}
   </> : editor

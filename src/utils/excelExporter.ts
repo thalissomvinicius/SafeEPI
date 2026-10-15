@@ -2,7 +2,8 @@ import ExcelJS from "exceljs"
 import { format } from "date-fns"
 import { COMPANY_CONFIG } from "@/config/company"
 import { DeliveryWithRelations, PPE } from "@/types/database"
-import { formatDateOnly, formatDeliveryDate } from "@/lib/dateOnly"
+import { formatDeliveryDate } from "@/lib/dateOnly"
+import { formatInventoryExpiry } from "@/lib/inventoryDisplay"
 import { movementEventDate, movementEventLabel, movementEventQuantity, MOVEMENT_HISTORY_NOTE, type MovementEvent } from "@/lib/movementEvents"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stockPolicy"
 import { DEVELOPER_CREDIT, DEVELOPER_NAME } from "@/config/developer"
@@ -134,7 +135,7 @@ export function exportDeliveriesToExcel(deliveries: DeliveryWithRelations[]) {
     addReportSheet(workbook, "Resumo Terceiros", "Resumo por Terceiro", thirdPartyRows)
   }
 
-  void saveWorkbook(workbook, `Relatorio_EPIs_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
+  return saveWorkbook(workbook, `Relatorio_EPIs_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
 }
 
 export function exportMovementEventsToExcel(events: MovementEvent[]) {
@@ -153,7 +154,7 @@ export function exportMovementEventsToExcel(events: MovementEvent[]) {
   }))
   addReportSheet(workbook, "Movimentos", "Entregas e conclusões de devolução", rows)
   addReportSheet(workbook, "Leitura do histórico", "Limitações dos registros legados", [{ Observação: MOVEMENT_HISTORY_NOTE }])
-  void saveWorkbook(workbook, `Movimentacoes_EPI_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
+  return saveWorkbook(workbook, `Movimentacoes_EPI_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
 }
 
 export function exportEmployeeToExcel(
@@ -175,7 +176,7 @@ export function exportEmployeeToExcel(
 
   addReportSheet(workbook, "Prontuario", `Prontuario Individual: ${employeeName}`, rows)
 
-  void saveWorkbook(workbook, `Prontuario_${employeeName.replace(/\s+/g, "_")}.xlsx`)
+  return saveWorkbook(workbook, `Prontuario_${employeeName.replace(/\s+/g, "_")}.xlsx`)
 }
 
 export function exportInventoryStockToExcel(ppes: PPE[], filterLabel = "Estoque atual") {
@@ -189,7 +190,7 @@ export function exportInventoryStockToExcel(ppes: PPE[], filterLabel = "Estoque 
     return {
       EPI: ppe.name,
       "No. C.A.": ppe.ca_number || "N/A",
-      "Validade C.A.": formatDateOnly(ppe.ca_expiry_date),
+      "Validade C.A.": formatInventoryExpiry(ppe.ca_expiry_date),
       Fabricante: ppe.manufacturer || "",
       Saldo: stock,
       Status: stock <= LOW_STOCK_THRESHOLD ? "Estoque baixo" : "OK",
@@ -220,5 +221,5 @@ export function exportInventoryStockToExcel(ppes: PPE[], filterLabel = "Estoque 
   ]
 
   addReportSheet(workbook, "Resumo", "Resumo do Estoque", summaryRows)
-  void saveWorkbook(workbook, `Relatorio_Estoque_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
+  return saveWorkbook(workbook, `Relatorio_Estoque_${COMPANY_CONFIG.shortName}_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
 }

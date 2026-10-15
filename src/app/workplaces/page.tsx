@@ -8,6 +8,7 @@ import { Workplace, Employee, DeliveryWithRelations, ThirdParty } from "@/types/
 import { useAuth } from "@/contexts/AuthContext"
 import { BottomSheet } from "@/components/ui/BottomSheet"
 import { LoadingRows, LoadingState } from "@/components/ui/LoadingState"
+import { Button } from "@/components/ui/button"
 
 export default function WorkplacesPage() {
   const { user } = useAuth()
@@ -414,10 +415,10 @@ export default function WorkplacesPage() {
                     className="min-h-11 flex-1 px-4 py-4 text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-[0.2em] transition-all">
                     Cancelar
                   </button>
-                  <button type="submit" disabled={isSaving}
-                    className="flex min-h-11 flex-[2] items-center justify-center rounded-2xl bg-[#2563EB] px-4 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]">
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : formData.id ? "Salvar Edição" : "Ativar Obra / Canteiro"}
-                  </button>
+                  <Button type="submit" disabled={isSaving} loading={isSaving} loadingText="Salvando…"
+                    className="flex h-auto min-h-11 flex-[2] items-center justify-center rounded-2xl bg-[#2563EB] px-4 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-900/15 transition-all hover:bg-[#1D4ED8]">
+                    {formData.id ? "Salvar Edição" : "Ativar Obra / Canteiro"}
+                  </Button>
                 </div>
                 {isAdmin && formData.id && (
                   <button type="button" disabled={isSaving || isDeleting} onClick={handleDeleteClick}

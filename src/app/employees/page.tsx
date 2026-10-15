@@ -9,7 +9,7 @@ import type SignatureCanvas from "react-signature-canvas"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
 import ExcelJS from "exceljs"
 import { api } from "@/services/api"
-import { Employee, Workplace, DeliveryWithRelations, CatalogItem, ThirdParty } from "@/types/database"
+import { Employee, Workplace, CatalogItem, ThirdParty } from "@/types/database"
 import { format, addDays, isPast } from "date-fns"
 import { useAuth } from "@/contexts/AuthContext"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -31,9 +31,12 @@ import { useDocumentArchive } from "@/hooks/useDocumentArchive"
 import { mapConcurrent } from "@/lib/mapConcurrent"
 import signatureStyles from "./prontuarioSignature.module.css"
 import { fetchImageDataUrl } from "@/utils/imageDataUrl"
+import { useEmployeeHistory } from "@/hooks/useEmployeeHistory"
+import { Button } from "@/components/ui/button"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
+const fetchEmployeeHistory = (employeeId: string) => api.getEmployeeHistory(employeeId)
 
 type EmployeeImportRow = Record<string, unknown>
 
@@ -211,10 +214,13 @@ export default function EmployeesPage() {
   const [checkingPendingToken, setCheckingPendingToken] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const importProgressTimerRef = useRef<number | null>(null)
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
-  const [employeeHistory, setEmployeeHistory] = useState<DeliveryWithRelations[]>([])
+  const {
+    employeeId: selectedEmployeeId, history: employeeHistory, loading: loadingHistory,
+    error: historyError, load: loadEmployeeHistory, refresh: refreshEmployeeHistory, clear: clearEmployeeHistory, isCurrent: isCurrentProfile,
+  } = useEmployeeHistory(fetchEmployeeHistory)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [profileAction, setProfileAction] = useState<string | null>(null)
+  const profileActionRef = useRef(false)
   const [formData, setFormData] = useState<{
     id?: string;
     name: string;
@@ -585,35 +591,34 @@ export default function EmployeesPage() {
     }
   }
 
-  const openProfile = async (empId: string) => {
-    setSelectedEmployeeId(empId)
+  const openProfile = (empId: string) => {
     setIsProfileOpen(true)
-    setLoadingHistory(true)
-    try {
-      const history = await api.getEmployeeHistory(empId)
-      setEmployeeHistory(history)
-    } catch (err) {
-      console.error("Erro ao carregar histórico:", err)
-      toast.error("Falha ao carregar prontuário.")
-    } finally {
-      setLoadingHistory(false)
-    }
+    void loadEmployeeHistory(empId)
+  }
+
+  const closeProfile = () => {
+    setIsProfileOpen(false)
+    clearEmployeeHistory()
   }
 
   const handleReturnItem = async (deliveryId: string) => {
+    if (profileActionRef.current || loadingHistory || historyError || !selectedEmployeeId || !employeeHistory.some(delivery => delivery.id === deliveryId)) return
+    const employeeId = selectedEmployeeId
     const motive = prompt("Qual o motivo da devolução? (Ex: Desgaste, Erro, Fim de Contrato)")
     if (!motive) return
 
+    profileActionRef.current = true
+    setProfileAction(`return:${deliveryId}`)
     try {
       await api.returnDelivery(deliveryId, motive)
-      if (selectedEmployeeId) {
-        const history = await api.getEmployeeHistory(selectedEmployeeId)
-        setEmployeeHistory(history)
-        toast.success("EPI devolvido com sucesso.")
-      }
+      await refreshEmployeeHistory(employeeId)
+      toast.success("EPI devolvido com sucesso.")
     } catch (err) {
       console.error("Erro ao dar baixa:", err)
       toast.error("Erro ao registrar devolução.")
+    } finally {
+      profileActionRef.current = false
+      setProfileAction(null)
     }
   }
 
@@ -779,27 +784,29 @@ export default function EmployeesPage() {
   }
 
   const handleTerminateEmployee = async () => {
-    if (!selectedEmployeeId) return
-    const emp = employees.find(e => e.id === selectedEmployeeId)
+    if (!selectedEmployeeId || loadingHistory || historyError || profileActionRef.current) return
+    const employeeId = selectedEmployeeId
+    const emp = employees.find(e => e.id === employeeId)
+    const activeDeliveryIds = employeeHistory.filter(delivery => !delivery.returned_at).map(delivery => delivery.id)
     
     if (!confirm(`Deseja realmente DESLIGAR o colaborador ${emp?.full_name} e dar baixa em todos os seus EPIs ativos?`)) return
+    profileActionRef.current = true
+    setProfileAction("terminate")
     try {
-      setLoadingHistory(true)
-      await api.terminateEmployee(selectedEmployeeId)
-      const activeDeliveries = employeeHistory.filter(d => !d.returned_at)
-      if (activeDeliveries.length > 0) {
-        await api.returnMultipleDeliveries(activeDeliveries.map(d => d.id), "Desligamento")
+      await api.terminateEmployee(employeeId)
+      if (activeDeliveryIds.length > 0) {
+        await api.returnMultipleDeliveries(activeDeliveryIds, "Desligamento")
       }
       
       await loadData()
-      const history = await api.getEmployeeHistory(selectedEmployeeId)
-      setEmployeeHistory(history)
+      await refreshEmployeeHistory(employeeId)
       toast.success("Colaborador desligado e EPIs baixados com sucesso.")
     } catch (err) {
       console.error("Erro ao desligar:", err)
       toast.error("Erro ao processar desligamento.")
     } finally {
-      setLoadingHistory(false)
+      profileActionRef.current = false
+      setProfileAction(null)
     }
   }
 
@@ -810,10 +817,8 @@ export default function EmployeesPage() {
       setIsDeletingEmployee(true)
       await api.deleteEmployee(employeeToDelete.id)
       setEmployees(prev => prev.filter(emp => emp.id !== employeeToDelete.id))
-      if (selectedEmployeeId === employeeToDelete.id) {
-        setSelectedEmployeeId(null)
-        setIsProfileOpen(false)
-        setEmployeeHistory([])
+      if (isCurrentProfile(employeeToDelete.id)) {
+        closeProfile()
       }
       toast.success("Colaborador excluido com sucesso.")
       setEmployeeToDelete(null)
@@ -832,10 +837,7 @@ export default function EmployeesPage() {
       await api.activateEmployee(employee.id)
       toast.success("Colaborador reativado com sucesso.")
       await loadData()
-      if (selectedEmployeeId === employee.id) {
-        const history = await api.getEmployeeHistory(employee.id)
-        setEmployeeHistory(history)
-      }
+      await refreshEmployeeHistory(employee.id)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao ativar colaborador."
       toast.error(message)
@@ -845,7 +847,7 @@ export default function EmployeesPage() {
   }
 
   const openTstModal = () => {
-    if (employeeHistory.length === 0) return
+    if (loadingHistory || historyError || profileActionRef.current || employeeHistory.length === 0) return
     setTstSelectedEmployee(null)
     setTstSearchTerm("")
     setTstRole("Técnico de Segurança do Trabalho")
@@ -1740,15 +1742,15 @@ export default function EmployeesPage() {
       )}
       {employeeToDelete && (
         <AccessibleOverlay label="Excluir colaborador" onClose={() => { if (!isDeletingEmployee) setEmployeeToDelete(null) }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)] animate-in zoom-in-95 duration-200">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-red-100 bg-red-50 text-red-600">
+          <div className="flex max-h-[calc(var(--safeepi-viewport-height,100dvh)-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)] animate-in zoom-in-95 duration-200">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6 sm:py-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-red-100 bg-red-50 text-red-600">
                   <Trash2 className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-red-600">Excluir colaborador</p>
-                  <h2 className="mt-1 text-lg font-black uppercase tracking-tight text-slate-900">
+                  <h2 className="mt-1 break-words text-lg font-black uppercase tracking-tight text-slate-900">
                     {employeeToDelete.full_name}
                   </h2>
                 </div>
@@ -1764,7 +1766,7 @@ export default function EmployeesPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="px-6 py-5">
+            <div className="min-h-0 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
                 <p className="text-sm font-semibold leading-relaxed text-slate-600">
                   Esta acao remove o colaborador das telas de cadastro e selecao, mas preserva o registro interno para manter entregas, certificados e documentos assinados vinculados corretamente.
@@ -1774,7 +1776,7 @@ export default function EmployeesPage() {
                 </div>
               </div>
             </div>
-            <div className="grid gap-3 border-t border-slate-100 bg-white px-6 py-5 sm:grid-cols-2">
+            <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-slate-100 bg-white px-5 py-4 sm:px-6 sm:py-5">
               <button
                 type="button"
                 disabled={isDeletingEmployee}
@@ -1783,14 +1785,15 @@ export default function EmployeesPage() {
               >
                 Cancelar
               </button>
-              <button
+              <Button
                 type="button"
-                disabled={isDeletingEmployee}
+                loading={isDeletingEmployee}
+                loadingText="Excluindo..."
                 onClick={() => void handleDeleteEmployee()}
                 className="rounded-2xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-900/20 transition-all hover:bg-red-700 disabled:opacity-60"
               >
-                {isDeletingEmployee ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Excluir"}
-              </button>
+                Excluir
+              </Button>
             </div>
           </div>
         </AccessibleOverlay>
@@ -2107,13 +2110,14 @@ export default function EmployeesPage() {
                 >
                   Cancelar
                 </button>
-                <button 
+                <Button
                   type="submit" 
-                  disabled={isSaving}
+                  loading={isSaving}
+                  loadingText="Salvando cadastro..."
                   className="min-h-[52px] flex-1 px-4 py-4 text-xs font-black text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-xl shadow-lg shadow-blue-900/10 uppercase tracking-widest transition-all flex items-center justify-center disabled:opacity-60"
                 >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar Cadastro"}
-                </button>
+                  Salvar Cadastro
+                </Button>
               </div>
             </form>
           </div>
@@ -2121,7 +2125,7 @@ export default function EmployeesPage() {
       )}
 
       {isProfileOpen && selectedEmployeeId && (
-        <AccessibleOverlay label="Prontuario do colaborador" onClose={() => setIsProfileOpen(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
+        <AccessibleOverlay label="Prontuario do colaborador" onClose={closeProfile} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end justify-center overflow-y-auto p-0 md:items-start md:p-4 animate-in fade-in duration-300">
           <div className="safeepi-sheet-panel bg-white rounded-t-[28px] md:my-3 md:rounded-[28px] shadow-2xl w-full max-w-6xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 md:zoom-in-95 duration-200 border border-slate-200">
             {(() => {
               const emp = employees.find(e => e.id === selectedEmployeeId)
@@ -2150,13 +2154,15 @@ export default function EmployeesPage() {
                         </div>
                       </div>
                     <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:justify-end">
-                      <button 
+                      <Button
                         onClick={openTstModal}
-                        disabled={loadingHistory || employeeHistory.length === 0}
+                        loading={isGeneratingPdf}
+                        loadingText="Gerando ficha..."
+                        disabled={loadingHistory || Boolean(historyError) || Boolean(profileAction) || employeeHistory.length === 0}
                         className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md flex items-center justify-center disabled:opacity-50 whitespace-nowrap"
                       >
                         <FileDown className="w-4 h-4 mr-2" /> Ficha NR-06
-                      </button>
+                      </Button>
                       {canEdit && emp && (
                         <button
                           onClick={() => setEmployeeToDelete(emp)}
@@ -2175,7 +2181,7 @@ export default function EmployeesPage() {
                         </button>
                       )}
                       <button 
-                        onClick={() => setIsProfileOpen(false)} 
+                        onClick={closeProfile}
                         title="Fechar prontuário"
                         className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 px-4 py-2.5 rounded-xl transition-colors"
                       >
@@ -2185,9 +2191,15 @@ export default function EmployeesPage() {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/30">
+                  <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/30">
                     {loadingHistory ? (
                       <LoadingRows rows={4} />
+                    ) : historyError ? (
+                      <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                        <p className="font-semibold">Não foi possível carregar este prontuário.</p>
+                        <p className="mt-1 break-words">{historyError}</p>
+                        <Button variant="outline" className="mt-3" onClick={() => void loadEmployeeHistory(selectedEmployeeId)}>Tentar novamente</Button>
+                      </div>
                     ) : (
                       <div className="space-y-6">
                         <div className="flex items-center justify-between">
@@ -2230,12 +2242,16 @@ export default function EmployeesPage() {
                                 </div>
 
                                 {!delivery.returned_at && emp?.active && (
-                                  <button
+                                  <Button
                                     onClick={() => handleReturnItem(delivery.id)}
+                                    loading={profileAction === `return:${delivery.id}`}
+                                    loadingText="Registrando..."
+                                    disabled={Boolean(profileAction)}
+                                    variant="outline"
                                     className="text-[#2563EB] hover:bg-blue-50 text-[10px] font-black uppercase tracking-widest border border-blue-100 px-4 py-2 rounded-xl transition-all justify-self-start lg:justify-self-end whitespace-nowrap"
                                   >
                                     Dar Baixa
-                                  </button>
+                                  </Button>
                                 )}
                                 {delivery.returned_at && (
                                   <span className="flex items-center text-green-600 text-[10px] font-black uppercase tracking-widest justify-self-start lg:justify-self-end bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 whitespace-nowrap">
@@ -2258,13 +2274,17 @@ export default function EmployeesPage() {
                   
                   {emp?.active && (
                     <div className="shrink-0 p-4 border-t border-slate-200 bg-blue-50/50 flex justify-end">
-                      <button 
+                      <Button
                         onClick={handleTerminateEmployee}
-                        className="w-full sm:w-auto text-red-700 hover:bg-red-700 hover:text-white border border-blue-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center"
+                        loading={profileAction === "terminate"}
+                        loadingText="Processando desligamento..."
+                        disabled={loadingHistory || Boolean(historyError) || Boolean(profileAction)}
+                        variant="outline"
+                        className="h-auto min-h-11 w-full whitespace-normal sm:w-auto text-red-700 hover:bg-red-700 hover:text-white border border-blue-200 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-sm flex items-center justify-center"
                       >
                         <UserMinus className="w-4 h-4 mr-2" />
                         Desligar Colaborador (Dar baixa em tudo)
-                      </button>
+                      </Button>
                     </div>
                   )}
                   {emp && !emp.active && canEdit && (

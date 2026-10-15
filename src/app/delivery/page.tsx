@@ -15,6 +15,7 @@ import { type FacialSubmission } from "@/components/ui/FacialDeliveryConfirmatio
 import { submitFacialDelivery } from "@/components/ui/submitFacialDelivery"
 import { FacialPreflightError } from "@/components/ui/facialClient"
 import { SignatureCapture } from "@/components/ui/SignatureCapture"
+import { Button } from "@/components/ui/button"
 import { getManualSignatureDeclaration } from "@/lib/manualSignatureEvidence"
 import { useDocumentArchive } from "@/hooks/useDocumentArchive"
 import { LoadingState } from "@/components/ui/LoadingState"
@@ -1329,7 +1330,7 @@ export default function DeliveryPage() {
         <p className="font-semibold">Pedido em andamento · {operation.items.filter((entry) => entry.deliveryId).length} de {operation.items.length} itens confirmados</p>
         <p className="mt-1">O pedido está preservado nesta aba. Retome abaixo; os itens já registrados não serão entregues novamente. A edição fica bloqueada até a conclusão.</p>
         {operationError && <p role="alert" className="mt-2 font-medium">{operationError}</p>}
-        {operation.mode === "later" && <button type="button" disabled={isSaving} onClick={() => void saveForLaterSignature()} className="mt-3 min-h-11 rounded-xl bg-amber-800 px-4 py-2 font-semibold text-white disabled:opacity-50">{isSaving ? "Retomando…" : "Retomar entrega e gerar link"}</button>}
+        {operation.mode === "later" && <Button type="button" loading={isSaving} loadingText="Retomando…" onClick={() => void saveForLaterSignature()} className="mt-3 bg-amber-800 text-white hover:bg-amber-900">Retomar entrega e gerar link</Button>}
         <a className="mt-3 inline-flex min-h-11 items-center px-3 font-semibold underline" href="/history" target="_blank" rel="noopener noreferrer">Conferir histórico</a>
       </div>}
 
@@ -1859,14 +1860,15 @@ export default function DeliveryPage() {
                         </p>
                       </div>
                     </div>
-                    <button
+                    <Button
                       type="button"
                       onClick={() => void requestLocationForSignature(true)}
-                      disabled={locationStatus === "requesting"}
-                      className="min-h-[44px] w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-semibold text-white shadow-lg shadow-amber-900/10 transition-all hover:bg-amber-700 disabled:opacity-60 sm:w-auto"
+                      loading={locationStatus === "requesting"}
+                      loadingText="Solicitando…"
+                      className="w-full bg-amber-700 text-white hover:bg-amber-800 sm:w-auto"
                     >
-                      {locationStatus === "requesting" ? "Solicitando..." : "Permitir localização"}
-                    </button>
+                      Permitir localização
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1898,8 +1900,8 @@ export default function DeliveryPage() {
                   </select>
                 </label>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <button type="button" disabled={isSaving} onClick={() => void generateRemoteLink()} className="min-h-11 rounded-xl border border-slate-300 px-3 py-3 font-semibold">Enviar link para assinatura</button>
-                  <button type="button" disabled={isSaving} onClick={() => void saveForLaterSignature()} className="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 font-semibold text-amber-900">Entregar agora e assinar depois</button>
+                  <Button type="button" variant="outline" loading={isSaving} loadingText="Processando…" onClick={() => void generateRemoteLink()} className="h-auto min-h-11 whitespace-normal px-3 py-3">Enviar link para assinatura</Button>
+                  <Button type="button" variant="outline" loading={isSaving} loadingText="Processando…" onClick={() => void saveForLaterSignature()} className="h-auto min-h-11 whitespace-normal border-amber-300 bg-amber-50 px-3 py-3 text-amber-900">Entregar agora e assinar depois</Button>
                 </div>
               </details>}
 
