@@ -450,7 +450,7 @@ export default function CompaniesPage() {
         </section>
 
         <aside className="min-w-0 space-y-6 xl:sticky xl:top-24 xl:self-start">
-          <form ref={companyFormRef} onSubmit={handleCompanySubmit} className="scroll-mt-24 max-w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 [&_input]:min-w-0 [&_input]:w-full [&_select]:min-h-11 [&_select]:w-full">
+          <form ref={companyFormRef} onSubmit={handleCompanySubmit} className="scroll-mt-24 max-w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 [&_input:not([type=checkbox]):not([type=color]):not([type=file])]:min-w-0 [&_input:not([type=checkbox]):not([type=color]):not([type=file])]:w-full [&_select]:min-h-11 [&_select]:w-full">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#2563EB]">Dados do cliente</p>
@@ -505,7 +505,7 @@ export default function CompaniesPage() {
                 </label>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
-                  <label className="flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                  <label className="flex min-h-11 items-center gap-3 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <input type="color" value={companyForm.primary_color} onChange={(event) => setCompanyForm({ ...companyForm, primary_color: event.target.value })} className="h-8 w-10 shrink-0 cursor-pointer rounded-lg border-0 bg-transparent p-0" title="Cor principal da empresa" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cor</span>
                   </label>
@@ -521,7 +521,7 @@ export default function CompaniesPage() {
 
                 <div className="grid gap-3">
                   <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <span>
+                    <span className="min-w-0 flex-1">
                       <span className="block text-xs font-black uppercase tracking-widest text-slate-700">Treinamentos Premium</span>
                       <span className="mt-1 block text-[11px] font-medium text-slate-500">Libera menu de treinamentos, certificados e recursos premium.</span>
                     </span>
@@ -534,7 +534,7 @@ export default function CompaniesPage() {
                   </label>
 
                   <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <span>
+                    <span className="min-w-0 flex-1">
                       <span className="block text-xs font-black uppercase tracking-widest text-slate-700">Aba Terceiros</span>
                       <span className="mt-1 block text-[11px] font-medium text-slate-500">Libera cadastro de tomadores/clientes atendidos pela empresa.</span>
                     </span>
@@ -569,7 +569,7 @@ export default function CompaniesPage() {
                     </label>
 
                     <label className="flex items-center justify-between gap-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-                      <span>
+                      <span className="min-w-0 flex-1">
                         <span className="block text-xs font-black uppercase tracking-widest text-red-700">Desativar acesso</span>
                         <span className="mt-1 block text-[11px] font-medium text-red-600">Use quando a empresa nao pagar.</span>
                       </span>
