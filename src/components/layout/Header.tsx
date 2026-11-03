@@ -2,16 +2,21 @@
 
 import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
+import Link from "next/link"
 import { Building2, ChevronDown } from "lucide-react"
 import { NotificationBell } from "./NotificationBell"
 import { GlobalSearch } from "./GlobalSearch"
 import { useAuth } from "@/contexts/AuthContext"
 import { api, type CompanyWithCounts } from "@/services/api"
 import { applyCompanyBrand } from "@/lib/brandTheme"
+import { useActiveBrand } from "@/hooks/useActiveBrand"
 
 export function Header() {
   const pathname = usePathname()
   const { user } = useAuth()
+  const activeBrand = useActiveBrand(user?.role === "MASTER" ? null : user?.company)
+  const brandLogo = activeBrand.logoUrl || "/logo.png"
   const [companies, setCompanies] = useState<CompanyWithCounts[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState("")
 
@@ -73,9 +78,14 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200/70 bg-white px-3 pt-[env(safe-area-inset-top)] sm:px-5 md:px-7">
-      <div className="flex min-w-0 max-w-[42vw] flex-col md:max-w-none">
-        <span className="mb-1 hidden text-[11px] font-medium leading-none text-slate-400 sm:block">Área de trabalho</span>
-        <h2 className="truncate text-sm font-semibold leading-snug tracking-tight text-slate-800">{getPageTitle(pathname)}</h2>
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none">
+        <Link href="/" aria-label="Ir para a visão geral" className="flex h-11 w-16 shrink-0 items-center justify-center md:hidden">
+          <Image src={brandLogo} alt={activeBrand.name} width={128} height={52} className="max-h-10 w-full object-contain" unoptimized={brandLogo.startsWith("http")} />
+        </Link>
+        <div className="min-w-0">
+          <span className="mb-1 hidden text-[11px] font-medium leading-none text-slate-400 sm:block">Área de trabalho</span>
+          <h2 className="truncate text-sm font-semibold leading-snug tracking-tight text-slate-800">{getPageTitle(pathname)}</h2>
+        </div>
       </div>
 
       <div className="flex flex-none justify-center px-0 lg:flex-1 lg:px-5">
