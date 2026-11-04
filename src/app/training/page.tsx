@@ -20,6 +20,7 @@ import { generateAuditCode } from "@/utils/auditCode"
 import { copyTextToClipboard } from "@/utils/clipboard"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
+import { EmployeePhoto } from "@/components/employees/EmployeePhoto"
 import { calculateTrainingValidity, getTrainingStatusFromValidity, getTrainingWorkloadRule } from "@/utils/trainingValidity"
 
 type RemoteSignatureEvidence = {
@@ -251,7 +252,7 @@ export default function TrainingPage() {
       const failures: string[] = []
       const [trainingsResult, employeesResult] = await Promise.allSettled([
         api.getTrainings(),
-        api.getEmployees()
+        api.getEmployees({ signPhotos: false })
       ])
 
       if (trainingsResult.status === "fulfilled") {
@@ -1225,8 +1226,7 @@ export default function TrainingPage() {
                           >
                             {emp.photo_url ? (
                               <div className="relative">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={emp.photo_url} alt={emp.full_name} className="w-10 h-10 rounded-full object-cover border-2 border-green-500" />
+                                <EmployeePhoto value={emp.photo_storage_path || emp.photo_url} alt={emp.full_name} size={40} className="border-2 border-green-500" />
                                 <div className="absolute -bottom-1 -right-1 bg-green-500 text-white rounded-full p-0.5">
                                   <CheckCircle2 className="w-2.5 h-2.5" />
                                 </div>

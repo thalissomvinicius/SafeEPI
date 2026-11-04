@@ -3,6 +3,7 @@ import { getSupabaseAdminConfigError, supabaseAdmin } from "@/lib/supabaseAdmin"
 import { signStorageValue } from "@/lib/privateStorage"
 import type { Company } from "@/types/database"
 import { resolveAuthorizedRole } from "@/lib/authorizedRole"
+import { isPreviewReadOnly } from "@/lib/previewEnvironment"
 
 async function loadActiveMembership(userId: string) {
   const { data, error } = await supabaseAdmin
@@ -116,7 +117,7 @@ export async function GET(request: Request) {
     : null
 
   // Mantém profiles em sincronia com a fonte autoritativa (membership).
-  if (!profile) {
+  if (!isPreviewReadOnly() && !profile) {
     await supabaseAdmin
       .from("profiles")
       .upsert({
@@ -126,7 +127,7 @@ export async function GET(request: Request) {
         role,
         company_id: companyId,
       })
-  } else if (profile.company_id !== companyId || profile.role !== role) {
+  } else if (!isPreviewReadOnly() && profile && (profile.company_id !== companyId || profile.role !== role)) {
     await supabaseAdmin
       .from("profiles")
       .update({ company_id: companyId, role })

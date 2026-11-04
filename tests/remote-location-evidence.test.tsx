@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   geolocation: vi.fn(), pdf: vi.fn(), archive: vi.fn(), fetch: vi.fn(),
 }))
 vi.mock("next/navigation", () => ({ useSearchParams: () => mocks.params }))
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: null }) }))
 vi.mock("@/services/api", () => ({ api: { archiveSignedDocument: mocks.archive } }))
 vi.mock("@/utils/pdfGenerator", () => ({ generateDeliveryPDF: mocks.pdf }))
 vi.mock("@/utils/geolocation", () => ({ isValidGeoLocation: (value: string) => /^-?\d+\.\d+, -?\d+\.\d+$/.test(value), requestRequiredGeolocation: mocks.geolocation }))

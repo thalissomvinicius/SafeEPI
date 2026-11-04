@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/Sidebar"
 import { MobileNav } from "@/components/layout/MobileNav"
 import { Header } from "@/components/layout/Header"
 import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
+import { PreviewBanner } from "@/components/layout/PreviewBanner"
 
 export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -21,6 +22,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
   if (isLoginPage || isPublicRemotePage || !user) {
     return (
       <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] w-full max-w-full flex-1 flex-col overflow-x-hidden">
+        <PreviewBanner floating />
         {children}
         {!isLoginPage && <footer className="mt-auto shrink-0 px-4 py-3 text-center"><DeveloperCredit /></footer>}
       </main>
@@ -33,6 +35,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
           <Header />
+          <PreviewBanner />
           <main id="main-content" tabIndex={-1} className="app-workspace flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+4.5rem)] md:pb-0">
             <div className="mx-auto min-w-0 w-full max-w-[1600px] flex-1">
               {children}

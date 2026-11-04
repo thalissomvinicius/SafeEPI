@@ -33,6 +33,7 @@ import signatureStyles from "./prontuarioSignature.module.css"
 import { fetchImageDataUrl } from "@/utils/imageDataUrl"
 import { useEmployeeHistory } from "@/hooks/useEmployeeHistory"
 import { Button } from "@/components/ui/button"
+import { EmployeePhoto } from "@/components/employees/EmployeePhoto"
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR")
 const formatTypingName = (value: string) => value.toLocaleUpperCase("pt-BR")
@@ -198,6 +199,7 @@ export default function EmployeesPage() {
   const [biometryFilter, setBiometryFilter] = useState<"all" | "registered" | "pending">("all")
   const [admissionStartFilter, setAdmissionStartFilter] = useState("")
   const [admissionEndFilter, setAdmissionEndFilter] = useState("")
+  const [employeePage, setEmployeePage] = useState({ filters: "", number: 1 })
   const [areMobileFiltersOpen, setAreMobileFiltersOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isFaceCameraOpen, setIsFaceCameraOpen] = useState(false)
@@ -374,7 +376,7 @@ export default function EmployeesPage() {
     try {
       setLoadError(null)
       const [empData, wpData, jobData, deptData, thirdPartyData] = await Promise.all([
-        api.getEmployees(),
+        api.getEmployees({ signPhotos: false }),
         api.getWorkplaces(),
         api.getJobTitles(),
         api.getDepartments(),
@@ -439,6 +441,15 @@ export default function EmployeesPage() {
 
     return matchesSearch && matchesStatus && matchesEmployeeScope && matchesDepartment && matchesWorkplace && matchesBiometry && matchesAdmissionStart && matchesAdmissionEnd
   })
+
+  // Filters and exports still use every employee; only the rendered list is paged.
+  const employeePageSize = 50
+  const employeeFilterKey = JSON.stringify([searchTerm, statusFilter, employeeScopeFilter, departmentFilter, workplaceFilter, biometryFilter, admissionStartFilter, admissionEndFilter])
+  const employeePageCount = Math.max(1, Math.ceil(filteredEmployees.length / employeePageSize))
+  const currentEmployeePage = employeePage.filters === employeeFilterKey ? Math.min(employeePage.number, employeePageCount) : 1
+  const employeePageStart = (currentEmployeePage - 1) * employeePageSize
+  const visibleEmployees = filteredEmployees.slice(employeePageStart, employeePageStart + employeePageSize)
+  const matchingTstEmployees = employees.filter(e => e.active && (e.full_name.toLowerCase().includes(tstSearchTerm.toLowerCase()) || e.cpf.includes(tstSearchTerm)))
 
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1559,7 +1570,7 @@ export default function EmployeesPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {filteredEmployees.map((emp) => (
+                  {visibleEmployees.map((emp) => (
                     <div key={emp.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
                       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                         <div className="min-w-0 flex-1">
@@ -1663,7 +1674,7 @@ export default function EmployeesPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-slate-50/50">
-                {filteredEmployees.map((emp) => (
+                {visibleEmployees.map((emp) => (
                   <MobileTableCard
                     key={emp.id}
                     title={emp.full_name}
@@ -1673,13 +1684,7 @@ export default function EmployeesPage() {
                       variant: emp.active ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-700",
                     }}
                     leading={
-                      emp.photo_url ? (
-                        <Image src={emp.photo_url} alt={emp.full_name} width={44} height={44} className="h-11 w-11 rounded-full border-2 border-green-500 object-cover" unoptimized />
-                      ) : (
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-400">
-                          <Users className="h-5 w-5" />
-                        </div>
-                      )
+                      <EmployeePhoto value={emp.photo_storage_path || emp.photo_url} alt={emp.full_name} className={emp.photo_url ? "border-2 border-green-500" : "border border-slate-200"} />
                     }
                     expandable
                     fields={[
@@ -1735,6 +1740,13 @@ export default function EmployeesPage() {
                   </div>
                 )}
               </div>
+              {filteredEmployees.length > 0 && <nav aria-label="Páginas de colaboradores" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white p-4">
+                <p className="text-sm text-slate-600" aria-live="polite">{employeePageStart + 1}–{Math.min(employeePageStart + employeePageSize, filteredEmployees.length)} de {filteredEmployees.length} colaboradores · Página {currentEmployeePage} de {employeePageCount}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" disabled={currentEmployeePage <= 1} onClick={() => setEmployeePage({ filters: employeeFilterKey, number: currentEmployeePage - 1 })}>Anterior</Button>
+                  <Button variant="outline" disabled={currentEmployeePage >= employeePageCount} onClick={() => setEmployeePage({ filters: employeeFilterKey, number: currentEmployeePage + 1 })}>Próxima</Button>
+                </div>
+              </nav>}
             </>
           )}
         </div>
@@ -1836,13 +1848,11 @@ export default function EmployeesPage() {
               <div className="flex flex-col items-center mb-4">
                 {formData.photo_url ? (
                   <div className="relative">
-                    <Image 
-                      src={formData.photo_url} 
+                    <EmployeePhoto
+                      value={formData.photo_url}
                       alt="Foto do cadastro do colaborador"
-                      width={96} 
-                      height={96} 
-                      className="w-24 h-24 rounded-full object-cover border-4 border-green-500" 
-                      unoptimized
+                      size={96}
+                      className="border-4 border-green-500"
                     />
                     <button 
                       type="button" 
@@ -2340,24 +2350,14 @@ export default function EmployeesPage() {
                 </div>
 
                 <div className="max-h-[280px] overflow-y-auto space-y-2 custom-scrollbar">
-                  {employees
-                    .filter(e => e.active && (
-                      e.full_name.toLowerCase().includes(tstSearchTerm.toLowerCase()) ||
-                      e.cpf.includes(tstSearchTerm)
-                    ))
+                  {matchingTstEmployees.slice(0, 50)
                     .map(emp => (
                       <button
                         key={emp.id}
                         onClick={() => handleSelectTst(emp)}
                         className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#2563EB]/30 hover:bg-blue-50/50 transition-all text-left group"
                       >
-                        {emp.photo_url ? (
-                          <Image src={emp.photo_url} alt={emp.full_name} width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-green-500" unoptimized />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 border-2 border-slate-200">
-                            <Users className="w-5 h-5" />
-                          </div>
-                        )}
+                        <EmployeePhoto value={emp.photo_storage_path || emp.photo_url} alt={emp.full_name} size={40} className="border-2 border-slate-200" />
                         <div className="flex-1 min-w-0">
                           <p className="font-black text-slate-800 text-sm truncate">{emp.full_name}</p>
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{getJobTitleName(emp.job_title)} • CPF: {emp.cpf}</p>
@@ -2368,6 +2368,7 @@ export default function EmployeesPage() {
                       </button>
                     ))
                   }
+                  {matchingTstEmployees.length > 50 && <p className="p-2 text-xs text-slate-500">Mostrando os primeiros 50 de {matchingTstEmployees.length}. Busque por nome ou CPF para localizar o responsável.</p>}
                   {employees.filter(e => e.active && (
                     e.full_name.toLowerCase().includes(tstSearchTerm.toLowerCase()) || e.cpf.includes(tstSearchTerm)
                   )).length === 0 && (

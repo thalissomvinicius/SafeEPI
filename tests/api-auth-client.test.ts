@@ -16,6 +16,7 @@ describe("authentication client handoff", () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   it("authenticates once and hands the same persisted session to the provider", async () => {
@@ -46,6 +47,14 @@ describe("authentication client handoff", () => {
     const { api } = await import("@/services/api")
     await expect(api.login("operador@safeepi.test", "synthetic-password")).rejects.toThrow("Credenciais invalidas")
     expect(mocks.getSession).not.toHaveBeenCalled()
+  })
+
+  it("logs out only the preview session without revoking production sessions", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview")
+    mocks.signOut.mockResolvedValue({ error: null })
+    const { api } = await import("@/services/api")
+    await api.logout()
+    expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" })
   })
 
   it("never caches the authorization profile", async () => {

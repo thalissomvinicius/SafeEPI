@@ -3,6 +3,8 @@ import { Employee, PPE, Delivery, Training, DeliveryWithRelations, TrainingWithR
 import { Session } from "@supabase/supabase-js";
 import { shouldRequestSignedStorageUrl } from "@/lib/storageAsset";
 import { collectSupabasePages } from "@/lib/supabasePagination";
+import { createEmployeePhotoLoader } from "@/lib/employeePhotoLoader";
+import { isPreviewReadOnly } from "@/lib/previewEnvironment";
 
 type AddTrainingResult = {
   training: Training;
@@ -10,6 +12,8 @@ type AddTrainingResult = {
 }
 
 export type SignedDocumentArchivePayload = {
+  expectedUserId?: string;
+  expectedCompanyId?: string;
   documentType: 'delivery' | 'remote_delivery' | 'return' | 'nr06' | 'training_certificate';
   employeeId?: string | null;
   deliveryId?: string | null;
@@ -146,6 +150,7 @@ type PrivateAssetResponse = {
     path: string | null;
     signedUrl: string | null;
     allowed: boolean;
+    expiresIn?: number;
   }>;
   error?: string;
 };
@@ -213,6 +218,10 @@ async function refreshActiveSession(): Promise<Session | null> {
   return sessionRefreshPromise;
 }
 
+async function signOutSession() {
+  return isPreviewReadOnly() ? supabase.auth.signOut({ scope: "local" }) : supabase.auth.signOut();
+}
+
 async function ensureActiveSession(): Promise<Session | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
@@ -228,7 +237,7 @@ async function ensureActiveSession(): Promise<Session | null> {
       return await refreshActiveSession();
     } catch (refreshError) {
       clearCompanyContextCache(true);
-      await supabase.auth.signOut();
+      await signOutSession();
       throw refreshError;
     }
   }
@@ -251,7 +260,7 @@ async function withSessionRetry<T>(operation: () => PromiseLike<T>): Promise<T> 
       await refreshActiveSession();
     } catch (refreshError) {
       clearCompanyContextCache(true);
-      await supabase.auth.signOut();
+      await signOutSession();
       throw refreshError;
     }
 
@@ -265,7 +274,7 @@ async function withSessionRetry<T>(operation: () => PromiseLike<T>): Promise<T> 
     await refreshActiveSession();
   } catch (refreshError) {
     clearCompanyContextCache(true);
-    await supabase.auth.signOut();
+    await signOutSession();
     throw refreshError;
   }
 
@@ -294,13 +303,13 @@ async function fetchWithAuthRetry(input: RequestInfo | URL, init: RequestInit = 
     refreshedSession = await refreshActiveSession();
   } catch {
     clearCompanyContextCache(true);
-    await supabase.auth.signOut();
+    await signOutSession();
     return response;
   }
 
   if (!refreshedSession) {
     clearCompanyContextCache(true);
-    await supabase.auth.signOut();
+    await signOutSession();
     return response;
   }
 
@@ -493,6 +502,7 @@ function getStoredMasterCompanyId(): string | null {
 }
 
 function clearCompanyContextCache(clearStoredMasterCompany = false) {
+  employeePhotoLoader.clear();
   cachedCompanyId = null;
   cachedCompanyIdResolved = false;
   companyIdRequest = null;
@@ -515,6 +525,8 @@ function primeResolvedCompanyContext(user: Pick<CurrentUser, "role" | "company_i
 }
 
 function setStoredMasterCompanyId(companyId: string | null) {
+  employeePhotoLoader.clear();
+  companiesContextVersion += 1;
   if (typeof window === "undefined") return;
   if (companyId) {
     window.localStorage.setItem(MASTER_COMPANY_CONTEXT_KEY, companyId);
@@ -592,6 +604,20 @@ function storagePathShadowKey(field: string) {
 function shouldSignStorageValue(value: unknown): value is string {
   return shouldRequestSignedStorageUrl(value);
 }
+
+const employeePhotoLoader = createEmployeePhotoLoader(async (paths) => {
+  const response = await fetchWithAuthRetry("/api/storage/signed-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assets: paths.map((path, index) => ({ key: String(index), path, mode: "view", bucket: BIOMETRIC_BUCKET })) }),
+  });
+  const result = await readResponseJson<PrivateAssetResponse>(response);
+  if (!response.ok) throw new Error(result.error || "Foto temporariamente indisponível.");
+  return paths.map((_, index) => {
+    const asset = result.assets?.find(item => item.key === String(index));
+    return { url: asset?.allowed ? asset.signedUrl : null, expiresIn: asset?.expiresIn };
+  });
+});
 
 async function getPrivateAssetUrl(
   value?: string | null,
@@ -696,6 +722,24 @@ export const api = {
     return getPrivateAssetUrl(value, mode, downloadName, bucket);
   },
 
+  async getEmployeePhotoUrl(value?: string | null) {
+    if (!value) return null;
+    if (!shouldSignStorageValue(value)) return value;
+    const version = companiesContextVersion;
+    const session = await ensureActiveSession();
+    if (!session?.user?.id) return null;
+    const companyId = await getCurrentCompanyId();
+    if (version !== companiesContextVersion) return null;
+    return employeePhotoLoader.load(JSON.stringify([session.user.id, companyId]), value);
+  },
+
+  async getArchiveContext(): Promise<{ userId: string; companyId: string }> {
+    const session = await ensureActiveSession();
+    const companyId = await getCurrentCompanyId();
+    if (!session?.user?.id || !companyId) throw new Error("Selecione uma empresa e entre novamente para recuperar o PDF.");
+    return { userId: session.user.id, companyId };
+  },
+
   // --- Autenticação ---
   async login(email: string, password: string) {
     const response = await fetch("/api/auth/login", {
@@ -722,7 +766,7 @@ export const api = {
 
   async logout() {
     clearCompanyContextCache(true);
-    const { error } = await supabase.auth.signOut();
+    const { error } = await signOutSession();
     if (error) throw error;
   },
 
@@ -824,11 +868,25 @@ export const api = {
   },
 
   async archiveSignedDocument(payload: SignedDocumentArchivePayload) {
+    const assertArchiveContext = async () => {
+      if (payload.expectedUserId || payload.expectedCompanyId) {
+        const context = await this.getArchiveContext();
+        if (context.userId !== payload.expectedUserId || context.companyId !== payload.expectedCompanyId) {
+          throw new Error("O PDF pertence a outra sessão ou empresa. Volte à conta e empresa originais para recuperar.");
+        }
+      }
+    };
+    const archiveHeaders = async () => {
+      const headers = await this.getAuthHeaders();
+      await assertArchiveContext();
+      return headers;
+    };
+    await assertArchiveContext();
     const formData = new FormData();
     const sha256Hash = payload.sha256Hash || await sha256Hex(payload.pdfBlob);
     let companyId: string | null = null;
     try {
-      companyId = await getCurrentCompanyId();
+      companyId = payload.expectedCompanyId || await getCurrentCompanyId();
     } catch (error) {
       if (!payload.linkToken) throw error;
     }
@@ -844,7 +902,7 @@ export const api = {
 
       const uploadTargetResponse = await fetch("/api/signed-documents/upload-url", {
         method: "POST",
-        headers: await this.getAuthHeaders(),
+        headers: await archiveHeaders(),
         body: uploadFormData,
       });
       const uploadTarget = await readResponseJson<SignedDocumentUploadTarget>(uploadTargetResponse);
@@ -897,7 +955,7 @@ export const api = {
 
     const res = await fetch("/api/signed-documents", {
       method: "POST",
-      headers: await this.getAuthHeaders(),
+      headers: await archiveHeaders(),
       body: formData,
     });
 

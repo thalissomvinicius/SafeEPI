@@ -2,6 +2,7 @@ import LRUCache from "lru-cache"
 import { NextResponse } from "next/server"
 import { supabaseAdmin, getSupabaseAdminConfigError } from "@/lib/supabaseAdmin"
 import { buildRateLimitKey } from "@/lib/requestSecurity"
+import { isPreviewReadOnly } from "@/lib/previewEnvironment"
 
 type RateLimitEntry = {
   count: number
@@ -70,7 +71,9 @@ export async function rateLimit(
   const safeWindowMs = Math.max(1000, Math.floor(windowMs))
   const opaqueKey = await buildRateLimitKey("safeepi", identifier || "unknown")
 
-  if (!getSupabaseAdminConfigError()) {
+  // Preview shares the production database: retain rate limiting locally without
+  // consuming production counters or modifying any database records.
+  if (!isPreviewReadOnly() && !getSupabaseAdminConfigError()) {
     const { data, error } = await supabaseAdmin.rpc("consume_rate_limit", {
       p_key: opaqueKey,
       p_limit: safeLimit,

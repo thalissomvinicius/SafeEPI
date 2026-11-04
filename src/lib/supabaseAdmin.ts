@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import { createPreviewSafeFetch } from "@/lib/previewEnvironment"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://missing-supabase-url.supabase.co"
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "missing-service-role-key"
@@ -16,6 +17,7 @@ export function getSupabaseAdminConfigError() {
 }
 
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  global: { fetch: createPreviewSafeFetch() },
   auth: {
     autoRefreshToken: false,
     persistSession: false,

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { buildCspHeader } from "@/lib/csp"
 import { extractBearerToken } from "@/lib/authHeaders"
+import { isBlockedPreviewAppRequest, PREVIEW_READ_ONLY_MESSAGE } from "@/lib/previewEnvironment"
 
 const ADMIN_ROLES = new Set(["MASTER", "ADMIN"])
 const PUBLIC_ROUTES = new Set(["/login", "/cadastro", "/esqueci-senha", "/unauthorized"])
@@ -80,6 +81,12 @@ function isAuthBypassedRoute(pathname: string) {
 export async function proxy(request: NextRequest) {
   const nonce = generateNonce()
   const csp = buildCspHeader(nonce)
+  if (isBlockedPreviewAppRequest(request.nextUrl.pathname, request.method)) {
+    return withSecurityHeaders(NextResponse.json({ error: PREVIEW_READ_ONLY_MESSAGE, code: "PREVIEW_READ_ONLY" }, {
+      status: 403,
+      headers: { "Cache-Control": "no-store" },
+    }), csp, nonce)
+  }
   const requestHeaders = new Headers(request.headers)
 
   requestHeaders.set("x-nonce", nonce)

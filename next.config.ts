@@ -27,6 +27,9 @@ const securityHeaders = [
 // O next.config.ts mantem apenas headers estaticos que nao dependem do request.
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_SAFE_EPI_READ_ONLY: process.env.VERCEL_ENV === "preview" ? "true" : "false",
+  },
   images: {
     remotePatterns: [
       {
