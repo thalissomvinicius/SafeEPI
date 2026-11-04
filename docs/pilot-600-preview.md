@@ -30,6 +30,18 @@ Isto é proteção dos caminhos desta aplicação, **não isolamento das credenc
 
 O laboratório usa um escopo sintético próprio no armazenamento local e não arquiva documentos no Supabase. Nenhum dado fictício deve ser confundido com uma entrega real.
 
+## Conferência autenticada em 04/11/2026
+
+- Acesso à prévia liberado com a proteção da Vercel mantida; sessão do SafeEPI aberta pelo próprio usuário.
+- Indicadores e consultas da ANTARES responderam. Colaboradores exibiu 121 registros próprios, em três páginas de até 50; a busca encontrou registros fora da página corrente e voltou à primeira página filtrada. Esse total inclui inativos e não deve ser confundido com a equipe ativa do painel.
+- Prontuário, estoque, histórico e formulário inicial de entrega abriram sem confirmar entregas, alterar cadastros ou executar SQL. Nas telas consultadas em 390 px não houve rolagem horizontal do documento.
+- Um PDF fictício foi criado no laboratório, persistiu após recarregar e foi baixado. A cópia de teste foi mantida no navegador para conferência do usuário. Nenhum PDF real foi reenviado ao servidor.
+- Corrigida a reserva de espaço do aviso no login da prévia. Conferidos 390×844, 390×568, 390×320 e 1440×900 no navegador. Em altura curta, o aviso preserva o status e o link; a explicação extensa continua disponível a leitores de tela. A produção não usa esse arranjo adicional.
+- A conferência do login foi local, sem credenciais ou banco real. A redução para 320 px simula espaço disponível com teclado: não substitui teste em Safari/iOS ou Chrome/Android físicos.
+- Após o ajuste, passaram 542 testes em 86 arquivos, lint, TypeScript e compilação da prévia. A cobertura configurada considera somente três utilitários de segurança, não a aplicação inteira.
+
+Esta é uma verificação funcional dirigida, não um teste de carga, de concorrência ou uma homologação completa das assinaturas. Os cadastros inspecionados estavam sem foto; imagens reais e o arquivamento autenticado ainda precisam de amostras e banco separado para homologação de gravações.
+
 ## Limites e próximos passos
 
 Esta rodada não altera SQL. A listagem ainda consulta todos os metadados em páginas Supabase, com paginação da exibição; busca/paginação integral no servidor permanecem evolução posterior. Custos históricos, matriz por função, kits e parâmetros de estoque/vida útil não foram implementados nesta versão.

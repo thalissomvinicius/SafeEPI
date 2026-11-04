@@ -10,6 +10,16 @@
   container: login / size;
 }
 
+/* The preview shell owns the visual viewport; the notice takes its natural
+   height and login adapts to the remaining space, including the keyboard. */
+:global([data-preview-login-shell]) .viewport {
+  position: relative;
+  top: 0;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+}
+
 .brandPanel { display: none; }
 .loginPanel {
   min-width: 0;

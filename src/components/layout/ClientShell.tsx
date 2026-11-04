@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import { useRef } from "react"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { Sidebar } from "@/components/layout/Sidebar"
@@ -7,6 +8,21 @@ import { MobileNav } from "@/components/layout/MobileNav"
 import { Header } from "@/components/layout/Header"
 import { DeveloperCredit } from "@/components/layout/DeveloperCredit"
 import { PreviewBanner } from "@/components/layout/PreviewBanner"
+import { useVisualViewport } from "@/hooks/useVisualViewport"
+import { isPreviewReadOnly } from "@/lib/previewEnvironment"
+
+/** Keep the notice in flow so its actual wrapped height is reserved above login. */
+function PreviewLoginShell({ children }: { children: React.ReactNode }) {
+  const viewportRef = useRef<HTMLElement | null>(null)
+  useVisualViewport(viewportRef)
+
+  return (
+    <main ref={viewportRef} id="main-content" tabIndex={-1} data-preview-login-shell className="fixed inset-x-0 flex w-full max-w-full flex-col overflow-hidden" style={{ top: "var(--safeepi-viewport-top, 0px)", height: "var(--safeepi-viewport-height, 100dvh)", containerType: "size", containerName: "safeepi-preview-login" }}>
+      <PreviewBanner atViewportTop />
+      {children}
+    </main>
+  )
+}
 
 export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -18,6 +34,10 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/delivery/remote") ||
     pathname?.startsWith("/training/remote") ||
     pathname?.startsWith("/capture")
+
+  if (isLoginPage && isPreviewReadOnly()) {
+    return <PreviewLoginShell>{children}</PreviewLoginShell>
+  }
 
   if (isLoginPage || isPublicRemotePage || !user) {
     return (

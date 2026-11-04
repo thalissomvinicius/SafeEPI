@@ -1,0 +1,15 @@
+/* Query the visible login shell, not the layout viewport: mobile keyboards can
+   shrink visualViewport without changing the browser's CSS media height. */
+@container safeepi-preview-login (max-height: 32rem) {
+  .explanation {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
