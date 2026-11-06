@@ -1,4 +1,5 @@
-import jsPDF from "jspdf"
+import type jsPDF from "jspdf"
+import { createPdfDocument } from "@/utils/pdfDocument"
 import autoTable from "jspdf-autotable"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -239,7 +240,7 @@ function completeBiometricReceipt(value?: BiometricReceiptMetadata): value is Bi
 
 export async function generateDeliveryPDF(data: DeliveryPDFData): Promise<Blob> {
   refreshPdfBrand()
-  const doc = new jsPDF({ format: "a4" })
+  const doc = createPdfDocument({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 14
@@ -500,7 +501,7 @@ export interface ReturnPDFData {
 
 export async function generateReturnPDF(data: ReturnPDFData): Promise<Blob> {
   refreshPdfBrand()
-  const doc = new jsPDF({ format: "a4" })
+  const doc = createPdfDocument({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const contentWidth = pageWidth - 28
@@ -655,7 +656,7 @@ export const EPI_RESPONSIBILITY_TERM = {
 
 export async function generateNR06PDF(data: NR06PDFData): Promise<Blob> {
   refreshPdfBrand()
-  const doc = new jsPDF({ format: "a4" })
+  const doc = createPdfDocument({ format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
 
@@ -923,7 +924,7 @@ export interface ReportPDFData {
 
 export function generateGeneralReportPDF(data: ReportPDFData): Blob {
   refreshPdfBrand()
-  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const doc = createPdfDocument({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
   const mx = 14
@@ -1098,7 +1099,7 @@ export interface TrainingCertificateData {
 
 export async function generateTrainingCertificate(data: TrainingCertificateData): Promise<Blob> {
   refreshPdfBrand()
-  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const doc = createPdfDocument({ orientation: "landscape", format: "a4" })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const centerX = pageWidth / 2
@@ -1423,7 +1424,7 @@ export interface EmployeesReportData {
 
 export function generateEmployeesReportPDF(data: EmployeesReportData): Blob {
   refreshPdfBrand()
-  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const doc = createPdfDocument({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const mx = 14
   const brandColor = [r, g, b] as [number, number, number]
@@ -1550,7 +1551,7 @@ export interface PpeCatalogReportData {
 
 export function generatePpeCatalogReportPDF(data: PpeCatalogReportData): Blob {
   refreshPdfBrand()
-  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const doc = createPdfDocument({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const mx = 14
   const brandColor = [r, g, b] as [number, number, number]
@@ -1697,7 +1698,7 @@ export interface InventoryStockReportData {
 
 export function generateInventoryStockReportPDF(data: InventoryStockReportData): Blob {
   refreshPdfBrand()
-  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const doc = createPdfDocument({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const mx = 14
   const brandColor = [r, g, b] as [number, number, number]
@@ -1834,7 +1835,7 @@ function drawMovementHistoryNote(doc: jsPDF, y: number) {
 
 export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
   refreshPdfBrand()
-  const doc = new jsPDF({ orientation: "portrait", format: "a4" })
+  const doc = createPdfDocument({ orientation: "portrait", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const mx = 14
   addReportHeader(doc, "RELATÓRIO DE MOVIMENTAÇÕES", "Entregas e devoluções de equipamentos no período selecionado", data.period)
@@ -1909,7 +1910,7 @@ export function generateMovementsSimplePDF(data: MovementsReportData): Blob {
 
 export async function generateMovementsPresentationPDF(data: MovementsReportData): Promise<Blob> {
   refreshPdfBrand()
-  const doc = new jsPDF({ orientation: "landscape", format: "a4" })
+  const doc = createPdfDocument({ orientation: "landscape", format: "a4" })
   const pw = doc.internal.pageSize.getWidth()
   const ph = doc.internal.pageSize.getHeight()
   const signatureImages = new Map<string, string>()

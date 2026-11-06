@@ -1,0 +1,3 @@
+# Generated comparison PDFs/renders stay local; release code never includes them.
+*
+!.gitignore

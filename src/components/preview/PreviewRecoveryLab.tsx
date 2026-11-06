@@ -29,8 +29,8 @@ export function PreviewRecoveryLab() {
     setBusy(true); setError(""); setMessage("")
     const scope = { userId: user.id, companyId: "preview-lab-synthetic" }
     try {
-      const { jsPDF } = await import("jspdf")
-      const pdf = new jsPDF()
+      const { createPdfDocument } = await import("@/utils/pdfDocument")
+      const pdf = createPdfDocument()
       pdf.setFontSize(20)
       pdf.text("SafeEPI - Teste de recuperacao", 20, 30)
       pdf.setFontSize(12)

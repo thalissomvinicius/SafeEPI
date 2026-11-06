@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import { generateDeliveryPDF, generateNR06PDF } from "@/utils/pdfGenerator"
+import { pdfSource } from "./pdfContent"
 
 const signaturePng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAbCAYAAACwRpUzAAAAUUlEQVR4AWNwL/CBYyAwRuajSMAwTAxFAl0BWAIXBunEifFKEjYWmwRBrxAMBJyYMq/8x4WhKjAlYMZiKMDllf+Uupb+kgS9QjAQcAYfwYAHAE7jpLivkXjUAAAAAElFTkSuQmCC"
-
-async function pdfSource(blob: Blob) {
-  return new TextDecoder("latin1").decode(await blob.arrayBuffer())
-}
 
 function pageCount(source: string) {
   return source.match(/\/Type\s*\/Page\b/g)?.length || 0
@@ -94,7 +91,7 @@ describe("layout dos PDFs juridicos", () => {
     expect(source.includes("Terminal Portaria Principal")).toBe(true)
     expect(source.includes("a".repeat(64))).toBe(true)
     expect(source).not.toContain("NaN")
-    expect(blob.size).toBeGreaterThan(10_000)
+    expect(source.length).toBeGreaterThan(10_000)
   })
 
   it("renderiza evidencias digitais nas celulas da ficha NR-06", async () => {
@@ -120,6 +117,6 @@ describe("layout dos PDFs juridicos", () => {
     const source = await pdfSource(blob)
     expect(pageCount(source)).toBeGreaterThanOrEqual(3)
     expect(source).not.toContain("NaN")
-    expect(blob.size).toBeGreaterThan(10_000)
+    expect(source.length).toBeGreaterThan(10_000)
   })
 })

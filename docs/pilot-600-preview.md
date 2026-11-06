@@ -44,6 +44,29 @@ Esta é uma verificação funcional dirigida, não um teste de carga, de concorr
 
 ## Limites e próximos passos
 
+### Novos PDFs compactados — 06/11/2026
+
+Os dez geradores agora usam uma fábrica comum com compactação Flate de conteúdo e PNG. O laboratório local também usa essa fábrica. A mudança está apenas na branch de prévia; o domínio principal não deve receber este código sem aprovação posterior.
+
+Esta etapa não redimensiona logos, fotos ou assinaturas, não muda o texto/modelo, não reprocessa PDFs antigos e não altera banco, uploads ou hashes já arquivados. Os novos arquivos são compactados durante a geração, antes do cálculo habitual do hash e do arquivamento.
+
+Comparação local com o gerador real, dados fictícios e a mesma logo pública original, horários e identificador de documento:
+
+| Cenário | Antes | Compactado | Páginas |
+| --- | ---: | ---: | ---: |
+| Recibo com assinatura ilustrativa e QR | 5.285.090 bytes | 837.720 bytes | 1 |
+| Prontuário com 30 itens e assinatura ilustrativa | 5.235.524 bytes | 842.820 bytes | 3 |
+
+Em ambos, a verificação confirmou igualdade de texto, streams/imagens decodificados, recursos, anotações, campos, metadados, ID e geometria de páginas. A renderização de todas as páginas no Poppler a 150 dpi foi idêntica pixel a pixel; os PNGs também foram inspecionados visualmente. Os tamanhos são destes exemplos sintéticos, não dos documentos privados no Storage. A logo pública grande ainda limita a economia nesta etapa sem reamostragem.
+
+Esses testes não comprovam o tamanho futuro de todos os PDFs nem resolvem a restrição de cota atual. A homologação com arquivos privados e o arquivamento real seguem dependentes da liberação do Supabase e de banco separado. Nenhum comprovante antigo foi baixado, recomprimido, substituído ou excluído nesta alteração.
+
+Para repetir os quatro arquivos comparativos, usar `SAFE_EPI_WRITE_PDF_QA=1` ao executar somente `tests/pdf-compression-integration.test.ts`. O destino é `output/pdf/new-pdf-compression-qa`; o teste recusa sobrescrever os arquivos existentes. Sem essa variável, a regressão usa um PNG RGBA sintético menor para manter a cobertura rotineira leve, sem simular a decodificação. O comparativo manual acima usou a logo pública grande real.
+
+Auditoria de dependências nesta data: `npm audit --omit=dev --audit-level=high` retornou zero vulnerabilidades de produção. A auditoria completa ainda encontrou 22 alertas em ferramentas de desenvolvimento (1 baixo, 16 moderados e 5 altos). Nenhuma dependência ou lockfile foi alterado nesta etapa; não foi aplicado `audit fix --force`.
+
+Verificação final: 548 testes em 88 arquivos passaram, além de lint, TypeScript e compilação da prévia. A execução completa de cobertura foi isolada das execuções parciais para evitar conflito nos arquivos temporários; os percentuais continuam limitados aos três utilitários configurados, não à aplicação inteira.
+
 Esta rodada não altera SQL. A listagem ainda consulta todos os metadados em páginas Supabase, com paginação da exibição; busca/paginação integral no servidor permanecem evolução posterior. Custos históricos, matriz por função, kits e parâmetros de estoque/vida útil não foram implementados nesta versão.
 
 Arquivamento real, concorrência de entregas, recuperação de resposta perdida, RLS e restauração de backup precisam de homologação própria em ambiente isolado. Testes sintéticos de 600 registros não são teste de carga de produção.
